@@ -1,4 +1,4 @@
-//! Domain model for skel.
+//! Domain model for cas.
 //!
 //! This crate holds pure logic. It does no I/O: no files, no network, no
 //! processes, no async runtime. Adapters live in other crates and implement
@@ -7,7 +7,7 @@
 //! # Example
 //!
 //! ```
-//! use skel_domain::{Item, ItemId, ItemState};
+//! use cas_domain::{Item, ItemId, ItemState};
 //!
 //! let id = ItemId::new("first-item").unwrap();
 //! let item = Item::new(id);

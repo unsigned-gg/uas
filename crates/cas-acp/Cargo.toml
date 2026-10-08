@@ -1,0 +1,15 @@
+[package]
+name = "cas-acp"
+description = "Agent Communication Protocol server (JSON-RPC 2.0 over stdio and TCP) for Zed and IDE integration."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[dependencies]
+
+[lints]
+workspace = true

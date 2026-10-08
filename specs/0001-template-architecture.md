@@ -27,8 +27,8 @@ each other, and the way the template renames itself.
 
 | Path | Content |
 |---|---|
-| `crates/skel-domain` | Library. Zero I/O. Entities and repository traits. |
-| `crates/skel-cli` | Binary named `skel`. `build.rs` stamps `git describe`. |
+| `crates/cas-domain` | Library. Zero I/O. Entities and repository traits. |
+| `crates/cas-cli` | Binary named `cas`. `build.rs` stamps `git describe`. |
 | `xtask/` | Package `xtask`. Holds `spec-check` and `toolchain-check`. Never renamed. |
 | `specs/` | LeanSpec registry. See spec 0002 for the gates that read it. |
 | `vendor/leanspec/` | Vendored LeanSpec docs. Not edited. Not renamed. |
@@ -45,7 +45,7 @@ I/O. The CLI crate depends on the domain crate. The domain crate never depends
 on the CLI crate.
 
 `make smoke` enforces the zero-I/O rule. It fails when
-`crates/skel-domain/src` contains `std::net`, `std::fs`, `tokio` or
+`crates/cas-domain/src` contains `std::net`, `std::fs`, `tokio` or
 `std::process`.
 
 ### Rename mechanism
@@ -69,7 +69,7 @@ same make target in a post-hook. One implementation serves both paths.
 
 ### What an instantiated repo changes
 
-- It renames the `skel` crates to its own prefix.
+- It renames the `cas` crates to its own prefix.
 - It loses the `template-check` workflow.
 - It adds its own specs from number 0006 upward. It keeps 0001 to 0005 and
   edits them to match the new repo.
@@ -82,12 +82,12 @@ same make target in a post-hook. One implementation serves both paths.
 | Template is a buildable GitHub template and a `cargo-generate.toml` | the operator | 2026-10-08 |
 | `AGENTS.md` is canonical. `CLAUDE.md` is a pointer. | the operator | 2026-10-08 |
 | Rename logic lives in the Makefile | the operator | 2026-10-08 |
-| Crate prefix is `skel` | the operator | 2026-10-08 |
+| Crate prefix is `cas` | the operator | 2026-10-08 |
 
 ## Plan
 
 - [ ] Workspace files: `Cargo.toml`, `rust-toolchain.toml`, `.cargo/config.toml`.
-- [ ] Crates `skel-domain` and `skel-cli`, plus `xtask`.
+- [ ] Crates `cas-domain` and `cas-cli`, plus `xtask`.
 - [ ] Makefile with `new-repo` and `template-check`.
 - [ ] `cargo-generate.toml` that delegates to `make new-repo`.
 - [ ] Land on `development`. Promote to `main` by the rule in spec 0003.
@@ -105,7 +105,7 @@ make template-check
 ```
 
 Passing means four things. `make check` and `make smoke` pass. The probe copy
-is rustfmt-clean. The probe copy builds. The command `grep -rIn --exclude-dir={target,.git,vendor} skel .` finds
+is rustfmt-clean. The probe copy builds. The command `grep -rIn --exclude-dir={target,.git,vendor} cas .` finds
 nothing in the probe copy.
 
 ## Notes
