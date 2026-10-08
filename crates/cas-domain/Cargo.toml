@@ -1,6 +1,6 @@
 [package]
-name = "skel-domain"
-description = "Domain model for skel. Pure logic, zero I/O."
+name = "cas-domain"
+description = "Domain model for cas. Pure logic, zero I/O."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

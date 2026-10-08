@@ -1,4 +1,4 @@
-# rust-monorepo-template
+# cas
 
 The estate Rust monorepo template. It builds and tests itself.
 
@@ -6,7 +6,7 @@ The estate Rust monorepo template. It builds and tests itself.
 
 ## What you get
 
-- A Cargo workspace: `crates/skel-domain` (zero I/O) and `crates/skel-cli`, plus `xtask/`.
+- A Cargo workspace: `crates/cas-domain` (zero I/O) and `crates/cas-cli`, plus `xtask/`.
 - A `Makefile` with one target for each gate. Run `make help`.
 - LeanSpec specs in `specs/`, checked by `make spec-check`.
 - CI, moon tasks, lefthook, gitleaks and cargo-deny.
@@ -26,7 +26,7 @@ make new-repo NAME=<name>
 Option 2: use cargo-generate.
 
 ```bash
-cargo generate --git git@github.com:cerebral-work/rust-monorepo-template.git --name <name>
+cargo generate --git git@github.com:cerebral-work/cas.git --name <name>
 cd <name>
 git add -A && git commit -S -m "chore: initial commit from template"  # new-repo needs a committed tree
 make new-repo NAME=<name>

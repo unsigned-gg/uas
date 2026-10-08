@@ -95,7 +95,7 @@ Refined from decision 8, Christian, interviews 2026-10-08.
    the version has no tag yet, it creates tag `vX.Y.Z` and the GitHub release.
 4. `release-plz.toml` sets in `[workspace]`: `git_only = true`, `publish =
    false`, `changelog_update = false`, `git_release_enable = false`,
-   `git_tag_enable = false`, `semver_check = false`. The package `skel-cli`
+   `git_tag_enable = false`, `semver_check = false`. The package `cas-cli`
    turns on the tag and the release. Its tag name is `v{{ version }}`.
 5. `CHANGELOG.md` follows Keep a Changelog 1.1.0. Each user-visible PR adds one
    line under `## [Unreleased]`. Nobody edits a released section.

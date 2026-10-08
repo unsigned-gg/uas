@@ -10,7 +10,7 @@ rust-version = "1.85"
 publish = false
 license = "LicenseRef-Proprietary"
 authors = ["Christian M. Todie <chris@todie.io>"]
-repository = "https://github.com/cerebral-work/rust-monorepo-template"
+repository = "https://github.com/cerebral-work/cas"
 
 [workspace.lints.rust]
 unsafe_code = "forbid"

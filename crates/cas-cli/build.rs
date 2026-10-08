@@ -1,4 +1,4 @@
-//! Build-time version stamp. Captures `git describe` into `SKEL_BUILD_REV`
+//! Build-time version stamp. Captures `git describe` into `CAS_BUILD_REV`
 //! so `--version` can print the commit. The value is `unknown` when the
 //! build tree is not a git checkout.
 
@@ -29,5 +29,5 @@ fn main() {
 
     let rev =
         git(&["describe", "--always", "--dirty", "--abbrev=7"]).unwrap_or_else(|| "unknown".into());
-    println!("cargo:rustc-env=SKEL_BUILD_REV={rev}");
+    println!("cargo:rustc-env=CAS_BUILD_REV={rev}");
 }
