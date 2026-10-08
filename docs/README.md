@@ -1,6 +1,6 @@
 # Documentation
 
-This is the docs index for rust-monorepo-template.
+This is the docs index for cas.
 
 | Section | Content |
 |---|---|

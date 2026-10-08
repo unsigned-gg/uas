@@ -2,7 +2,7 @@
 
 use std::collections::BTreeMap;
 
-use skel_domain::{DomainError, Item, ItemId, ItemRepository};
+use cas_domain::{DomainError, Item, ItemId, ItemRepository};
 
 /// Keeps items in a sorted map. Data is lost when the process exits.
 #[derive(Debug, Default)]

@@ -1,4 +1,4 @@
-# rust-monorepo-template task runner. Run `make` to list targets.
+# cas task runner. Run `make` to list targets.
 # Shared workstations keep JOBS=2. CI passes JOBS=10 (specs/0002-verification-gates-and-evidence.md).
 SHELL := bash
 .SHELLFLAGS := -euo pipefail -c
@@ -56,13 +56,13 @@ toolchain-check: ## Verify rustc matches rust-toolchain.toml
 	cargo xtask toolchain-check
 
 smoke: ## Build the CLI, run it, check the domain crate has no I/O
-	cargo build -p skel-cli --locked -j $(JOBS)
-	out="$$(cargo run -q -p skel-cli --locked -j $(JOBS) -- --version)"
+	cargo build -p cas-cli --locked -j $(JOBS)
+	out="$$(cargo run -q -p cas-cli --locked -j $(JOBS) -- --version)"
 	echo "$$out"
-	[[ "$$out" =~ ^skel\ [0-9]+\.[0-9]+\.[0-9]+\ \(.+\)$$ ]] || { echo "smoke: unexpected --version output" >&2; exit 1; }
-	cargo run -q -p skel-cli --locked -j $(JOBS) -- demo | grep -q '"done"' || { echo "smoke: demo did not reach done" >&2; exit 1; }
-	if grep -rnE 'std::net|std::fs|tokio|std::process' crates/skel-domain/src; then
-		echo "smoke: skel-domain must not use I/O" >&2
+	[[ "$$out" =~ ^cas\ [0-9]+\.[0-9]+\.[0-9]+\ \(.+\)$$ ]] || { echo "smoke: unexpected --version output" >&2; exit 1; }
+	cargo run -q -p cas-cli --locked -j $(JOBS) -- demo | grep -q '"done"' || { echo "smoke: demo did not reach done" >&2; exit 1; }
+	if grep -rnE 'std::net|std::fs|tokio|std::process' crates/cas-domain/src; then
+		echo "smoke: cas-domain must not use I/O" >&2
 		exit 1
 	fi
 	echo "smoke: ok"
@@ -102,8 +102,8 @@ new-repo: ## Rename the template (NAME=<kebab> [ORG=cerebral-work])
 	fi
 	snake="$${name//-/_}"
 	upper="$${snake^^}"
-	git mv crates/skel-domain "crates/$$name-domain"
-	git mv crates/skel-cli "crates/$$name-cli"
+	git mv crates/cas-domain "crates/$$name-domain"
+	git mv crates/cas-cli "crates/$$name-cli"
 	git ls-files -z | while IFS= read -r -d '' f; do
 		# vendor/ is upstream text; the new-repo skill stays verbatim as the
 		# record of how this repo was made from the template.
@@ -113,10 +113,10 @@ new-repo: ## Rename the template (NAME=<kebab> [ORG=cerebral-work])
 		# The bare token is matched on word boundaries so that a word which
 		# merely contains it is never rewritten.
 		sed -i \
-			-e "s#cerebral-work/rust-monorepo-template#$$org/$$name#g" \
-			-e "s#rust-monorepo-template#$$name#g" \
-			-e "s/SKEL_/$${upper}_/g" \
-			-e "s/skel_/$${snake}_/g" \
+			-e "s#cerebral-work/cas#$$org/$$name#g" \
+			-e "s#cas#$$name#g" \
+			-e "s/CAS_/$${upper}_/g" \
+			-e "s/cas_/$${snake}_/g" \
 			-e "s/\bskel\b/$$name/g" \
 			"$$f"
 	done
@@ -147,8 +147,8 @@ template-check: ## Run check, spec-check, smoke, then prove the rename in a temp
 	cargo fmt --all --check
 	cargo build --workspace -j $(JOBS)
 	$(MAKE) -f Makefile spec-check
-	if grep -rIn -E '\bskel\b|skel_|SKEL_' --exclude-dir={target,.git,vendor} . | grep -v '^\./\.agents/skills/new-repo/'; then
-		echo "template-check: leftover 'skel' after rename" >&2
+	if grep -rIn -E '\bskel\b|cas_|CAS_' --exclude-dir={target,.git,vendor} . | grep -v '^\./\.agents/skills/new-repo/'; then
+		echo "template-check: leftover 'cas' after rename" >&2
 		exit 1
 	fi
 	echo "template-check: ok"
