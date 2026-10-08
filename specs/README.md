@@ -5,7 +5,7 @@ Methodology: LeanSpec. The reference copy is in `../vendor/leanspec/`.
 
 | Spec | Title | Status | Priority |
 |---|---|---|---|
-| [0001](0001-template-architecture.md) | Template architecture | in-progress | high |
+| [0001](0001-cas-architecture-and-crate-layout.md) | CAS architecture and crate layout | in-progress | high |
 | [0002](0002-verification-gates-and-evidence.md) | Verification gates and evidence | in-progress | high |
 | [0003](0003-branch-model-and-promotion.md) | Branch model and promotion | in-progress | high |
 | [0004](0004-dependency-and-licence-policy.md) | Dependency and licence policy | in-progress | high |

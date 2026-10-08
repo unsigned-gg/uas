@@ -10,4 +10,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - The repository, generated from `cerebral-work/rust-monorepo-template` (template `main` at `1366ed9`) and renamed with `make new-repo NAME=cas`: the crates `cas-domain` and `cas-cli`, the `xtask`, the gate targets, CI, moon, lefthook, the specs and the agent files.
 - Eight placeholder crates from the research design: `cas-engine`, `cas-pool`, `cas-sandbox`, `cas-ebpf`, `cas-router`, `cas-acp`, `cas-storage` and `cas-deck`. Each compiles and has a README that names its research section, phase and open questions.
+- Spec 0001 `cas-architecture-and-crate-layout` replaces the template architecture spec. It pins the nine research crates plus `cas-cli`, the downward dependency rule, the invariants, the failure matrix, the integration edges and the open gaps. Spec 0004 lists the evaluated dependencies and the two copyleft exclusions. README, AGENTS.md, the docs index and `engineering/` describe CAS.
 

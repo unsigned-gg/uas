@@ -3,7 +3,7 @@ status: in-progress
 created: 2026-10-08
 tags: [verification, gates, evidence, make]
 priority: high
-depends_on: [0001-template-architecture]
+depends_on: [0001-cas-architecture-and-crate-layout]
 ---
 
 # 0002-verification-gates-and-evidence
