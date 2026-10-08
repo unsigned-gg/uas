@@ -40,4 +40,18 @@ pub enum DomainError {
     /// No lease has this id.
     #[error("lease {0} not found")]
     LeaseNotFound(String),
+    /// Another lease holds the slot (spec 0007, R1).
+    #[error("slot {slot} is held by lease {lease} until {until}")]
+    SlotLeased {
+        /// The slot that was asked for.
+        slot: String,
+        /// The lease that holds it.
+        lease: String,
+        /// When that lease expires, in epoch seconds.
+        until: u64,
+    },
+    /// The presented token does not match the lease (spec 0007, R2). Holds the
+    /// lease id only, never a token.
+    #[error("token does not match lease {0}")]
+    TokenMismatch(String),
 }
