@@ -23,7 +23,8 @@ Facts from 2026-10-08:
   It uses edition 2024, so the workspace `rust-version` floor is 1.85.
 - `autonice` is GPL-2.0. `zerostack` is GPL-3.0. Both are copyleft.
 - `0xPlaygrounds/rig` is MIT, version 0.44.0.
-- All eight research evaluations in `cerebral-work/research` are drafts.
+- Every research evaluation is a draft: the 13 files under `repos/` at
+  `cerebral-work/research@4068134` all have `status: "draft"`.
 
 ## Design
 
@@ -76,17 +77,18 @@ the first use.
 
 | Project | Licence (per research) | Role in CAS | Status | Source |
 |---|---|---|---|---|
-| gitoxide (`gix`) | MIT OR Apache-2.0 | `cas-pool`: in-process worktrees and checkpoints | evaluated, unpinned, NOT approved | `repos/gitoxide.md` lines 100-111 |
-| autumn-harvest | MIT OR Apache-2.0 | `cas-engine`: durable workflows | evaluated, unpinned, NOT approved | `repos/autumn-harvest.md` |
-| aya | licence to verify | `cas-ebpf`: eBPF programs and loader | evaluated, unpinned, NOT approved | `repos/neutral-engineering.md` section 2.1 |
+| gitoxide (`gix`) | MIT OR Apache-2.0 | `cas-pool`: in-process worktrees and checkpoints | evaluated, unpinned, NOT approved | `repos/gitoxide.md` line 15 (licence), lines 100-111 (role) |
+| autumn-harvest | MIT OR Apache-2.0 | `cas-engine`: durable workflows | evaluated, unpinned, NOT approved | `repos/autumn-harvest.md` line 15 |
+| aya | MIT OR Apache-2.0 (not in the research; `aya-rs/aya` workspace `Cargo.toml`, read 2026-10-08) | `cas-ebpf`: eBPF programs and loader | evaluated, unpinned, NOT approved | `repos/neutral-engineering.md` section 2.1 |
 | a Landlock crate | to choose | `cas-sandbox`: filesystem rulesets | not chosen | `rust-native-agent-substrate.md` section 3.3 |
 | madstack (`pgray/madstack`: Axum, Maud, htmx) | MIT | `cas-deck`: operator dashboard | evaluated, unpinned, NOT approved | `repos/madstack.md` |
 | rig-core 0.44 | MIT | model calls through the LiteLLM gateway, on need | pinned at 0.44.0 by the decision above, not in the workspace | `0xPlaygrounds/rig` |
 
-The aya licence is not stated in the research files read for this spec. Verify
-it against the aya repository before any pin. An eBPF program that calls
-GPL-only kernel helpers must declare a GPL-compatible licence in its `license`
-section. This repo is proprietary. Record the position here before the first
+The research does not state the aya licence. The `aya-rs/aya` workspace
+`Cargo.toml` declares `MIT OR Apache-2.0` (read 2026-10-08). Re-read it at the
+pin. A separate question remains: an eBPF program that calls GPL-only kernel
+helpers must declare a GPL-compatible licence in its `license` section (Linux
+kernel `Documentation/bpf/bpf_licensing.rst`). This repo is proprietary. Record the position here before the first
 `cas-ebpf` program. Spec 0001 lists this as an open gap.
 
 ### Copyleft exclusions
