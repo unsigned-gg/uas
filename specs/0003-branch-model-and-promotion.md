@@ -84,7 +84,7 @@ A promotion PR merges `development` into `main`.
 Read the protection back from the API. Do not trust the call that wrote it.
 
 ```bash
-gh api repos/cerebral-work/cas/branches/main/protection \
+gh api repos/cerebral-work/cas-substrate/branches/main/protection \
   --jq '{force: .allow_force_pushes.enabled, del: .allow_deletions.enabled, admins: .enforce_admins.enabled, checks: .required_status_checks.contexts}'
 ```
 
