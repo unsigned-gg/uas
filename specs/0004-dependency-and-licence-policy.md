@@ -30,8 +30,10 @@ Facts from 2026-10-08:
 
 ### Licence rules
 
-- Copyleft is denied. `deny.toml` lists `GPL-2.0`, `GPL-3.0`, `AGPL-3.0` and
-  `LGPL-3.0` under `deny`. The two named cases are autonice and zerostack.
+- Copyleft is denied. `deny.toml` uses the cargo-deny v2 schema, which has no
+  `deny` list. A licence passes only when it is in `allow`. No GPL, AGPL or
+  LGPL licence is in `allow`, so all of them fail. The two named cases are
+  autonice and zerostack.
 - `cargo deny check` runs in `make check` and in the CI job `cargo-deny`.
 - A new licence needs an operator decision before it enters the allow list.
 
@@ -110,15 +112,15 @@ The `gh` step is temporary. Remove it when the `ci-rust` image ships `gh`.
 - `zerostack` is GPL-3.0. It is reference only. Never vendor it. Never depend
   on it.
 
-`deny.toml` denies both licences. A dependency that pulls either one in fails
+Neither licence is in the `deny.toml` allow list. A dependency that pulls either one in fails
 `cargo deny check`.
 
 ## Plan
 
-- [ ] Write `deny.toml` with the licence allow list and the four denied licences.
-- [ ] Add the commented pgt example to the root `Cargo.toml`.
-- [ ] Add `make pgt-install`.
-- [ ] Add a why-comment to every workspace dependency.
+- [x] Write `deny.toml` with the licence allow list. Copyleft fails by omission (v2 schema).
+- [x] Add the commented pgt example to the root `Cargo.toml`.
+- [x] Add `make pgt-install`.
+- [x] Add a why-comment to every workspace dependency.
 - [ ] Ask the CTO for a pgt licence statement. Track it outside this repo.
 
 ## Test
