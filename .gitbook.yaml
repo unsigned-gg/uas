@@ -1,0 +1,7 @@
+# GitBook and GitHub sync: the docs/ tree is the space content root.
+# The space settings (visibility, domain, members) live in GitBook. This file is only the mapping.
+root: ./docs/
+
+structure:
+  readme: README.md
+  summary: SUMMARY.md

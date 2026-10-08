@@ -1,0 +1,12 @@
+# cargo-generate config.
+# After `cargo generate --git <url> --name <name>`, commit the tree
+# (`git add -A && git commit -S`), then run `make new-repo NAME=<name>`.
+# The rename uses `git mv` and refuses an uncommitted tree.
+# That target renames the crates and the repo. cargo-generate hooks run in a
+# sandbox and cannot call make, so the rename stays a separate step.
+# Placeholders stay empty so the template builds unchanged.
+[template]
+cargo_generate_version = ">=0.20"
+ignore = [".git", "target"]
+
+[placeholders]

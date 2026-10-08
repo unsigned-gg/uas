@@ -1,0 +1,59 @@
+# Flow: gates
+#
+# Workspace verification gates: format check, clippy with warnings denied, the test suite,
+# then an operator sign-off gate. Each verify_cmd calls a make target, so the -j rule
+# lives in the Makefile (JOBS defaults to 2).
+
+[flow]
+name = "gates"
+description = "Execute workspace verification gates: fmt, clippy (-D warnings), tests, and operator gate"
+
+# Step 1: Format check
+[[step]]
+id = "fmt-check"
+title = "Verify rustfmt formatting"
+kind = "test"
+agent = "auto"
+verify_cmd = ["make", "fmt-check"]
+prompt = """
+Run `make fmt-check`.
+Make sure there are no formatting violations.
+"""
+
+# Step 2: Clippy
+[[step]]
+id = "clippy-check"
+title = "Run clippy with warnings denied"
+kind = "test"
+agent = "auto"
+deps = ["fmt-check"]
+verify_cmd = ["make", "clippy"]
+prompt = """
+Run `make clippy`.
+Make sure the workspace passes with no warnings.
+"""
+
+# Step 3: Test suite
+[[step]]
+id = "test-suite"
+title = "Run the test suite"
+kind = "test"
+agent = "auto"
+deps = ["clippy-check"]
+verify_cmd = ["make", "test"]
+prompt = """
+Run `make test`.
+All tests must pass.
+"""
+
+# Step 4: Operator approval gate
+[[step]]
+id = "operator-gate"
+title = "Operator sign-off gate"
+kind = "gate"
+gate = "heimdal:approval"
+deps = ["test-suite"]
+prompt = """
+Review the receipts for fmt, clippy and tests.
+Approve the gate to allow the PR merge or the promotion.
+"""

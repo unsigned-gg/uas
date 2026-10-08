@@ -1,0 +1,40 @@
+crates:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'crates/**'
+          - 'xtask/**'
+          - 'Cargo.toml'
+          - 'Cargo.lock'
+
+specs:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'specs/**'
+          - 'vendor/leanspec/**'
+          - '.lean-spec'
+
+ci:
+  - changed-files:
+      - any-glob-to-any-file:
+          - '.github/workflows/**'
+          - '.github/dependabot.yml'
+          - '.moon/**'
+          - 'Makefile'
+          - 'lefthook.yml'
+
+docs:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'docs/**'
+          - 'engineering/**'
+          - 'README.md'
+          - 'CHANGELOG.md'
+          - 'CONTRIBUTING.md'
+
+agents:
+  - changed-files:
+      - any-glob-to-any-file:
+          - 'AGENTS.md'
+          - 'CLAUDE.md'
+          - '.agents/**'
+          - '.claude/**'

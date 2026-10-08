@@ -1,0 +1,44 @@
+# CodeQL for Rust. DORMANT by default.
+#
+# Measured 2026-10-08: GitHub Code Security is disabled on cerebral-work private
+# repositories (`security_and_analysis.code_security.status = disabled`; the
+# code-scanning API returns 403 "Code Security must be enabled"). Without it,
+# the SARIF upload fails, and CodeQL's licence does not cover private code.
+# Enabling Code Security is a paid enterprise setting: the operator's decision.
+#
+# To turn this on after Code Security is enabled: set the repository variable
+# CODE_SCANNING=true. It is NOT a required check (specs/0005).
+name: codeql
+
+on:
+  pull_request:
+  push:
+    branches: [development, main]
+  schedule:
+    - cron: "17 6 * * 1" # weekly, Monday 06:17 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    name: codeql
+    if: >-
+      vars.CODE_SCANNING == 'true' &&
+      (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: {group: ent-default, labels: [ci-rust]}
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      actions: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: github/codeql-action/init@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4
+        with:
+          languages: rust
+          build-mode: none
+      - uses: github/codeql-action/analyze@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4
+        with:
+          category: /language:rust
