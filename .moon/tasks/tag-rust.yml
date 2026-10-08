@@ -18,7 +18,9 @@ tasks:
     command: 'cargo build -p $project -j 2 --locked'
     inputs: ['@group(sources)']
   test:
-    command: 'cargo nextest run -p $project --build-jobs 2 --locked'
+    # A crate with no tests yet (a placeholder) must not fail the task:
+    # nextest exits 4 on "no tests to run" unless --no-tests says otherwise.
+    command: 'cargo nextest run -p $project --build-jobs 2 --locked --no-tests=warn'
     inputs: ['@group(sources)']
   clippy:
     command: 'cargo clippy -p $project --all-targets -j 2 --locked -- -D warnings'
