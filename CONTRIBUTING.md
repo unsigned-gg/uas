@@ -33,7 +33,7 @@ make check
 - Sign every commit. Use Conventional Commits. Do not put a ticket ID in the subject.
 - Merge with a merge commit. Never squash.
 - Add one line under `## [Unreleased]` in `CHANGELOG.md` for each user-visible change.
-- The promotion PR from `development` to `main` is the operator's decision.
+- The promotion PR from `development` to `main` merges on green CI (spec 0003).
 - Run `make check` and `make hygiene` before you push.
 
 ## Pull requests
