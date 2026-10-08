@@ -39,7 +39,8 @@ make check
 6. Open a PR into `development`. Use a normal PR so that CI runs. A PR opened by the default GITHUB_TOKEN does not trigger CI.
 7. Merge on green CI with a merge commit.
 8. Open the promotion PR from `development` to `main`.
-9. Stop. The operator approves and merges the promotion PR. An agent never approves it and never clicks merge.
+9. Merge the promotion PR on green CI with a merge commit pinned to the head SHA (spec 0003). An agent never approves it.
+10. Check that the `release` run on `main` is green. A red run is a stop.
 
 ## After the promotion merge
 

@@ -8,7 +8,7 @@ Science and paid runs stay with their approver. They do not belong here.
 
 ## Now
 
-1. **Phase 1, domain** (proposed). What: build `cas-domain` with slot, lease, envelope, attestation and error types. Done when: tests for illegal transitions, lease expiry and tier ordering pass, and `cargo tree -p cas-domain` shows no runtime or workspace crates.
+1. **Phase 1, domain** (done 2026-10-08, PR #3; 19 of 19 tests pass, `cargo tree -p cas-domain` shows only `serde` and `thiserror`). What: build `cas-domain` with slot, lease, envelope, attestation and error types. Done when: tests for illegal transitions, lease expiry and tier ordering pass, and `cargo tree -p cas-domain` shows no runtime or workspace crates.
 2. **Phase 1, engine** (proposed). What: wire the Autumn-Harvest engine into `cas-engine` with SQLite and Postgres backends and activity retry loops. Done when: a workflow replays from its event log after a killed process with no repeated activity. Blocked on spec 0004 approving the dependency.
 3. **Open gap, pool runtime** (proposed). What: a spec that chooses thread-per-core or Tokio for `cas-pool`. Done when: the spec is merged and names the evidence.
 4. **Open gap, job cap** (proposed). What: a spec for a real build job cap, or a decision to drop the claim. Done when: the spec states a mechanism that limits job count, not only priority.

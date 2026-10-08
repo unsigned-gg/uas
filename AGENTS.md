@@ -48,7 +48,7 @@ A crate depends only on crates in lower layers. Add a Cargo dependency only when
 6. **Use Conventional Commits.** Do not put a ticket ID in the subject. Put `Part of CER-N` in the PR body.
 7. **Merge with merge commits only.** Never squash.
 8. **Write the changelog.** Add one line under `## [Unreleased]` in `CHANGELOG.md` for each user-visible PR. Never edit a released section.
-9. **Never approve the promotion PR.** The promotion PR carries `development` to `main`. Agents do not approve it and do not click merge. The operator does.
+9. **Merge the promotion PR on green.** The promotion PR carries `development` to `main`. A lane merges it when CI is green, with a merge commit pinned to the head SHA. Agents never approve it. Then check that `main` matches `development` and that the `release` run is green. Spec 0003 has the operator ruling.
 10. **Never push to `main`.** The hook `guard-main-push.sh` blocks it.
 11. **No secrets in the repo.** `make` and lefthook run gitleaks.
 12. **Pin every external dependency** and record it in spec 0004 before first use. Copyleft licences are denied by `deny.toml`.
@@ -90,7 +90,7 @@ Skills are in `.agents/skills/<name>/SKILL.md`. Read the skill before you start 
 ## Approval routes
 
 - A lane merges its own feature PR into `development` when CI is green.
-- The promotion PR from `development` to `main` needs the operator's go.
+- A lane merges the promotion PR from `development` to `main` when CI is green (spec 0003).
 - Secrets, Terraform, DNS and platform apps need the operator. Prepare the change and stop.
 - Force-push to `main`, unsigned commits and merging with red CI are never allowed.
 - Code owners are listed in `.github/CODEOWNERS`.
