@@ -120,11 +120,50 @@ pub enum SlotState {
 }
 
 /// One harness slot in the pool.
+///
+/// Deserializing accepts only a state and worktree pair that the transitions
+/// can reach: `Cold` has no worktree, `Warm`, `Leased` and `Suspended` have
+/// one, and `Draining` may have either.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(try_from = "SlotRepr")]
 pub struct Slot {
     id: SlotId,
     state: SlotState,
     worktree: Option<WorktreeRef>,
+}
+
+/// The wire shape of a [`Slot`], checked before it becomes one.
+#[derive(Deserialize)]
+struct SlotRepr {
+    id: SlotId,
+    state: SlotState,
+    worktree: Option<WorktreeRef>,
+}
+
+impl TryFrom<SlotRepr> for Slot {
+    type Error = DomainError;
+
+    fn try_from(r: SlotRepr) -> Result<Self, Self::Error> {
+        use SlotState::{Cold, Draining, Leased, Suspended, Warm};
+        let reachable = match r.state {
+            Cold => r.worktree.is_none(),
+            Warm | Leased | Suspended => r.worktree.is_some(),
+            Draining => true,
+        };
+        if !reachable {
+            let worktree = if r.worktree.is_some() { "set" } else { "none" };
+            return Err(DomainError::Invalid {
+                kind: "slot",
+                value: format!("state={:?} worktree={worktree}", r.state),
+                reason: "no transition reaches this state and worktree pair",
+            });
+        }
+        Ok(Self {
+            id: r.id,
+            state: r.state,
+            worktree: r.worktree,
+        })
+    }
 }
 
 impl Slot {
@@ -332,5 +371,39 @@ mod tests {
         assert!(serde_json::from_str::<SlotId>("\"good-id\"").is_ok());
         assert!(serde_json::from_str::<SlotId>("\"Bad Id\"").is_err());
         assert!(serde_json::from_str::<WorktreeRef>("\"a/../b\"").is_err());
+    }
+
+    #[test]
+    fn serde_rejects_states_no_transition_can_reach() {
+        let wt_json = serde_json::to_value(slot_in(SlotState::Warm)).unwrap()["worktree"].clone();
+        let mut cold_with_worktree = serde_json::to_value(slot_in(SlotState::Cold)).unwrap();
+        cold_with_worktree["worktree"] = wt_json;
+        let mut bad = vec![cold_with_worktree];
+        for state in [SlotState::Warm, SlotState::Leased, SlotState::Suspended] {
+            let mut v = serde_json::to_value(slot_in(state)).unwrap();
+            v["worktree"] = serde_json::Value::Null;
+            bad.push(v);
+        }
+        for v in bad {
+            assert!(
+                serde_json::from_value::<Slot>(v.clone()).is_err(),
+                "accepted {v}"
+            );
+        }
+    }
+
+    #[test]
+    fn serde_round_trips_every_reachable_slot() {
+        use SlotState::{Cold, Draining, Leased, Suspended, Warm};
+        let mut reachable: Vec<Slot> = [Cold, Warm, Leased, Suspended, Draining]
+            .into_iter()
+            .map(slot_in)
+            .collect();
+        // Draining is reachable with a worktree too.
+        reachable.push(slot_in(Warm).drain().unwrap());
+        for s in reachable {
+            let json = serde_json::to_value(&s).unwrap();
+            assert_eq!(serde_json::from_value::<Slot>(json).unwrap(), s);
+        }
     }
 }
