@@ -42,7 +42,7 @@ Measured 2026-10-08:
 | `_rust.yml` | Reusable. The `rust` job calls it. |
 | `template-check.yml` | `template-check`. `make new-repo` deletes this file. |
 | `codeql.yml` | Dormant. See below. |
-| `sbom.yml` | `cargo-cyclonedx` on push to `main` and on release. |
+| `sbom.yml` | `cargo-cyclonedx` on push to `main`. |
 | `release.yml` | release-plz `release` on push to `main`. |
 | `audit.yml` | Weekly `cargo audit`. |
 | `labeler.yml` | Labels PRs by path. |
