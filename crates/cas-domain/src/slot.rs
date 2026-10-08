@@ -219,6 +219,9 @@ impl Slot {
     }
 
     /// Move any state except `Draining` to `Draining`.
+    ///
+    /// The worktree reference stays, so the pool can tear the worktree down
+    /// (spec 0007, R4). A slot drained from `Cold` has none.
     pub fn drain(self) -> Result<Self, DomainError> {
         use SlotState::{Cold, Leased, Suspended, Warm};
         self.transition(
@@ -405,5 +408,14 @@ mod tests {
             let json = serde_json::to_value(&s).unwrap();
             assert_eq!(serde_json::from_value::<Slot>(json).unwrap(), s);
         }
+    }
+
+    #[test]
+    fn drain_keeps_the_worktree() {
+        use SlotState::{Cold, Leased, Suspended, Warm};
+        for state in [Warm, Leased, Suspended] {
+            assert_eq!(slot_in(state).drain().unwrap().worktree(), Some(&wt()));
+        }
+        assert_eq!(slot_in(Cold).drain().unwrap().worktree(), None);
     }
 }

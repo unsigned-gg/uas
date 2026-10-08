@@ -165,11 +165,12 @@ fn demo(slot_id: &str) -> Result<Report> {
     record("warm", &slot, &ledger);
 
     let slot = slot.lease()?;
+    let token = LeaseToken::new("demo-token-not-a-secret")?;
     ledger.issue(Lease::new(
         lease_id.clone(),
         slot_id.clone(),
         PrincipalRef::new("agent-demo")?,
-        LeaseToken::new("demo-token-not-a-secret")?,
+        token.clone(),
         DEMO_START,
         DEMO_START + DEMO_TTL,
         Budget::new(100_000, 600)?,
@@ -180,7 +181,7 @@ fn demo(slot_id: &str) -> Result<Report> {
     record("suspend", &slot, &ledger);
 
     let slot = slot.resume()?;
-    ledger.renew(&lease_id, DEMO_START + 100, DEMO_TTL)?;
+    ledger.renew(&lease_id, &token, DEMO_START + 100, DEMO_TTL)?;
     record("resume", &slot, &ledger);
 
     let slot = slot.release()?;
