@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - `cas-engine` workflow sessions, activities, and event log with `cas harness` CLI runner and `.saga/flows/cas-builder.toml` dogfood flow.
+- Spec 0007, the lease rules: one live lease per slot, only the lease token renews a lease, a renewal extends by at least one second, and a draining slot keeps its worktree. `cas-domain` adds `check_slot_free`, `Lease::holds_slot_at`, `LeaseToken::matches`, and the errors `SlotLeased` and `TokenMismatch`.
+
+### Changed
+- `Lease::renew` and `LeaseLedger::renew` take the lease token as a new parameter. A renewal by zero seconds now fails. The in-memory ledger refuses a second live lease on a slot.
 
 ### Fixed
 - `cas-domain`: deserializing a `Slot`, `Lease`, `Budget` or `Envelope` now runs the same checks as the constructors. Before, JSON could build a `Leased` slot with no worktree, a lease that ends before it begins, a zero budget, or an envelope with a bad id.

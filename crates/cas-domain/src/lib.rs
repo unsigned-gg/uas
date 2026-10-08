@@ -33,5 +33,5 @@ mod slot;
 pub use attestation::{Attestation, EvidenceTier};
 pub use envelope::Envelope;
 pub use error::DomainError;
-pub use lease::{Budget, Lease, LeaseId, LeaseLedger, LeaseToken, PrincipalRef};
+pub use lease::{check_slot_free, Budget, Lease, LeaseId, LeaseLedger, LeaseToken, PrincipalRef};
 pub use slot::{Slot, SlotId, SlotState, WorktreeRef};
