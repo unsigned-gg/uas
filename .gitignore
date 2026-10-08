@@ -1,0 +1,10 @@
+/target/
+/.tools/
+.dagr/
+.saga/*
+!.saga/flows/
+!.saga/flows/*.toml
+.env*
+.claude/settings.local.json
+.moon/cache/
+*.cdx.json

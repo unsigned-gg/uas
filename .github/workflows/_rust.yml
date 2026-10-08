@@ -1,0 +1,110 @@
+# Reusable Rust gate. Callers: ci.yml (job `rust`). Spec: specs/0005-ci-cache-and-runners.md.
+#
+# The Makefile is the single source of commands: this workflow runs `make ci`,
+# never its own cargo invocations, so CI and a workstation cannot drift.
+#
+# Runner facts (action-runners origin/main@39a10ee, read 2026-10-08):
+# - lane `ci-rust` bakes Rust 1.94.1 (= rust-toolchain.toml), rustfmt, clippy,
+#   cargo-deny 0.19.9 and typos 1.49; RUSTUP_HOME is READ-ONLY to the runner user,
+#   so this workflow never installs a toolchain (a toolchain action would fail).
+# - pods are ephemeral with no volumes: the only cross-job caches are the
+#   Actions cache (rust-cache) and, when configured, sccache on Cloudflare R2.
+# - pod CPU limit is 10, so CI passes JOBS=10 (the workstation default is 2;
+#   specs/0002 records the exception).
+name: rust (reusable)
+
+on:
+  workflow_call:
+    inputs:
+      jobs:
+        description: "Cargo build jobs (make JOBS=). The ci-rust pod CPU limit is 10."
+        type: number
+        default: 10
+      nextest-profile:
+        description: "nextest profile (see .config/nextest.toml)."
+        type: string
+        default: ci
+
+permissions:
+  contents: read
+
+jobs:
+  cargo:
+    name: cargo
+    runs-on: {group: ent-default, labels: [ci-rust]}
+    timeout-minutes: 45
+    env:
+      CARGO_TERM_COLOR: always
+      CARGO_INCREMENTAL: "0"
+      CARGO_NET_RETRY: "10"
+      # sccache on R2: same secret names as cerebral-work/reverie ci.yml.
+      # Empty until the bucket and secrets exist; the sccache steps are then
+      # skipped (not fail-soft). Secrets cannot appear in `if:`, so they are
+      # surfaced through env and tested there.
+      SCCACHE_BUCKET: ${{ secrets.SCCACHE_R2_BUCKET }}
+      SCCACHE_ENDPOINT: ${{ secrets.SCCACHE_R2_ENDPOINT }}
+      SCCACHE_REGION: auto
+      SCCACHE_S3_USE_SSL: "true"
+      AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: toolchain (baked, verified)
+        run: |
+          set -euo pipefail
+          rustc --version
+          cargo --version
+          cargo fmt --version
+          cargo clippy --version
+
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          shared-key: rust
+          # Only the integration and release branches write the cache; PRs read it.
+          save-if: ${{ github.ref == 'refs/heads/development' || github.ref == 'refs/heads/main' }}
+          cache-on-failure: true
+
+      - name: sccache (R2)
+        if: env.SCCACHE_BUCKET != ''
+        uses: mozilla-actions/sccache-action@fc920bf0ec8de6ee65d409111f7ec508035751ba # v0.0.11
+
+      - name: sccache start (hard)
+        if: env.SCCACHE_BUCKET != ''
+        run: |
+          set -euo pipefail
+          # A dead backend must fail the job, not silently disable the cache.
+          sccache --start-server
+          echo "RUSTC_WRAPPER=sccache" >> "$GITHUB_ENV"
+
+      - uses: taiki-e/install-action@f7e5d7c961414b23f5b25b2da9294395d08513ad # v2.87.26
+        with:
+          tool: cargo-nextest
+
+      - name: make ci
+        run: make ci JOBS=${{ inputs.jobs }} NEXTEST_PROFILE=${{ inputs.nextest-profile }}
+
+      - name: junit
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: junit-${{ github.run_id }}-${{ github.run_attempt }}
+          path: target/nextest/${{ inputs.nextest-profile }}/junit.xml
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: sccache stats (hard)
+        if: always() && env.SCCACHE_BUCKET != ''
+        run: |
+          set -euo pipefail
+          sccache --show-stats | tee sccache-stats.txt
+          errors=$(awk '/^Cache errors/ {print $NF; exit}' sccache-stats.txt)
+          location=$(awk -F'  +' '/^Cache location/ {print $2; exit}' sccache-stats.txt)
+          {
+            echo "### sccache"
+            echo ""
+            echo "- location: ${location:-unknown}"
+            echo "- cache errors: ${errors:-unknown}"
+          } >> "$GITHUB_STEP_SUMMARY"
+          case "$location" in *s3*|*S3*) ;; *) echo "::error::sccache is not using the R2 backend (location: ${location:-none})"; exit 1 ;; esac
+          if [ "${errors:-1}" != "0" ]; then echo "::error::sccache reported ${errors} cache errors"; exit 1; fi

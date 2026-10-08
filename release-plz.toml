@@ -1,0 +1,17 @@
+# Release flow: `make release-notes VERSION=x.y.z` in a PR to development.
+# On push to main, release-plz `release` tags vX.Y.Z and creates the GitHub release.
+# See specs/0005-ci-cache-and-runners.md.
+[workspace]
+git_only = true
+publish = false
+changelog_update = false
+git_release_enable = false
+git_tag_enable = false
+semver_check = false
+
+[[package]]
+name = "skel-cli"
+git_tag_enable = true
+git_release_enable = true
+git_tag_name = "v{{ version }}"
+git_release_body = "See CHANGELOG.md for v{{ version }}."

@@ -1,0 +1,127 @@
+# CI gates. Spec: specs/0005-ci-cache-and-runners.md; gate rules: specs/0002.
+# Required checks on `development` and `main` (specs/0003): secrets, rust, cargo-deny, hygiene.
+# Every action is pinned by commit SHA with its version in a comment.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [development, main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: "0"
+  CARGO_NET_RETRY: "10"
+
+jobs:
+  secrets:
+    name: secrets
+    # Fork guard: self-hosted runners never run code from a fork.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: {group: ent-default, labels: [self-hosted]}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # gitleaks scans every reachable commit
+      - name: gitleaks
+        env:
+          GITLEAKS_VERSION: 8.30.1
+          GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+        run: |
+          set -euo pipefail
+          curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" -o gitleaks.tar.gz
+          echo "${GITLEAKS_SHA256}  gitleaks.tar.gz" | sha256sum -c -
+          tar -xzf gitleaks.tar.gz gitleaks
+          ./gitleaks git . --redact --no-banner --verbose
+
+  rust:
+    name: rust
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    uses: ./.github/workflows/_rust.yml
+    with:
+      jobs: 10
+      nextest-profile: ci
+    secrets: inherit
+
+  cargo-deny:
+    name: cargo-deny
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: {group: ent-default, labels: [ci-rust]}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # cargo-deny 0.19.9 is baked into the ci-rust image.
+      - name: make deny
+        run: |
+          cargo deny --version
+          make deny
+
+  hygiene:
+    name: hygiene
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: {group: ent-default, labels: [ci-rust]}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          shared-key: hygiene
+          save-if: ${{ github.ref == 'refs/heads/development' || github.ref == 'refs/heads/main' }}
+      # typos 1.49 is baked into the ci-rust image; machete is not.
+      - uses: taiki-e/install-action@f7e5d7c961414b23f5b25b2da9294395d08513ad # v2.87.26
+        with:
+          tool: cargo-machete
+      - name: make hygiene (typos, machete, spec-check, toolchain-check)
+        run: make hygiene JOBS=10
+
+  moon-affected:
+    name: moon-affected
+    # Informational, not required: moon's affected graph runs only the tasks a
+    # diff touches. The `rust` job is the gate. Pattern: unsigned-gg/soma-os ci.yml (EST-219).
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: {group: ent-default, labels: [ci-rust]}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # moon affected needs history; a shallow clone silently empties the diff
+      # moon only. `auto-install: true` would run `proto install`, which detects
+      # rust-toolchain.toml and drives rustup against the image's READ-ONLY
+      # /usr/local/rustup (measured 2026-10-08: "could not remove 'install'
+      # directory ... Permission denied", then every moon task re-downloads
+      # rustfmt and clippy and fails). Rust stays the baked toolchain.
+      - uses: moonrepo/setup-toolchain@261c62cb5b0f580c7be7c8cd0f023a2e96756095 # v0.6.4
+        with:
+          auto-install: false
+          moon-version: 2.2.6
+          cache-version: moon-only-v1
+      # The moon `test` task runs nextest, which the ci-rust image does not bake.
+      - uses: taiki-e/install-action@f7e5d7c961414b23f5b25b2da9294395d08513ad # v2.87.26
+        with:
+          tool: cargo-nextest
+      - name: moon ci (affected only)
+        run: |
+          set -euo pipefail
+          # cargo must be the baked toolchain, not a proto shim.
+          command -v cargo
+          case "$(command -v cargo)" in "$HOME"/.proto/*) echo "::error::cargo resolves to a proto shim"; exit 1 ;; esac
+          base="origin/${{ github.base_ref || 'development' }}"
+          # moon 2.2.6 `moon ci` aborts with app::tty::required_id on an empty
+          # task graph (docs-only diffs), so count affected tasks first.
+          task_count=$(MOON_BASE="$base" moon query tasks --affected | jq '.tasks | length')
+          if [ "$task_count" -eq 0 ]; then
+            echo "::notice::no affected moon tasks for this diff; skipping"
+            echo "moon-affected: SKIPPED (0 affected tasks)" >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          # --downstream deep: dependents of a changed crate run too (EST-219).
+          moon ci --base "$base" --downstream deep

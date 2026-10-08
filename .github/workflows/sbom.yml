@@ -1,0 +1,57 @@
+# CycloneDX SBOM for the workspace. Runs on the release branch and on releases.
+# The SBOM is an artifact on every main push and is attached to each GitHub release.
+name: sbom
+
+on:
+  push:
+    branches: [main]
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sbom:
+    name: sbom
+    runs-on: {group: ent-default, labels: [ci-rust]}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: taiki-e/install-action@f7e5d7c961414b23f5b25b2da9294395d08513ad # v2.87.26
+        with:
+          tool: cargo-cyclonedx
+      - name: make sbom
+        run: |
+          set -euo pipefail
+          make sbom
+          mkdir -p sbom
+          find . -name '*.cdx.json' -not -path './target/*' -not -path './sbom/*' -exec cp {} sbom/ \;
+          ls -l sbom
+          test -n "$(ls -A sbom)"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: sbom-${{ github.sha }}
+          path: sbom/
+          if-no-files-found: error
+          retention-days: 90
+
+  attach:
+    name: attach to release
+    needs: sbom
+    if: github.event_name == 'release'
+    # gh is baked into the self-hosted (ci-base) image, not into ci-rust.
+    runs-on: {group: ent-default, labels: [self-hosted]}
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: sbom-${{ github.sha }}
+          path: sbom
+      - name: gh release upload
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${{ github.event.release.tag_name }}" sbom/*.cdx.json --repo "${{ github.repository }}" --clobber

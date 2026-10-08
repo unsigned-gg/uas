@@ -1,0 +1,40 @@
+# Release: tag + GitHub release on the release branch. Spec: specs/0005 (release flow).
+#
+# The version bump and the CHANGELOG roll happen BEFORE this, in a normal PR to
+# `development` (`make release-notes VERSION=x.y.z`), so CI runs on them. A
+# release-plz `release-pr` is not used: a PR opened with the default
+# GITHUB_TOKEN never triggers CI, so its required checks would never report.
+#
+# On every push to `main`, release-plz (`git_only = true`, see release-plz.toml)
+# compares the workspace version with the git tags. When `v<version>` does not
+# exist yet, it creates the tag and the GitHub release. Otherwise it does nothing.
+name: release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: release
+    runs-on: {group: ent-default, labels: [ci-rust]}
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # git_only mode reads tags
+      - uses: release-plz/action@18641b6c63063cc5ff8786ebf69cd57e8541bae1 # v0.5.140
+        with:
+          command: release
+        env:
+          GITHUB_TOKEN: ${{ github.token }}

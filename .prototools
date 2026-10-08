@@ -1,0 +1,12 @@
+# proto pins moon only. Rust is pinned by rust-toolchain.toml and baked into
+# the ci-rust runner image; proto must never install it there.
+moon = "2.2.6"
+
+[settings.offline]
+# The estate ci-rust runner netpol allows only :443 egress (DNS via
+# kube-system only), so proto's default offline probes (public DNS :53,
+# http :80) read as offline and abort plugin downloads with `plugin::offline`
+# even though ghcr.io:443 is reachable. Probe the :443 hosts proto needs.
+# Same fix as unsigned-gg/soma-os .prototools.
+custom-hosts = ["github.com:443", "ghcr.io:443"]
+override-default-hosts = true

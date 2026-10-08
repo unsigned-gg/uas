@@ -1,0 +1,30 @@
+# Weekly RustSec advisory scan of Cargo.lock. Not a PR gate: `cargo deny check`
+# (job cargo-deny in ci.yml) already blocks PRs on advisories. This catches
+# advisories published after a merge.
+name: audit
+
+on:
+  schedule:
+    - cron: "41 5 * * 1" # weekly, Monday 05:41 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    name: audit
+    runs-on: {group: ent-default, labels: [ci-rust]}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: taiki-e/install-action@f7e5d7c961414b23f5b25b2da9294395d08513ad # v2.87.26
+        with:
+          tool: cargo-audit
+      - name: make audit
+        run: |
+          set -euo pipefail
+          if make audit > audit.txt 2>&1; then status=clean; else status=advisories; fi
+          { echo "### cargo audit: ${status}"; echo ""; echo '```'; tail -n 60 audit.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          cat audit.txt
+          test "$status" = clean

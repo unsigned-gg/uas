@@ -1,0 +1,5 @@
+# actionlint config: the estate's self-hosted runner labels (action-runners helm values).
+self-hosted-runner:
+  labels:
+    - ci-rust
+    - reverie

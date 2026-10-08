@@ -1,0 +1,46 @@
+[workspace]
+resolver = "2"
+members = ["crates/*", "xtask"]
+
+[workspace.package]
+edition = "2021"
+version = "0.1.0"
+# Floor set by pgt (edition 2024). The pinned toolchain is in rust-toolchain.toml.
+rust-version = "1.85"
+publish = false
+license = "LicenseRef-Proprietary"
+authors = ["the operator <chris@todie.io>"]
+repository = "https://github.com/cerebral-work/rust-monorepo-template"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+missing_docs = "warn"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+
+[workspace.dependencies]
+# Derive (de)serialization for domain types and CLI output.
+serde = { version = "1", features = ["derive"] }
+# JSON output for the CLI.
+serde_json = "1"
+# Typed error enums in library crates.
+thiserror = "2"
+# Context-carrying errors in binaries and xtask.
+anyhow = "1"
+# Argument parsing for the CLI.
+clap = { version = "4", features = ["derive"] }
+# Structured logging facade.
+tracing = "0.1"
+# Log output and RUST_LOG filtering.
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Example of a private git dependency (record it in specs/0004 before first use):
+# pgt-core = { git = "https://github.com/cerebral-work/pgt", rev = "54d90f5" }
+
+[profile.release]
+lto = true
+codegen-units = 1
+
+[profile.dev]
+debug = "line-tables-only"

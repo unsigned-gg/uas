@@ -1,0 +1,26 @@
+[package]
+name = "skel-cli"
+description = "Command line interface for skel."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "skel"
+path = "src/main.rs"
+
+[dependencies]
+skel-domain = { path = "../skel-domain" }
+anyhow = { workspace = true }
+clap = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+
+[lints]
+workspace = true
