@@ -68,6 +68,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "330a5ed07fa54e4702c9d6c4174f74427fc0ef6e214bbd677ae50a5099946470"
 
 [[package]]
+name = "cas-acp"
+version = "0.1.0"
+
+[[package]]
 name = "cas-cli"
 version = "0.1.0"
 dependencies = [
@@ -81,6 +85,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "cas-deck"
+version = "0.1.0"
+
+[[package]]
 name = "cas-domain"
 version = "0.1.0"
 dependencies = [
@@ -88,6 +96,30 @@ dependencies = [
  "serde_json",
  "thiserror",
 ]
+
+[[package]]
+name = "cas-ebpf"
+version = "0.1.0"
+
+[[package]]
+name = "cas-engine"
+version = "0.1.0"
+
+[[package]]
+name = "cas-pool"
+version = "0.1.0"
+
+[[package]]
+name = "cas-router"
+version = "0.1.0"
+
+[[package]]
+name = "cas-sandbox"
+version = "0.1.0"
+
+[[package]]
+name = "cas-storage"
+version = "0.1.0"
 
 [[package]]
 name = "cfg-if"

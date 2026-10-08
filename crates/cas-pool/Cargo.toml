@@ -1,0 +1,15 @@
+[package]
+name = "cas-pool"
+description = "Worker slot manager: warm worktree pool (gitoxide), cgroup v2 suspend and resume."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[dependencies]
+
+[lints]
+workspace = true
