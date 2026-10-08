@@ -11,7 +11,7 @@ Methodology: LeanSpec. The reference copy is in `../vendor/leanspec/`.
 | [0004](0004-dependency-and-licence-policy.md) | Dependency and licence policy | in-progress | high |
 | [0005](0005-ci-cache-and-runners.md) | CI, cache and runners | in-progress | high |
 | [0006](0006-cas-engine-and-harness-dogfood.md) | CAS engine and harness dogfood | complete | high |
-| [0007](0007-lease-rules.md) | Lease rules | in-progress | high |
+| [0007](0007-lease-rules.md) | Lease rules | complete | high |
 
 ## How to add a spec
 

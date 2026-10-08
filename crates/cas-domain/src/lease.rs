@@ -516,6 +516,12 @@ mod tests {
             l.renew(&wrong, 150, 10),
             Err(DomainError::TokenMismatch("lease-1".into()))
         );
+        // Same length as the real token, so only the byte comparison can catch it.
+        let near = LeaseToken::new("s3cr3t-token-valuX").unwrap();
+        assert_eq!(
+            l.renew(&near, 150, 10),
+            Err(DomainError::TokenMismatch("lease-1".into()))
+        );
         assert_eq!(l.renew(&tok(), 150, 10).unwrap().expires_at, 210);
     }
 

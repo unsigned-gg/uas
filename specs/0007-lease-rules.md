@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: complete
 created: 2026-10-08
 tags: [domain, lease, slot, rules]
 priority: high
@@ -85,11 +85,11 @@ The only caller of `renew` and `issue` on 2026-10-08 is `cas demo` in
 ## Plan
 
 - [x] Record the four rulings in this spec.
-- [ ] R1: add `Lease::holds_slot_at` and `check_slot_free`. Call it from the in-memory ledger.
-- [ ] R2: add `LeaseToken::matches` and the token parameter on both `renew` methods.
-- [ ] R3: reject `extend_by == 0` in `Lease::renew`.
-- [ ] R4: document the rule on `Slot::drain` and pin it with a test.
-- [ ] Update `cas demo` to renew with the token.
+- [x] R1: add `Lease::holds_slot_at` and `check_slot_free`. Call it from the in-memory ledger.
+- [x] R2: add `LeaseToken::matches` and the token parameter on both `renew` methods.
+- [x] R3: reject `extend_by == 0` in `Lease::renew`.
+- [x] R4: document the rule on `Slot::drain` and pin it with a test.
+- [x] Update `cas demo` to renew with the token.
 
 ## Test
 
