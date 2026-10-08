@@ -1,11 +1,11 @@
-# AGENTS.md - rust-monorepo-template
+# AGENTS.md - cas
 
 This file is the canonical rule set for people and agents. Every rule is stated once, here.
 `CLAUDE.md` only points to this file.
 
 ## What this is
 
-The estate Rust monorepo template, `cerebral-work/rust-monorepo-template`. It builds and tests itself.
+The estate Rust monorepo template, `cerebral-work/cas`. It builds and tests itself.
 Start a new repo from it with `make new-repo NAME=<name>`. The skill `.agents/skills/new-repo/SKILL.md` gives the steps.
 After you run `make new-repo`, this file describes your new repo. Edit it to match.
 
@@ -13,8 +13,8 @@ After you run `make new-repo`, this file describes your new repo. Edit it to mat
 
 | Path | Content |
 |---|---|
-| `crates/skel-domain` | Library. Entities and ports. Zero I/O. |
-| `crates/skel-cli` | Binary `skel`. Parses arguments and calls the domain. |
+| `crates/cas-domain` | Library. Entities and ports. Zero I/O. |
+| `crates/cas-cli` | Binary `cas`. Parses arguments and calls the domain. |
 | `xtask/` | Repo tasks in Rust: `spec-check` and `toolchain-check`. The package name stays `xtask`. |
 | `specs/` | LeanSpec specs and the registry `specs/README.md`. |
 | `vendor/leanspec/` | Vendored LeanSpec method (MIT). Do not edit. |
@@ -58,7 +58,7 @@ Run `make help` for the full list. These targets are the contract.
 | `make hygiene` | `typos`, `machete`, `spec-check`, `toolchain-check`. |
 | `make spec-check` | Validate `specs/`. |
 | `make toolchain-check` | Compare `rust-toolchain.toml` with the installed Rust. |
-| `make smoke` | Build the CLI, run `skel --version`, check the domain has no I/O. |
+| `make smoke` | Build the CLI, run `cas --version`, check the domain has no I/O. |
 | `make release-notes VERSION=x.y.z` | Roll `[Unreleased]` into a version heading. |
 | `make new-repo NAME=<name>` | Rename the template into a new repo. |
 | `make template-check` | Check that the template and a renamed copy both build. |

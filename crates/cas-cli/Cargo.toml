@@ -1,6 +1,6 @@
 [package]
-name = "skel-cli"
-description = "Command line interface for skel."
+name = "cas-cli"
+description = "Command line interface for cas."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -10,11 +10,11 @@ authors.workspace = true
 repository.workspace = true
 
 [[bin]]
-name = "skel"
+name = "cas"
 path = "src/main.rs"
 
 [dependencies]
-skel-domain = { path = "../skel-domain" }
+cas-domain = { path = "../cas-domain" }
 anyhow = { workspace = true }
 clap = { workspace = true }
 serde = { workspace = true }

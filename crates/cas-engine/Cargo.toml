@@ -1,0 +1,15 @@
+[package]
+name = "cas-engine"
+description = "Durable workflow engine: Autumn-Harvest workflow definitions, activities and saga compensators."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[dependencies]
+
+[lints]
+workspace = true

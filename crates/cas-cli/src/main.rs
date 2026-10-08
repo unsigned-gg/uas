@@ -1,21 +1,21 @@
-//! `skel` command line entry point.
+//! `cas` command line entry point.
 
 mod memory;
 
 use anyhow::{Context, Result};
+use cas_domain::{Item, ItemId, ItemRepository};
 use clap::{Parser, Subcommand};
 use serde::Serialize;
-use skel_domain::{Item, ItemId, ItemRepository};
 use tracing_subscriber::EnvFilter;
 
 use memory::InMemoryRepository;
 
 /// Version text: crate version plus the git revision stamped by `build.rs`.
-const VERSION: &str = concat!(env!("CARGO_PKG_VERSION"), " (", env!("SKEL_BUILD_REV"), ")");
+const VERSION: &str = concat!(env!("CARGO_PKG_VERSION"), " (", env!("CAS_BUILD_REV"), ")");
 
 /// Template command line tool.
 #[derive(Debug, Parser)]
-#[command(name = "skel", version = VERSION, about)]
+#[command(name = "cas", version = VERSION, about)]
 struct Cli {
     #[command(subcommand)]
     command: Command,
@@ -92,7 +92,7 @@ mod tests {
     fn demo_reaches_done() {
         let steps = demo("abc").unwrap();
         assert_eq!(steps.len(), 3);
-        assert_eq!(steps[2].item.state(), skel_domain::ItemState::Done);
+        assert_eq!(steps[2].item.state(), cas_domain::ItemState::Done);
     }
 
     #[test]
