@@ -33,7 +33,39 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0 # git_only mode reads tags
+      # The ci-rust image has no gh. release-plz/action always runs a git-config
+      # step that calls `gh api`, so without gh the job stops with exit 127.
+      # Pinned by version and sha256 (spec 0004, CI tools). Remove this step
+      # when the ci-rust image ships gh.
+      - name: Install gh (pinned)
+        env:
+          GH_VERSION: "2.101.0"
+          GH_SHA256_X64: 9bca2d1c16825f109907a23307628a2f0698fbf99662b73a5cf0b020293072b8
+          GH_SHA256_ARM64: b57e8063f18862647c9d22727c32e9da1b963f8bf9db648fe123a6975695640f
+        run: |
+          case "$RUNNER_ARCH" in
+            X64) arch=amd64; sum="$GH_SHA256_X64" ;;
+            ARM64) arch=arm64; sum="$GH_SHA256_ARM64" ;;
+            *) echo "unsupported RUNNER_ARCH: $RUNNER_ARCH" >&2; exit 1 ;;
+          esac
+          name="gh_${GH_VERSION}_linux_${arch}"
+          curl -fsSL --retry 3 -o "$RUNNER_TEMP/$name.tar.gz" \
+            "https://github.com/cli/cli/releases/download/v${GH_VERSION}/$name.tar.gz"
+          echo "$sum  $RUNNER_TEMP/$name.tar.gz" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/$name.tar.gz" -C "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/$name/bin" >> "$GITHUB_PATH"
+      # The same call the release-plz git-config step makes. It fails here, with
+      # a clear name, if gh or the token does not work.
+      - name: Check gh and the token
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          gh --version
+          gh api graphql -f query='query { viewer { login } }' --jq .data.viewer.login
+      # Tag only from main. A manual run on another branch tests the steps above
+      # and creates no tag.
       - uses: release-plz/action@18641b6c63063cc5ff8786ebf69cd57e8541bae1 # v0.5.140
+        if: github.ref == 'refs/heads/main'
         with:
           command: release
         env:
