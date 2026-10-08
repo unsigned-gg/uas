@@ -3,7 +3,7 @@ status: in-progress
 created: 2026-10-08
 tags: [dependencies, licence, deny, pgt]
 priority: high
-depends_on: [0001-template-architecture]
+depends_on: [0001-cas-architecture-and-crate-layout]
 ---
 
 # 0004-dependency-and-licence-policy
@@ -23,7 +23,8 @@ Facts from 2026-10-08:
   It uses edition 2024, so the workspace `rust-version` floor is 1.85.
 - `autonice` is GPL-2.0. `zerostack` is GPL-3.0. Both are copyleft.
 - `0xPlaygrounds/rig` is MIT, version 0.44.0.
-- All eight research evaluations in `cerebral-work/research` are drafts.
+- Every research evaluation is a draft: the 13 files under `repos/` at
+  `cerebral-work/research@4068134` all have `status: "draft"`.
 
 ## Design
 
@@ -65,6 +66,41 @@ redistributes pgt code or copies it into this repo.
 Decision, the operator, 2026-10-08: rig is evaluated and pinned at 0.44.0 (MIT).
 The template does not include it. A repo adopts it when it needs model calls.
 It calls models through the LiteLLM gateway, not vendor APIs.
+
+### CAS dependencies from the research
+
+The CAS research names the projects below. Date of this list: 2026-10-08.
+Source for each: `cerebral-work/research@4068134`. Every research evaluation
+is a draft. None of these is approved. None is pinned. No crate depends on
+any of them yet. The rule above applies: pin and record a version here before
+the first use.
+
+| Project | Licence (per research) | Role in CAS | Status | Source |
+|---|---|---|---|---|
+| gitoxide (`gix`) | MIT OR Apache-2.0 | `cas-pool`: in-process worktrees and checkpoints | evaluated, unpinned, NOT approved | `repos/gitoxide.md` line 15 (licence), lines 100-111 (role) |
+| autumn-harvest | MIT OR Apache-2.0 | `cas-engine`: durable workflows | evaluated, unpinned, NOT approved | `repos/autumn-harvest.md` line 15 |
+| aya | MIT OR Apache-2.0 (not in the research; `aya-rs/aya` workspace `Cargo.toml`, read 2026-10-08) | `cas-ebpf`: eBPF programs and loader | evaluated, unpinned, NOT approved | `repos/neutral-engineering.md` section 2.1 |
+| a Landlock crate | to choose | `cas-sandbox`: filesystem rulesets | not chosen | `rust-native-agent-substrate.md` section 3.3 |
+| madstack (`pgray/madstack`: Axum, Maud, htmx) | MIT | `cas-deck`: operator dashboard | evaluated, unpinned, NOT approved | `repos/madstack.md` |
+| rig-core 0.44 | MIT | model calls through the LiteLLM gateway, on need | pinned at 0.44.0 by the decision above, not in the workspace | `0xPlaygrounds/rig` |
+
+The research does not state the aya licence. The `aya-rs/aya` workspace
+`Cargo.toml` declares `MIT OR Apache-2.0` (read 2026-10-08). Re-read it at the
+pin. A separate question remains: an eBPF program that calls GPL-only kernel
+helpers must declare a GPL-compatible licence in its `license` section (Linux
+kernel `Documentation/bpf/bpf_licensing.rst`). This repo is proprietary. Record the position here before the first
+`cas-ebpf` program. Spec 0001 lists this as an open gap.
+
+### Copyleft exclusions
+
+- `autonice` (neutral-engineering) is GPL-2.0. The research uses it as the
+  model for `cas-ebpf`. It is reference only. Never vendor it. Never depend
+  on it. Re-implement the idea on aya.
+- `zerostack` is GPL-3.0. It is reference only. Never vendor it. Never depend
+  on it.
+
+`deny.toml` denies both licences. A dependency that pulls either one in fails
+`cargo deny check`.
 
 ## Plan
 

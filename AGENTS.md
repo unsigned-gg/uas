@@ -1,19 +1,30 @@
-# AGENTS.md - cas
+# AGENTS.md - cas-substrate
 
 This file is the canonical rule set for people and agents. Every rule is stated once, here.
 `CLAUDE.md` only points to this file.
 
 ## What this is
 
-The estate Rust monorepo template, `cerebral-work/cas`. It builds and tests itself.
-Start a new repo from it with `make new-repo NAME=<name>`. The skill `.agents/skills/new-repo/SKILL.md` gives the steps.
-After you run `make new-repo`, this file describes your new repo. Edit it to match.
+`cerebral-work/cas-substrate` is the Cerebral Agent Substrate (CAS). It is a Rust-native,
+pooled runtime for agent harnesses. Status: scaffold and domain; no runtime yet.
+The design is a draft in `cerebral-work/research@4068134`. Read
+`specs/0001-cas-architecture-and-crate-layout.md` before you change any crate.
+The repo was made from the estate Rust monorepo template. The Go repo `unsigned-gg/substrate`
+is a different system.
 
 ## Layout
 
 | Path | Content |
 |---|---|
-| `crates/cas-domain` | Library. Entities and ports. Zero I/O. |
+| `crates/cas-domain` | Slots, leases, envelopes, attestations. Zero I/O. Phase 1. |
+| `crates/cas-engine` | Durable workflows and saga compensators. Placeholder. Phase 1. |
+| `crates/cas-sandbox` | Landlock and namespace isolation. Placeholder. Phase 2. |
+| `crates/cas-ebpf` | eBPF priority clamping and audit probes. Placeholder. Phase 2. |
+| `crates/cas-pool` | Worker slots, warm worktrees, cgroup suspend. Placeholder. Phase 3. |
+| `crates/cas-acp` | JSON-RPC server for IDEs. Placeholder. Phase 3. |
+| `crates/cas-router` | Prefix-hash routing for model calls. Placeholder. Phase 4. |
+| `crates/cas-deck` | Operator dashboard. Placeholder. Phase 5. |
+| `crates/cas-storage` | Storage clients. Placeholder. No phase yet. |
 | `crates/cas-cli` | Binary `cas`. Parses arguments and calls the domain. |
 | `xtask/` | Repo tasks in Rust: `spec-check` and `toolchain-check`. The package name stays `xtask`. |
 | `specs/` | LeanSpec specs and the registry `specs/README.md`. |
@@ -22,8 +33,10 @@ After you run `make new-repo`, this file describes your new repo. Edit it to mat
 | `.claude/` | Claude Code settings and hooks. |
 | `docs/`, `engineering/` | Docs for people. Engineering notes. |
 
-Dependency direction: crates depend only downward. The CLI depends on the domain. The domain depends on no other crate.
-The domain crate has zero I/O. It must not use `std::net`, `std::fs`, `std::process` or `tokio`. `make smoke` checks this.
+Layering: from the top layer down, `deck > acp > engine > pool > sandbox, ebpf > router > domain`.
+A crate depends only on crates in lower layers. Add a Cargo dependency only when real code needs it.
+`cas-domain` depends on no other crate in the workspace. It has zero I/O: it must not use `std::net`,
+`std::fs`, `std::process` or `tokio`. `make smoke` checks this.
 
 ## Rules that bind
 
