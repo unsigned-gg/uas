@@ -96,6 +96,8 @@ Refined from decision 8, Christian, interviews 2026-10-08.
    The job first installs a pinned `gh`, because the `ci-rust` image has none
    and the release-plz action needs it (spec 0004, CI tools). The release-plz
    step runs only on `main`. A manual run on another branch creates no tag.
+   The job also has `pull-requests: read`, because release-plz lists the pull
+   requests of the released commit.
 4. `release-plz.toml` sets in `[workspace]`: `git_only = true`, `publish =
    false`, `changelog_update = false`, `git_release_enable = false`,
    `git_tag_enable = false`, `semver_check = false`. The package `cas-cli`
@@ -105,11 +107,11 @@ Refined from decision 8, Christian, interviews 2026-10-08.
 
 ## Plan
 
-- [ ] Write `ci.yml`, `_rust.yml` and `template-check.yml`.
-- [ ] Write `codeql.yml`, `sbom.yml`, `release.yml`, `audit.yml`, `labeler.yml`.
-- [ ] Pin every action by SHA.
-- [ ] Add the sccache step and its hard stats check, skipped by `if:`.
-- [ ] Run once on a PR. Confirm the four required check names.
+- [x] Write `ci.yml` and `_rust.yml`. (`template-check.yml` is template-only. `make new-repo` deletes it.)
+- [x] Write `codeql.yml`, `sbom.yml`, `release.yml`, `audit.yml`, `labeler.yml`.
+- [x] Pin every action by SHA.
+- [x] Add the sccache step and its hard stats check, skipped by `if:`.
+- [x] Run once on a PR. Confirm the four required check names (spec 0003).
 - [ ] Ask the paas lane for the R2 bucket, secrets and image changes.
 
 ## Test
