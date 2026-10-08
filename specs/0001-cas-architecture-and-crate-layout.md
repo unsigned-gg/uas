@@ -23,9 +23,10 @@ This repo was made from the estate Rust monorepo template on 2026-10-08. The
 scaffold carries the gates in specs 0002 to 0005. This spec fixes what is CAS
 specific: the crates, the layering rule, the invariants and the open gaps.
 
-Relation to `unsigned-gg/substrate`: that repo is written in Go. It is a
-Kubernetes sandbox runtime. It is a different system with a similar name. CAS
-does not import it, call it, or replace it.
+Relation to `unsigned-gg/substrate`: GitHub reports its language as Go and its
+description as "Agent Substrate: the core system" (read 2026-10-08). It is a
+different system with a similar name. CAS does not import it, call it, or
+replace it.
 
 Status on 2026-10-08: scaffold and domain only. No runtime exists yet. The
 eight non-domain crates are placeholders with a README and no code.
@@ -106,8 +107,8 @@ section 11. Four failures, each with a planned response:
 | Host CPU saturation | Clamp the build process tree to `nice 19`. | ebpf |
 
 The research claims a tree restore under 5 ms and a cache hit rate over 90
-percent. These are design claims with `asserted` evidence. Nobody has measured
-them here.
+percent (SYN sections 4.5 and 4.7, ATL section 11). These are design claims.
+Nobody has measured them here.
 
 ### Integration edges
 
@@ -121,8 +122,8 @@ section 3.
 5. Execution receipts go to saga. An exit code of 0 earns the `verified` tier.
 6. Saga compensates on failure. Results go to reverie as memory and to the
    cortex mesh as signed messages.
-7. `cas-deck` reads the cortex settle queue at `/v1/settle/pending`. The
-   operator signs off there.
+7. `cas-deck` connects to the cortex settle queue at `/v1/settle/pending`
+   (DES section 3.6). The operator signs off there.
 
 CAS integrates with soma, cortex, saga and reverie through service edges. It
 does not vendor them.
@@ -155,7 +156,8 @@ These are not decided. Each needs a spec or an operator ruling before code.
    Phase 6 deploys a Kubernetes operator for aistore. That is not a crate.
 4. **aistore is Go.** `cas-storage` can only be an HTTP client of it.
 5. **eBPF licence.** An eBPF program that calls GPL-only kernel helpers must
-   declare a GPL-compatible licence in its `license` section. This repo is
+   declare a GPL-compatible licence in its `license` section. (Source: the
+   Linux kernel, `Documentation/bpf/bpf_licensing.rst`; not in the research.) This repo is
    proprietary. The helpers needed are unknown. Spec 0004 records the open
    question. Decide before the first program.
 6. **eBPF toolchain.** The eBPF side needs nightly Rust and `bpf-linker`. The
