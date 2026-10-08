@@ -173,7 +173,7 @@ These are not decided. Each needs a spec or an operator ruling before code.
 ## Plan
 
 - [x] Scaffold from the estate template. Ten crates compile.
-- [ ] Build `cas-domain` (slot, lease, envelope, attestation, error).
+- [x] Build `cas-domain` (slot, lease, envelope, attestation, error). PR #3.
 - [ ] Write the spec that chooses the pool runtime.
 - [ ] Write the spec that designs a job cap for builds, or drops the claim.
 - [ ] Give `cas-storage` a phase or merge it into another crate.

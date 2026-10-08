@@ -49,7 +49,7 @@ Both branches carry the same classic protection.
 | PR required, admins included | yes | yes |
 | Required approvals | 0 | 0 |
 | Required check `secrets` | yes | yes |
-| Required check `rust` | yes | yes |
+| Required check `rust / cargo` | yes | yes |
 | Required check `cargo-deny` | yes | yes |
 | Required check `hygiene` | yes | yes |
 
@@ -59,25 +59,36 @@ workflow.
 
 The approval count is 0 on purpose. Estate rule "prod is dev" (operator ruling
 2026-09-30) lets a lane merge on green CI. Review can follow the merge.
-The check names are confirmed after the first CI run. Spec 0005 lists the jobs.
+The check names were read back from the API on 2026-10-08. The `rust` job
+reports as `rust / cargo`. Spec 0005 lists the jobs.
 
 ### Promotion PR
 
 A promotion PR merges `development` into `main`.
 
-- The operator decides. Christian Todie merges it. This is his go, per
-  decision of record, interview 2026-10-08.
-- No agent approves or merges its own promotion PR.
+- Land-on-green covers the promotion PR. Operator ruling: Christian Todie
+  chose "Land-on-green covers it" in an interview in the CAS lane on
+  2026-10-08. It replaces the earlier decision of the same day that only he
+  merges it.
+- A lane merges the promotion PR when every required check is green on the
+  head. Use a merge commit pinned to the head:
+  `gh pr merge <N> --merge --match-head-commit <sha>`.
+- No agent approves its own promotion PR. The protection needs 0 approvals.
+- On ceres, the user hook `guard-merge-to-main.sh` blocks every
+  `gh pr merge`. The lane adds the `# allow-merge` marker, cites this ruling
+  and reports the merge.
 - After the merge, `development` and `main` must point to the same content.
   Check it with `git diff origin/development origin/main`. It must print nothing.
+- The push to `main` starts the `release` workflow. Check that the run is
+  green. A red run is a stop, not a detail.
 
 ## Plan
 
-- [ ] Create the repo with `main` and `development`.
-- [ ] Turn on `delete_branch_on_merge`. Turn off squash and rebase merge.
-- [ ] Write the protection for both branches.
-- [ ] Add the four required checks after the first green run.
-- [ ] Open the first promotion PR. The operator merges it.
+- [x] Create the repo with `main` and `development`.
+- [x] Turn on `delete_branch_on_merge`. Turn off squash and rebase merge.
+- [x] Write the protection for both branches.
+- [x] Add the four required checks after the first green run.
+- [x] Open the first promotion PR and merge it (#4, merged 2026-10-08).
 
 ## Test
 
@@ -89,7 +100,8 @@ gh api repos/cerebral-work/cas-substrate/branches/main/protection \
 ```
 
 Passing means `force` and `del` are false, `admins` is true, and `checks`
-lists `secrets`, `rust`, `cargo-deny` and `hygiene`. Repeat for `development`.
+lists `secrets`, `rust / cargo`, `cargo-deny` and `hygiene`. Repeat for
+`development`.
 A push to `main` from a throwaway clone must be refused.
 
 ## Notes
