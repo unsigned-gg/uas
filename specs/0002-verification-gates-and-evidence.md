@@ -66,10 +66,10 @@ same number.
 
 ## Plan
 
-- [ ] Write the Makefile targets with exact names from the table above.
-- [ ] Add `.config/nextest.toml` with profiles `default`, `ci`, `pre-push`.
-- [ ] Add `toolchain-check` to `xtask`.
-- [ ] Wire `rust` and `hygiene` CI jobs to the make targets.
+- [x] Write the Makefile targets with exact names from the table above.
+- [x] Add `.config/nextest.toml` with profiles `default`, `ci`, `pre-push`.
+- [x] Add `toolchain-check` to `xtask`.
+- [x] Wire `rust` and `hygiene` CI jobs to the make targets.
 - [ ] Prove each gate fails on a planted fault, then passes.
 
 ## Test
