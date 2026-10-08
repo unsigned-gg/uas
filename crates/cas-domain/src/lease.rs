@@ -139,6 +139,7 @@ impl From<PrincipalRef> for String {
 
 /// Spending limits for one lease.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(try_from = "BudgetRepr")]
 pub struct Budget {
     /// Most tokens the holder may use.
     pub max_tokens: u64,
@@ -168,6 +169,7 @@ impl Budget {
 /// Time values are epoch seconds passed in by the caller. The domain never
 /// reads a clock.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(try_from = "LeaseRepr")]
 pub struct Lease {
     /// Lease id.
     pub id: LeaseId,
@@ -183,6 +185,49 @@ pub struct Lease {
     pub expires_at: u64,
     /// Spending limits.
     pub budget: Budget,
+}
+
+/// The wire shape of a [`Budget`], checked by [`Budget::new`].
+#[derive(Deserialize)]
+struct BudgetRepr {
+    max_tokens: u64,
+    max_wall_secs: u64,
+}
+
+impl TryFrom<BudgetRepr> for Budget {
+    type Error = DomainError;
+
+    fn try_from(r: BudgetRepr) -> Result<Self, Self::Error> {
+        Self::new(r.max_tokens, r.max_wall_secs)
+    }
+}
+
+/// The wire shape of a [`Lease`], checked by [`Lease::new`].
+#[derive(Deserialize)]
+struct LeaseRepr {
+    id: LeaseId,
+    slot: SlotId,
+    holder: PrincipalRef,
+    token: LeaseToken,
+    issued_at: u64,
+    expires_at: u64,
+    budget: Budget,
+}
+
+impl TryFrom<LeaseRepr> for Lease {
+    type Error = DomainError;
+
+    fn try_from(r: LeaseRepr) -> Result<Self, Self::Error> {
+        Self::new(
+            r.id,
+            r.slot,
+            r.holder,
+            r.token,
+            r.issued_at,
+            r.expires_at,
+            r.budget,
+        )
+    }
 }
 
 impl Lease {
@@ -363,5 +408,24 @@ mod tests {
         let l = lease(1, 2);
         let json = serde_json::to_string(&l).unwrap();
         assert_eq!(serde_json::from_str::<Lease>(&json).unwrap(), l);
+    }
+
+    #[test]
+    fn serde_rejects_what_the_constructors_reject() {
+        let good = serde_json::to_value(lease(100, 200)).unwrap();
+        let mut ends_early = good.clone();
+        ends_early["expires_at"] = serde_json::json!(100);
+        assert!(serde_json::from_value::<Lease>(ends_early).is_err());
+        let mut zero_budget = good.clone();
+        zero_budget["budget"]["max_tokens"] = serde_json::json!(0);
+        assert!(serde_json::from_value::<Lease>(zero_budget).is_err());
+        assert!(serde_json::from_str::<Budget>(r#"{"max_tokens":0,"max_wall_secs":60}"#).is_err());
+        assert!(
+            serde_json::from_str::<Budget>(r#"{"max_tokens":1000,"max_wall_secs":0}"#).is_err()
+        );
+        assert_eq!(
+            serde_json::from_value::<Lease>(good).unwrap(),
+            lease(100, 200)
+        );
     }
 }
