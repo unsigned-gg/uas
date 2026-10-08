@@ -10,7 +10,7 @@ Methodology: LeanSpec. The reference copy is in `../vendor/leanspec/`.
 | [0003](0003-branch-model-and-promotion.md) | Branch model and promotion | in-progress | high |
 | [0004](0004-dependency-and-licence-policy.md) | Dependency and licence policy | in-progress | high |
 | [0005](0005-ci-cache-and-runners.md) | CI, cache and runners | in-progress | high |
-| [0006](0006-cas-engine-and-harness-dogfood.md) | CAS engine and harness dogfood | in-progress | high |
+| [0006](0006-cas-engine-and-harness-dogfood.md) | CAS engine and harness dogfood | complete | high |
 
 ## How to add a spec
 

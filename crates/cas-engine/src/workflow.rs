@@ -1,0 +1,377 @@
+//! Durable workflow session lifecycle manager and event replayer.
+
+use cas_domain::{LeaseId, SlotId};
+
+use crate::{
+    Activity, ActivityResult, Compensator, EngineError, EventStore, InMemoryEventStore,
+    NoopCompensator, SessionId, SessionState, WorkflowEvent,
+};
+
+/// A durable workflow session managing execution turns and event logging.
+pub struct WorkflowSession<S: EventStore = InMemoryEventStore> {
+    session_id: SessionId,
+    state: SessionState,
+    slot_id: Option<SlotId>,
+    lease_id: Option<LeaseId>,
+    store: S,
+    compensator: Box<dyn Compensator>,
+}
+
+impl WorkflowSession<InMemoryEventStore> {
+    /// Create a new session with in-memory event storage and a default no-op compensator.
+    pub fn new(session_id: SessionId) -> Self {
+        Self::with_store_and_compensator(
+            session_id,
+            InMemoryEventStore::new(),
+            Box::new(NoopCompensator),
+        )
+    }
+
+    /// Rebuild session state from a recorded event sequence without side effects.
+    pub fn replay_from_events(
+        session_id: SessionId,
+        events: &[WorkflowEvent],
+    ) -> Result<Self, EngineError> {
+        let mut session = WorkflowSession::new(session_id);
+        for event in events {
+            match event {
+                WorkflowEvent::SessionStarted {
+                    sequence,
+                    slot_id,
+                    lease_id,
+                    timestamp: _,
+                    ..
+                } => {
+                    if *sequence != session.store.len() as u64 {
+                        return Err(EngineError::ReplayFailed {
+                            sequence: *sequence,
+                            reason: "non-sequential sequence number".into(),
+                        });
+                    }
+                    session.slot_id = Some(slot_id.clone());
+                    session.lease_id = Some(lease_id.clone());
+                    session.state = SessionState::Running;
+                    session.store.append(event.clone())?;
+                }
+                WorkflowEvent::ActivityStarted { sequence, .. } => {
+                    if *sequence != session.store.len() as u64 {
+                        return Err(EngineError::ReplayFailed {
+                            sequence: *sequence,
+                            reason: "non-sequential sequence number".into(),
+                        });
+                    }
+                    session.store.append(event.clone())?;
+                }
+                WorkflowEvent::ActivityCompleted { sequence, .. } => {
+                    if *sequence != session.store.len() as u64 {
+                        return Err(EngineError::ReplayFailed {
+                            sequence: *sequence,
+                            reason: "non-sequential sequence number".into(),
+                        });
+                    }
+                    session.store.append(event.clone())?;
+                }
+                WorkflowEvent::ActivityFailed { sequence, .. } => {
+                    if *sequence != session.store.len() as u64 {
+                        return Err(EngineError::ReplayFailed {
+                            sequence: *sequence,
+                            reason: "non-sequential sequence number".into(),
+                        });
+                    }
+                    session.store.append(event.clone())?;
+                }
+                WorkflowEvent::Compensating { sequence, .. } => {
+                    if *sequence != session.store.len() as u64 {
+                        return Err(EngineError::ReplayFailed {
+                            sequence: *sequence,
+                            reason: "non-sequential sequence number".into(),
+                        });
+                    }
+                    session.state = SessionState::Compensating;
+                    session.store.append(event.clone())?;
+                }
+                WorkflowEvent::SessionFinished {
+                    sequence,
+                    final_state,
+                    ..
+                } => {
+                    if *sequence != session.store.len() as u64 {
+                        return Err(EngineError::ReplayFailed {
+                            sequence: *sequence,
+                            reason: "non-sequential sequence number".into(),
+                        });
+                    }
+                    session.state = *final_state;
+                    session.store.append(event.clone())?;
+                }
+            }
+        }
+        Ok(session)
+    }
+}
+
+impl<S: EventStore> WorkflowSession<S> {
+    /// Create a session with custom event store and compensator.
+    pub fn with_store_and_compensator(
+        session_id: SessionId,
+        store: S,
+        compensator: Box<dyn Compensator>,
+    ) -> Self {
+        Self {
+            session_id,
+            state: SessionState::Unstarted,
+            slot_id: None,
+            lease_id: None,
+            store,
+            compensator,
+        }
+    }
+
+    /// Access the session identifier.
+    pub fn id(&self) -> &SessionId {
+        &self.session_id
+    }
+
+    /// Current lifecycle state.
+    pub fn state(&self) -> SessionState {
+        self.state
+    }
+
+    /// Associated slot binding, if started.
+    pub fn slot_id(&self) -> Option<&SlotId> {
+        self.slot_id.as_ref()
+    }
+
+    /// Associated lease binding, if started.
+    pub fn lease_id(&self) -> Option<&LeaseId> {
+        self.lease_id.as_ref()
+    }
+
+    /// Access recorded events in the log.
+    pub fn events(&self) -> &[WorkflowEvent] {
+        self.store.events()
+    }
+
+    /// Start the workflow session by binding an acquired slot and lease.
+    pub fn start(
+        &mut self,
+        slot_id: SlotId,
+        lease_id: LeaseId,
+        timestamp: u64,
+    ) -> Result<(), EngineError> {
+        self.transition_to(SessionState::Running)?;
+        self.slot_id = Some(slot_id.clone());
+        self.lease_id = Some(lease_id.clone());
+
+        tracing::debug!(
+            session_id = %self.session_id,
+            %slot_id,
+            %lease_id,
+            "session started"
+        );
+
+        let seq = self.store.len() as u64;
+        self.store.append(WorkflowEvent::SessionStarted {
+            sequence: seq,
+            session_id: self.session_id.clone(),
+            slot_id,
+            lease_id,
+            timestamp,
+        })
+    }
+
+    /// Begin an activity within the session.
+    pub fn start_activity(
+        &mut self,
+        activity: Activity,
+        timestamp: u64,
+    ) -> Result<(), EngineError> {
+        if self.state != SessionState::Running {
+            return Err(EngineError::InvalidStateTransition {
+                from: self.state,
+                to: SessionState::Running,
+                reason: "cannot start activity unless session is in Running state",
+            });
+        }
+        tracing::debug!(
+            session_id = %self.session_id,
+            activity_id = %activity.id,
+            "activity started"
+        );
+        let seq = self.store.len() as u64;
+        self.store.append(WorkflowEvent::ActivityStarted {
+            sequence: seq,
+            activity,
+            timestamp,
+        })
+    }
+
+    /// Record successful completion of an activity.
+    pub fn complete_activity(
+        &mut self,
+        result: ActivityResult,
+        timestamp: u64,
+    ) -> Result<(), EngineError> {
+        if self.state != SessionState::Running {
+            return Err(EngineError::InvalidStateTransition {
+                from: self.state,
+                to: SessionState::Running,
+                reason: "cannot complete activity unless session is in Running state",
+            });
+        }
+        tracing::debug!(
+            session_id = %self.session_id,
+            activity_id = %result.activity_id,
+            "activity completed"
+        );
+        let seq = self.store.len() as u64;
+        self.store.append(WorkflowEvent::ActivityCompleted {
+            sequence: seq,
+            result,
+            timestamp,
+        })
+    }
+
+    /// Fail an activity and trigger saga compensation rollback.
+    pub fn fail_activity(
+        &mut self,
+        activity: &Activity,
+        reason: String,
+        timestamp: u64,
+    ) -> Result<(), EngineError> {
+        if self.state != SessionState::Running {
+            return Err(EngineError::InvalidStateTransition {
+                from: self.state,
+                to: SessionState::Compensating,
+                reason: "cannot fail activity unless session is in Running state",
+            });
+        }
+
+        tracing::warn!(
+            session_id = %self.session_id,
+            activity_id = %activity.id,
+            %reason,
+            "activity failed, compensating"
+        );
+
+        let seq = self.store.len() as u64;
+        self.store.append(WorkflowEvent::ActivityFailed {
+            sequence: seq,
+            activity_id: activity.id.clone(),
+            reason: reason.clone(),
+            timestamp,
+        })?;
+
+        self.state = SessionState::Compensating;
+        let comp_seq = self.store.len() as u64;
+        self.store.append(WorkflowEvent::Compensating {
+            sequence: comp_seq,
+            reason: reason.clone(),
+            timestamp,
+        })?;
+
+        // Execute compensation logic
+        if let Err(e) = self.compensator.compensate(activity, &reason) {
+            return Err(EngineError::CompensationFailed {
+                activity_id: activity.id.clone(),
+                reason: e.to_string(),
+            });
+        }
+
+        self.state = SessionState::Failed;
+        let fin_seq = self.store.len() as u64;
+        self.store.append(WorkflowEvent::SessionFinished {
+            sequence: fin_seq,
+            final_state: SessionState::Failed,
+            timestamp,
+        })
+    }
+
+    /// Conclude the session with success.
+    pub fn finish_success(&mut self, timestamp: u64) -> Result<(), EngineError> {
+        self.transition_to(SessionState::Succeeded)?;
+        tracing::info!(session_id = %self.session_id, "session finished successfully");
+        let seq = self.store.len() as u64;
+        self.store.append(WorkflowEvent::SessionFinished {
+            sequence: seq,
+            final_state: SessionState::Succeeded,
+            timestamp,
+        })
+    }
+
+    fn transition_to(&mut self, target: SessionState) -> Result<(), EngineError> {
+        if !self.state.can_transition_to(target) {
+            return Err(EngineError::InvalidStateTransition {
+                from: self.state,
+                to: target,
+                reason: "illegal state transition",
+            });
+        }
+        self.state = target;
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ActivityKind;
+    use cas_domain::{Attestation, EvidenceTier, PrincipalRef};
+
+    #[test]
+    fn full_successful_session_lifecycle() {
+        let sess_id = SessionId::new("sess-1").unwrap();
+        let slot_id = SlotId::new("slot-1").unwrap();
+        let lease_id = LeaseId::new("lease-1").unwrap();
+
+        let mut sess = WorkflowSession::new(sess_id.clone());
+        assert_eq!(sess.state(), SessionState::Unstarted);
+
+        sess.start(slot_id, lease_id, 100).unwrap();
+        assert_eq!(sess.state(), SessionState::Running);
+
+        let act = Activity::new("act-1", "Verify gates", ActivityKind::Verify);
+        sess.start_activity(act.clone(), 105).unwrap();
+
+        let att = Attestation {
+            signer: PrincipalRef::new("cas/agent-1").unwrap(),
+            evidence: EvidenceTier::Verified,
+            receipt: "make check: ok".into(),
+            at: 110,
+        };
+        let res = ActivityResult {
+            activity_id: act.id,
+            success: true,
+            attestation: att,
+            summary: Some("passed".into()),
+        };
+        sess.complete_activity(res, 110).unwrap();
+        sess.finish_success(120).unwrap();
+
+        assert_eq!(sess.state(), SessionState::Succeeded);
+        assert_eq!(sess.events().len(), 4);
+
+        // Replay verification
+        let replayed = WorkflowSession::replay_from_events(sess_id, sess.events()).unwrap();
+        assert_eq!(replayed.state(), SessionState::Succeeded);
+        assert_eq!(replayed.events().len(), 4);
+    }
+
+    #[test]
+    fn session_failure_triggers_compensation() {
+        let sess_id = SessionId::new("sess-fail").unwrap();
+        let slot_id = SlotId::new("slot-1").unwrap();
+        let lease_id = LeaseId::new("lease-1").unwrap();
+
+        let mut sess = WorkflowSession::new(sess_id);
+        sess.start(slot_id, lease_id, 100).unwrap();
+
+        let act = Activity::new("act-fail", "Run broken check", ActivityKind::Verify);
+        sess.start_activity(act.clone(), 105).unwrap();
+        sess.fail_activity(&act, "make check exit 1".into(), 110)
+            .unwrap();
+
+        assert_eq!(sess.state(), SessionState::Failed);
+        assert_eq!(sess.events().len(), 5);
+    }
+}
