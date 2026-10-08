@@ -39,17 +39,17 @@ Run `make spec-check`.
 Verify that all LeanSpec documents conform to rules without warnings or broken links.
 """
 
-# -- Step 3: Slot lease allocation --------------------------------------------
+# -- Step 3: Slot allocation and harness verification -------------------------
 [[step]]
 id = "slot-lease"
-title = "Allocate substrate execution slot and verify demo lifecycle"
+title = "Allocate substrate execution slot and verify harness lifecycle"
 kind = "verify"
 agent = "auto"
 deps = ["spec-check"]
-verify_cmd = ["cargo", "run", "-p", "cas-cli", "--", "demo", "--slot", "slot-builder"]
+verify_cmd = ["cargo", "run", "-p", "cas-cli", "--", "harness", "run", "--slot", "slot-builder", "--task", "spec-check", "--dry-run"]
 prompt = """
-Run `cargo run -p cas-cli -- demo --slot slot-builder`.
-Confirm the slot transitions cleanly through Warm -> Leased -> Suspended -> Leased -> Warm.
+Run `cargo run -p cas-cli -- harness run --slot slot-builder --task spec-check --dry-run`.
+Confirm the session executes cleanly, emitting an event log and a Verified attestation.
 """
 
 # -- Step 4: Builder implementation -------------------------------------------

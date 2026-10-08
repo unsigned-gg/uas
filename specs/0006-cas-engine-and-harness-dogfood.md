@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: complete
 created: 2026-10-08
 tags: [engine, harness, dogfood, saga, substrate]
 priority: high
@@ -71,12 +71,12 @@ Saga Flow -> Custody Check -> Slot Acquisition -> Implementation -> Gate Verific
 ## Plan
 
 - [x] Create spec 0006 and record in `specs/README.md`.
-- [ ] Define `.saga/flows/cas-builder.toml` workflow template.
-- [ ] Validate flow template via `saga flows` and `saga run --dry-run`.
-- [ ] Implement `WorkflowSession` and `Activity` traits in `crates/cas-engine`.
-- [ ] Implement in-memory event store in `crates/cas-engine`.
-- [ ] Expose `cas harness` subcommand in `crates/cas-cli`.
-- [ ] Pass all workspace verification gates (`make check`, `make smoke`).
+- [x] Define `.saga/flows/cas-builder.toml` workflow template.
+- [x] Validate flow template via `saga flows` and `saga run --dry-run`.
+- [x] Implement `WorkflowSession` and `Activity` traits in `crates/cas-engine`.
+- [x] Implement in-memory event store in `crates/cas-engine`.
+- [x] Expose `cas harness` subcommand in `crates/cas-cli`.
+- [x] Pass all workspace verification gates (`make check`, `make smoke`).
 
 ## Test
 
