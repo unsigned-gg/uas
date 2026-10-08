@@ -8,7 +8,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- The estate Rust monorepo template: a Cargo workspace with a zero-I/O domain crate, a CLI crate and an `xtask`; a `Makefile` with the gate targets; LeanSpec specs with `make spec-check`; CI workflows; moon tasks; lefthook and gitleaks; `AGENTS.md` with four skills; Claude Code hooks; issue and PR templates; and `make new-repo` to start a repo from it.
+- The repository, generated from `cerebral-work/rust-monorepo-template` (template `main` at `1366ed9`) and renamed with `make new-repo NAME=cas`: the crates `cas-domain` and `cas-cli`, the `xtask`, the gate targets, CI, moon, lefthook, the specs and the agent files.
+- Eight placeholder crates from the research design: `cas-engine`, `cas-pool`, `cas-sandbox`, `cas-ebpf`, `cas-router`, `cas-acp`, `cas-storage` and `cas-deck`. Each compiles and has a README that names its research section, phase and open questions.
 
-### Fixed
-- `make new-repo` runs `cargo fmt --all` after the rename. A name that sorts before `clap`, such as `cas`, left the CLI imports out of order and failed `make check`.
