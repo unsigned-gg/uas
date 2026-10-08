@@ -91,6 +91,17 @@ helpers must declare a GPL-compatible licence in its `license` section (Linux
 kernel `Documentation/bpf/bpf_licensing.rst`). This repo is proprietary. Record the position here before the first
 `cas-ebpf` program. Spec 0001 lists this as an open gap.
 
+### CI tools
+
+A tool that a workflow downloads at run time is an external dependency too.
+Pin it by version and sha256 and record it here.
+
+| Tool | Version | Licence | Use | Pin |
+|---|---|---|---|---|
+| `gh` (cli/cli) | 2.101.0, published 2026-09-15 | MIT | `release.yml`: the release-plz action calls `gh` in its git-config step. The `ci-rust` image has no `gh`. | sha256 for `linux_amd64` and `linux_arm64` in `release.yml`. Checked 2026-10-08 against `gh_2.101.0_checksums.txt` and a local `sha256sum` of each tarball. |
+
+The `gh` step is temporary. Remove it when the `ci-rust` image ships `gh`.
+
 ### Copyleft exclusions
 
 - `autonice` (neutral-engineering) is GPL-2.0. The research uses it as the
