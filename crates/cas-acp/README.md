@@ -6,7 +6,7 @@ Agent Communication Protocol server (JSON-RPC 2.0 over stdio and TCP) for Zed an
 |---|---|
 | Status | Placeholder. No code yet. |
 | Roadmap phase | Phase 3 (with cas-pool) |
-| Research | `/home/ctodie/projects/cerebral/cas-substrate-prep/cerebral-work/research@4068134gentic-systems/designs/substrate-diagrams-and-components.md §3` |
+| Research | `cerebral-work/research@4068134:agentic-systems/designs/substrate-diagrams-and-components.md section 3` |
 | Will depend on | cas-domain, cas-engine |
 
 The layering rule is in `specs/0001-cas-architecture-and-crate-layout.md`: a crate
