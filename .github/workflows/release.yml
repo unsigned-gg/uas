@@ -29,6 +29,9 @@ jobs:
     timeout-minutes: 20
     permissions:
       contents: write
+      # release-plz lists the pull requests of the released commit. Without
+      # this scope the call returns 403 "Resource not accessible by integration".
+      pull-requests: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -62,6 +65,9 @@ jobs:
         run: |
           gh --version
           gh api graphql -f query='query { viewer { login } }' --jq .data.viewer.login
+          # release-plz lists the pull requests of the released commit. This
+          # needs the pull-requests scope.
+          gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/pulls" --jq length
       # Tag only from main. A manual run on another branch tests the steps above
       # and creates no tag.
       - uses: release-plz/action@18641b6c63063cc5ff8786ebf69cd57e8541bae1 # v0.5.140
