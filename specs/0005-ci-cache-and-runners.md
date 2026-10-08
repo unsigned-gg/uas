@@ -93,6 +93,9 @@ Refined from decision 8, Christian, interviews 2026-10-08.
 2. The promotion PR moves the change to `main` (spec 0003).
 3. On push to `main`, release-plz `release` runs with `git_only = true`. When
    the version has no tag yet, it creates tag `vX.Y.Z` and the GitHub release.
+   The job first installs a pinned `gh`, because the `ci-rust` image has none
+   and the release-plz action needs it (spec 0004, CI tools). The release-plz
+   step runs only on `main`. A manual run on another branch creates no tag.
 4. `release-plz.toml` sets in `[workspace]`: `git_only = true`, `publish =
    false`, `changelog_update = false`, `git_release_enable = false`,
    `git_tag_enable = false`, `semver_check = false`. The package `cas-cli`
