@@ -10,6 +10,13 @@ authors.workspace = true
 repository.workspace = true
 
 [dependencies]
+cas-domain = { path = "../cas-domain" }
+serde = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }
 
 [lints]
 workspace = true
