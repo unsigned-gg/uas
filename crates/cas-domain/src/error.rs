@@ -1,28 +1,43 @@
-use crate::item::ItemState;
+use crate::SlotState;
 
 /// Errors the domain can return.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum DomainError {
-    /// The item id text is not valid.
-    #[error("invalid item id {id:?}: {reason}")]
-    InvalidId {
-        /// The rejected text.
-        id: String,
+    /// A validated text value was rejected.
+    #[error("invalid {kind} {value:?}: {reason}")]
+    Invalid {
+        /// Which kind of value was rejected, for example `slot id`.
+        kind: &'static str,
+        /// The rejected text. Never set for secrets.
+        value: String,
         /// Why the text was rejected.
         reason: &'static str,
     },
-    /// The requested state change is not allowed.
-    #[error("illegal transition from {from:?} to {to:?}")]
+    /// The requested slot state change is not allowed.
+    #[error("illegal slot transition: cannot {op} a slot that is {from:?}")]
     IllegalTransition {
         /// State before the change.
-        from: ItemState,
-        /// State the caller asked for.
-        to: ItemState,
+        from: SlotState,
+        /// The operation the caller asked for.
+        op: &'static str,
     },
-    /// An item with this id already exists.
-    #[error("item {0} already exists")]
-    Duplicate(String),
-    /// No item has this id.
-    #[error("item {0} not found")]
-    NotFound(String),
+    /// A lease has expired and cannot be renewed.
+    #[error("lease {lease} expired at {expires_at} (now {now})")]
+    LeaseExpired {
+        /// The lease id.
+        lease: String,
+        /// When the lease ended, in epoch seconds.
+        expires_at: u64,
+        /// The time of the attempt, in epoch seconds.
+        now: u64,
+    },
+    /// A time calculation went past the range of `u64`.
+    #[error("time value overflow")]
+    TimeOverflow,
+    /// A lease with this id already exists.
+    #[error("lease {0} already exists")]
+    LeaseExists(String),
+    /// No lease has this id.
+    #[error("lease {0} not found")]
+    LeaseNotFound(String),
 }
