@@ -15,6 +15,7 @@ path = "src/main.rs"
 
 [dependencies]
 cas-domain = { path = "../cas-domain" }
+cas-engine = { path = "../cas-engine" }
 anyhow = { workspace = true }
 clap = { workspace = true }
 serde = { workspace = true }

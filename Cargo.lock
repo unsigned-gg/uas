@@ -77,6 +77,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "cas-domain",
+ "cas-engine",
  "clap",
  "serde",
  "serde_json",
@@ -104,6 +105,13 @@ version = "0.1.0"
 [[package]]
 name = "cas-engine"
 version = "0.1.0"
+dependencies = [
+ "cas-domain",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tracing",
+]
 
 [[package]]
 name = "cas-pool"
