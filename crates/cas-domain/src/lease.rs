@@ -517,7 +517,7 @@ mod tests {
             Err(DomainError::TokenMismatch("lease-1".into()))
         );
         // Same length as the real token, so only the byte comparison can catch it.
-        let near = LeaseToken::new("s3cr3t-token-valuX").unwrap();
+        let near = LeaseToken::new("s3cr3x-token-value").unwrap();
         assert_eq!(
             l.renew(&near, 150, 10),
             Err(DomainError::TokenMismatch("lease-1".into()))
@@ -558,7 +558,7 @@ mod tests {
     fn token_matches_only_the_same_text() {
         let abc = LeaseToken::new("abc").unwrap();
         assert!(abc.matches(&LeaseToken::new("abc").unwrap()));
-        assert!(!abc.matches(&LeaseToken::new("abd").unwrap()));
+        assert!(!abc.matches(&LeaseToken::new("ab9").unwrap()));
         assert!(!abc.matches(&LeaseToken::new("abcd").unwrap()));
     }
 
