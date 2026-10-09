@@ -16,6 +16,7 @@ Methodology: LeanSpec. The reference copy is in `../vendor/leanspec/`.
 | [0009](0009-saga-compensation-runner-and-durability.md) | Saga compensation runner and durability | complete | high |
 | [0010](0010-landlock-ruleset-and-abi-probe.md) | Landlock ruleset and ABI probe | complete | high |
 | [0011](0011-network-namespace-isolation.md) | Network namespace isolation | complete | high |
+| [0012](0012-sandbox-escape-suite.md) | Sandbox escape suite | complete | high |
 
 ## How to add a spec
 

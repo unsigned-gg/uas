@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Spec 0012 and the `cas-sandbox` escape suite (CER-2684, CER-2721): one jailed worker runs the attack matrix (writes and links out of the workspace, execute from `/tmp`, `no_new_privs` and Landlock across exec, setuid `sudo`, TCP, UDP and raw-socket egress) and the gate asserts every row.
 - Spec 0011 and `cas-sandbox::netns` (CER-2717): `isolate()` installs a `pre_exec` hook that gives the worker a private network namespace with only `lo` up, through `unshare(CLONE_NEWNET)` or, unprivileged, a user namespace with an identity uid/gid map; `rustix` 1.1.5 enters the workspace.
 - `cas-sandbox` launcher (CER-2716): `jail()` installs a `pre_exec` hook that enters the Landlock ruleset with `PR_SET_NO_NEW_PRIVS` before `exec`, `launch()` spawns a worker inside it, and a child that cannot enter the jail never runs (`SandboxError::JailRefused`).
 - `cas-engine`: `MeshIntent` and optional `intent`/`hop_count` fields on `CortexMeshEvent` mirror the cortex mesh envelope contract (CER-2737). `CortexMeshEvent::increment_hop` enforces the bounded-recursion rule: at most 10 agent-to-agent hops, then an error demanding human escalation. The JSON wire form matches `cortex-domain` `MessageIntent` (snake_case, absent distinct from defaulted).
