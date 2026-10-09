@@ -147,9 +147,14 @@ comment (AGENTS.md rule 14).
 A kernel errno reaches the parent unchanged in `Spawn`. The test switches
 `no_new_privs` off. Measured 2026-10-09: on ceres (unprivileged) the kernel
 refuses `landlock_restrict_self` with `EPERM` and the parent sees that
-errno; on the CI runner (`CAP_SYS_ADMIN`, not root) the kernel accepts the
-call and the child reaches the launcher's own `JailRefused` verdict. Both
-paths leave the worker unrun.
+errno; on the CI runner the process already has `no_new_privs` set, so the
+kernel accepts the call and the child reaches the launcher's own
+`JailRefused` verdict. Both paths leave the worker unrun.
+
+Correction, CAS lane, 2026-10-09: an earlier revision said the CI runner
+holds `CAP_SYS_ADMIN`. It holds no capability at all (`CapBnd` 0, measured
+in PR #27). The verdict path was reached through `NoNewPrivs: 1`, not a
+capability.
 
 ### Out of scope
 

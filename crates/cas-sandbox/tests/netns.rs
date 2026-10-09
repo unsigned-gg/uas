@@ -1,7 +1,9 @@
 //! Spec 0011 gate: `cargo test -p cas-sandbox -j 2 --test netns`.
 //!
 //! The worker is this test binary, re-executed with `helper_probe` as the only
-//! test and `CAS_NETNS_HELPER` set. It prints two lines; the parent reads them.
+//! test and `CAS_NETNS_HELPER` set. It prints three lines; the parent reads them.
+//! On a host that cannot create a namespace the jailed case prints `skipped`
+//! with the host diagnostics and passes; the PR body says which host ran it.
 
 use std::env;
 use std::fs;
@@ -10,7 +12,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::Duration;
 
-use cas_sandbox::{launch, netns, LandlockRulesetBuilder};
+use cas_sandbox::{launch, netns, LandlockRulesetBuilder, NETNS_REFUSED_ERRNO};
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
@@ -126,8 +128,30 @@ fn unjailed_control_reaches_loopback() -> TestResult {
     Ok(())
 }
 
+/// Can this host give a child a private network namespace? Starts the probe
+/// under `netns::isolate` alone. A refusal prints the host diagnostics.
+fn namespace_available() -> Result<bool, std::io::Error> {
+    let mut command = probe_command()?;
+    netns::isolate(&mut command);
+    match command.spawn() {
+        Ok(mut child) => {
+            child.wait()?;
+            Ok(true)
+        }
+        Err(err) if err.raw_os_error() == Some(NETNS_REFUSED_ERRNO) => {
+            eprintln!("skipped: this host cannot create a network namespace");
+            print_host_diagnostics();
+            Ok(false)
+        }
+        Err(err) => Err(err),
+    }
+}
+
 #[test]
 fn jailed_worker_has_only_loopback() -> TestResult {
+    if !namespace_available()? {
+        return Ok(());
+    }
     let ws = scratch("netns-ws")?;
     // The preset has no /proc rule (spec 0010); the probe reads /proc/net/dev.
     let (ruleset, _) = LandlockRulesetBuilder::worker(&ws, Vec::<PathBuf>::new())
