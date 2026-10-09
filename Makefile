@@ -60,7 +60,9 @@ smoke: ## Build the CLI, run it, check the domain crate has no I/O
 	out="$$(cargo run -q -p cas-cli --locked -j $(JOBS) -- --version)"
 	echo "$$out"
 	[[ "$$out" =~ ^cas\ [0-9]+\.[0-9]+\.[0-9]+\ \(.+\)$$ ]] || { echo "smoke: unexpected --version output" >&2; exit 1; }
-	cargo run -q -p cas-cli --locked -j $(JOBS) -- demo | grep -q '"done"' || { echo "smoke: demo did not reach done" >&2; exit 1; }
+	# grep reads all of the demo output on purpose: `grep -q` exits at the first match,
+	# the demo then dies of SIGPIPE, and pipefail reports that as a failed smoke (1 in 4 runs).
+	cargo run -q -p cas-cli --locked -j $(JOBS) -- demo | grep '"done"' >/dev/null || { echo "smoke: demo did not reach done" >&2; exit 1; }
 	if grep -rnE 'std::net|std::fs|tokio|std::process' crates/cas-domain/src; then
 		echo "smoke: cas-domain must not use I/O" >&2
 		exit 1
