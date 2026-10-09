@@ -11,3 +11,6 @@
 
 # Lane persona (lane-persona, ephemeral)
 .agents/persona.md
+
+# blackwall custody store (local runs; never committed)
+.blackwall/
