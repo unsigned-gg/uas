@@ -16,6 +16,9 @@ struct Args {
     /// Unix socket to serve `cas-pool` on.
     #[arg(long, default_value = "/run/cas/ebpf.sock")]
     socket: PathBuf,
+    /// Group that may connect to the socket (mode 0660). Resolved from /etc/group.
+    #[arg(long)]
+    socket_group: Option<String>,
 }
 
 fn main() -> ExitCode {
@@ -39,7 +42,12 @@ fn run(args: Args) -> anyhow::Result<ExitCode> {
         eprintln!("cas-ebpfd: cannot load the kernel program on this host: {summary}");
         return Ok(ExitCode::from(2));
     }
+    let socket_gid = args
+        .socket_group
+        .as_deref()
+        .map(cas_ebpf::daemon::resolve_group)
+        .transpose()?;
     let probes = cas_ebpf::loader::Probes::load()?;
-    cas_ebpf::daemon::run_with(probes, &args.socket)?;
+    cas_ebpf::daemon::run_with(probes, &args.socket, socket_gid)?;
     Ok(ExitCode::SUCCESS)
 }

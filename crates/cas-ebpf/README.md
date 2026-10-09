@@ -40,7 +40,9 @@ depends only on crates in lower layers.
   `setpriority(PRIO_PGRP, pgid, 19)` once before `exec`. Measured on ceres:
   `PRIO_PROCESS` clamps one thread only; `PRIO_PGRP` clamps all.
 - **Daemon:** a root systemd unit `cas-ebpfd` owns the maps and the ring buffer and
-  serves unprivileged `cas-pool` over a Unix socket with a fixed allowlist.
+  serves unprivileged `cas-pool` over a Unix socket with a fixed allowlist. Every
+  request is checked against the peer's uid (`SO_PEERCRED`): own pids only, a per-uid
+  quota, own events only. `--socket-group` names who may connect.
 - **Audit:** exec events only (CER-2720 narrowed). `run_hash` is a per-run transcript digest.
 
 ## Build and test

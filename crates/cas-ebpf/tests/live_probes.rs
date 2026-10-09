@@ -115,12 +115,66 @@ fn untracked_processes_are_silent() -> TestResult {
     if skip() {
         return Ok(());
     }
+    let me = std::process::id();
     let mut probes = Probes::load()?;
     let mut child = Command::new("/bin/true").spawn()?;
-    let child_pid = child.id();
+    let silent_pid = child.id();
     child.wait()?;
     let events = collect(&mut probes, Duration::from_millis(300));
-    assert!(events.iter().all(|e| e.pid != child_pid));
+    assert!(
+        events.iter().all(|e| e.pid != silent_pid),
+        "untracked exec reported"
+    );
+    // Positive control in the same test: once tracked, the next child is reported.
+    probes.track(me, 1)?;
+    let mut child = Command::new("/bin/true").spawn()?;
+    let loud_pid = child.id();
+    child.wait()?;
+    let events = collect(&mut probes, Duration::from_secs(3));
+    assert!(
+        events.iter().any(|e| e.pid == loud_pid),
+        "control: tracked exec missing"
+    );
+    probes.untrack(me)?;
+    Ok(())
+}
+
+#[test]
+fn exit_evicts_the_child_from_the_map() -> TestResult {
+    if skip() {
+        return Ok(());
+    }
+    let me = std::process::id();
+    let mut probes = Probes::load()?;
+    probes.track(me, 1)?;
+    let mut child = Command::new("sleep").arg("1").spawn()?;
+    let child_pid = child.id();
+    // The fork probe inserted the child; it is tracked while it runs.
+    let deadline = Instant::now() + Duration::from_secs(3);
+    while !probes.is_tracked(child_pid)? {
+        assert!(
+            Instant::now() < deadline,
+            "child never entered TRACKED_PIDS"
+        );
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    child.wait()?;
+    let deadline = Instant::now() + Duration::from_secs(3);
+    while probes.is_tracked(child_pid)? {
+        assert!(Instant::now() < deadline, "exit did not evict the child");
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    probes.untrack(me)?;
+    Ok(())
+}
+
+#[test]
+fn tracking_failures_start_at_zero() -> TestResult {
+    if skip() {
+        return Ok(());
+    }
+    let probes = Probes::load()?;
+    assert_eq!(probes.tracking_failures()?, 0);
     Ok(())
 }
 
