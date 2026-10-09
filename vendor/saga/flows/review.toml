@@ -1,0 +1,26 @@
+[flow]
+name = "review"
+description = "Code review flow: inspect changes, summarize findings, and gate for operator approval."
+
+[params.branch]
+required = false
+default = "main"
+
+[[step]]
+id = "diff-scan"
+title = "Scan branch diff"
+kind = "review"
+agent = "auto"
+prompt = """
+Review the diff on branch {{params.branch}} against its base.
+Identify potential issues: correctness, style, security, and test coverage.
+Summarize findings as a bulleted list.
+"""
+
+[[step]]
+id = "review-gate"
+title = "Operator review approval"
+kind = "gate"
+gate = "heimdal:approval"
+deps = ["diff-scan"]
+prompt = "Review the findings and approve or request changes for the {{params.branch}} branch."

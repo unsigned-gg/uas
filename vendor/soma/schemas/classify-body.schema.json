@@ -1,0 +1,168 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ClassifyBody",
+  "description": "The `POST /v1/classify` request body (EST-363): classification WITHOUT\nsubmission, for a shadow-mode witness such as `sockets/harness-hook`\n(`sockets/harness-hook/docs/edge.md`, Leg 2).\n\nThe same `(agent, verb, params)` `POST /v1/actions` classifies on, plus the\nhash of the payload the caller would have submitted. reflexd never sees\nthe payload itself. Unknown fields are refused: a body that carries a\n`payload` is a submission sent to the wrong route.",
+  "type": "object",
+  "properties": {
+    "agent": {
+      "description": "The calling agent, self-declared as on `POST /v1/actions`.",
+      "type": "string"
+    },
+    "params": {
+      "description": "The params the classifier reads (`target`, `amount`,\n`recipient_class`, …). Left out, the call is classified as one that\ndeclares none, which fails closed where a posture rule needs them.",
+      "$ref": "#/$defs/VerbParams"
+    },
+    "payload_sha256": {
+      "description": "SHA-256 of the payload: 64 lowercase hex characters, no prefix.",
+      "type": "string"
+    },
+    "verb": {
+      "$ref": "#/$defs/Verb"
+    }
+  },
+  "additionalProperties": false,
+  "required": [
+    "agent",
+    "verb",
+    "payload_sha256"
+  ],
+  "$defs": {
+    "Amount": {
+      "description": "A monetary amount for `spend` classification, in minor units of a currency\n(cents for USD). Compared against founder-set soft/hard caps by the\nclassifier.",
+      "type": "object",
+      "properties": {
+        "currency": {
+          "description": "ISO-4217-ish currency code (`\"USD\"`).",
+          "type": "string"
+        },
+        "minor_units": {
+          "description": "Minor units — cents for USD, pence for GBP, etc.",
+          "type": "integer",
+          "format": "int64"
+        }
+      },
+      "required": [
+        "minor_units",
+        "currency"
+      ]
+    },
+    "RecipientClass": {
+      "description": "A recipient classification a policy can gate `send-external` on\n(`spend(<$500, known-vendor)`, soma §5.1; `\"known-counterparty\"`, §8).\n\nThe taxonomy is closed on purpose: an unrecognized recipient class fails to\ndeserialize rather than silently classifying as benign.",
+      "oneOf": [
+        {
+          "description": "Inside the org — internal writes, colleagues.",
+          "type": "string",
+          "const": "internal"
+        },
+        {
+          "description": "A vendor already on the books.",
+          "type": "string",
+          "const": "known-vendor"
+        },
+        {
+          "description": "A counterparty in an existing engagement (soma §8 example).",
+          "type": "string",
+          "const": "known-counterparty"
+        },
+        {
+          "description": "No prior relationship — the most conservative outbound class.",
+          "type": "string",
+          "const": "unknown"
+        },
+        {
+          "description": "The public / an unbounded audience (publish-adjacent).",
+          "type": "string",
+          "const": "public"
+        }
+      ]
+    },
+    "Verb": {
+      "description": "The starter verb taxonomy for instance #0 (soma §5.1).\n\nSerializes kebab-case to match the wire (`file-internal`, `send-external`,\n`hire-engage`, `grant-access`, `delete-destroy`, `commit-code`).",
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": [
+            "read",
+            "draft",
+            "file-internal",
+            "report",
+            "schedule",
+            "send-external",
+            "publish",
+            "spend",
+            "sign",
+            "hire-engage",
+            "grant-access",
+            "delete-destroy"
+          ]
+        },
+        {
+          "description": "Delegated to terrarium's existing commit gates (soma §5.1).",
+          "type": "string",
+          "const": "commit-code"
+        }
+      ]
+    },
+    "VerbParams": {
+      "description": "Parameters a verb carries that policies gate on (soma §5.1: \"amount,\nrecipient class, visibility\"). Every field is optional — a `read` carries\nnone, a `spend` carries an `amount`, a `send-external` a `recipient_class`.\n\n`None` fields are omitted from the wire (`skip_serializing_if`) so the\nserialized `params` object stays as tight as the §8 examples.",
+      "type": "object",
+      "properties": {
+        "amount": {
+          "description": "For `spend` — the amount requested.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Amount"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "channel": {
+          "description": "Transport for outbound verbs (`\"email\"`, `\"slack\"` — soma §8).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "recipient_class": {
+          "description": "For `send-external` / `sign` — who receives it (soma §8).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RecipientClass"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "target": {
+          "description": "The resource acted on, as the submitter declares it. reflexd seals an\naction whose target names its own policy or state as NEVER\n(`reflex::classifier::ProtectedTargets`, EST-459). Self-declared, so\nthat rule is a second line: it stops an honest or mistaken agent, and\nthe structural barriers are elsewhere (EST-460).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "visibility": {
+          "description": "For `publish` — how widely it is exposed.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Visibility"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "Visibility": {
+      "description": "Payload visibility a policy can gate `publish` on (soma §5.1).",
+      "type": "string",
+      "enum": [
+        "internal",
+        "public"
+      ]
+    }
+  }
+}

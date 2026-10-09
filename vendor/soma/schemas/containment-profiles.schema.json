@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ContainmentProfiles",
+  "description": "`GET /v1/containment/profiles` on blackwall-serve — the profile registry,\nread by reflexd when it queues a contained card. Not served yet.",
+  "type": "object",
+  "properties": {
+    "digest": {
+      "description": "Digest over the whole registry document, for change detection.",
+      "type": "string"
+    },
+    "enforced_tiers": {
+      "description": "The isolation tiers serve ENFORCES and will attest (CER-2276 §6.1).\nContainment is supported for tier T only when this lists T and some\nprofile's `tier` is T; reflexd refuses a contained submit otherwise\n(`containment-not-enforced`). Absent parses as empty: a serve that\npredates the field enforces nothing.",
+      "type": "array",
+      "default": [],
+      "items": {
+        "type": "string"
+      }
+    },
+    "profiles": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/ProfileEntry"
+      }
+    }
+  },
+  "required": [
+    "profiles",
+    "digest"
+  ],
+  "$defs": {
+    "ProfileEntry": {
+      "description": "One registry entry.",
+      "type": "object",
+      "properties": {
+        "digest": {
+          "description": "`\"sha256:<hex>\"` over the JCS form of the profile, computed by\nblackwall. Copied into [`Containment::profile_digest`] verbatim.",
+          "type": "string"
+        },
+        "profile": {
+          "description": "The resolved profile as JSON text, verbatim as blackwall served it. Its\nshape is blackwall's to define; soma reads only [`ProfileView`] out of\nit and shows the rest to the signer unchanged.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "profile",
+        "digest"
+      ]
+    }
+  }
+}

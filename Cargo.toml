@@ -34,6 +34,8 @@ clap = { version = "4", features = ["derive"] }
 tracing = "0.1"
 # Log output and RUST_LOG filtering.
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+# TOML deserialization for Saga flows (.saga/flows/*.toml).
+toml = "0.8"
 
 # Example of a private git dependency (record it in specs/0004 before first use):
 # pgt-core = { git = "https://github.com/cerebral-work/pgt", rev = "54d90f5" }

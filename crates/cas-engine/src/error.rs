@@ -55,4 +55,11 @@ pub enum EngineError {
     /// Policy admission violation.
     #[error("policy violation: {0}")]
     PolicyViolation(String),
+
+    /// Invalid or malformed flow definition.
+    #[error("invalid flow definition: {reason}")]
+    InvalidFlow {
+        /// Detail why the flow definition is invalid.
+        reason: String,
+    },
 }

@@ -1,0 +1,180 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "JobStatus",
+  "description": "The `GET /v1/jobs/:id` body (blackwall-serve `JobStatusResponse`), reduced\nto the documented contract surface. Unknown fields are ignored (additive\nrule); `run_hash` is present **iff** `state=done`.",
+  "type": "object",
+  "properties": {
+    "action_id": {
+      "description": "The reflex action id serve received on dispatch, verbatim (CER-2276\n§6). Follows `base_commit`: `#[serde(default)]` and ALWAYS serialized —\n`null` when the dispatch carried none; a missing key means a serve that\npredates the field. Do not add `skip_serializing_if`.",
+      "type": [
+        "string",
+        "null"
+      ],
+      "default": null
+    },
+    "base_commit": {
+      "description": "The commit the run's jail was cut from (EST-251 pin; read route from\nsoma#410). Mirrors serve's field exactly: `#[serde(default)]` and\nALWAYS serialized — `null` means the run recorded no base (pre-EST-251\njob, or a working tree that is not a git repo); a MISSING key means a\nserve that predates the field. Do not add `skip_serializing_if`; the two\nmust stay distinguishable.",
+      "type": [
+        "string",
+        "null"
+      ],
+      "default": null
+    },
+    "changeset": {
+      "description": "The run's changeset hash, if the executor produced one.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "containment": {
+      "description": "What serve OBSERVED it enforced for this run (EST-318). Executor-\nattested, by value; absent when no containment was requested.",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/AppliedContainment"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "containment_attestation": {
+      "description": "The JSON text of a [`crate::attestation::SignedContainmentAttestation`]\n(§5). Always serialized; `null` until serve signs. reflex seals only\nfrom this, never from the unsigned `containment` above.",
+      "type": [
+        "string",
+        "null"
+      ],
+      "default": null
+    },
+    "created_at": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "error": {
+      "description": "Error detail, present when `terminal` is `Error`/`Crashed`.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "escapement_attempt": {
+      "description": "escapement's 0-based attempt counter serve received, verbatim (§6).\nSame always-serialized rule as `action_id`.",
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "uint32",
+      "default": null,
+      "minimum": 0
+    },
+    "finished_at": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "job_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "run_hash": {
+      "description": "blackwall's content-addressed run hash — the durable custody pointer.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "state": {
+      "$ref": "#/$defs/JobState"
+    },
+    "terminal": {
+      "description": "Terminal classification (`\"Completed\"`/`\"Crashed\"`/`\"Error\"`), present\nonce the job reaches a terminal state.\n\nA string on the wire, not a tagged enum: blackwall-serve Debug-formats\nits internal `McpTerminal` (`format!(\"{t:?}\")`), so these spellings are\nvariant names, not serde renames. Modeled as `String` here — a closed\nenum would turn a blackwall-side variant addition into a reflex-side\nparse failure, which the contract's unknown-tolerance forbids.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "updated_at": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "world": {
+      "description": "The world commit linking parent → child tree.",
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "required": [
+    "state"
+  ],
+  "$defs": {
+    "AppliedContainment": {
+      "description": "What the executor OBSERVED it enforced for one run.\n\nExecutor-attested. A reader records it as attested by the executor, never\nas verified by the reader.",
+      "type": "object",
+      "properties": {
+        "enforced_by": {
+          "description": "One entry per enforced layer.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/EnforcedLayer"
+          }
+        },
+        "profile": {
+          "description": "The profile the executor resolved.",
+          "type": "string"
+        },
+        "profile_digest": {
+          "description": "The digest of the profile the executor resolved. Must equal the\nrequest's [`Containment::profile_digest`]; a difference means the\nregistry changed and the executor should have refused.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "profile",
+        "profile_digest",
+        "enforced_by"
+      ]
+    },
+    "EnforcedLayer": {
+      "description": "One layer the executor observed in force.",
+      "type": "object",
+      "properties": {
+        "evidence": {
+          "description": "The observation BY VALUE: a compact JSON extract of what was read (a\njail probe result, the CiliumEndpoint policy status, the guest and\nhost kernel identities), carried as JSON text so it is byte-stable in\nthe record. Never a label, a stamp, or a reference to an object that\nmay be garbage-collected before anyone audits it. Empty is no evidence.",
+          "type": "string"
+        },
+        "layer": {
+          "description": "`\"landlock\"`, `\"landlock-exec\"`, `\"kata\"`, `\"cnp\"`, `\"tetragon\"` — an\nopen set; the requirement is whatever the profile's `required_layers`\nnames.",
+          "type": "string"
+        },
+        "observed_at": {
+          "description": "RFC 3339 time of the observation.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "layer",
+        "evidence",
+        "observed_at"
+      ]
+    },
+    "JobState": {
+      "description": "A job's lifecycle state (`GET /v1/jobs/:id`).\n\n`Unknown` absorbs states this build has never heard of (`#[serde(other)]`):\nthe contract's posture is that an unknown state is *not yet terminal* —\nguessing wrong seals a false outcome permanently, waiting merely costs\nanother poll.",
+      "type": "string",
+      "enum": [
+        "pending",
+        "running",
+        "done",
+        "failed",
+        "unknown"
+      ]
+    }
+  }
+}

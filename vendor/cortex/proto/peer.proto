@@ -1,0 +1,76 @@
+// cortex.mesh.v1 — peer identity and registration records.
+//
+// This file is the SPEC OF RECORD for what a mesh peer IS (RFC
+// docs/spec/mesh-protocol-v1.md, D1). The Rust in cortex-domain is generated
+// from it. Package v1 is frozen at ratification: additive-only, never
+// renumber, never retype, `reserved` on removal (PROTOCOL.md).
+syntax = "proto3";
+
+package cortex.mesh.v1;
+
+import "google/protobuf/timestamp.proto";
+
+// Who a peer acts for and where it works. Every field is optional-by-empty:
+// pre-identity clients register with none of them and keep working
+// (tolerant reader — the posture migration 0005 set for user/project).
+message Identity {
+  // The human this peer acts for. ADVISORY in v1: trusted from the
+  // register-secret-gated client, not a verified IdP claim.
+  string user = 1;
+  // The project the pane works in — origin remote slug, e.g. "org/repo".
+  string project = 2;
+  // The LANE this peer is: the component or subject it owns, e.g.
+  // "soma/domain", "soma/reflex", "cortex". One subject per peer. Finer than
+  // project (soma/domain and soma/reflex share a project). Lowercase,
+  // path-like: ^[a-z0-9][a-z0-9._/-]{0,63}$ — validated server-side, 422 on
+  // mismatch (CER-2212).
+  string subject = 3;
+  // "human" or "agent" (CER-2362). Advisory like the rest of Identity;
+  // empty on pre-pool peers.
+  string kind = 4;
+  // The pool this peer is a member of (CER-2362); empty for lanes and
+  // humans. A pool member's Identity.user is its pool owner's.
+  string pool = 5;
+  // The harness driving this peer's pane, as a lowercase token: "claude",
+  // "omp", "opencode", "agy". The structured form of the harness segment the
+  // role string already carries (session-<harness>-<host>-<ws>-<pane>);
+  // populated by the session bridge from the multiplexer agent kind. Shape
+  // ^[a-z][a-z0-9-]{0,31}$ (validate.rs); empty = unknown (optional-by-empty).
+  string harness = 6;
+  // The capabilities this harness advertises, as free-form tokens from the
+  // mesh capability vocabulary (harness-domain research 2026-10-06): e.g.
+  // "tool_call", "stream_json", "thinking", "grpc_native". A repeated string,
+  // not an enum: the set churns too fast for grow-at-the-end.
+  repeated string capabilities = 7;
+}
+
+// Peer-asserted or sweeper-derived liveness. Mirrors cortex_mesh::PeerStatus.
+enum PeerStatus {
+  PEER_STATUS_UNSPECIFIED = 0;
+  PEER_STATUS_IDLE = 1;
+  PEER_STATUS_WORKING = 2;
+  PEER_STATUS_BLOCKED = 3;
+  // 3+ missed beats of the peer's own cadence — sweeper-set, kept.
+  PEER_STATUS_STALE = 4;
+  PEER_STATUS_OFFLINE = 5;
+}
+
+// A registered mesh peer, as the registry renders it.
+message Peer {
+  // UUID, text form. NOT a stable address: uuids are re-minted on
+  // re-registration (~1 bulk re-mint/day measured). Address by role or
+  // subject; a uuid send to nobody is a NOT_FOUND (CER-2147).
+  string id = 1;
+  // "session-<name>" for a pane, "service-<name>" for a pre-provisioned
+  // service peer. Roles are not unique: a restarted pane overlaps its
+  // predecessor until the sweeper retires it.
+  string role = 2;
+  PeerStatus status = 3;
+  google.protobuf.Timestamp last_heartbeat = 4;
+  // The harness's own handle for the pane (e.g. "ceres/estate/wC:p1").
+  // Free-form; legal characters wider than a role's.
+  string session_ref = 5;
+  // The clamped beat interval the sweeper holds this peer to.
+  int32 heartbeat_secs = 6;
+  Identity identity = 7;
+}

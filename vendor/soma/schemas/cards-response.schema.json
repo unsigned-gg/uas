@@ -1,0 +1,292 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CardsResponse",
+  "description": "The `GET /v1/cards` body.",
+  "type": "object",
+  "properties": {
+    "cards": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/FederatedCard"
+      }
+    }
+  },
+  "required": [
+    "cards"
+  ],
+  "$defs": {
+    "ActState": {
+      "description": "The current act-state as read from the ledger fold.\n\nThe ledger is append-only, so a sealed record is never rewritten:\ntransitions are appended as [`DecisionAct`] lines and the CURRENT state is\nthe fold of those lines. Absent on records sealed before act-state existed\n— read that as unknown, never as confirmed.",
+      "type": "object",
+      "properties": {
+        "at": {
+          "description": "RFC 3339 — when this state was recorded.",
+          "type": "string"
+        },
+        "reason": {
+          "description": "Why, when `status` is `failed`. Absent otherwise.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "retryable": {
+          "description": "Whether a `failed` act may be retried (decision coherence §3): the\nreconciler retries retryable failures with backoff and PARKS\nnon-retryable ones for the operator. Absent on non-failed states and\non failures recorded before this field existed — absent reads as\nretryable, because the upstream settle is idempotent (cortex#98) and\na wasted retry is recoverable where a silently-parked act is not.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "status": {
+          "$ref": "#/$defs/ActStatus"
+        }
+      },
+      "required": [
+        "status",
+        "at"
+      ]
+    },
+    "ActStatus": {
+      "description": "What became of a sealed decision's upstream act (decision coherence §2,\noperator requirement 2026-08-21).\n\n\"Sealed but not confirmed\" is the state that had no name — which is\nexactly why nothing could act on it when the settle hop failed: the\nledger held cryptographic proof of a decision and the system behaved as\nthough none existed. Naming the state is most of the fix.",
+      "oneOf": [
+        {
+          "description": "Verified and recorded; the act not yet attempted.",
+          "type": "string",
+          "const": "sealed"
+        },
+        {
+          "description": "Sent upstream, awaiting confirmation.",
+          "type": "string",
+          "const": "dispatched"
+        },
+        {
+          "description": "Upstream accepted — terminal.",
+          "type": "string",
+          "const": "confirmed"
+        },
+        {
+          "description": "Upstream refused or was unreachable; `reason` carries why.",
+          "type": "string",
+          "const": "failed"
+        }
+      ]
+    },
+    "CardContainment": {
+      "description": "Everything a contained RED card carries so a signer sees, and signs, the\ncontainment the run will get.",
+      "type": "object",
+      "properties": {
+        "containment": {
+          "description": "What will be dispatched, unchanged.",
+          "$ref": "#/$defs/Containment"
+        },
+        "containment_sha256": {
+          "description": "[`Containment::sha256`], computed by reflexd at queue time. The deck\nputs it in the signing input as `containment_sha256` and never\ncomputes it itself.",
+          "type": "string"
+        },
+        "profile": {
+          "description": "The resolved profile, verbatim from the registry entry — shown to the\nsigner (tier included), never re-rendered from a second source.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "containment",
+        "profile",
+        "containment_sha256"
+      ]
+    },
+    "CardDecided": {
+      "description": "The daemon's own sealed verdict on a card that is nonetheless still\npending upstream (bridge task #54).\n\nPresent when the decision ledger holds an ACCEPTED decision for the card\nwhile the source system still lists it — which means the DECISION\nhappened and only the upstream act is unconfirmed. Rendering such a card\nas an open decision is the lie this field exists to prevent: it invited\na second signature over the same payload, and three sealed records where\nthere was one decision is, after the fact, indistinguishable from an\noperator who changed their mind twice.\n\nDeliberately not a filter. A decided-but-unsettled card is a REAL failure\nthe operator must see (the upstream act did not complete); it must simply\nstop being signable.",
+      "type": "object",
+      "properties": {
+        "accepted_decisions": {
+          "description": "How many ACCEPTED decisions the ledger holds for this card. Anything\nabove 1 is itself evidence of the defect this field fixes, and is\nsurfaced rather than collapsed.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "act": {
+          "description": "What became of the act (decision coherence §2) — why a decided card is\nstill in the source's pending list. Absent = unknown, which the deck\nmust render as unknown, never as confirmed.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ActState"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "actor_email": {
+          "description": "Who signed it, as verified at seal time.",
+          "type": "string"
+        },
+        "ts": {
+          "description": "When the (latest) accepted decision was signed.",
+          "type": "string"
+        },
+        "verdict": {
+          "description": "The sealed verdict (`approve` / `reject`).",
+          "type": "string"
+        }
+      },
+      "required": [
+        "verdict",
+        "actor_email",
+        "ts",
+        "accepted_decisions"
+      ]
+    },
+    "CardGuard": {
+      "description": "A guard's finding about a card, when the source carries one.",
+      "type": "object",
+      "properties": {
+        "allow": {
+          "type": "boolean"
+        },
+        "reason": {
+          "type": "string"
+        },
+        "rule_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "allow",
+        "rule_id",
+        "reason"
+      ]
+    },
+    "CardSource": {
+      "description": "Which queue a card came from.",
+      "oneOf": [
+        {
+          "description": "A card in cortex, raised by a lane via `cortex-card`.",
+          "type": "string",
+          "const": "cortex"
+        },
+        {
+          "description": "A RED-tier action in reflexd's own queue.",
+          "type": "string",
+          "const": "reflex"
+        }
+      ]
+    },
+    "Containment": {
+      "description": "What reflex asks the executor to enforce for one run.\n\nEvery field is a string or an array of strings. [`Self::canonical_json`]\nis the shared RFC 8785 implementation in [`crate::jcs`] (CER-2276); a\nnumeric field added here must stay within its integers-only profile, and\nchanges [`Self::sha256`] for every containment that carries it.",
+      "type": "object",
+      "properties": {
+        "policy": {
+          "description": "The reflex containment-seed id that chose it, cited like a\nclassification's policy (`\"soma/comms:draft@v1\"`).",
+          "type": "string"
+        },
+        "profile": {
+          "description": "Registry key of the profile (`\"gateway-only\"`).",
+          "type": "string"
+        },
+        "profile_digest": {
+          "description": "`\"sha256:<lowercase hex>\"` — the registry entry's own digest, copied\nverbatim from [`ProfileEntry::digest`]. reflex never computes it.",
+          "type": "string"
+        },
+        "required_layers": {
+          "description": "The layers the executor must attest, copied in the order the registry\nserved them. Order is significant to [`Self::sha256`].",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "profile",
+        "policy",
+        "profile_digest",
+        "required_layers"
+      ]
+    },
+    "FederatedCard": {
+      "description": "One card, normalized across sources.",
+      "type": "object",
+      "properties": {
+        "age_secs": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        },
+        "containment": {
+          "description": "The containment a contained RED action will run under, with the\nresolved profile to show and the `containment_sha256` to sign\n(EST-318, ratified Q2(b)). Computed by reflexd when the card is\nqueued; the deck passes the hash into the signing input and never\nrecomputes it. Absent = the action carries no containment.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CardContainment"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "custody": {
+          "description": "Where the run record behind this card lives (CANON §1c, EST-185):\n`blackwall-serve` (in-cluster — reflexd's settle hop resolves against\nit) or `fleet:<agent>` (a runner's own store, which the settle hop\ncannot reach). The deck decides signability from this value.\n\nPassed through verbatim from the producer and **never defaulted**:\n`None` means the producer did not say, which the deck renders as\n\"custody not reported\" — a different fact from `blackwall-serve`, and\none reflexd must not invent. Session cards carry none by design;\nreflex's own RED cards carry none until an executor records one.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "decided": {
+          "description": "See [`CardDecided`]. `None` = the ledger holds no accepted decision\nfor this card; the card is genuinely open.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CardDecided"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "guard": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CardGuard"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "id": {
+          "description": "cortex `job_id`, or a reflex action id. Unique only WITHIN a source —\nwhich is why [`CardSource`] travels with it and why the decision record\nnames the queue.",
+          "type": "string"
+        },
+        "needs_attention": {
+          "type": "boolean"
+        },
+        "payload_hash": {
+          "description": "The content address of what the agent asked to do, as bare lowercase\nhex — the bytes a `reflex-red` decision signs (EST-212; §1c\n`reflexd ↔ deck` row). Absent when the source carries none: cortex\ncards bind to the title until they have a content address.\n\nComputed once, by reflexd, at submit — the hex after a VERIFIED\n`sha256:` label on the action's `payload_hash` (`reflex_binding_hex`);\na card whose action carries any other or absent label gets `None`,\nnever a guess. The deck passes it through and never recomputes it —\na client-side re-hash would be a second implementation of the\nbinding (§1c rule 3). Population is EST-214 (reflex lane); until\nthen the deck reads the same value from the `/v1/queue` join.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "source": {
+          "$ref": "#/$defs/CardSource"
+        },
+        "title": {
+          "description": "One line for the operator. cortex supplies `changeset.description`.",
+          "type": "string"
+        },
+        "upstream_settle_url": {
+          "description": "cortex's own settle URL, carried for provenance and **not** for the deck\nto POST to.\n\nTwo reasons. It currently points at a cluster-internal address that no\nworkstation can open — a known defect. And more fundamentally, settling\nthrough it would bypass reflexd, which is where the operator's signed\ndecision is verified and sealed; a settle path that skips verification\nis the thing this whole design exists to remove. The deck settles via\nreflexd and reflexd makes the upstream hop.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "source",
+        "id",
+        "title",
+        "needs_attention"
+      ]
+    }
+  }
+}

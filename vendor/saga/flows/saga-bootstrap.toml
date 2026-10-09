@@ -1,0 +1,123 @@
+[flow]
+name = "saga-bootstrap"
+description = "Dogfood flow: parallel execution multi-agent and harness critical path DAG across saga crates."
+
+[params.repo]
+required = true
+default = "unsigned-gg/saga"
+
+[[step]]
+id = "build"
+title = "Build saga workspace (release)"
+kind = "impl"
+agent = "auto"
+verify_cmd = ["cargo", "build", "--release", "--locked"]
+prompt = "Build the {{params.repo}} workspace in release mode: cargo build --release --locked"
+
+[[step]]
+id = "check-fmt"
+title = "Format check (rustfmt)"
+kind = "test"
+agent = "auto"
+deps = ["build"]
+verify_cmd = ["cargo", "fmt", "--all", "--check"]
+prompt = "Verify formatting across {{params.repo}} workspace: cargo fmt --all --check"
+
+[[step]]
+id = "check-clippy"
+title = "Clippy linter (warnings denied)"
+kind = "test"
+agent = "auto"
+deps = ["build"]
+verify_cmd = ["cargo", "clippy", "--all-targets", "--", "-D", "warnings"]
+prompt = "Run cargo clippy --all-targets -- -D warnings across {{params.repo}}"
+
+[[step]]
+id = "test-domain"
+title = "Domain layer tests (saga-domain, norn-domain)"
+kind = "test"
+agent = "auto"
+deps = ["build"]
+verify_cmd = ["cargo", "test", "-p", "saga-domain", "-p", "norn-domain", "--locked"]
+prompt = "Run unit tests for core domain crates in {{params.repo}}"
+
+[[step]]
+id = "test-flow"
+title = "Flow engine & decision tests (saga-flow, volva)"
+kind = "test"
+agent = "auto"
+deps = ["build"]
+verify_cmd = ["cargo", "test", "-p", "saga-flow", "-p", "volva", "--locked"]
+prompt = "Run unit and integration tests for saga-flow and volva in {{params.repo}}"
+
+[[step]]
+id = "test-orchestration"
+title = "Orchestration & gate tests (bifrost, heimdal)"
+kind = "test"
+agent = "auto"
+deps = ["build"]
+verify_cmd = ["cargo", "test", "-p", "bifrost", "-p", "heimdal", "--locked"]
+prompt = "Run unit tests for bifrost and heimdal in {{params.repo}}"
+
+[[step]]
+id = "test-tooling"
+title = "Tooling & presentation tests (dagr, norn, skald, saga-cli)"
+kind = "test"
+agent = "auto"
+deps = ["build"]
+verify_cmd = ["cargo", "test", "-p", "dagr", "-p", "norn-core", "-p", "saga-cli", "--locked"]
+prompt = "Run tests for dagr, norn, skald, and saga-cli in {{params.repo}}"
+
+[[step]]
+id = "smoke"
+title = "Smoke test: dry-run flow instantiation and dagr validation"
+kind = "test"
+agent = "auto"
+deps = ["build"]
+verify_cmd = ["make", "smoke"]
+prompt = "Run make smoke to verify flow instantiation and dagr validation"
+
+[[step]]
+id = "harness-check"
+title = "Harness habitat checks (tokens, mesh bridge, lane isolation & confinement)"
+kind = "test"
+agent = "auto"
+deps = ["build"]
+verify_cmd = ["godseat", "harness-check", "--only", "token_liveness", "mesh_bridge_liveness", "lane_isolation", "lane_confinement", "--json"]
+prompt = "Run godseat harness-check to verify tokens, mesh bridge, and lane isolation"
+
+[[step]]
+id = "integration-contract"
+title = "Dagr v3 contract & flow analytics validation"
+kind = "test"
+agent = "auto"
+deps = ["test-tooling", "smoke"]
+inputs = ["test-tooling", "smoke"]
+verify_cmd = ["cargo", "test", "-p", "dagr", "--test", "check_cli", "--locked"]
+prompt = "Verify dagr contract and flow analytics check suites pass cleanly"
+
+[[step]]
+id = "settle"
+title = "Final unified workspace verification"
+kind = "test"
+agent = "auto"
+deps = [
+  "check-fmt",
+  "check-clippy",
+  "test-domain",
+  "test-flow",
+  "test-orchestration",
+  "integration-contract",
+  "harness-check",
+]
+inputs = [
+  "check-fmt",
+  "check-clippy",
+  "test-domain",
+  "test-flow",
+  "test-orchestration",
+  "integration-contract",
+  "harness-check",
+]
+verify_cmd = ["make", "check"]
+prompt = "Verify make check passes across the entire workspace."

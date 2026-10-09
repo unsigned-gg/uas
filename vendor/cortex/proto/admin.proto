@@ -1,0 +1,137 @@
+// cortex.mesh.v1 — the operator admin surface (CER-2362): pools, the
+// routing table, firewall parity with the JSON route, member revoke, and
+// the audit read.
+//
+// Auth: a human peer token whose canonical user is in
+// mesh_operator_identity. The shared register secret is break-glass only
+// and is recorded as actor=secret. Every write lands in mesh_admin_audit.
+syntax = "proto3";
+
+package cortex.mesh.v1;
+
+import "google/protobuf/empty.proto";
+import "google/protobuf/timestamp.proto";
+
+message Pool {
+  string name = 1;
+  // The named human who owns the pool's identities (operator decision 1).
+  string owner_user = 2;
+  bool enabled = 3;
+  uint32 max_members = 4;
+  uint32 max_depth = 5;
+  uint32 lease_ms = 6;
+  uint32 max_deliver = 7;
+  google.protobuf.Timestamp created_at = 8;
+  string created_by = 9;
+}
+
+message Route {
+  // Subject grammar; reserved in mesh_address_owners with kind "route".
+  string address = 1;
+  string pool = 2;
+  uint64 version = 3;
+  google.protobuf.Timestamp updated_at = 4;
+  string updated_by = 5;
+}
+
+message AuditEntry {
+  google.protobuf.Timestamp at = 1;
+  // The operator's canonical user, or "secret" on break-glass.
+  string actor = 2;
+  string action = 3;
+  string detail = 4;
+}
+
+message FirewallRule {
+  // The owner the rule gates, or "role:<role>" for an unowned role (#277).
+  string owner = 1;
+  repeated string allowed = 2;
+}
+
+message ListPoolsRequest {}
+message ListPoolsResponse {
+  repeated Pool pools = 1;
+}
+message CreatePoolRequest {
+  Pool pool = 1;
+}
+message SetPoolEnabledRequest {
+  string name = 1;
+  bool enabled = 2;
+}
+
+message SetRouteRequest {
+  string address = 1;
+  string pool = 2;
+  // Compare-and-set: the version the caller last saw. A mismatch is
+  // FAILED_PRECONDITION (409 on the JSON mirror); the route row and its
+  // mesh_route_events row commit in one transaction.
+  uint64 expected_version = 3;
+}
+message SetRouteResponse {
+  uint64 version = 1;
+}
+message ClearRouteRequest {
+  string address = 1;
+  uint64 expected_version = 2;
+}
+message ListRoutesRequest {}
+// Open to any authenticated peer (discovery), unlike the rest of MeshAdmin.
+message ListRoutesResponse {
+  repeated Route routes = 1;
+}
+
+message GetFirewallRequest {
+  // Empty = every rule.
+  string owner = 1;
+}
+message GetFirewallResponse {
+  repeated FirewallRule rules = 1;
+}
+message SetFirewallRequest {
+  string owner = 1;
+  repeated string allowed = 2;
+}
+message ClearFirewallRequest {
+  string owner = 1;
+}
+
+message RevokeMemberRequest {
+  string pool = 1;
+  string peer_id = 2;
+}
+
+message AuditRequest {
+  // 0 = server default page.
+  uint32 limit = 1;
+}
+message AuditResponse {
+  repeated AuditEntry entries = 1;
+}
+
+// Pool retirement: republish every undelivered message of `from_pool` onto
+// `to_pool`, so nothing strands when a pool is retired.
+message DrainRequest {
+  string from_pool = 1;
+  string to_pool = 2;
+}
+message DrainResponse {
+  // Messages moved.
+  uint64 moved = 1;
+}
+
+service MeshAdmin {
+  rpc ListPools(ListPoolsRequest) returns (ListPoolsResponse);
+  rpc CreatePool(CreatePoolRequest) returns (Pool);
+  rpc SetPoolEnabled(SetPoolEnabledRequest) returns (Pool);
+  rpc SetRoute(SetRouteRequest) returns (SetRouteResponse);
+  rpc ClearRoute(ClearRouteRequest) returns (google.protobuf.Empty);
+  rpc ListRoutes(ListRoutesRequest) returns (ListRoutesResponse);
+  rpc GetFirewall(GetFirewallRequest) returns (GetFirewallResponse);
+  rpc SetFirewall(SetFirewallRequest) returns (google.protobuf.Empty);
+  rpc ClearFirewall(ClearFirewallRequest) returns (google.protobuf.Empty);
+  rpc RevokeMember(RevokeMemberRequest) returns (google.protobuf.Empty);
+  rpc ListAudit(AuditRequest) returns (AuditResponse);
+  // Pool retirement: move undelivered work onto another pool.
+  rpc Drain(DrainRequest) returns (DrainResponse);
+}

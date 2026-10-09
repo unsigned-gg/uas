@@ -1,0 +1,649 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Trend",
+  "description": "The whole trend read over a chain — the body of `GET /v1/trends`,\nserialized whole.",
+  "type": "object",
+  "properties": {
+    "head": {
+      "$ref": "#/$defs/Head"
+    },
+    "kinds": {
+      "description": "Every record on the chain, by kind. Sums to the chain length.",
+      "$ref": "#/$defs/Kinds"
+    },
+    "rows": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Row"
+      }
+    },
+    "through_seq": {
+      "description": "Highest sequence read, or `null` for an empty chain. Always sent.",
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "uint64",
+      "minimum": 0
+    },
+    "untimed": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Untimed"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "window": {
+      "description": "The window asked for.",
+      "$ref": "#/$defs/Window"
+    }
+  },
+  "required": [
+    "kinds",
+    "window",
+    "head",
+    "rows"
+  ],
+  "$defs": {
+    "Direction": {
+      "description": "Which way a metric moved between the prior window and this one.\nInternally tagged on `direction`; `points` is signed (`now − prior`) in\nthe reading's own unit.",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "direction": {
+              "type": "string",
+              "const": "rising"
+            },
+            "points": {
+              "type": "number",
+              "format": "double"
+            }
+          },
+          "required": [
+            "direction",
+            "points"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "direction": {
+              "type": "string",
+              "const": "falling"
+            },
+            "points": {
+              "type": "number",
+              "format": "double"
+            }
+          },
+          "required": [
+            "direction",
+            "points"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "direction": {
+              "type": "string",
+              "const": "flat"
+            },
+            "points": {
+              "type": "number",
+              "format": "double"
+            }
+          },
+          "required": [
+            "direction",
+            "points"
+          ]
+        },
+        {
+          "description": "One of the two readings is not a number, so there is no direction —\nand no flat line either.",
+          "type": "object",
+          "properties": {
+            "direction": {
+              "type": "string",
+              "const": "unknown"
+            },
+            "reason": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "direction",
+            "reason"
+          ]
+        }
+      ]
+    },
+    "Head": {
+      "description": "Where the chain ends, and how far from `now` — the surface's staleness\nchip. The head and the newest timed record are reported separately\nbecause on the live chain they differ.",
+      "type": "object",
+      "properties": {
+        "age_secs": {
+          "description": "Time windows only: seconds from the head's own instant to `now`.\n`NotYet` when the head carries none.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Measurable"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "at_unix": {
+          "description": "The last record's own instant, if it carries a readable one.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int64"
+        },
+        "kind": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RecordKind"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "newest_timed": {
+          "description": "The newest record of any kind that carries a readable instant.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TimedPoint"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "seq": {
+          "description": "The last record's `seq`, or `null` for an empty chain.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint64",
+          "minimum": 0
+        }
+      }
+    },
+    "Kinds": {
+      "description": "How many records of each kind a chain holds. The sum is the chain length;\n`Calibration::decisions` counts only the `audit` lines among them.",
+      "type": "object",
+      "properties": {
+        "amendment": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "audit": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "decision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "decision_act": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "other": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "audit",
+        "decision",
+        "decision_act",
+        "amendment",
+        "other"
+      ]
+    },
+    "Measurable": {
+      "description": "A signal that cannot be computed yet, distinguished from one that computes\nto nothing. Externally tagged, snake_case: `{\"measured\": N}` or\n`{\"not_yet\": {\"reason\": …}}`.\n\n**Not-computable is its own state on this wire and must never render as a\nmeasured zero.** Reporting \"0 expired cards\" when no mechanism can produce\nan expiry would be a lie in the shape of a measurement.",
+      "oneOf": [
+        {
+          "description": "Computed from the chain.",
+          "type": "object",
+          "properties": {
+            "measured": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "measured"
+          ]
+        },
+        {
+          "description": "Not computable, and why.",
+          "type": "object",
+          "properties": {
+            "not_yet": {
+              "type": "object",
+              "properties": {
+                "reason": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "reason"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "not_yet"
+          ]
+        }
+      ]
+    },
+    "Metric": {
+      "description": "One measured metric. Each is a row on the measurement surface.",
+      "oneOf": [
+        {
+          "description": "Actions classified in the window. Time-window measure only.",
+          "type": "string",
+          "const": "volume"
+        },
+        {
+          "description": "Share of attributable actions taken at RED — how much of the traffic\nreaches a person.",
+          "type": "string",
+          "const": "routed_to_person"
+        },
+        {
+          "description": "Share of attributable actions at NEVER — what is being attempted\nagainst sealed verbs. A drift signal about the callers, not credit to\nthe gate.",
+          "type": "string",
+          "const": "refusal_never"
+        },
+        {
+          "description": "Share of RED actions whose outcome was a refusal:\n`rejected / (approved + rejected)`.",
+          "type": "string",
+          "const": "refusal_red"
+        },
+        {
+          "description": "Share of automatic (GREEN/YELLOW) actions that ended adversely —\ncalibration's signal 2, windowed.",
+          "type": "string",
+          "const": "adverse_auto"
+        },
+        {
+          "description": "Card verdicts a person signed in the window. Time-window only.",
+          "type": "string",
+          "const": "signoffs"
+        },
+        {
+          "description": "Share of signed verdicts that were `reject`.",
+          "type": "string",
+          "const": "signoff_refusal"
+        },
+        {
+          "description": "Share of signed verdicts that were `override-with-amendment` (EST-164).",
+          "type": "string",
+          "const": "signoff_override"
+        },
+        {
+          "description": "Queued → signed. Not yet: the queued instant is not sealed.",
+          "type": "string",
+          "const": "settle_latency"
+        },
+        {
+          "description": "Adverse outcome → incident link. Not yet: no incident object (EST-173).",
+          "type": "string",
+          "const": "incident_link_lag"
+        }
+      ]
+    },
+    "Reading": {
+      "description": "One reading of one metric over one window. Internally tagged on `state`.",
+      "oneOf": [
+        {
+          "description": "A count.",
+          "type": "object",
+          "properties": {
+            "count": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0
+            },
+            "state": {
+              "type": "string",
+              "const": "count"
+            }
+          },
+          "required": [
+            "state",
+            "count"
+          ]
+        },
+        {
+          "description": "A share, in percentage points, with the fraction it came from.",
+          "type": "object",
+          "properties": {
+            "denominator": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0
+            },
+            "numerator": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0
+            },
+            "points": {
+              "type": "number",
+              "format": "double"
+            },
+            "state": {
+              "type": "string",
+              "const": "share"
+            }
+          },
+          "required": [
+            "state",
+            "numerator",
+            "denominator",
+            "points"
+          ]
+        },
+        {
+          "description": "The mechanism exists; this window holds no sample for it.",
+          "type": "object",
+          "properties": {
+            "reason": {
+              "type": "string"
+            },
+            "state": {
+              "type": "string",
+              "const": "empty"
+            }
+          },
+          "required": [
+            "state",
+            "reason"
+          ]
+        },
+        {
+          "description": "Nothing in the chain can produce this yet, and why.",
+          "type": "object",
+          "properties": {
+            "reason": {
+              "type": "string"
+            },
+            "state": {
+              "type": "string",
+              "const": "not_yet"
+            }
+          },
+          "required": [
+            "state",
+            "reason"
+          ]
+        }
+      ]
+    },
+    "RecordKind": {
+      "description": "The kind of one ledger record — the layer of the chain a row reads.",
+      "oneOf": [
+        {
+          "description": "A classifier action record.",
+          "type": "string",
+          "const": "audit"
+        },
+        {
+          "description": "A sign-off record — a person's verdict on a card, with its verification.",
+          "type": "string",
+          "const": "decision"
+        },
+        {
+          "description": "An act-state transition for a settled decision.",
+          "type": "string",
+          "const": "decision_act"
+        },
+        {
+          "description": "A change to the constitution (marrow §4).",
+          "type": "string",
+          "const": "amendment"
+        },
+        {
+          "description": "A shape marrow does not recognise. Counted, never guessed at.",
+          "type": "string",
+          "const": "other"
+        }
+      ]
+    },
+    "Row": {
+      "description": "One row of the measurement surface.",
+      "type": "object",
+      "properties": {
+        "label": {
+          "type": "string"
+        },
+        "metric": {
+          "$ref": "#/$defs/Metric"
+        },
+        "now": {
+          "$ref": "#/$defs/Reading"
+        },
+        "prior": {
+          "$ref": "#/$defs/Reading"
+        },
+        "prior_window": {
+          "$ref": "#/$defs/Span"
+        },
+        "source": {
+          "description": "The layer of the chain this row reads.",
+          "$ref": "#/$defs/RecordKind"
+        },
+        "trend": {
+          "$ref": "#/$defs/Direction"
+        },
+        "window": {
+          "$ref": "#/$defs/Span"
+        }
+      },
+      "required": [
+        "metric",
+        "label",
+        "source",
+        "now",
+        "prior",
+        "trend",
+        "window",
+        "prior_window"
+      ]
+    },
+    "Span": {
+      "description": "The window a reading actually came from — the evidence behind the\nnumber. Internally tagged on `kind`.",
+      "oneOf": [
+        {
+          "description": "A run of records of one layer. Bounds are absent when the run is empty.",
+          "type": "object",
+          "properties": {
+            "first_seq": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0
+            },
+            "kind": {
+              "type": "string",
+              "const": "sequence"
+            },
+            "last_seq": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "format": "uint64",
+              "minimum": 0
+            },
+            "records": {
+              "description": "Records of this layer in the run.",
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0
+            },
+            "unattributable": {
+              "description": "…of which could not be bucketed. Counted, never guessed at.",
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "kind",
+            "records",
+            "unattributable"
+          ]
+        },
+        {
+          "description": "Timed records of one layer in `(from_unix, to_unix]`.",
+          "type": "object",
+          "properties": {
+            "from_unix": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "kind": {
+              "type": "string",
+              "const": "time"
+            },
+            "records": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0
+            },
+            "to_unix": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "unattributable": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "kind",
+            "from_unix",
+            "to_unix",
+            "records",
+            "unattributable"
+          ]
+        }
+      ]
+    },
+    "TimedPoint": {
+      "description": "A record that carries a readable instant.",
+      "type": "object",
+      "properties": {
+        "at_unix": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "kind": {
+          "$ref": "#/$defs/RecordKind"
+        },
+        "seq": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "seq",
+        "kind",
+        "at_unix"
+      ]
+    },
+    "Untimed": {
+      "description": "Time windows only: records that no time window can place, per layer.",
+      "type": "object",
+      "properties": {
+        "audit": {
+          "description": "`audit` records with no readable `at`.",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "decision": {
+          "description": "`decision` records with no readable `ts`.",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "audit",
+        "decision"
+      ]
+    },
+    "Window": {
+      "description": "The window a trend is asked over. Internally tagged on `kind`.",
+      "oneOf": [
+        {
+          "description": "The last `size` records of a row's layer, against the `size` before\nthem.",
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "sequence"
+            },
+            "size": {
+              "type": "integer",
+              "format": "uint",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "kind",
+            "size"
+          ]
+        },
+        {
+          "description": "Records whose sealed instant falls in `(now − span, now]`, against\n`(now − 2·span, now − span]`. Records without a readable instant are\ncounted as [`Trend::untimed`].",
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "time"
+            },
+            "now_unix": {
+              "type": "integer",
+              "format": "int64"
+            },
+            "span_secs": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0
+            }
+          },
+          "required": [
+            "kind",
+            "span_secs",
+            "now_unix"
+          ]
+        }
+      ]
+    }
+  }
+}

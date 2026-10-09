@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ContainmentRefusalBody",
+  "description": "Serve's HTTP 400 body for a refused contained dispatch:\n`{\"error\": \"<human prose>\", \"reason\": \"<code>\"}`. A non-containment 400\ncarries `{\"error\": …}` with NO `reason` key, which this type does not model.",
+  "type": "object",
+  "properties": {
+    "error": {
+      "type": "string"
+    },
+    "reason": {
+      "$ref": "#/$defs/ContainmentRefusal"
+    }
+  },
+  "required": [
+    "error",
+    "reason"
+  ],
+  "$defs": {
+    "ContainmentRefusal": {
+      "description": "Why blackwall-serve refused a dispatch that carried `containment`\n(`docs/specs/est-318-containment-attestation.md` §6.1 rule 1, soma#514).\nExactly these five kebab-case tokens: serve emits them, reflex parses them,\nso a typo cannot pass both suites.\n\nA TRANSPORT refusal, separate from the four-value audit\n[`crate::wire::Reason`]. Only `containment-profile-changed` maps across, and\nthat mapping lives in reflex, not here.",
+      "type": "string",
+      "enum": [
+        "containment-invalid",
+        "containment-profile-unknown",
+        "containment-profile-changed",
+        "containment-not-enforced",
+        "containment-layer-unenforced"
+      ]
+    }
+  }
+}
