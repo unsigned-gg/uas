@@ -9,7 +9,26 @@ license.workspace = true
 authors.workspace = true
 repository.workspace = true
 
+[[bin]]
+name = "cas-ebpfd"
+path = "src/bin/cas-ebpfd.rs"
+
 [dependencies]
+anyhow = { workspace = true }
+aya = { workspace = true }
+clap = { workspace = true }
+rustix = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+
+[build-dependencies]
+# build.rs checks the committed BPF object against ebpf/cas-ebpf.o.sha256 (spec 0014 D3).
+sha2 = { workspace = true }
 
 [lints.rust]
 # Spec 0001 decision 2026-10-09: this crate makes raw syscalls. unsafe is denied,

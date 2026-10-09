@@ -75,10 +75,13 @@ ebpf-build: ## Build the kernel eBPF artifact into crates/cas-ebpf/ebpf/cas-ebpf
 		--manifest-path crates/cas-ebpf/ebpf/Cargo.toml \
 		--target bpfel-unknown-none -Z build-std=core --release -j $(JOBS)
 	cp crates/cas-ebpf/ebpf/target/bpfel-unknown-none/release/cas-ebpf-ebpf crates/cas-ebpf/ebpf/cas-ebpf.o
-	sha256sum crates/cas-ebpf/ebpf/cas-ebpf.o
+	sha256sum crates/cas-ebpf/ebpf/cas-ebpf.o | cut -d' ' -f1 > crates/cas-ebpf/ebpf/cas-ebpf.o.sha256
 
-ebpf-test: ## Run real eBPF probe integration tests (requires sudo)
-	sudo -E env "PATH=$$PATH" cargo test -p cas-ebpf --test '*' -j $(JOBS) -- --nocapture
+# Operator-run on ceres (spec 0014 D8). Build unprivileged, then run only the test binary under sudo.
+ebpf-test: ## Run the live eBPF probe tests (operator-run, needs sudo)
+	BIN=$$(cargo test -p cas-ebpf --test live_probes --no-run -j $(JOBS) --message-format=json 2>/dev/null | jq -r 'select(.reason=="compiler-artifact" and .target.name=="live_probes") | .executable' | grep -v null | tail -n1); \
+	test -x "$$BIN" || { echo "ebpf-test: live_probes binary not found"; exit 1; }; \
+	sudo "$$BIN" --nocapture --test-threads=1
 
 audit: ## Check dependencies for known advisories
 	cargo audit
