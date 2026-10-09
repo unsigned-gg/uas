@@ -85,9 +85,10 @@ async fn track_then_untrack_changes_the_count() {
     tokio::task::spawn_blocking(move || {
         let mut client = DaemonClient::connect(&path).expect("connect");
         assert_eq!(client.status().expect("status"), (0, 0));
-        client.track(4242, 1).expect("track");
+        let me = std::process::id();
+        client.track(me, 1).expect("track");
         assert_eq!(client.status().expect("status").0, 1);
-        client.untrack(4242).expect("untrack");
+        client.untrack(me).expect("untrack");
         assert_eq!(client.status().expect("status").0, 0);
     })
     .await
@@ -101,11 +102,55 @@ async fn track_reaches_the_handle() {
     let path = fx.path.clone();
     tokio::task::spawn_blocking(move || {
         let mut client = DaemonClient::connect(&path).expect("connect");
-        client.track(77, 5).expect("track");
+        client.track(std::process::id(), 5).expect("track");
     })
     .await
     .expect("join");
-    assert_eq!(fx.handle.lock().expect("lock").tracked(), vec![(77, 5)]);
+    assert_eq!(
+        fx.handle.lock().expect("lock").tracked(),
+        vec![(std::process::id(), 5)]
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn track_of_another_users_pid_is_refused() {
+    if rustix::process::geteuid().is_root() {
+        eprintln!("skipped: running as root, every pid is trackable");
+        return;
+    }
+    let fx = Fixture::start().await;
+    let path = fx.path.clone();
+    let err = tokio::task::spawn_blocking(move || {
+        let mut client = DaemonClient::connect(&path).expect("connect");
+        // pid 1 belongs to root. The connection is still usable afterwards.
+        let err = client.track(1, 0).expect_err("init is not ours");
+        assert_eq!(client.status().expect("status"), (0, 0));
+        err
+    })
+    .await
+    .expect("join");
+    assert!(
+        matches!(&err, EbpfError::Protocol(reason) if reason.contains("belongs to uid 0")),
+        "{err}"
+    );
+    assert!(fx.handle.lock().expect("lock").tracked().is_empty());
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn track_of_a_missing_pid_is_refused() {
+    let fx = Fixture::start().await;
+    let path = fx.path.clone();
+    let err = tokio::task::spawn_blocking(move || {
+        let mut client = DaemonClient::connect(&path).expect("connect");
+        client.track(4_000_000, 1).expect_err("no such pid")
+    })
+    .await
+    .expect("join");
+    assert!(
+        matches!(&err, EbpfError::Protocol(reason) if reason.starts_with("pid 4000000:")),
+        "{err}"
+    );
+    assert!(fx.handle.lock().expect("lock").tracked().is_empty());
 }
 
 #[tokio::test(flavor = "multi_thread")]

@@ -241,7 +241,12 @@ The audit digest records exact execution sequence for Saga receipts:
   [Install]
   WantedBy=multi-user.target
   ```
-- **Socket Permissions:** `/run/cas/ebpf.sock` created with mode `0660`, group `docker` or `ctodie`.
+- **Socket Permissions:** `/run/cas/ebpf.sock` is bound under umask `0117` and then set
+  to mode `0660`, group `docker` or `ctodie`. It never exists with a wider mode.
+- **Peer Rule:** the daemon reads `SO_PEERCRED` on every connection and refuses one
+  without it. `track` is accepted only for a pid whose real uid (`/proc/<pid>/status`)
+  equals the peer's uid. A root peer may track any pid. Without this rule a socket-group
+  member could make the root daemon renice another user's process tree.
 - **UDS Protocol** (`protocol.rs`): one JSON object per line, request then
   response, at most 4096 bytes per line. A longer line closes the connection.
   Anything not on this list gets `{"ok":false,"error":"..."}` and the connection

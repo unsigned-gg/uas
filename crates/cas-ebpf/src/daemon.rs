@@ -5,6 +5,12 @@
 //! out on a broadcast channel. One task per connection answers requests. The
 //! handle sits behind a std mutex that is held for a map call only, never
 //! across an await.
+//!
+//! Boundary rule: the daemon runs as root and any member of the socket group
+//! may connect. A `track` request is accepted only for a pid whose real uid
+//! equals the connecting peer's uid (`SO_PEERCRED`); a root peer may track any
+//! pid. Without that rule a group member could make the daemon renice another
+//! user's process tree.
 
 use std::{
     collections::BTreeSet,
@@ -63,7 +69,12 @@ impl<H: ProbeHandle + Send + 'static> Daemon<H> {
     /// Binds the socket and serves until an error ends the reader or the listener.
     pub async fn serve(self) -> Result<(), EbpfError> {
         remove_stale(&self.path)?;
-        let listener = UnixListener::bind(&self.path)?;
+        // Bind under a restrictive umask, so the socket never exists with a wider
+        // mode than SOCKET_MODE, then set the exact mode.
+        let previous = rustix::process::umask(rustix::fs::Mode::from_bits_truncate(0o117));
+        let bound = UnixListener::bind(&self.path);
+        rustix::process::umask(previous);
+        let listener = bound?;
         std::fs::set_permissions(&self.path, std::fs::Permissions::from_mode(SOCKET_MODE))?;
         tracing::info!(socket = %self.path.display(), "cas-ebpfd listening");
 
@@ -165,14 +176,57 @@ fn drain<H: ProbeHandle>(shared: &Shared<H>, last_dropped: &mut u64) {
 }
 
 async fn connection<H: ProbeHandle + Send + 'static>(shared: Arc<Shared<H>>, stream: UnixStream) {
-    if let Err(e) = serve_connection(&shared, stream).await {
+    let peer = match stream.peer_cred() {
+        Ok(cred) => Peer { uid: cred.uid() },
+        Err(e) => {
+            tracing::warn!(error = %e, "refusing a connection without peer credentials");
+            return;
+        }
+    };
+    if let Err(e) = serve_connection(&shared, stream, peer).await {
         tracing::debug!(error = %e, "connection ended");
     }
+}
+
+/// The credentials of a connected client (`SO_PEERCRED`).
+#[derive(Clone, Copy, Debug)]
+struct Peer {
+    uid: u32,
+}
+
+impl Peer {
+    /// `Ok(())` when this peer may track `pid`: root may track anything, anyone
+    /// else only a pid whose real uid is their own.
+    fn may_track(self, pid: u32) -> Result<(), String> {
+        if self.uid == 0 {
+            return Ok(());
+        }
+        match pid_owner(pid) {
+            Ok(owner) if owner == self.uid => Ok(()),
+            Ok(owner) => Err(format!(
+                "pid {pid} belongs to uid {owner}, not to uid {}",
+                self.uid
+            )),
+            Err(e) => Err(format!("pid {pid}: {e}")),
+        }
+    }
+}
+
+/// The real uid of `pid`, from the `Uid:` line of `/proc/<pid>/status`.
+fn pid_owner(pid: u32) -> io::Result<u32> {
+    let status = std::fs::read_to_string(format!("/proc/{pid}/status"))?;
+    status
+        .lines()
+        .find_map(|line| line.strip_prefix("Uid:"))
+        .and_then(|rest| rest.split_whitespace().next())
+        .and_then(|uid| uid.parse().ok())
+        .ok_or_else(|| io::Error::other("no Uid line in /proc status"))
 }
 
 async fn serve_connection<H: ProbeHandle + Send + 'static>(
     shared: &Shared<H>,
     stream: UnixStream,
+    peer: Peer,
 ) -> Result<(), EbpfError> {
     let (read_half, mut writer) = stream.into_split();
     let mut reader = BufReader::new(read_half);
@@ -193,14 +247,18 @@ async fn serve_connection<H: ProbeHandle + Send + 'static>(
             write_json(&mut writer, &Response::ack()).await?;
             return stream_events(rx, reader, writer).await;
         }
-        let response = dispatch(shared, request);
+        let response = dispatch(shared, request, peer);
         write_json(&mut writer, &response).await?;
     }
 }
 
-fn dispatch<H: ProbeHandle>(shared: &Shared<H>, request: Request) -> Response {
+fn dispatch<H: ProbeHandle>(shared: &Shared<H>, request: Request, peer: Peer) -> Response {
     match request {
         Request::Track { pid, ppid } => {
+            if let Err(reason) = peer.may_track(pid) {
+                tracing::warn!(uid = peer.uid, pid, %reason, "track refused");
+                return Response::failure(reason);
+            }
             let mut tracked = lock(&shared.tracked);
             match lock(&shared.handle).track(pid, ppid) {
                 Ok(()) => {
