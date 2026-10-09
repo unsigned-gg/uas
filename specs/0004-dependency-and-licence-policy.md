@@ -118,6 +118,55 @@ object declares `Dual MIT/GPL` in its `license` section, as the aya template
 does. Only that program object carries it. The userspace loader and every
 other crate stay proprietary, and `deny.toml` still denies GPL crates.
 
+### CAS epic dependency list (draft, 2026-10-09)
+
+Status: PROPOSED. Christian ruled to approve the dependency list once, up
+front, for the parked epic run. This table is the list to approve. No crate
+enters a `Cargo.toml` until the row is approved and the ticket that needs it
+starts. Each pin is the newest version published on or before 2026-09-25 (14
+days before research). Versions, licences and MSRV come from crates.io
+metadata, read 2026-10-09.
+
+| Crate | Version | Licence | Used by | Phase | Conditions |
+|---|---|---|---|---|---|
+| `landlock` | 0.4.7 | MIT OR Apache-2.0 | cas-sandbox | 2 | none |
+| `rustix` | 1.1.5 | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT | cas-sandbox, cas-pool | 2, 3 | default-features off; `std`, `process`, `thread`, `fs`, `mount` |
+| `aya` | 0.14.0 | MIT OR Apache-2.0 | cas-ebpf (loader) | 2 | MSRV 1.87 |
+| `aya-ebpf` | 0.2.1 | MIT OR Apache-2.0 | kernel-side BPF program, outside the workspace build | 2 | nightly, rust-src, bpf-linker; program object declares `Dual MIT/GPL` |
+| `aya-log`, `aya-log-ebpf` | 0.3.0, 0.2.0 | MIT OR Apache-2.0 | cas-ebpf | 2 | only if the BPF program logs |
+| `gix` | 0.88.0 | MIT OR Apache-2.0 | cas-pool | 3 | default-features off, minimal features; MSRV 1.88; fallback 0.87.1 |
+| `agent-client-protocol` | 2.2.0 | Apache-2.0 | cas-acp | 3 | MSRV 1.88; 3.x is under 14 days old |
+| `tokio` | 1.53.1 | MIT | cas-router, cas-deck, cas-storage | 4, 5, 6 | default-features off; `rt-multi-thread`, `macros`, `net`, `time`, `sync`. The cas-pool runtime stays open (spec 0001 gap 1) |
+| `sha2` | 0.11.0 | MIT OR Apache-2.0 | cas-router | 4 | none |
+| `reqwest` | 0.13.5 | MIT OR Apache-2.0 | cas-router, cas-deck | 4, 5 | default-features off; `rustls` (aws-lc-rs provider, needs cmake), `http2`, `json`, `stream` |
+| `futures-util` | 0.3.34 | MIT OR Apache-2.0 | cas-router, cas-deck | 4, 5 | none |
+| `axum` | 0.8.9 | MIT | cas-deck | 5 | `ws` covers WebSocket |
+| `tower-http` | 0.7.1 | MIT | cas-deck | 5 | `fs`, `trace`, `timeout`, `compression-gzip` |
+| `tokio-stream` | 0.1.19 | MIT | cas-deck | 5 | none |
+| `maud` | 0.27.0 | MIT OR Apache-2.0 | cas-deck | 5 | `axum`; last release 2025-02-02 (stale, accepted with the MAD stack) |
+| `similar` | 3.2.0 | Apache-2.0 | cas-deck | 5 | none |
+| `aws-sdk-s3` | 1.150.0 | Apache-2.0 | cas-storage | 6 | default-features off; `sigv4a`, `http-1x`, `default-https-client`, `rt-tokio`, `behavior-version-latest`. The default `rustls` feature pulls the legacy hyper 0.14 / rustls 0.21 stack with 4 advisories. MSRV 1.94.1 |
+| `ed25519-dalek` | 3.0.0 | BSD-3-Clause | identity | 7 | Phase 7 waits for Allen |
+| `jsonschema` | 0.58.0 | MIT | identity | 7 | default-features off (no remote `$ref`); pulls `fluent-uri` (MIT-0); Phase 7 waits for Allen |
+| `governor` | 0.10.4 | MIT | identity | 7 | Phase 7 waits for Allen |
+| `a2a-lf` | 0.3.1 | Apache-2.0 | cas-engine (A2A envelopes) | 7 | protocol conformance not verified; Phase 7 waits for Allen |
+| `criterion` | 0.8.2 | Apache-2.0 OR MIT | benches (dev only) | 3, 8 | default-features off; `cargo_bench_support` |
+
+Not listed, with the reason:
+- `syntect` (deck highlighting): pulls `bincode`, unmaintained (RUSTSEC-2025-0141).
+- Phase 8 CRDT (`yrs` 0.28.0 pulls `smallstr`, unmaintained, RUSTSEC-2026-0215; `automerge` 0.12.0 needs Rust 1.90): chosen in the DeltaDB spec.
+- minikv client: the only crate found is a one-author project; the ticket owner must confirm what minikv means.
+
+Check of the whole set (`cargo deny check` with this repo's deny.toml, throwaway
+project, 522 packages, 2026-10-09):
+- With the aws-sdk-s3 features above: no vulnerability, no yanked crate.
+- All targets: rejected licences `MIT-0` (fluent-uri, via jsonschema) and
+  `CDLA-Permissive-2.0` (webpki-root-certs, wasm32 only). Linux targets only:
+  `MIT-0` remains.
+- Unmaintained: `bincode` (syntect) and `smallstr` (yrs). Both are excluded above.
+- The set needs a Rust floor of 1.88 (aya, gix, ACP, transitive icu crates);
+  aws-sdk-s3 needs 1.94.1, which equals the pinned toolchain.
+
 ### CI tools
 
 A tool that a workflow downloads at run time is an external dependency too.
