@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `Lease::renew` and `LeaseLedger::renew` take the lease token as a new parameter. A renewal by zero seconds now fails. The in-memory ledger refuses a second live lease on a slot.
 - `release-plz`: name GitHub releases `v{{ version }}` to match tag names instead of `cas-cli-v{{ version }}`.
 - `ci`: drop the dead `release` trigger and attach job from `sbom.yml`, generating the SBOM artifact on push to `main` only.
+- `cas-sandbox`, `cas-pool` and `cas-ebpf` deny `unsafe` instead of forbidding it. A block opts in with `#[allow(unsafe_code)]` and a `// SAFETY:` comment, which clippy enforces. Spec 0001 and spec 0004 record this ruling, the BPF program licence (`Dual MIT/GPL`, program object only) and the sudo `make ebpf-test` decision.
 
 ### Fixed
 - `cas-cli`: `cas harness run` makes `--evidence` optional, defaults dry runs to heuristic evidence, and rejects claiming verified or reported evidence when simulating execution (CER-2671).

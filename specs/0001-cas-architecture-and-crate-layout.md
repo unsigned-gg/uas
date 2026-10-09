@@ -148,6 +148,9 @@ vendors their contract files and never their service code:
 | GPL dependencies are denied by `deny.toml`. | the operator | 2026-10-08 |
 | CAS vendors estate contract files, never service code ("contracts yes, code no"). | the operator | 2026-10-09 |
 | Phase 8 (DeltaDB) enters the epic saga run. Recorded as adoption into the plan, see Notes. | the operator | 2026-10-09 |
+| `unsafe` stays forbidden in the workspace. `cas-sandbox`, `cas-pool` and `cas-ebpf` deny it instead, with a per-block allow and a SAFETY comment (AGENTS.md rule 14). | the operator | 2026-10-09 |
+| The kernel-side BPF program object declares `Dual MIT/GPL`. The loader and every other crate stay proprietary. | the operator | 2026-10-09 |
+| eBPF tests on ceres run through a sudo `make ebpf-test` target. The sysctl `kernel.unprivileged_bpf_disabled` is not changed. | the operator | 2026-10-09 |
 
 The research names nine crates. This repo has ten because of `cas-cli`.
 
@@ -166,13 +169,17 @@ These are not decided. Each needs a spec or an operator ruling before code.
 3. **`cas-storage` has no phase.** The roadmap lists no phase for this crate.
    Phase 6 deploys a Kubernetes operator for aistore. That is not a crate.
 4. **aistore is Go.** `cas-storage` can only be an HTTP client of it.
-5. **eBPF licence.** An eBPF program that calls GPL-only kernel helpers must
-   declare a GPL-compatible licence in its `license` section. (Source: the
-   Linux kernel, `Documentation/bpf/bpf_licensing.rst`; not in the research.) This repo is
-   proprietary. The helpers needed are unknown. Spec 0004 records the open
-   question. Decide before the first program.
-6. **eBPF toolchain.** The eBPF side needs nightly Rust and `bpf-linker`. The
-   `ci-rust` image has neither (spec 0005).
+5. **eBPF licence.** Decided 2026-10-09, see Decisions of record and spec 0004:
+   the kernel-side BPF program object declares `Dual MIT/GPL`. Every other
+   crate, the userspace loader included, stays proprietary. (An eBPF program
+   that calls GPL-only kernel helpers must declare a GPL-compatible licence;
+   Linux kernel `Documentation/bpf/bpf_licensing.rst`.)
+6. **eBPF toolchain and access.** The eBPF side needs nightly Rust and
+   `bpf-linker`. The `ci-rust` image has neither (spec 0005). On ceres,
+   tracepoint programs need CAP_BPF and CAP_PERFMON, whatever
+   `kernel.unprivileged_bpf_disabled` says. Decided 2026-10-09: a
+   `make ebpf-test` target runs only the eBPF test binary under sudo, and the
+   operator types the password. CI still needs a privileged runner.
 7. **The research disagrees about the crate list.** By count on 2026-10-08:
    the synthesis table names 6 CAS crates, the diagram atlas draws 8, and the
    design names 9. The synthesis omits `cas-acp`, `cas-storage` and
@@ -188,7 +195,7 @@ These are not decided. Each needs a spec or an operator ruling before code.
 - [ ] Write the spec that chooses the pool runtime.
 - [ ] Write the spec that designs a job cap for builds, or drops the claim.
 - [ ] Give `cas-storage` a phase or merge it into another crate.
-- [ ] Decide the eBPF licence position and record it in spec 0004.
+- [x] Decide the eBPF licence position and record it in spec 0004 (2026-10-09).
 - [ ] Add each crate dependency only when its first real code lands.
 
 ## Test
