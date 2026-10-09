@@ -11,8 +11,8 @@ depends_on: [0001-cas-architecture-and-crate-layout, 0004-dependency-and-licence
 ## Overview
 
 `cas-sandbox` is a placeholder. Phase 2 starts here. This spec gives the crate
-its first real code: a probe for the kernel's Landlock ABI and a builder for
-the filesystem ruleset that confines a worker (CER-2715, parent CER-2680).
+its first real code. CER-2715 adds the Landlock ABI probe and the ruleset
+builder. CER-2716 adds the launcher. Parent: CER-2680.
 
 Why now: spec 0001 invariant 4.4 says a worker writes only inside its
 ephemeral worktree. Nothing enforces that today. The launcher (CER-2716), the
@@ -49,6 +49,7 @@ Facts, measured 2026-10-09 on ceres:
 | D5 | ABI v1 accesses are a hard requirement. `build()` fails on a kernel that cannot enforce them. Newer accesses (refer, truncate, ioctl) are best effort. | CAS lane, 2026-10-09 |
 | D6 | Default deny. The builder lists what a worker may touch. Everything else is denied for every handled access. | CAS lane, 2026-10-09 |
 | D7 | Scratch and device paths get write without execute. Only the workspace and the system paths may execute. | CAS lane, 2026-10-09, after a critic pass |
+| D8 | The child enters the jail in `pre_exec`, between fork and exec. The parent never restricts itself. A refused jail is reported as `ENOTRECOVERABLE`, because std forwards only a raw errno from `pre_exec`. | CAS lane, 2026-10-09 |
 
 the operator corrects any of these in place.
 
@@ -113,14 +114,45 @@ test proves it.
 `SandboxError` is a `thiserror` enum: `PathMissing(PathBuf)`,
 `PathOpen(PathBuf, io::Error)`, `Ruleset(landlock::RulesetError)` and
 `ProbeThread(String)`. On a kernel without Landlock, `build()` returns
-`Ruleset` because of D5. After `restrict_self`, the launcher (CER-2716) must
-also treat `RulesetStatus::PartiallyEnforced` and `NotEnforced` as a failed
-jail.
+`Ruleset` because of D5. `JailRefused` means the child could not enter the
+jail and did not run. `Spawn` wraps any other `spawn` failure.
+
+Correction, CAS lane, 2026-10-09: an earlier revision said the launcher must
+treat `PartiallyEnforced` as a failed jail. That was wrong. D5 makes newer
+accesses best effort, so a kernel at ABI v3 reports `PartiallyEnforced` for
+a ruleset that handles v5 accesses. Only `NotEnforced` fails the jail.
+
+### Launcher
+
+`launcher::jail(command, ruleset)` installs a `pre_exec` hook on a
+`std::process::Command`. `launcher::launch(ruleset, command)` installs it and
+spawns. In the child, before `exec`:
+
+1. `restrict_self` sets `PR_SET_NO_NEW_PRIVS` and calls
+   `landlock_restrict_self`. The crate does both; the launcher calls neither
+   syscall itself.
+2. The child refuses to continue when `no_new_privs` is false or the ruleset
+   status is `NotEnforced`. It returns `ENOTRECOVERABLE`, which `exec` never
+   produces, and the parent's `spawn` fails with `SandboxError::JailRefused`.
+   The worker never runs. A kernel errno from the syscalls passes through.
+3. Nothing in the child allocates: every error is built from a raw errno.
+   The parent process may have other threads, and an allocation after fork
+   can deadlock on the allocator lock.
+
+The ruleset stays in the parent's closure. Each child takes its own copy
+after fork, so one jailed command spawns any number of jailed workers.
+`pre_exec` is the one `unsafe` block in the crate; it carries a `SAFETY`
+comment (AGENTS.md rule 14).
+
+A kernel errno reaches the parent unchanged in `Spawn`. The test switches
+`no_new_privs` off: the kernel then refuses `landlock_restrict_self` with
+`EPERM` for an unprivileged process, and the parent sees that errno. Not
+measured: the launcher's own `JailRefused` verdict. It needs root, which
+passes the kernel check, or a kernel without Landlock.
 
 ### Out of scope
 
-`restrict_self` on a worker, `PR_SET_NO_NEW_PRIVS` in `pre_exec`, network
-namespaces and the escape suite belong to CER-2716, CER-2717, CER-2684 and
+Network namespaces and the escape suite belong to CER-2717, CER-2684 and
 CER-2721.
 
 ## Plan
@@ -131,17 +163,20 @@ CER-2721.
 - [x] `LandlockRulesetBuilder`, `RulesetPlan` and the `worker` preset.
 - [x] Integration test `landlock_probe`: the probe reports, the caller stays unrestricted, the builder canonicalises a symlink, a missing path fails, and a jailed thread writes inside the workspace but not under `$HOME`, not through a `/tmp` symlink.
 - [x] CHANGELOG line and `specs/README.md` row.
+- [x] `launcher::jail` and `launcher::launch` with the `JailRefused` and `Spawn` errors (CER-2716).
+- [x] Integration test `launcher`: a jailed `sh` writes inside the workspace only and reports `NoNewPrivs: 1`. A jailed command jails every child. A kernel refusal reaches the parent as its own errno.
 
 ## Test
 
 ```bash
 cargo test -p cas-sandbox -j 2 --test landlock_probe
+cargo test -p cas-sandbox -j 2 --test launcher
 ```
 
-Passing means exit 0. Add `-- --nocapture` to see the probe line
+Passing means exit 0 for both. Add `-- --nocapture` to see the probe line
 `landlock probe: status=Available effective_abi=N kernel_abi=None`, N at
-least 1. On a kernel with no Landlock the jail cases print `skipped` and
-pass; the PR body then states which kernel ran the gate. Also run
+least 1. On a kernel with no Landlock the jail and launcher cases print
+`skipped` and pass; the PR body then states which kernel ran the gate. Also run
 `make check`, `make hygiene` and `make smoke`.
 
 ## Notes

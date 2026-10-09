@@ -1,17 +1,22 @@
 //! Landlock rulesets, namespace isolation and path canonicalisation for harness processes.
 //!
 //! Spec 0010 gives this crate its first code: a probe for the kernel's
-//! Landlock ABI and a builder for the default-deny filesystem ruleset that
-//! confines a worker. Applying the ruleset to a worker process belongs to the
-//! launcher (CER-2716). See `specs/0010-landlock-ruleset-and-abi-probe.md`.
+//! Landlock ABI, a builder for the default-deny filesystem ruleset that
+//! confines a worker, and the launcher that spawns a worker inside it.
+//! See `specs/0010-landlock-ruleset-and-abi-probe.md`.
+//!
+//! `unsafe` is denied, not forbidden (AGENTS.md rule 14). The one block that
+//! opts in is `launcher::jail`, for `pre_exec`.
 #![deny(unsafe_code)]
 
 pub mod abi;
 pub mod canon;
 pub mod error;
+pub mod launcher;
 pub mod ruleset;
 
 pub use abi::{probe, AbiReport, AbiStatus};
 pub use canon::canonical;
 pub use error::SandboxError;
+pub use launcher::{jail, launch, JAIL_REFUSED_ERRNO};
 pub use ruleset::{LandlockRulesetBuilder, PathAccess, PlannedRule, RulesetPlan};
