@@ -57,8 +57,10 @@ pkgs=()
 while IFS= read -r f; do
   case "$f" in
     crates/*/*)
-      d=$(dirname "$f")
-      while [ "$d" != "." ] && [ ! -f "$d/Cargo.toml" ]; do d=$(dirname "$d"); done
+      # The workspace crate is always crates/<name>. A nested package below it
+      # (crates/cas-ebpf/ebpf, the kernel program, built outside the workspace)
+      # maps to its parent crate, whose build.rs checks the committed object.
+      d=$(cut -d/ -f1-2 <<<"$f")
       [ -f "$d/Cargo.toml" ] || continue
       name=$(sed -n 's/^name *= *"\(.*\)"/\1/p' "$d/Cargo.toml" | head -1)
       [ -n "$name" ] && pkgs+=("$name")
