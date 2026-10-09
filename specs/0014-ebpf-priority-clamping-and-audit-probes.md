@@ -97,10 +97,13 @@ flowchart TD
 
 ### Tracepoint Probes & Maps
 
-1. **`sched_process_fork` Probe:** Reads `child_pid` (offset 44) and parent tgid via `bpf_get_current_pid_tgid() >> 32`. If the parent exists in `TRACKED_PIDS`, inserts `child_pid`. The map holds 1024 entries; daemon caps non-root peers at 256 entries.
-2. **`sched_process_exec` Probe:** Reads `pid` (offset 12). If tracked, reads `comm`, `uid`, timestamp, and `ppid`. Submits a 168-byte `ExecEvent` to `AUDIT_EVENTS` (256 KiB ring buffer). Ring drop increments `DROPPED_EVENTS[0]`; map insertion failure increments `DROPPED_EVENTS[1]`.
+1. **`sched_process_fork` Probe:** Reads `child_pid` (offset 44) and parent tgid via `bpf_get_current_pid_tgid() >> 32`. If parent exists in `TRACKED_PIDS`, inserts `child_pid`. The map holds 1024 entries shared across all clients. Thread clones spend entries while running. If the map is full, insertion fails and increments `DROPPED_EVENTS[1]` (`Probes::tracking_failures`), signifying an escaped child process.
+2. **`sched_process_exec` Probe:** Reads `pid` (offset 12). If tracked, reads `comm`, `uid`, timestamp, and `ppid`. Submits a 168-byte `ExecEvent` to `AUDIT_EVENTS` (256 KiB ring buffer). Reservation failure increments `DROPPED_EVENTS[0]` (`ProbeHandle::dropped_events`, streamed on `{"dropped":N}`).
 3. **`sched_process_exit` Probe:** Reads exiting `pid` (offset 24). If present in `TRACKED_PIDS`, deletes the key to prevent map leaks.
-4. **`ExecEvent` Memory Layout (168 bytes):** `timestamp_ns: u64` (offset 0), `pid: u32` (8), `ppid: u32` (12), `uid: u32` (16), `comm: [u8; 16]` (20), `filename: [u8; 128]` (36), `_pad: u32` (164).
+4. **Counters (`DROPPED_EVENTS`):** A two-slot `PerCpuArray<u64>`:
+   - Slot 0: Ring-buffer reserve failures (`ProbeHandle::dropped_events`, emitted on `{"dropped":N}` lines).
+   - Slot 1: Fork inserts refused because `TRACKED_PIDS` was full (`Probes::tracking_failures`); a non-zero count indicates a child worker escaped tracking.
+5. **`ExecEvent` Memory Layout (168 bytes):** `timestamp_ns: u64` (offset 0), `pid: u32` (8), `ppid: u32` (12), `uid: u32` (16), `comm: [u8; 16]` (20), `filename: [u8; 128]` (36), `_pad: u32` (164).
 
 ### Priority Clamping Invariants
 
@@ -142,7 +145,7 @@ flowchart TD
   WantedBy=multi-user.target
   ```
 - **Socket & Permissions:** Bound under umask `0117`, mode `0660`, owned by `--socket-group` (default `ctodie`).
-- **Peer Rules (SO_PEERCRED):** Validates peer credentials. `track` requires target process uid equal to peer uid (max 256 pids per non-root uid). `untrack` requires peer ownership. `stream` delivers only the peer's events. Root is exempt.
+- **Peer Rules (SO_PEERCRED):** The daemon reads `SO_PEERCRED` on every connection and rejects connections without credentials. `track` is capped per non-root UID at 256 PIDs (`daemon::DEFAULT_TRACK_QUOTA`, `Daemon::with_track_quota`). Requests exceeding quota return `{"ok":false,"error":"track quota 256 reached for uid U"}`. Reason: `TRACKED_PIDS` (1024 entries) is shared across all clients and thread clones spend entries while running. Target process UID must equal peer UID (`/proc/<pid>/status`). `untrack` requires peer ownership. `stream` delivers only the peer's UID events. Root peers are exempt from all quotas and restrictions.
 - **UDS Protocol:** JSON lines, max 4096 bytes per line:
   - `{"op":"track","pid":N,"ppid":P}` -> `{"ok":true}`
   - `{"op":"untrack","pid":N}` -> `{"ok":true}`
