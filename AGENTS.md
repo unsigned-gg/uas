@@ -56,6 +56,7 @@ A crate depends only on crates in lower layers. Add a Cargo dependency only when
 11. **No secrets in the repo.** `make` and lefthook run gitleaks.
 12. **Pin every external dependency** and record it in spec 0004 before first use. Copyleft licences are denied by `deny.toml`.
 13. **Write prose in short sentences.** Use active voice. Use ASCII only in files.
+14. **Keep `unsafe` out, except where syscalls need it.** The workspace forbids `unsafe`. `cas-sandbox`, `cas-pool` and `cas-ebpf` deny it instead: a block opts in with `#[allow(unsafe_code)]` and a `// SAFETY:` comment, and clippy rejects an unsafe block with no SAFETY comment. Spec 0001 records the ruling.
 
 ## Commands
 

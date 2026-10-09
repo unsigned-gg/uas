@@ -111,8 +111,12 @@ The research does not state the aya licence. The `aya-rs/aya` workspace
 `Cargo.toml` declares `MIT OR Apache-2.0` (read 2026-10-08). Re-read it at the
 pin. A separate question remains: an eBPF program that calls GPL-only kernel
 helpers must declare a GPL-compatible licence in its `license` section (Linux
-kernel `Documentation/bpf/bpf_licensing.rst`). This repo is proprietary. Record the position here before the first
-`cas-ebpf` program. Spec 0001 lists this as an open gap.
+kernel `Documentation/bpf/bpf_licensing.rst`). This repo is proprietary.
+
+Position, decided by the operator on 2026-10-09: the kernel-side BPF program
+object declares `Dual MIT/GPL` in its `license` section, as the aya template
+does. Only that program object carries it. The userspace loader and every
+other crate stay proprietary, and `deny.toml` still denies GPL crates.
 
 ### CI tools
 
