@@ -239,4 +239,8 @@ draft, no approver):
   plan. Christian corrects it here if that reading is wrong.
 - The blocking finding still stands. No Phase 8 code runs until a revised
   design lands that never commits directly to main. Phase 8 runs last.
-- Estate-wide DeltaDB work is CER-2671, owned by another lane.
+- Estate-wide DeltaDB and Blackwall custody process adopted with PR-floor constraints
+  across estate Rust repositories (CER-2671, operator ruling 2026-10-08). Adopts the
+  integration design with PR-only landing: changesets reconcile to feature branches,
+  open PRs targeting `development`, and merge on green with merge commits. Direct push
+  to `main` remains forbidden.
