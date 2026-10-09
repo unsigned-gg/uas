@@ -1,0 +1,9 @@
+# The first custody run on cas-substrate (CER-2671). The defect was found by a
+# read-only survey on 2026-10-08.
+provider = "claude"
+model = "sonnet"
+budget_tokens = 200000
+conventional_subject = "fix(cli): a harness dry run never records a verified attestation"
+
+[vars]
+ticket = "CER-2671"

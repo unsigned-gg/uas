@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Blackwall custody setup (CER-2671): `blackwall.toml` (claude provider, `make check` and `make hygiene` as the verify gate, PRs into `development`, automerge off), the `tasks/` library with the first task `harness-evidence`, the `custody-run` skill, `make custody-check`, and `.blackwall/` ignored.
 - `cas-engine` workflow sessions, activities, and event log with `cas harness` CLI runner and `.saga/flows/cas-builder.toml` dogfood flow.
 - Spec 0007, the lease rules: one live lease per slot, only the lease token renews a lease, a renewal extends by at least one second, and a draining slot keeps its worktree. `cas-domain` adds `check_slot_free`, `Lease::holds_slot_at`, `LeaseToken::matches`, and the errors `SlotLeased` and `TokenMismatch`.
 
