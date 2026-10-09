@@ -44,33 +44,42 @@ asserts the matrix.
 | `write_ws` | write inside the workspace | `ok` | positive control |
 | `write_home` | write under `$HOME` | `EACCES` | Landlock |
 | `write_etc` | create `/etc/cas-escape-test` | `EACCES` | Landlock, also DAC |
+| `append_etc_passwd` | open `/etc/passwd` for append | `EACCES` | Landlock, also DAC |
+| `read_home_ssh` | list `$HOME/.ssh` | `EACCES`, or `absent` | Landlock |
 | `write_root` | create `/cas-escape-test` | `EACCES` | Landlock, also DAC |
 | `read_outside` | read a file under `$HOME` | `EACCES` | Landlock |
 | `write_via_symlink` | symlink in the workspace to `$HOME`, write through it | `EACCES` | Landlock binds the inode |
-| `rename_out` | rename a workspace file into `$HOME` | `EACCES` or `EXDEV` | Landlock refer |
-| `hardlink_out` | hard-link a workspace file into `$HOME` | `EACCES` or `EXDEV` | Landlock refer |
-| `exec_from_tmp` | copy `/usr/bin/true` to `/tmp`, execute it | `EACCES` | spec 0010 D7, write without execute |
+| `rename_out` | rename a workspace file into `$HOME` | `EACCES` on one mount; `EXDEV` across mounts | Landlock refer; across mounts the kernel answers first |
+| `hardlink_out` | hard-link a workspace file into `$HOME` | `EACCES` on one mount; `EXDEV` across mounts | Landlock refer; across mounts the kernel answers first |
+| `exec_from_ws` | copy `/usr/bin/true` into the workspace, execute it | `ok` | positive control for the next row |
+| `exec_from_tmp` | the same copy in `/tmp`, execute it | `EACCES` | spec 0010 D7, write without execute |
 | `nnp` | `NoNewPrivs` in `/proc/self/status` | `1` | launcher |
 | `grandchild_nnp` | the same from a child `sh` | `1` | inherited across exec |
+| `grandchild_write_ws` | a child `sh` writes inside the workspace | exit 0, file present | positive control: the shell runs |
 | `grandchild_write_home` | a child `sh` writes under `$HOME` | non-zero exit, no file | Landlock inherited across exec |
 | `setuid_sudo` | `sudo -n true` | `The "no new privileges" flag is set` (sudo 1.9) or `effective uid is not 0`; with a user namespace, `owned by uid 65534` | `no_new_privs` ignores the setuid bit; in the user namespace root is unmapped |
 | `tcp_wan` | TCP connect to `1.1.1.1:80` | `ENETUNREACH` | namespace, no route |
 | `udp_wan` | UDP send to `1.1.1.1:53` | `ENETUNREACH` | namespace, no route |
-| `ping_raw` | `ping -c1 -W1 1.1.1.1` | non-zero exit | `no_new_privs` ignores file capabilities, so the raw socket cannot open; with no route it would fail anyway |
+| `ping_raw` | `ping -c1 -W1 1.1.1.1` | `raw-socket-denied` (stderr `socktype: SOCK_RAW`) or `no-route` | `no_new_privs` ignores file capabilities, so the raw socket cannot open; with no route it would fail anyway |
 | `interfaces` | `/proc/net/dev` | `lo` | namespace |
 
-A host without `sudo` or `ping` reports `absent` for that row and the
-parent accepts it. The parent also checks that no file appeared outside the
-workspace and that the moved file is still inside it.
+A host without `sudo`, `ping` or `$HOME/.ssh` reports `absent` for that
+row and the parent accepts it. The parent also checks that no file appeared
+outside the workspace and that the moved file is still inside it. The
+`root-unmapped` outcome of `setuid_sudo` shows an ownership failure, not
+`no_new_privs`; the run without a namespace is the one that shows
+`no_new_privs`.
 
 ### Known gaps
 
 - `write_etc` and `write_root` are denied by file permissions as well as by
   Landlock for a non-root worker. Those two rows cannot tell the mechanisms
   apart. The `$HOME` rows can, and they are the ones that matter.
-- A Unix socket outside the workspace can still be connected to. Landlock
-  scopes Unix sockets from ABI v6 (Linux 6.12); ceres is at v3. Not in the
-  matrix. CER-2718 decides the socket policy.
+- Unix sockets are not in the matrix. Landlock ABI v6 (Linux 6.12) scopes
+  abstract Unix sockets and signals (`landlock-0.4.7:src/compat.rs`, the
+  `ABI::V6` comment); ceres is at v3. Whether a pathname socket outside the
+  workspace can be connected to from the jail is not measured here.
+  CER-2718 measures it when it sets the socket policy.
 - Measured 2026-10-09 on ceres: `ping_raw` reports `exit2 socktype:
   SOCK_RAW`. The raw socket could not be opened: `no_new_privs` makes the
   kernel ignore `ping`'s file capabilities, and ICMP datagram sockets are
@@ -90,10 +99,12 @@ workspace and that the moved file is still inside it.
 cargo test -p cas-sandbox -j 2 --test escapes
 ```
 
-Passing means exit 0. Add `-- --nocapture` to see one line per row. On a
-host without Landlock the suite prints `skipped` and passes; on a host
-without namespaces only the network rows are skipped. The PR body says
-which host ran it. Also run `make check`, `make hygiene` and `make smoke`.
+Passing means exit 0. Add `-- --nocapture` to see one line per row. The
+suite prints `skipped` and passes on a host without Landlock, or when
+`HOME` is unset or not writable. On a host without namespaces the second
+run is skipped and the first run reports its network rows as `skipped`.
+The PR body says which host ran it and which rows were skipped. Also run
+`make check`, `make hygiene` and `make smoke`.
 
 ## Notes
 
