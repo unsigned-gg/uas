@@ -3,8 +3,8 @@
 use cas_domain::{LeaseId, SlotId};
 
 use crate::{
-    Activity, ActivityResult, Compensator, EngineError, EventStore, InMemoryEventStore,
-    NoopCompensator, SessionId, SessionState, WorkflowEvent,
+    Activity, ActivityResult, CompensationReceipt, Compensator, EngineError, EventStore,
+    InMemoryEventStore, NoopCompensator, SessionId, SessionState, WorkflowEvent,
 };
 
 /// A durable workflow session managing execution turns and event logging.
@@ -15,6 +15,7 @@ pub struct WorkflowSession<S: EventStore = InMemoryEventStore> {
     lease_id: Option<LeaseId>,
     store: S,
     compensator: Box<dyn Compensator>,
+    compensation_receipts: Vec<CompensationReceipt>,
 }
 
 impl WorkflowSession<InMemoryEventStore> {
@@ -124,6 +125,7 @@ impl<S: EventStore> WorkflowSession<S> {
             lease_id: None,
             store,
             compensator,
+            compensation_receipts: Vec::new(),
         }
     }
 
@@ -150,6 +152,31 @@ impl<S: EventStore> WorkflowSession<S> {
     /// Access recorded events in the log.
     pub fn events(&self) -> &[WorkflowEvent] {
         self.store.events()
+    }
+
+    /// Access compensation receipts emitted during rollback, if any.
+    pub fn compensation_receipts(&self) -> &[CompensationReceipt] {
+        &self.compensation_receipts
+    }
+
+    /// Check if an activity has already been completed in this session's history.
+    pub fn is_activity_completed(&self, activity_id: &str) -> bool {
+        self.store.events().iter().any(|ev| match ev {
+            WorkflowEvent::ActivityCompleted { result, .. } => result.activity_id == activity_id,
+            _ => false,
+        })
+    }
+
+    /// Retrieve the cached result of an already completed activity, if present.
+    pub fn cached_result(&self, activity_id: &str) -> Option<&ActivityResult> {
+        self.store.events().iter().find_map(|ev| match ev {
+            WorkflowEvent::ActivityCompleted { result, .. }
+                if result.activity_id == activity_id =>
+            {
+                Some(result)
+            }
+            _ => None,
+        })
     }
 
     /// Start the workflow session by binding an acquired slot and lease.
@@ -271,12 +298,16 @@ impl<S: EventStore> WorkflowSession<S> {
         })?;
 
         // Execute compensation logic
-        if let Err(e) = self.compensator.compensate(activity, &reason) {
-            return Err(EngineError::CompensationFailed {
-                activity_id: activity.id.clone(),
-                reason: e.to_string(),
-            });
-        }
+        let receipts = match self.compensator.compensate(activity, &reason) {
+            Ok(receipts) => receipts,
+            Err(e) => {
+                return Err(EngineError::CompensationFailed {
+                    activity_id: activity.id.clone(),
+                    reason: e.to_string(),
+                });
+            }
+        };
+        self.compensation_receipts.extend(receipts);
 
         self.state = SessionState::Failed;
         let fin_seq = self.store.len() as u64;
