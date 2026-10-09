@@ -27,6 +27,14 @@ rely on these rules, not on whatever the first adapter happens to do.
 
 ## Design
 
+### Requirements (EARS)
+
+- **Ubiquitous:** The `cas-domain` ledger shall permit at most one unexpired lease per slot at any point in time.
+- **Event-driven:** WHEN renewing a lease, the caller shall provide a matching `LeaseToken` and an extension of at least one second.
+- **State-driven:** WHILE a slot transitions to `Draining`, the slot shall retain its associated worktree reference.
+- **Unwanted behavior:** IF a caller attempts to issue a lease for an occupied slot, THEN the ledger shall return `SlotLeased`.
+- **Unwanted behavior:** IF a renewal request provides an incorrect token, THEN the domain shall return `TokenMismatch` without revealing lease state.
+
 ### Rules
 
 | # | Rule | Before | Enforced by |

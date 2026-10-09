@@ -33,6 +33,15 @@ eight non-domain crates are placeholders with a README and no code.
 
 ## Design
 
+### Requirements (EARS)
+
+- **Ubiquitous:** The workspace crates shall strictly follow the downward layering order (`deck > acp > engine > pool > sandbox, ebpf > router > domain`).
+- **Ubiquitous:** The `cas-domain` crate shall contain pure types and zero direct I/O dependencies.
+- **Event-driven:** WHEN a crate requires estate contracts, the workspace shall vendor schema definitions under `vendor/` without compiling them as members.
+- **State-driven:** WHILE a worker runs builds on shared hosts, the substrate shall clamp build process trees to `nice 19`.
+- **Unwanted behavior:** IF an unauthorized file access occurs in a worker sandbox, THEN the kernel shall deny the call and trigger saga compensation.
+- **Optional feature:** WHERE DeltaDB virtual worktrees are enabled, the substrate shall reconcile changesets through pull requests targeting `development`.
+
 ### Crates
 
 The workspace has ten crates. Phases come from the research roadmap

@@ -28,6 +28,14 @@ Facts from 2026-10-08:
 
 ## Design
 
+### Requirements (EARS)
+
+- **Ubiquitous:** The workspace shall declare a proprietary licence (`LicenseRef-Proprietary`) and deny copyleft licences via `deny.toml`.
+- **Ubiquitous:** The workspace shall pin every external dependency by exact version or git revision before use.
+- **Event-driven:** WHEN adding an external dependency, the developer shall document rationale in workspace dependencies and update this specification.
+- **State-driven:** WHILE building eBPF kernel probe objects, the build system shall declare dual MIT/GPL licensing for kernel compatibility.
+- **Unwanted behavior:** IF a dependency introduces copyleft terms or unapproved git sources, THEN `cargo deny check` shall fail the build.
+
 ### Licence rules
 
 - Copyleft is denied. `deny.toml` uses the cargo-deny v2 schema, which has no

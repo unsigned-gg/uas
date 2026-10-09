@@ -78,6 +78,15 @@ Facts, measured 2026-10-09 on ceres (kernel `6.6.87.2-microsoft-standard-WSL2`):
 
 ## Design
 
+### Requirements (EARS)
+
+- **Ubiquitous:** The `cas-ebpf` crate shall implement clean-room eBPF probes using Aya without copyleft dependencies.
+- **Ubiquitous:** The root daemon `cas-ebpfd` shall hold `CAP_BPF` and `CAP_SYS_NICE` while serving unprivileged clients over a UDS socket.
+- **Event-driven:** WHEN a worker slot spawns, `cas-pool` shall configure a dedicated process group and clamp priority to `nice 19`.
+- **Event-driven:** WHEN process exec or exit events fire, the eBPF probe shall stream structured `ExecEvent` records and update `run_hash`.
+- **State-driven:** WHILE tracking worker processes, the eBPF probe shall detect group escape attempts and re-clamp priority to `nice 19`.
+- **Unwanted behavior:** IF a tracked process exits, THEN the probe shall evict the process ID from `TRACKED_PIDS` to prevent map leaks.
+
 ### Decisions
 
 | # | Decision | Who, when |

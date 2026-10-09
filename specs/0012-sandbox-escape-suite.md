@@ -26,6 +26,14 @@ are closed to every group, so `ping` needs a raw socket).
 
 ## Design
 
+### Requirements (EARS)
+
+- **Ubiquitous:** The adversarial suite shall verify that Landlock, `no_new_privs`, and network namespaces compose to confine the worker.
+- **Event-driven:** WHEN an attack executes, the harness shall record structured receipts and assert expected error outcomes.
+- **State-driven:** WHILE running inside the sandbox, the worker shall make modifications strictly within its workspace root.
+- **Unwanted behavior:** IF an escape attempt occurs, THEN the kernel shall block the operation with expected error codes.
+- **Optional feature:** WHERE network namespaces are unavailable, the suite shall mark network rows as skipped.
+
 ### Shape
 
 The worker is the test binary, re-executed with `helper_attacks` as the

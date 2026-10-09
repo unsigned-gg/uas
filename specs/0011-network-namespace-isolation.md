@@ -38,6 +38,14 @@ Facts, measured 2026-10-09:
 
 ## Design
 
+### Requirements (EARS)
+
+- **Ubiquitous:** The sandbox shall isolate worker processes inside a private network namespace with only a loopback interface.
+- **Ubiquitous:** The network isolation shall deny all outbound traffic by default with `ENETUNREACH`.
+- **Event-driven:** WHEN spawning a sandboxed worker, the launcher shall execute the netns hook in `pre_exec` before Landlock.
+- **State-driven:** WHILE configuring the network namespace, the child shall bring up the loopback interface using direct ioctl calls.
+- **Unwanted behavior:** IF unprivileged `CLONE_NEWNET` fails with `EPERM`, THEN the hook shall fallback to user namespace creation with identity mappings.
+
 ### Decisions
 
 | # | Decision | Who, when |

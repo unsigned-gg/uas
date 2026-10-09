@@ -40,6 +40,14 @@ Landlock ABI 3, unprivileged):
 
 ## Design
 
+### Requirements (EARS)
+
+- **Ubiquitous:** The `cas-router` socket proxy shall expose model gateway access via a Unix domain socket inside the worker workspace.
+- **Ubiquitous:** The proxy shall inject the gateway bearer token while stripping incoming authorization headers from the worker.
+- **Event-driven:** WHEN a worker sends an HTTP request, the proxy shall validate the target against the route allowlist.
+- **State-driven:** WHILE handling proxy connections, the router shall stream bodies under strict size and duration limits.
+- **Unwanted behavior:** IF a request contains unapproved paths or malformed headers, THEN the proxy shall reject the request immediately.
+
 ### Decisions
 
 | # | Decision | Who, when |

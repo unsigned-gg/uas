@@ -23,6 +23,14 @@ Evidence from 2026-10-08:
 
 ## Design
 
+### Requirements (EARS)
+
+- **Ubiquitous:** The verification system shall classify all claims into explicit evidence tiers (`verified`, `reported`, `heuristic`, `asserted`).
+- **Ubiquitous:** The build harness shall restrict workstation compilation to two parallel jobs (`-j 2` and `--build-jobs 2`).
+- **Event-driven:** WHEN a gate requires proof, the submitter shall provide `verified` tier evidence citing command output.
+- **State-driven:** WHILE running inside ephemeral CI runner pods, the build system shall allow higher concurrency (`JOBS=10`).
+- **Unwanted behavior:** IF a claim lacks reproducible command output, THEN the gate shall reject the claim as unverified.
+
 ### Gates
 
 | Target | Runs | Use |

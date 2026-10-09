@@ -28,6 +28,14 @@ autonomous builder agents on host `ceres`, the substrate requires:
 
 ## Design
 
+### Requirements (EARS)
+
+- **Ubiquitous:** The engine coordinator shall execute registered compensators in reverse dependency order upon workflow failure.
+- **Ubiquitous:** Each executed compensator shall produce a structured `CompensationReceipt` recording success and status reason.
+- **Event-driven:** WHEN a step activity fails, the session shall transition to `Compensating` and trigger cleanup.
+- **State-driven:** WHILE recovering from a restart, the engine shall reconstruct session state from event logs without re-executing activities.
+- **Unwanted behavior:** IF a compensation handler fails, THEN the engine shall record the error and continue remaining compensations.
+
 ### 1. Compensation Architecture
 
 When an activity returns a non-zero exit code or violates admission policies, the session
