@@ -21,6 +21,14 @@ This spec defines the ACP server in `cas-acp` (Phase 3, CER-2683):
 
 ## Design
 
+### Requirements (EARS)
+
+- **Ubiquitous:** The `cas-acp` server shall implement JSON-RPC 2.0 framing over standard I/O for IDE communication.
+- **Event-driven:** WHEN an IDE submits an execution request, `cas-acp` shall allocate a pooled slot and dispatch a workflow.
+- **Event-driven:** WHEN a slot lease approaches expiration, `cas-acp` shall emit an asynchronous lease update notification.
+- **State-driven:** WHILE streaming workflow progress, `cas-acp` shall translate engine activity events into ACP delta frames.
+- **Unwanted behavior:** IF a user sends a cancellation request, THEN `cas-acp` shall freeze the slot and trigger cleanup.
+
 ### Decisions
 
 | # | Decision | Who, when |

@@ -25,6 +25,14 @@ execute under Saga flows, broadcast attestations to Cortex, and query/record mem
 
 ## Design
 
+### Requirements (EARS)
+
+- **Ubiquitous:** The substrate shall communicate with Soma, Saga, Cortex, and Reverie exclusively across defined service edges.
+- **Event-driven:** WHEN admitting a task, the substrate shall verify that slot parameters match the Soma policy tier.
+- **Event-driven:** WHEN an activity produces verified attestations, the substrate shall persist records to Reverie and publish status to Cortex.
+- **State-driven:** WHILE handling Tier2 actions, the substrate shall await operator approval from the Cortex settle queue.
+- **Unwanted behavior:** IF an activity fails verification, THEN the substrate shall invoke registered Saga compensators for rollback.
+
 ### 1. Integration Topology
 
 The lifecycle follows the estate boundary contract:
