@@ -1,0 +1,8 @@
+# Adopt DeltaDB and Blackwall custody process with PR-floor constraints (CER-2671).
+provider = "claude"
+model = "sonnet"
+budget_tokens = 200000
+conventional_subject = "docs(spec-0001): adopt DeltaDB and Blackwall custody with PR-floor constraints"
+
+[vars]
+ticket = "CER-2671"

@@ -1,0 +1,116 @@
+# Flow: estate-custody-rollout
+#
+# Estate-wide DeltaDB & Blackwall custody rollout across Rust repositories (CER-2671, EST-548).
+# Pipeline: terrain custody assertion -> custody configuration verification ->
+# jailed task execution -> WorldId settle -> mechanical reconcile gate -> PR landing on green.
+
+[flow]
+name = "estate-custody-rollout"
+description = "Estate-wide DeltaDB & Blackwall custody process rollout: terrain assert -> custody verify -> E2E trial -> PR -> merge on green"
+
+[params.ticket]
+required = true
+description = "Tracking Linear issue (e.g. CER-2671)"
+
+[params.task_name]
+required = true
+description = "Task library name under tasks/ (e.g. harness-evidence)"
+
+[params.target_component]
+required = false
+default = "core"
+description = "Target component or crate"
+
+[limits]
+max_in_flight = 2
+claude = 1
+omp = 1
+
+# ── Step 1: Pre-flight terrain & custody assertion ──────────────────────────
+[[step]]
+id = "terrain-assert"
+title = "Assert terrain sandbox and custody health"
+kind = "verify"
+agent = "auto"
+verify_cmd = ["blackwall", "doctor"]
+prompt = """
+Assert repository readiness and Blackwall custody health:
+1. Verify Blackwall workspace is initialized and Landlock jail is active.
+2. Confirm AGENTS.md and SECURITY.md are present.
+3. Validate presence of local git hooks.
+Emit normative receipt and fail closed on drift.
+"""
+
+# ── Step 2: Custody configuration verification ──────────────────────────────
+[[step]]
+id = "custody-config-check"
+title = "Verify blackwall.toml and task library alignment"
+kind = "verify"
+agent = "auto"
+deps = ["terrain-assert"]
+verify_cmd = ["test", "-f", "blackwall.toml"]
+prompt = """
+Verify blackwall.toml configuration:
+1. Provider set to claude (for OpDelta trace generation) or gateway.
+2. Verify gate configured with host throttling: make check JOBS=2.
+3. PR base targets development (never main).
+4. Task library directory exists at tasks/{{params.task_name}}.
+"""
+
+# ── Step 3: Ephemeral jailed task execution ──────────────────────────────────
+[[step]]
+id = "custody-start"
+title = "Execute task in Blackwall Landlock sandbox"
+kind = "impl"
+agent = "auto"
+deps = ["custody-config-check"]
+verify_cmd = ["test", "-f", "tasks/{{params.task_name}}/prompt.md"]
+prompt = """
+Run the task under Blackwall custody:
+Execute: blackwall start --task {{params.task_name}}
+Ensure process runs within Landlock jail and writes operation deltas to delta store.
+"""
+
+# ── Step 4: Settle candidate changeset ───────────────────────────────────────
+[[step]]
+id = "custody-settle"
+title = "Settle WorldId pointer and generate delta trace"
+kind = "impl"
+agent = "auto"
+deps = ["custody-start"]
+prompt = """
+Advance Blackwall state pointer:
+1. Execute blackwall settle to advance WorldId.
+2. Verify operation deltas via blackwall run trace <run_hash>.
+3. Ensure no uncommitted working tree pollution remains.
+"""
+
+# ── Step 5: Mechanical reconcile verification gate ───────────────────────────
+[[step]]
+id = "custody-reconcile"
+title = "Run fail-closed mechanical verification gate"
+kind = "test"
+agent = "auto"
+deps = ["custody-settle"]
+verify_cmd = ["make", "check", "JOBS=2"]
+prompt = """
+Execute mechanical verification in Blackwall temporary scratch tree:
+Run verify command: make check JOBS=2 && make hygiene JOBS=2.
+Deterministic exit code 0 grants VERIFIED evidence tier.
+"""
+
+# ── Step 6: PR publication & Land on Green merge ─────────────────────────────
+[[step]]
+id = "custody-pr-land"
+title = "Materialize rebased PR and land on green"
+kind = "gate"
+gate = "heimdal:approval"
+deps = ["custody-reconcile"]
+prompt = """
+Reconcile and publish candidate change:
+1. blackwall reconcile materializes feature branch blackwall/<run_hash>.
+2. Open GitHub PR targeting development with signed commits.
+3. Await CI check-runs.
+4. Merge on green with --match-head-commit.
+5. Capture merge commit SHA as final landing receipt.
+"""
