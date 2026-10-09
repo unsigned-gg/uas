@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::Duration;
 
-use cas_sandbox::{jail, netns, LandlockRulesetBuilder};
+use cas_sandbox::{launch, netns, LandlockRulesetBuilder};
 
 type TestResult = Result<(), Box<dyn std::error::Error>>;
 
@@ -34,6 +34,18 @@ fn helper_probe() {
     )
     .map(|_| ());
     println!("wan_connect={}", describe(wan));
+    // The interfaces this process can see. /proc/net/dev is per network namespace.
+    let interfaces = fs::read_to_string("/proc/net/dev")
+        .map(|text| {
+            text.lines()
+                .skip(2)
+                .filter_map(|line| line.split(':').next())
+                .map(|name| name.trim().to_string())
+                .collect::<Vec<_>>()
+                .join(",")
+        })
+        .unwrap_or_else(|err| format!("unreadable:{err}"));
+    println!("interfaces={interfaces}");
 }
 
 fn describe(result: std::io::Result<()>) -> String {
@@ -57,14 +69,18 @@ fn probe_command() -> Result<Command, std::io::Error> {
     Ok(command)
 }
 
-/// `(lo_connect, wan_connect)` from the probe's stdout.
-fn parse(stdout: &str) -> (Option<String>, Option<String>) {
+/// `(lo_connect, wan_connect, interfaces)` from the probe's stdout.
+fn parse(stdout: &str) -> (Option<String>, Option<String>, Option<String>) {
     let value = |key: &str| {
         stdout
             .lines()
             .find_map(|line| line.strip_prefix(key).map(str::to_string))
     };
-    (value("lo_connect="), value("wan_connect="))
+    (
+        value("lo_connect="),
+        value("wan_connect="),
+        value("interfaces="),
+    )
 }
 
 fn scratch(name: &str) -> Result<PathBuf, std::io::Error> {
@@ -94,27 +110,43 @@ fn unjailed_control_reaches_loopback() -> TestResult {
         "{}",
         String::from_utf8_lossy(&output.stderr)
     );
-    let (lo, wan) = parse(&String::from_utf8_lossy(&output.stdout));
+    let (lo, wan, interfaces) = parse(&String::from_utf8_lossy(&output.stdout));
     assert_eq!(lo.as_deref(), Some("ok"), "control: loopback must work");
-    println!("unjailed control: wan_connect={}", wan.unwrap_or_default());
+    let interfaces = interfaces.unwrap_or_default();
+    println!(
+        "unjailed control: wan_connect={} interfaces={interfaces}",
+        wan.unwrap_or_default()
+    );
+    assert!(
+        interfaces
+            .split(',')
+            .any(|name| name != "lo" && !name.is_empty()),
+        "control: the host must have an interface besides lo, got {interfaces:?}"
+    );
     Ok(())
 }
 
 #[test]
 fn jailed_worker_has_only_loopback() -> TestResult {
     let ws = scratch("netns-ws")?;
+    // The preset has no /proc rule (spec 0010); the probe reads /proc/net/dev.
     let (ruleset, _) = LandlockRulesetBuilder::worker(&ws, Vec::<PathBuf>::new())
         .allow_read_exec(target_dir()?)
+        .allow_read("/proc")
         .build()?;
     let mut command = probe_command()?;
     netns::isolate(&mut command);
-    jail(&mut command, ruleset);
-    let output = command.spawn()?.wait_with_output()?;
+    let output = launch(ruleset, &mut command)?.wait_with_output()?;
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(output.status.success(), "worker failed: {stderr}");
     let stdout = String::from_utf8_lossy(&output.stdout);
-    let (lo, wan) = parse(&stdout);
-    println!("jailed: lo_connect={:?} wan_connect={:?}", lo, wan);
+    let (lo, wan, interfaces) = parse(&stdout);
+    println!("jailed: lo_connect={lo:?} wan_connect={wan:?} interfaces={interfaces:?}");
+    assert_eq!(
+        interfaces.as_deref(),
+        Some("lo"),
+        "the namespace must hold only lo"
+    );
     assert_eq!(
         lo.as_deref(),
         Some("ok"),

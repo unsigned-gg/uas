@@ -47,13 +47,17 @@ pub fn jail(command: &mut Command, ruleset: RulesetCreated) -> &mut Command {
 /// comes from a `netns::isolate` hook on the same command. A kernel errno from
 /// `landlock_restrict_self` or `prctl` arrives unchanged in `Spawn`.
 pub fn launch(ruleset: RulesetCreated, command: &mut Command) -> Result<Child, SandboxError> {
-    jail(command, ruleset)
-        .spawn()
-        .map_err(|err| match err.raw_os_error() {
-            Some(JAIL_REFUSED_ERRNO) => SandboxError::JailRefused,
-            Some(NETNS_REFUSED_ERRNO) => SandboxError::NetnsRefused,
-            _ => SandboxError::Spawn(err),
-        })
+    jail(command, ruleset).spawn().map_err(classify_spawn_error)
+}
+
+/// Turn a `spawn` error into the sandbox verdict. The reserved errnos come from
+/// the hooks; everything else is a plain spawn failure with its own errno.
+fn classify_spawn_error(err: io::Error) -> SandboxError {
+    match err.raw_os_error() {
+        Some(JAIL_REFUSED_ERRNO) => SandboxError::JailRefused,
+        Some(NETNS_REFUSED_ERRNO) => SandboxError::NetnsRefused,
+        _ => SandboxError::Spawn(err),
+    }
 }
 
 /// Runs in the child. Refuses to continue unless the ruleset is enforced and
@@ -95,4 +99,25 @@ fn kernel_errno(err: &RulesetError) -> Option<i32> {
         source = inner.source();
     }
     None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn reserved_errnos_become_verdicts() {
+        let jail = classify_spawn_error(io::Error::from_raw_os_error(JAIL_REFUSED_ERRNO));
+        assert!(matches!(jail, SandboxError::JailRefused));
+        let netns = classify_spawn_error(io::Error::from_raw_os_error(NETNS_REFUSED_ERRNO));
+        assert!(matches!(netns, SandboxError::NetnsRefused));
+    }
+
+    #[test]
+    fn other_errnos_stay_spawn_errors() {
+        let eperm = classify_spawn_error(io::Error::from_raw_os_error(1));
+        assert!(matches!(eperm, SandboxError::Spawn(ref e) if e.raw_os_error() == Some(1)));
+        let other = classify_spawn_error(io::Error::other("no errno"));
+        assert!(matches!(other, SandboxError::Spawn(ref e) if e.raw_os_error().is_none()));
+    }
 }
