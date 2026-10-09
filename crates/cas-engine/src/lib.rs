@@ -56,14 +56,22 @@
 
 mod activity;
 mod compensator;
+mod cortex;
 mod error;
 mod event;
+mod reverie;
+mod saga;
 mod session;
+mod soma;
 mod workflow;
 
 pub use activity::{Activity, ActivityKind, ActivityResult};
 pub use compensator::{Compensator, NoopCompensator, RecordingCompensator};
+pub use cortex::{CortexMeshEvent, SettleCard, SettleQueue, SettleStatus};
 pub use error::EngineError;
 pub use event::{EventStore, InMemoryEventStore, WorkflowEvent};
+pub use reverie::{InMemoryReverieClient, ReverieClient, ReverieContextQuery, ReverieMemoryRecord};
+pub use saga::{SagaFlowCoordinator, SagaStep};
 pub use session::{SessionId, SessionState};
+pub use soma::SomaAdmissionGate;
 pub use workflow::WorkflowSession;

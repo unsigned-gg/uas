@@ -24,6 +24,16 @@ impl EvidenceTier {
         self == Self::Verified
     }
 
+    /// String identifier for this evidence tier.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Verified => "verified",
+            Self::Reported => "reported",
+            Self::Heuristic => "heuristic",
+            Self::Asserted => "asserted",
+        }
+    }
+
     /// Strength rank: higher is stronger.
     fn rank(self) -> u8 {
         match self {

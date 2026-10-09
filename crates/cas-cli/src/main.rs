@@ -4,11 +4,12 @@ mod memory;
 
 use anyhow::{Context, Result};
 use cas_domain::{
-    Attestation, Budget, EvidenceTier, Lease, LeaseId, LeaseLedger, LeaseToken, PrincipalRef, Slot,
-    SlotId, SlotState, WorktreeRef,
+    Attestation, Budget, EvidenceTier, Lease, LeaseId, LeaseLedger, LeaseToken, PolicyTier,
+    PrincipalRef, Slot, SlotId, SlotState, SomaClassification, WorktreeRef,
 };
 use cas_engine::{
-    Activity, ActivityKind, ActivityResult, SessionId, SessionState, WorkflowEvent, WorkflowSession,
+    Activity, ActivityKind, ActivityResult, SessionId, SessionState, SomaAdmissionGate,
+    WorkflowEvent, WorkflowSession,
 };
 use clap::{Parser, Subcommand};
 use serde::{Deserialize, Serialize};
@@ -64,8 +65,14 @@ enum HarnessCommand {
         task: String,
 
         /// Evidence tier (verified, reported, heuristic, asserted).
-        #[arg(long, default_value = "verified")]
-        evidence: String,
+        /// Defaults to verified for real runs, heuristic for dry-run.
+        #[arg(long)]
+        evidence: Option<String>,
+
+        /// Policy tier (tier-0, tier-1, tier-2).
+        /// Defaults to tier-0 for dry-run, tier-1 for execution.
+        #[arg(long)]
+        policy_tier: Option<String>,
 
         /// Principal signer for the attestation.
         #[arg(long, default_value = "cas/harness")]
@@ -109,6 +116,8 @@ struct HarnessReport {
     lease_id: String,
     state: SessionState,
     done: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    policy_tier: Option<PolicyTier>,
     attestation: Option<Attestation>,
     failure_reason: Option<String>,
     events: Vec<WorkflowEvent>,
@@ -135,6 +144,17 @@ fn parse_evidence_tier(s: &str) -> Result<EvidenceTier> {
         other => anyhow::bail!(
             "unknown evidence tier: '{other}'. Expected verified, reported, heuristic, or asserted"
         ),
+    }
+}
+
+fn parse_policy_tier(s: &str) -> Result<PolicyTier> {
+    match s.to_ascii_lowercase().as_str() {
+        "tier-0" | "tier0" | "0" => Ok(PolicyTier::Tier0),
+        "tier-1" | "tier1" | "1" => Ok(PolicyTier::Tier1),
+        "tier-2" | "tier2" | "2" => Ok(PolicyTier::Tier2),
+        other => {
+            anyhow::bail!("unknown policy tier: '{other}'. Expected tier-0, tier-1, or tier-2")
+        }
     }
 }
 
@@ -201,7 +221,8 @@ fn harness_run(
     slot: &str,
     session: Option<String>,
     task: &str,
-    evidence_str: &str,
+    evidence_opt: Option<&str>,
+    policy_tier_opt: Option<&str>,
     signer: &str,
     dry_run: bool,
 ) -> Result<HarnessReport> {
@@ -211,13 +232,69 @@ fn harness_run(
     let lease_id =
         LeaseId::new(format!("lease-{}", slot_id.as_str())).context("invalid lease id")?;
     let signer = PrincipalRef::new(signer).context("invalid --signer")?;
-    let evidence = parse_evidence_tier(evidence_str)?;
+
+    let evidence = match (evidence_opt, dry_run) {
+        (None, true) => EvidenceTier::Heuristic,
+        (None, false) => EvidenceTier::Verified,
+        (Some(raw), true) => {
+            let tier = parse_evidence_tier(raw)?;
+            if tier == EvidenceTier::Verified || tier == EvidenceTier::Reported {
+                anyhow::bail!(
+                    "a dry run executes nothing and cannot record {} tier evidence",
+                    tier.as_str()
+                );
+            }
+            tier
+        }
+        (Some(raw), false) => parse_evidence_tier(raw)?,
+    };
+
+    let policy_tier = match policy_tier_opt {
+        Some(raw) => parse_policy_tier(raw)?,
+        None => {
+            if dry_run {
+                PolicyTier::Tier0
+            } else {
+                PolicyTier::Tier1
+            }
+        }
+    };
+
+    let classification = SomaClassification::new(
+        policy_tier,
+        if dry_run { "simulation" } else { "execution" },
+        "soma reflex admission check",
+    )?;
+    let admission_gate = SomaAdmissionGate::new(classification);
+
     let now = current_epoch_seconds();
 
     let mut workflow = WorkflowSession::new(session_id.clone());
     workflow.start(slot_id.clone(), lease_id.clone(), now)?;
 
-    let activity = Activity::new("act-1", task, ActivityKind::Verify);
+    let activity_kind = if dry_run {
+        ActivityKind::Verify
+    } else {
+        ActivityKind::Impl
+    };
+    let activity = Activity::new("act-1", task, activity_kind);
+
+    if let Err(e) = admission_gate.admit_activity(&activity) {
+        let reason = format!("policy admission rejected: {e}");
+        workflow.fail_activity(&activity, reason.clone(), now)?;
+        return Ok(HarnessReport {
+            session_id: session_id.to_string(),
+            slot_id: slot_id.to_string(),
+            lease_id: lease_id.to_string(),
+            state: workflow.state(),
+            done: false,
+            policy_tier: Some(policy_tier),
+            attestation: None,
+            failure_reason: Some(reason),
+            events: workflow.events().to_vec(),
+        });
+    }
+
     workflow.start_activity(activity.clone(), now)?;
 
     if dry_run {
@@ -242,6 +319,7 @@ fn harness_run(
             lease_id: lease_id.to_string(),
             state: workflow.state(),
             done: true,
+            policy_tier: Some(policy_tier),
             attestation: Some(attestation),
             failure_reason: None,
             events: workflow.events().to_vec(),
@@ -281,6 +359,7 @@ fn harness_run(
                 lease_id: lease_id.to_string(),
                 state: workflow.state(),
                 done: true,
+                policy_tier: Some(policy_tier),
                 attestation: Some(attestation),
                 failure_reason: None,
                 events: workflow.events().to_vec(),
@@ -299,6 +378,7 @@ fn harness_run(
                 lease_id: lease_id.to_string(),
                 state: workflow.state(),
                 done: false,
+                policy_tier: Some(policy_tier),
                 attestation: None,
                 failure_reason: Some(reason),
                 events: workflow.events().to_vec(),
@@ -365,10 +445,19 @@ fn main() -> Result<()> {
                 session,
                 task,
                 evidence,
+                policy_tier,
                 signer,
                 dry_run,
             } => {
-                let report = harness_run(&slot, session, &task, &evidence, &signer, dry_run)?;
+                let report = harness_run(
+                    &slot,
+                    session,
+                    &task,
+                    evidence.as_deref(),
+                    policy_tier.as_deref(),
+                    &signer,
+                    dry_run,
+                )?;
                 println!("{}", serde_json::to_string_pretty(&report)?);
                 if !report.done {
                     anyhow::bail!("harness task failed: {:?}", report.failure_reason);
@@ -414,12 +503,13 @@ mod tests {
     }
 
     #[test]
-    fn harness_run_dry_run_generates_verified_report() {
+    fn dry_run_defaults_to_heuristic() {
         let report = harness_run(
             "slot-test",
             None,
             "make spec-check",
-            "verified",
+            None,
+            None,
             "cas/test",
             true,
         )
@@ -428,8 +518,53 @@ mod tests {
         assert_eq!(report.state, SessionState::Succeeded);
         assert_eq!(report.events.len(), 4);
         let att = report.attestation.unwrap();
-        assert_eq!(att.evidence, EvidenceTier::Verified);
+        assert_eq!(att.evidence, EvidenceTier::Heuristic);
         assert_eq!(att.signer.as_str(), "cas/test");
+        assert_eq!(report.policy_tier, Some(PolicyTier::Tier0));
+    }
+
+    #[test]
+    fn dry_run_rejects_verified() {
+        let result = harness_run(
+            "slot-test",
+            None,
+            "make spec-check",
+            Some("verified"),
+            None,
+            "cas/test",
+            true,
+        );
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn real_run_defaults_to_verified() {
+        let report = harness_run("slot-test", None, "true", None, None, "cas/test", false).unwrap();
+        assert!(report.done);
+        assert_eq!(report.state, SessionState::Succeeded);
+        let att = report.attestation.unwrap();
+        assert_eq!(att.evidence, EvidenceTier::Verified);
+        assert_eq!(report.policy_tier, Some(PolicyTier::Tier1));
+    }
+
+    #[test]
+    fn policy_tier0_rejects_real_execution() {
+        let report = harness_run(
+            "slot-test",
+            None,
+            "true",
+            None,
+            Some("tier-0"),
+            "cas/test",
+            false,
+        )
+        .unwrap();
+        assert!(!report.done);
+        assert_eq!(report.state, SessionState::Failed);
+        assert!(report
+            .failure_reason
+            .unwrap()
+            .contains("policy admission rejected"));
     }
 
     #[test]
@@ -438,7 +573,8 @@ mod tests {
             "slot-test",
             None,
             "echo hello-cas",
-            "verified",
+            Some("verified"),
+            None,
             "cas/test",
             false,
         )
@@ -451,8 +587,16 @@ mod tests {
 
     #[test]
     fn harness_run_captures_failure() {
-        let report =
-            harness_run("slot-test", None, "exit 42", "verified", "cas/test", false).unwrap();
+        let report = harness_run(
+            "slot-test",
+            None,
+            "exit 42",
+            Some("verified"),
+            None,
+            "cas/test",
+            false,
+        )
+        .unwrap();
         assert!(!report.done);
         assert_eq!(report.state, SessionState::Failed);
         assert!(report.attestation.is_none());
@@ -464,10 +608,11 @@ mod tests {
         let report = harness_run(
             "slot-test",
             None,
-            "make spec-check",
-            "verified",
+            "echo test-cmd",
+            None,
+            None,
             "cas/test",
-            true,
+            false,
         )
         .unwrap();
         let json = serde_json::to_string_pretty(&report).unwrap();

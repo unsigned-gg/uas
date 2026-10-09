@@ -47,4 +47,12 @@ pub enum EngineError {
         /// Reason for failure.
         reason: String,
     },
+
+    /// Storage or entity lookup error.
+    #[error("store error: {0}")]
+    StoreError(String),
+
+    /// Policy admission violation.
+    #[error("policy violation: {0}")]
+    PolicyViolation(String),
 }
