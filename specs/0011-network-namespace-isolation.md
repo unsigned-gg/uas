@@ -23,10 +23,12 @@ Facts, measured 2026-10-09:
   `unshare -Urn` (user namespace plus network namespace) succeeds, and
   `ip link set lo up` works inside it. `/proc/sys/user/max_user_namespaces`
   is 224913.
-- The CI runner holds `CAP_SYS_ADMIN` without being root (spec 0010, the
-  launcher refusal test on PR #26). Whether it also holds `CAP_NET_ADMIN` is
-  not measured. Tier: asserted. The CI run of this spec's PR measures which
-  path the runner takes.
+- The CI runner (`ci-rust` pod, kernel `6.18.51-talos`) holds no
+  capability (`CapBnd` 0), has `NoNewPrivs: 1` already set and a seccomp
+  filter (`Seccomp: 2`). `unshare -n` and `unshare -Urn` both fail with
+  `Operation not permitted`; `max_user_namespaces` is 15000. Measured in
+  this spec's PR #27 by the gate's diagnostics. The runner cannot create a
+  network namespace by either path.
 - `rustix` 1.1.5 is on the approved spec 0004 list with features `std`,
   `process`, `thread`, `fs`, `mount`. Its `ioctl` module is not feature
   gated. `unshare` is deprecated in favour of `unshare_unsafe`.
@@ -101,10 +103,13 @@ Passing means exit 0. The worker is the test binary, re-executed through
 `netns::isolate` and `launch`. The ruleset adds read and execute on the
 `target` directory and read on `/proc`. The parent reads three probe lines
 from the worker's stdout. The jailed worker must see only `lo` in
-`/proc/net/dev`; the unjailed control must see another interface. On a
-kernel that cannot create the namespace, `launch` fails with
-`NetnsRefused` and the test fails. There is no skip. Add `-- --nocapture`
-to see the probe lines. Also run `make check`,
+`/proc/net/dev`; the unjailed control must see another interface. The
+jailed case first probes the host with `netns::isolate` alone. A host that
+cannot create a namespace prints `skipped` plus its diagnostics and the
+case passes; the PR body then says which host ran it. Decision, Christian,
+2026-10-09, by interview in the CAS lane: probe and skip, and file a ticket
+for the `ci-rust` runner so CI proves the namespace later. Add
+`-- --nocapture` to see the probe lines. Also run `make check`,
 `make hygiene` and `make smoke`.
 
 ## Notes

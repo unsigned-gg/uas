@@ -185,8 +185,9 @@ fn a_refused_jail_never_runs_the_worker() -> TestResult {
     let (ruleset, _) = LandlockRulesetBuilder::worker(&ws, Vec::<PathBuf>::new()).build()?;
     // Without no_new_privs, one of two things happens. An unprivileged process is
     // refused by the kernel: landlock_restrict_self fails with EPERM, and that errno
-    // must reach the parent unchanged (ceres). A process with CAP_SYS_ADMIN passes
-    // the kernel check and reaches the launcher's own verdict (the CI runner).
+    // must reach the parent unchanged (ceres). A process that already has
+    // no_new_privs set, or holds CAP_SYS_ADMIN, passes the kernel check and reaches
+    // the launcher's own verdict (the CI runner, which has NoNewPrivs 1 and no caps).
     let ruleset = ruleset.no_new_privs(false);
     let marker = ws.join("ran.txt");
     let err = launch(
