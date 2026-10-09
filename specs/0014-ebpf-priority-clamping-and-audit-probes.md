@@ -85,10 +85,10 @@ Facts, measured 2026-10-09 on ceres (kernel `6.6.87.2-microsoft-standard-WSL2`):
 ### Requirements (EARS)
 
 - **Ubiquitous:** The `cas-ebpf` crate shall implement clean-room eBPF probes using Aya without copyleft dependencies.
-- **Ubiquitous:** The root daemon `cas-ebpfd` shall hold `CAP_BPF` and `CAP_SYS_NICE` while serving unprivileged clients over a UDS socket.
+- **Ubiquitous:** The root daemon `cas-ebpfd` shall hold `CAP_BPF`, `CAP_PERFMON` and `CAP_SYS_NICE` while serving unprivileged clients over a UDS socket, and shall accept `track` only for a pid owned by the peer's uid.
 - **Event-driven:** WHEN a worker slot spawns, `cas-pool` shall configure a dedicated process group and clamp priority to `nice 19`.
 - **Event-driven:** WHEN process exec or exit events fire, the eBPF probe shall stream structured `ExecEvent` records and update `run_hash`.
-- **State-driven:** WHILE tracking worker processes, the eBPF probe shall detect group escape attempts and re-clamp priority to `nice 19`.
+- **State-driven:** WHILE tracking worker processes, `cas-ebpfd` shall read the nice value of every tracked pid that execs and re-clamp it to `nice 19` when it is above 19. The kernel probe does not read the process group.
 - **Unwanted behavior:** IF a tracked process exits, THEN the probe shall evict the process ID from `TRACKED_PIDS` to prevent map leaks.
 
 ### Decisions
@@ -299,19 +299,25 @@ pub enum EbpfError {
 - [x] Create standalone eBPF subcrate `crates/cas-ebpf/ebpf/`.
 - [x] Configure nightly toolchain and `bpf-linker` via mise.
 - [x] Implement kernel tracepoint probes (`sched_process_exec`, `sched_process_fork`, `sched_process_exit`).
-- [x] Compile and verify relocatable ELF object (`cas-ebpf.o`, 1.4 KB, Dual MIT/GPL).
-- [ ] Add `cas-ebpf.o` artifact, SHA-256 hash, and build recipe to Makefile.
-- [ ] Implement `build.rs` in `cas-ebpf` verifying bytecode hash when toolchain exists.
-- [ ] Implement userspace BPF loader and map bindings in `cas-ebpf`.
-- [ ] Implement `cas-ebpfd` daemon with Unix domain socket listener.
-- [ ] Implement `run_hash` transcript digest generator with `sha2 = "0.11.0"`.
-- [ ] Add `make ebpf-test` target running integration tests under sudo.
-- [ ] Unit tests with mocked event stream:
-  - Process group clamping sets nice 19.
-  - Child process fork inherits tracked state.
-  - Exited process evicts from tracked map.
-  - `run_hash` is deterministic for identical execution traces.
-- [ ] Update `specs/README.md` and `cas-epics-phase-2-to-5-roadmap.md`.
+- [x] Compile and verify relocatable ELF object (`cas-ebpf.o`, 5,976 bytes, Dual MIT/GPL, reproducible hash).
+- [x] Add `cas-ebpf.o` artifact, SHA-256 hash file, and `make ebpf-build` recipe.
+- [x] Implement `build.rs` in `cas-ebpf` that refuses to build when the object and the hash file disagree.
+- [x] Implement userspace BPF loader and map bindings in `cas-ebpf` (`loader::Probes`).
+- [x] Implement `cas-ebpfd` daemon with Unix domain socket listener, line protocol and blocking client.
+- [x] Implement `run_hash` transcript digest generator with `sha2 = "0.11.0"` (`audit::RunHash`).
+- [x] Add `make ebpf-test` target: builds the live test binary unprivileged, runs it under sudo.
+- [x] Unprivileged tests (47, in CI): wire layout and roundtrip; `run_hash` equal for identical
+  streams and different for reordered or re-timed ones; dropped count unattests the receipt;
+  a real child spawned through `enter_clamped_group` reads nice 19 in its own group; the daemon
+  over a fake handle (track, untrack, status, allowlist, line bound, stream, dropped line,
+  socket mode, peer rule).
+- [ ] Live gate on ceres (`make ebpf-test`, sudo, operator-run): load and attach; exec of a
+  tracked child is reported with the right pid, ppid, comm and filename; fork propagates
+  tracking; untracked processes are silent; dropped counter starts at zero. Not run yet.
+- [ ] Wire `cas-pool` (spec 0015): `enter_clamped_group` in `pre_exec`, `DaemonClient::track`
+  after spawn, `AuditReceipt` into the Saga receipt, `unattested` when the daemon is absent.
+- [ ] Install the unit on ceres (`crates/cas-ebpf/cas-ebpfd.service`), operator-run.
+- [x] Update `specs/README.md` (status in-progress).
 
 ## Test
 
