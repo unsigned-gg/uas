@@ -43,6 +43,10 @@ landlock = "0.4.7"
 tokio = { version = "1.53.1", default-features = false, features = ["rt-multi-thread", "macros", "net", "time", "sync", "io-util"] }
 # unshare, procfs writes and the lo ioctl for the worker network namespace (spec 0011, CER-2717).
 rustix = { version = "1.1.5", default-features = false, features = ["std", "thread", "process", "fs"] }
+# Userspace eBPF loader, tracepoint attach and ring buffer reader in cas-ebpf (spec 0014, CER-2719, CER-2720).
+aya = "0.14.0"
+# SHA-256 for the run_hash transcript digest (spec 0014) and the committed BPF object check in cas-ebpf build.rs.
+sha2 = "0.11.0"
 
 # Example of a private git dependency (record it in specs/0004 before first use):
 # pgt-core = { git = "https://github.com/cerebral-work/pgt", rev = "54d90f5" }
