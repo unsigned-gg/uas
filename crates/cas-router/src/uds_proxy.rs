@@ -24,8 +24,7 @@ use tokio::sync::{oneshot, Semaphore};
 pub const MAX_HEADER_BYTES: usize = 16 * 1024;
 
 /// `POST` targets a worker may call, matched exactly (query string excluded).
-pub const DEFAULT_POST_PATHS: &[&str] =
-    &["/v1/chat/completions", "/v1/embeddings", "/v1/telemetry"];
+pub const DEFAULT_POST_PATHS: &[&str] = &["/v1/chat/completions", "/v1/embeddings"];
 
 /// `GET` targets a worker may call: the prefix itself or one more path segment.
 pub const DEFAULT_GET_PREFIXES: &[&str] = &["/v1/models"];
@@ -152,7 +151,11 @@ impl ProxyHandle {
     /// Bind the socket and serve it on a dedicated runtime thread.
     pub fn start(config: ProxyConfig) -> Result<Self, ProxyError> {
         let socket_path = config.socket_path.clone();
-        if socket_path.exists() {
+        // The worker owns the directory around the socket. Never follow a
+        // symlink there, and never remove anything but a stale socket inode.
+        check_socket_site(&socket_path)
+            .map_err(|err| ProxyError::Bind(socket_path.clone(), err))?;
+        if std::fs::symlink_metadata(&socket_path).is_ok() {
             std::fs::remove_file(&socket_path)
                 .map_err(|err| ProxyError::Bind(socket_path.clone(), err))?;
         }
@@ -196,13 +199,38 @@ impl ProxyHandle {
         if let Some(thread) = self.thread.take() {
             let _ = thread.join();
         }
-        let _ = std::fs::remove_file(&self.socket_path);
+        if check_socket_site(&self.socket_path).is_ok() {
+            let _ = std::fs::remove_file(&self.socket_path);
+        }
     }
 }
 
 impl Drop for ProxyHandle {
     fn drop(&mut self) {
         self.stop();
+    }
+}
+
+/// Refuse a socket site the worker could have redirected: the parent must be a
+/// real directory, not a symlink, and whatever sits at the path must be a socket.
+fn check_socket_site(path: &Path) -> io::Result<()> {
+    use std::os::unix::fs::FileTypeExt;
+    let parent = path
+        .parent()
+        .ok_or_else(|| io::Error::other("socket path has no parent"))?;
+    let parent_meta = std::fs::symlink_metadata(parent)?;
+    if parent_meta.file_type().is_symlink() || !parent_meta.is_dir() {
+        return Err(io::Error::other(
+            "socket directory is a symlink or not a directory",
+        ));
+    }
+    match std::fs::symlink_metadata(path) {
+        Ok(meta) if meta.file_type().is_socket() => Ok(()),
+        Ok(_) => Err(io::Error::other(
+            "socket path holds something that is not a socket",
+        )),
+        Err(err) if err.kind() == io::ErrorKind::NotFound => Ok(()),
+        Err(err) => Err(err),
     }
 }
 
@@ -637,7 +665,6 @@ mod tests {
         let config = config();
         assert!(check_request(&head("POST", "/v1/chat/completions"), &config).is_ok());
         assert!(check_request(&head("POST", "/v1/embeddings"), &config).is_ok());
-        assert!(check_request(&head("POST", "/v1/telemetry?x=1"), &config).is_ok());
         assert!(check_request(&head("GET", "/v1/models"), &config).is_ok());
         assert!(check_request(&head("GET", "/v1/models?x=1"), &config).is_ok());
         assert!(check_request(&head("GET", "/v1/models/glm-5.2"), &config).is_ok());
@@ -652,6 +679,7 @@ mod tests {
             ("GET", "/etc/passwd"),
             ("POST", "/v1/chat/completions/../../admin"),
             ("POST", "/v1/chat/completions/extra"),
+            ("POST", "/v1/telemetry"),
             ("POST", "/v1/chat/completionsx"),
             ("POST", "/v1/models"),
             ("GET", "/v1/models/a/b"),
