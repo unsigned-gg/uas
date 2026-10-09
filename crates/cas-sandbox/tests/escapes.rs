@@ -115,6 +115,15 @@ fn helper_attacks() {
     report("exec_from_tmp", describe(Command::new(&tmp_bin).status()));
     let _ = fs::remove_file(&tmp_bin);
 
+    // A pathname Unix socket outside the workspace (spec 0012 known gap, measured
+    // for spec 0013). The parent listens on it; the jailed worker connects.
+    report(
+        "uds_connect_out",
+        describe(std::os::unix::net::UnixStream::connect(
+            outside.join("denied.sock"),
+        )),
+    );
+
     // Privilege: no_new_privs here and in a grandchild, Landlock in a grandchild.
     report("nnp", read_nnp("/proc/self/status"));
     report(
@@ -325,6 +334,8 @@ fn run_matrix(with_netns: bool) -> TestResult {
         return Ok(());
     };
     fs::write(outside.join("secret.txt"), b"host secret")?;
+    // A listening pathname socket outside the workspace, for the uds_connect_out row.
+    let _listener = std::os::unix::net::UnixListener::bind(outside.join("denied.sock"))?;
     let ws = scratch(if with_netns {
         "escapes-ws-ns"
     } else {
@@ -421,6 +432,11 @@ fn run_matrix(with_netns: bool) -> TestResult {
         ws.join("movable.txt").exists(),
         "the file stayed in the workspace"
     );
+
+    // Measurement, not a gate: Landlock below ABI v6 does not mediate connect on
+    // pathname Unix sockets, so this row is expected to succeed. Spec 0013 cites it.
+    println!("uds_connect_out (measurement): {}", get("uds_connect_out"));
+    assert_ne!(get("uds_connect_out"), "missing");
 
     // Privilege.
     assert_eq!(get("nnp"), "1");

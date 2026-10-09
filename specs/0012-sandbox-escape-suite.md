@@ -62,6 +62,7 @@ asserts the matrix.
 | `udp_wan` | UDP send to `1.1.1.1:53` | `ENETUNREACH` | namespace, no route |
 | `ping_raw` | `ping -c1 -W1 1.1.1.1` | `raw-socket-denied` (stderr `socktype: SOCK_RAW`) or `no-route` | `no_new_privs` ignores file capabilities, so the raw socket cannot open; with no route it would fail anyway |
 | `interfaces` | `/proc/net/dev` | `lo` | namespace |
+| `uds_connect_out` | connect to a pathname Unix socket under `$HOME` | `ok` (measurement) | not mediated below Landlock ABI v6 |
 
 A host without `sudo`, `ping` or `$HOME/.ssh` reports `absent` for that
 row and the parent accepts it. The parent also checks that no file appeared
@@ -75,11 +76,13 @@ outside the workspace and that the moved file is still inside it. The
 - `write_etc` and `write_root` are denied by file permissions as well as by
   Landlock for a non-root worker. Those two rows cannot tell the mechanisms
   apart. The `$HOME` rows can, and they are the ones that matter.
-- Unix sockets are not in the matrix. Landlock ABI v6 (Linux 6.12) scopes
-  abstract Unix sockets and signals (`landlock-0.4.7:src/compat.rs`, the
-  `ABI::V6` comment); ceres is at v3. Whether a pathname socket outside the
-  workspace can be connected to from the jail is not measured here.
-  CER-2718 measures it when it sets the socket policy.
+- Measured 2026-10-09, row `uds_connect_out`: a jailed worker CAN connect to
+  a pathname Unix socket outside the workspace, with and without the network
+  namespace. Landlock below ABI v6 does not mediate `connect` on pathname
+  sockets; ABI v6 (Linux 6.12) scopes only abstract sockets and signals
+  (`landlock-0.4.7:src/compat.rs`, the `ABI::V6` comment). The row is a
+  measurement, not a gate. Spec 0013 makes the gateway proxy's allowlist the
+  boundary for what a worker may reach over a socket.
 - Measured 2026-10-09 on ceres: `ping_raw` reports `exit2 socktype:
   SOCK_RAW`. The raw socket could not be opened: `no_new_privs` makes the
   kernel ignore `ping`'s file capabilities, and ICMP datagram sockets are

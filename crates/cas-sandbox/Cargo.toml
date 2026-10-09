@@ -14,6 +14,10 @@ landlock = { workspace = true }
 rustix = { workspace = true }
 thiserror = { workspace = true }
 
+[dev-dependencies]
+# The spec 0013 gate runs the proxy from the layer below (sandbox > router).
+cas-router = { path = "../cas-router" }
+
 [lints.rust]
 # Spec 0001 decision 2026-10-09: this crate makes raw syscalls. unsafe is denied,
 # not forbidden, so one block may opt in with #[allow(unsafe_code)] and a
