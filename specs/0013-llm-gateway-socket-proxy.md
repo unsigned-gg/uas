@@ -25,9 +25,10 @@ Landlock ABI 3, unprivileged):
 
 - Spec 0012 row `uds_connect_out`: a jailed worker can `connect` to a
   pathname Unix socket under `$HOME`, with and without the network
-  namespace. Landlock below ABI v6 does not mediate `connect` on pathname
-  sockets, and `CLONE_NEWNET` isolates only abstract sockets. The proxy's
-  allowlist is therefore the boundary, not the jail.
+  namespace. No Landlock ABI known to the crate mediates `connect` on a
+  pathname socket (v6 scopes abstract sockets only), and `CLONE_NEWNET`
+  isolates only abstract sockets. The proxy's allowlist is therefore the
+  boundary, not the jail.
 - The worker preset (spec 0010) grants every access beneath the workspace,
   so a socket at `<workspace>/.ipc/llm.sock` needs no new rule.
 - Spec 0004 approves `tokio` for `cas-router`, `cas-deck` and
@@ -46,10 +47,11 @@ Landlock ABI 3, unprivileged):
 | D1 | The proxy lives in `cas-router`, on `tokio`. `cas-sandbox` keeps only the socket mount: the `.ipc` directory and the path convention. Layering holds: sandbox sits above router. | the operator, 2026-10-09, by interview in the CAS lane |
 | D2 | Upstream is plain HTTP to the tailnet or in-cluster gateway. No `reqwest`, no TLS stack now. | the operator, 2026-10-09, by interview in the CAS lane |
 | D3 | The socket is `<workspace>/.ipc/llm.sock`. `cas_sandbox::ipc::ensure_ipc_dir` creates `.ipc` with mode `0700`. | agy lane draft, kept; CAS lane, 2026-10-09 |
-| D4 | Allowlist: `POST` to `/v1/chat/completions`, `/v1/embeddings`, `/v1/telemetry`; `GET` and `POST` to `/v1/models` and below. A prefix matches at the end, before `/` or before `?`. Everything else is `403`. `..` segments and `//` are `403`. Only origin-form targets are accepted, so `CONNECT` and absolute URLs are `403`. | agy lane draft, kept; CAS lane, 2026-10-09 |
-| D5 | The worker never holds the key. The proxy reads it from a file outside the workspace at start, drops any `Authorization` the worker sent, and adds its own. `Debug` on the config redacts it. | agy lane draft, kept; CAS lane, 2026-10-09 |
-| D6 | One request per connection, `Connection: close` on both sides. Request head capped at 16 KiB (`431`). Bodies need `Content-Length`; `Transfer-Encoding` is `411`. Hop-by-hop headers and `Host` are dropped; `Host` is rewritten to the upstream host. | CAS lane, 2026-10-09 |
+| D4 | Allowlist: `POST` to exactly `/v1/chat/completions`, `/v1/embeddings` or `/v1/telemetry`; `GET` to `/v1/models` or `/v1/models/<one segment>`. A query string is allowed. Everything else is `403`: other methods, other paths, `..` segments, `//`, percent-encoded `.`, `/` or `\`, malformed percent-encoding, characters outside the URI set, and non-origin-form targets (so `CONNECT` and absolute URLs). | agy lane draft, narrowed after a critic pass; CAS lane, 2026-10-09 |
+| D5 | The worker never holds the key. The proxy takes it from a file outside the workspace at start (`with_key_file`), or from the caller that already holds it (`with_bearer_token`). It drops any `Authorization` and every `x-litellm-*` header the worker sent, and adds its own `Authorization`. `Debug` on the config redacts it. | agy lane draft, kept; CAS lane, 2026-10-09 |
+| D6 | One request per connection, `Connection: close` on both sides, no half-close toward the upstream. The head is read through a reader capped at 16 KiB (`431`), so a line without a newline cannot grow memory. Bodies need one `Content-Length` of digits only; conflicting values, signs or non-digits are `400`; `Transfer-Encoding` is `411`. Header names must be tokens; control bytes, bare `CR`, non-ASCII and obsolete line folding are `400`. Hop-by-hop headers and `Host` are dropped; `Host` is rewritten; `Content-Length` is re-emitted once, normalized. | CAS lane, 2026-10-09 |
 | D7 | `tokio` enters the workspace with the approved features plus `io-util`, a feature of the same crate that `AsyncReadExt` and `AsyncWriteExt` need. Recorded in spec 0004 as a lane amendment. | CAS lane, 2026-10-09 |
+| D8 | Limits, all configurable: 64 live connections (`503` beyond), 16 MiB declared body (`413` beyond), 10 s to send the head (`408`), 5 s to connect upstream (`502`), 120 s for the whole exchange (both sides closed). A transient accept error backs off 50 ms and never ends the listener. A short body gets `400` and the upstream connection is closed. | CAS lane, 2026-10-09, after a critic pass |
 
 the operator corrects any of these in place.
 
@@ -74,8 +76,11 @@ the proxy with the key file, spawn the worker through `netns::isolate` and
 
 `cas_router::ProxyError`: `Bind`, `KeyFile`, `Runtime`. A rejected request
 gets an HTTP status and a one-line reason that never carries upstream data
-or the key: `400`, `403`, `411`, `431`, `505`, and `502` when the upstream
-cannot be reached.
+or the key: `400`, `403`, `408`, `411`, `413`, `431`, `503`, `505`, and
+`502` when the upstream cannot be reached or answers nothing. Once any
+byte of an upstream response has reached the worker, a later failure only
+closes the connection; no second response is written. Upstream responses
+are passed through unfiltered; a gateway error body is the gateway's own.
 
 ### Out of scope
 
@@ -87,7 +92,7 @@ filtering. Rate limits. The pool's wiring.
 - [x] `cas_sandbox::ipc` with `socket_path` and `ensure_ipc_dir`.
 - [x] `cas_router::uds_proxy` with `ProxyConfig`, `ProxyHandle`, the parser, the allowlist and the forwarder; unit tests for the filter and the redaction.
 - [x] Spec 0012 row `uds_connect_out` and the gap note updated with the measurement.
-- [x] Integration test `uds_proxy` in `cas-sandbox`: a jailed worker (in the namespace where the host allows it) gets `200` through the socket with the key injected and the `Host` rewritten; `CONNECT`, `/admin/keys`, `/etc/passwd`, a `..` path and `PUT` get `403`; a 20 KiB head gets `431`; the worker cannot read the key file; the socket file is gone after shutdown.
+- [x] Integration test `uds_proxy` in `cas-sandbox`: a jailed worker (in the namespace where the host allows it) gets `200` through the socket with the key injected and the `Host` rewritten; `CONNECT`, `/admin/keys`, `/etc/passwd`, a `..` path, an encoded `..` and `PUT` get `403`; a 20 KiB head gets `431`; conflicting `Content-Length` gets `400`; a stalled body is cut without a response and the next request still works; the worker cannot read the key file; the socket file is gone after shutdown.
 - [x] `tokio` in the workspace; spec 0004 note; CHANGELOG line; `specs/README.md` row.
 
 ## Test
