@@ -25,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Spec 0007, the lease rules: one live lease per slot, only the lease token renews a lease, a renewal extends by at least one second, and a draining slot keeps its worktree. `cas-domain` adds `check_slot_free`, `Lease::holds_slot_at`, `LeaseToken::matches`, and the errors `SlotLeased` and `TokenMismatch`.
 
 ### Changed
+- Specs 0014 and 0015: tightened spec 0014 below 300 lines with zero warnings while maintaining all facts, format offsets, and peer rules; integrated eBPF priority clamping and audit hooks (`pre_exec` `enter_clamped_group`, `DaemonClient::track`, `EventStream`, `AuditReceipt`, and `unattested` fallback) into spec 0015 for `cas-pool`.
 - Adopt DeltaDB and Blackwall custody process with PR-floor constraints in spec 0001 (CER-2671).
 - `Lease::renew` and `LeaseLedger::renew` take the lease token as a new parameter. A renewal by zero seconds now fails. The in-memory ledger refuses a second live lease on a slot.
 - `release-plz`: name GitHub releases `v{{ version }}` to match tag names instead of `cas-cli-v{{ version }}`.
