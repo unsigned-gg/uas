@@ -54,4 +54,14 @@ pub enum DomainError {
     /// lease id only, never a token.
     #[error("token does not match lease {0}")]
     TokenMismatch(String),
+    /// A task violates the policy tier constraint.
+    #[error("policy violation: {action} not allowed under {tier}: {reason}")]
+    PolicyViolation {
+        /// Action attempted.
+        action: String,
+        /// Active policy tier.
+        tier: String,
+        /// Why it was rejected.
+        reason: &'static str,
+    },
 }
