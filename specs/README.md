@@ -14,6 +14,7 @@ Methodology: LeanSpec. The reference copy is in `../vendor/leanspec/`.
 | [0007](0007-lease-rules.md) | Lease rules | complete | high |
 | [0008](0008-soma-cortex-saga-reverie-integration.md) | Soma Cortex Saga Reverie integration | complete | high |
 | [0009](0009-saga-compensation-runner-and-durability.md) | Saga compensation runner and durability | complete | high |
+| [0010](0010-landlock-ruleset-and-abi-probe.md) | Landlock ruleset and ABI probe | complete | high |
 
 ## How to add a spec
 
