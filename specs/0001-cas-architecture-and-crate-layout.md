@@ -126,7 +126,16 @@ section 3.
    (DES section 3.6). The operator signs off there.
 
 CAS integrates with soma, cortex, saga and reverie through service edges. It
-does not vendor them.
+vendors their contract files and never their service code:
+
+- A contract file is a schema, a protocol definition, a flow template or a
+  contract type source. It lives under `vendor/<name>/`.
+- Each `vendor/<name>/README.md` names the source repository and the upstream
+  commit. Refresh a copy only by replacing it from a newer commit.
+- Nothing under `vendor/` is a workspace member or compiled into a crate. A
+  crate that needs a contract type defines it, or reaches it through a
+  service edge.
+- Spec 0004 lists the copies and their licences.
 
 ### Decisions of record
 
@@ -137,6 +146,8 @@ does not vendor them.
 | `cas-cli` stays beside the nine research crates. The smoke gate and the release tag use it. | Christian | 2026-10-08 |
 | Crate prefix is `cas`. | Christian | 2026-10-08 |
 | GPL dependencies are denied by `deny.toml`. | Christian | 2026-10-08 |
+| CAS vendors estate contract files, never service code ("contracts yes, code no"). | Christian | 2026-10-09 |
+| Phase 8 (DeltaDB) enters the epic saga run. Recorded as adoption into the plan, see Notes. | Christian | 2026-10-09 |
 
 The research names nine crates. This repo has ten because of `cas-cli`.
 
@@ -209,10 +220,16 @@ References, as `repo@sha:path`:
 Alternatives rejected: dropping `cas-cli` to match the research list. The smoke
 gate and the release tag need a binary.
 
-Proposed, not adopted: a DeltaDB virtual-worktree integration with Saga,
-Blackwall and Soma
+DeltaDB virtual-worktree integration with Saga, Blackwall and Soma
 (`cerebral-work/research@ddf42c8:agentic-systems/designs/deltadb-virtual-worktree-integration.md`,
-draft, no approver). This spec does not adopt it. Christian ruled on 2026-10-08
-to record it here only. The cortex lane sent six review findings to the
-proposing lane (w1R:p1) the same day. One finding blocks: the design commits
-directly to main.
+draft, no approver):
+
+- 2026-10-08: Christian ruled to record it here only, as proposed, not adopted.
+- 2026-10-08: the cortex lane sent six review findings to the proposing lane
+  (w1R:p1). One finding blocks: the design commits directly to main.
+- 2026-10-09: Christian included Phase 8 (DeltaDB) in the epic saga run, by
+  interview in the CAS lane. The CAS lane records this as adoption into the
+  plan. Christian corrects it here if that reading is wrong.
+- The blocking finding still stands. No Phase 8 code runs until a revised
+  design lands that never commits directly to main. Phase 8 runs last.
+- Estate-wide DeltaDB work is CER-2671, owned by another lane.
