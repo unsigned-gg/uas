@@ -12,6 +12,7 @@ Methodology: LeanSpec. The reference copy is in `../vendor/leanspec/`.
 | [0005](0005-ci-cache-and-runners.md) | CI, cache and runners | in-progress | high |
 | [0006](0006-cas-engine-and-harness-dogfood.md) | CAS engine and harness dogfood | complete | high |
 | [0007](0007-lease-rules.md) | Lease rules | complete | high |
+| [0008](0008-soma-cortex-saga-reverie-integration.md) | Soma Cortex Saga Reverie integration | complete | high |
 
 ## How to add a spec
 

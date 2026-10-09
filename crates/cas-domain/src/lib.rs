@@ -28,10 +28,12 @@ mod envelope;
 mod error;
 mod ident;
 mod lease;
+mod policy;
 mod slot;
 
 pub use attestation::{Attestation, EvidenceTier};
 pub use envelope::Envelope;
 pub use error::DomainError;
 pub use lease::{check_slot_free, Budget, Lease, LeaseId, LeaseLedger, LeaseToken, PrincipalRef};
+pub use policy::{PolicyTier, SomaClassification};
 pub use slot::{Slot, SlotId, SlotState, WorktreeRef};
