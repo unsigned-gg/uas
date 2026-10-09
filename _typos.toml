@@ -1,2 +1,6 @@
 [files]
 extend-exclude = ["vendor/", "Cargo.lock"]
+
+[default.extend-identifiers]
+# O_WRONLY, the open(2) flag (rustix OFlags::WRONLY).
+WRONLY = "WRONLY"
