@@ -145,10 +145,11 @@ after fork, so one jailed command spawns any number of jailed workers.
 comment (AGENTS.md rule 14).
 
 A kernel errno reaches the parent unchanged in `Spawn`. The test switches
-`no_new_privs` off: the kernel then refuses `landlock_restrict_self` with
-`EPERM` for an unprivileged process, and the parent sees that errno. Not
-measured: the launcher's own `JailRefused` verdict. It needs root, which
-passes the kernel check, or a kernel without Landlock.
+`no_new_privs` off. Measured 2026-10-09: on ceres (unprivileged) the kernel
+refuses `landlock_restrict_self` with `EPERM` and the parent sees that
+errno; on the CI runner (`CAP_SYS_ADMIN`, not root) the kernel accepts the
+call and the child reaches the launcher's own `JailRefused` verdict. Both
+paths leave the worker unrun.
 
 ### Out of scope
 
@@ -164,7 +165,7 @@ CER-2721.
 - [x] Integration test `landlock_probe`: the probe reports, the caller stays unrestricted, the builder canonicalises a symlink, a missing path fails, and a jailed thread writes inside the workspace but not under `$HOME`, not through a `/tmp` symlink.
 - [x] CHANGELOG line and `specs/README.md` row.
 - [x] `launcher::jail` and `launcher::launch` with the `JailRefused` and `Spawn` errors (CER-2716).
-- [x] Integration test `launcher`: a jailed `sh` writes inside the workspace only and reports `NoNewPrivs: 1`. A jailed command jails every child. A kernel refusal reaches the parent as its own errno.
+- [x] Integration test `launcher`: a jailed `sh` writes inside the workspace only and reports `NoNewPrivs: 1`. A jailed command jails every child. A refused jail never runs the worker.
 
 ## Test
 
