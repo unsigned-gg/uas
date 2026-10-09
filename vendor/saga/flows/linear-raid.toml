@@ -1,0 +1,67 @@
+[flow]
+name = "linear-raid"
+description = "Linear raid lifecycle: claim ticket, implement, test, clippy, gate sign-off, and close ticket."
+
+[params.issue_id]
+required = true
+
+[params.feature_name]
+required = true
+
+[[step]]
+id = "claim-ticket"
+title = "Claim Linear ticket"
+kind = "impl"
+agent = "auto"
+prompt = """
+Claim Linear ticket {{params.issue_id}} for {{params.feature_name}}.
+Set assignee and verify ticket is in active state.
+"""
+verify_cmd = ["linearctl", "show", "{{params.issue_id}}"]
+
+[[step]]
+id = "implement"
+title = "Implement feature"
+kind = "impl"
+agent = "auto"
+deps = ["claim-ticket"]
+prompt = """
+Implement {{params.feature_name}} corresponding to ticket {{params.issue_id}}.
+Adhere to workspace conventions and ensure zero compiler warnings.
+"""
+
+[[step]]
+id = "test-check"
+title = "Run test suite"
+kind = "test"
+agent = "claude"
+deps = ["implement"]
+verify_cmd = ["cargo", "test", "--locked"]
+prompt = "Confirm all unit and integration tests pass for {{params.feature_name}}."
+
+[[step]]
+id = "clippy-check"
+title = "Run clippy linter"
+kind = "test"
+agent = "claude"
+deps = ["implement"]
+verify_cmd = ["cargo", "clippy", "--all-targets", "--", "-D", "warnings"]
+prompt = "Confirm code passes clippy without warnings."
+
+[[step]]
+id = "operator-gate"
+title = "Approve shipment"
+kind = "gate"
+gate = "heimdal:approval"
+deps = ["test-check", "clippy-check"]
+prompt = "Review test receipts and sign off on {{params.feature_name}} ({{params.issue_id}})."
+
+[[step]]
+id = "close-ticket"
+title = "Close Linear ticket"
+kind = "impl"
+agent = "auto"
+deps = ["operator-gate"]
+prompt = """
+Close Linear ticket {{params.issue_id}} upon successful shipment and gate approval.
+"""

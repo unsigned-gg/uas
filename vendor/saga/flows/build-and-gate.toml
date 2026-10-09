@@ -1,0 +1,31 @@
+[flow]
+name = "build-and-gate"
+description = "Build workspace, run test suite, and gate release for operator sign-off."
+
+[params.target]
+required = true
+default = "saga-cli"
+
+[[step]]
+id = "compile"
+title = "Compile release binary"
+kind = "impl"
+agent = "auto"
+prompt = "Build {{params.target}} in release mode: cargo build --release -p {{params.target}}"
+
+[[step]]
+id = "verify-tests"
+title = "Run test suite"
+kind = "test"
+agent = "claude"
+deps = ["compile"]
+verify_cmd = ["cargo", "test", "-p", "{{params.target}}", "--locked"]
+prompt = "Run the full test suite for {{params.target}}. All tests must pass."
+
+[[step]]
+id = "release-gate"
+title = "Human operator approval"
+kind = "gate"
+gate = "heimdal:approval"
+deps = ["verify-tests"]
+prompt = "Review test receipts and approve shipment of {{params.target}}."

@@ -1,0 +1,195 @@
+// cortex.mesh.v1 — lane messaging: the envelope, addressing, and the
+// send / recv / ack RPCs over the per-peer `lane-{uuid}` mailbox streams.
+//
+// Substrate rules that bind every transport (CER-2095): the mailbox never
+// auto-acks — `Recv` delivers, the client `Ack`s explicitly after
+// processing; an unacked entry stays in the PEL and is replayed. Streams
+// are capped (MAXLEN ~512) so at-least-once is bounded by the cap.
+syntax = "proto3";
+
+package cortex.mesh.v1;
+
+import "cortex/mesh/v1/peer.proto";
+import "google/protobuf/empty.proto";
+import "google/protobuf/struct.proto";
+import "google/protobuf/timestamp.proto";
+
+enum LaneMessageKind {
+  LANE_MESSAGE_KIND_UNSPECIFIED = 0;
+  // A new message.
+  LANE_MESSAGE_KIND_MSG = 1;
+  // Mechanical delivery receipt, bridge-emitted on injection. Never acked
+  // back. Its presence proves receipt; its absence proves nothing.
+  LANE_MESSAGE_KIND_ACK = 2;
+  // A substantive agent-authored reply.
+  LANE_MESSAGE_KIND_REPLY = 3;
+}
+
+// The envelope carried in a mailbox entry's payload. Mirrors
+// cortex_mesh::lane::LaneMessage field for field.
+message LaneMessage {
+  LaneMessageKind kind = 1;
+  // The sending peer's uuid — the address an ACK/REPLY correlates to. The
+  // server overwrites it with the authenticated sender (spoof-proof);
+  // clients need not set it.
+  string from_peer = 2;
+  // Human-readable sender identity (the pane's session role), rendered on
+  // the injected notification line.
+  string from_session = 3;
+  // One line the receiving agent sees first. Short and literal.
+  string subject = 4;
+  // Short markdown body, at most 16 KiB (LANE_BODY_MAX_BYTES). Long-form
+  // goes in a handoff file referenced from `refs.handoff`.
+  string body = 5;
+  // Structured pointers — free-form vocabulary shared with settle cards
+  // (`pr`, `tickets`, `handoff`, …). Emitters own the vocabulary.
+  google.protobuf.Struct refs = 6;
+  // The mailbox message id this ACK/REPLY correlates to. Empty on MSG.
+  string reply_to = 7;
+  // Sender's identity (user @ project, and the lane it speaks from).
+  // Tolerant reader: absent on pre-identity senders.
+  Identity from = 8;
+}
+
+// Where a message goes. Exactly one arm.
+message SendTarget {
+  oneof to {
+    // Direct: that peer's own lane stream. NOT_FOUND if no live peer holds
+    // the uuid (CER-2147) — never a silent accept.
+    string peer = 1;
+    // Every live holder of this session role, each on its own stream.
+    // NOT_FOUND if nobody holds it (CER-2141). Session roles only: lane
+    // traffic never targets a service stream.
+    string role = 2;
+    // Every live peer whose Identity.subject equals this — the LANE
+    // address (CER-2212). NOT_FOUND if nobody holds it.
+    string subject = 3;
+    // Every live session peer whose Identity.project equals this, except
+    // the sender. Empty match delivers 0, not an error.
+    string project = 4;
+    // Every live session peer except the sender. Empty mesh delivers 0.
+    google.protobuf.Empty broadcast = 5;
+    // A pool route address (CER-2362): resolves through the operator
+    // routing table to a pool. WS0 refuses it 501/UNIMPLEMENTED; rollout
+    // order (pbjson is strict) is both API replicas and every edge before
+    // any client sends it.
+    string route = 6;
+  }
+}
+
+message SendRequest {
+  // The caller's own peer id — pairs with the bearer token.
+  string peer_id = 1;
+  SendTarget to = 2;
+  LaneMessage message = 3;
+  // Optional client idempotency key, honoured on ROUTE sends only (CER-2587).
+  // 1-128 printable ASCII; empty = absent. The server derives the message id
+  // from (sender, pool, key), so a retry with the same key inside the pool
+  // stream's duplicate window returns the original stream_seq. Added 2026-10-05
+  // (additive; field 4).
+  string idempotency_key = 4;
+}
+
+message SendResponse {
+  // Streams written. 0 is possible for broadcast/project on an empty match
+  // — reported, not an error, so the sender knows nobody was there.
+  uint32 delivered = 1;
+  // Fan-out targets that failed. Non-zero only for fan-out arms: per-target
+  // failures are reported rather than aborting mid-fan-out, because a
+  // failure after partial delivery would push the caller into duplicates.
+  uint32 failed = 2;
+  // Mailbox message ids minted, one per delivered stream — what an ACK or
+  // REPLY's `reply_to` names.
+  repeated string message_ids = 3;
+  // Targets dropped by an owner firewall (CER-2238). A ROUTE send that is
+  // walled is a 403, never 200 with walled > 0 (CER-2362).
+  uint32 walled = 4;
+  // The pool a route send resolved to (CER-2362); empty on lane targets.
+  string pool = 5;
+  // The published message's pool stream sequence; 0 when not pooled.
+  // Status and dedupe key by (pool, stream_seq), which a remap cannot
+  // change retroactively.
+  uint64 stream_seq = 6;
+}
+
+// A delivered mailbox entry. `stream_id` is what `Ack` takes back.
+message LaneEntry {
+  string stream_id = 1;
+  string message_id = 2;
+  string from_role = 3;
+  google.protobuf.Timestamp timestamp = 4;
+  LaneMessage message = 5;
+}
+
+message RecvRequest {
+  string peer_id = 1;
+  // Max entries per batch (default 10 when 0).
+  uint32 count = 2;
+  // Pending entries idle longer than this are replayed to the caller — its
+  // own un-acked reads from before a restart (default 30000 when 0).
+  uint32 min_idle_ms = 3;
+  // When true, the server keeps the stream open and pushes entries as they
+  // arrive instead of returning one batch. Delivery never implies ack.
+  bool follow = 4;
+  // Resumable cursor (CER-2362, borrowed from AX): a reconnecting client
+  // passes the last stream id it saw and the server backfills from there.
+  string after_id = 5;
+}
+
+message AckRequest {
+  string peer_id = 1;
+  repeated string stream_ids = 2;
+}
+
+message ReadRequest {
+  string peer_id = 1;
+  string message_id = 2;
+}
+
+// Delivery state of a message, for lanes and pools (CER-2362).
+enum MessageState {
+  MESSAGE_STATE_UNSPECIFIED = 0;
+  MESSAGE_STATE_PENDING = 1;
+  // With a lane: read but unacked. With a pool: held by a member.
+  MESSAGE_STATE_IN_FLIGHT = 2;
+  MESSAGE_STATE_ACKED = 3;
+  // Pools only: redelivered up to max_deliver, then moved aside.
+  MESSAGE_STATE_DEAD_LETTERED = 4;
+}
+
+message MessageStatusRequest {
+  // The caller's own peer id — pairs with the bearer token.
+  string peer_id = 1;
+  // A lane mailbox message id; mutually exclusive with (pool, stream_seq).
+  string message_id = 2;
+  // Pool delivery key (CER-2362).
+  string pool = 3;
+  uint64 stream_seq = 4;
+  // Lane lookups: the peer the message was sent TO (the JSON route's `to`).
+  // Required with message_id.
+  string to_peer = 5;
+}
+
+message MessageStatusResponse {
+  MessageState state = 1;
+  // The pool member holding the delivery, when IN_FLIGHT; empty otherwise.
+  string member = 2;
+  // Lane lookups, mirroring the JSON route's metadata: the stream entry id,
+  // and (in flight only, when measured) idle time and delivery count.
+  string stream_id = 3;
+  optional uint64 idle_ms = 4;
+  optional uint64 deliveries = 5;
+}
+
+service LaneMailbox {
+  // Recipient-only retained body lookup. Never delivers or acknowledges.
+  // Other recipients' ids and expired/unknown ids are all NOT_FOUND.
+  rpc Read(ReadRequest) returns (LaneEntry);
+  rpc Send(SendRequest) returns (SendResponse);
+  // Server-streams entries; ends after one batch unless `follow`.
+  rpc Recv(RecvRequest) returns (stream LaneEntry);
+  rpc Ack(AckRequest) returns (google.protobuf.Empty);
+  // Per-message delivery state, lanes and pools (CER-2362). WS0 returns
+  // UNIMPLEMENTED.
+  rpc MessageStatus(MessageStatusRequest) returns (MessageStatusResponse);
+}

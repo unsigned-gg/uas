@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "DispatchAdmitted",
+  "description": "The `202` body of `POST /dispatch`. A 202 means QUEUED, not run.",
+  "type": "object",
+  "properties": {
+    "decision": {
+      "description": "`\"admitted\"`.",
+      "type": "string"
+    },
+    "protocol": {
+      "description": "escapement's fleet-protocol version (`\"0.1\"`).",
+      "type": "string"
+    },
+    "queue_depth": {
+      "description": "Queue depth AFTER admission — note it counts `queued` only, not\n`assigned`, so a fleet of stuck assignments still reads `0`\n(EST-186).",
+      "type": "integer",
+      "format": "uint64",
+      "default": 0,
+      "minimum": 0
+    }
+  },
+  "required": [
+    "decision"
+  ]
+}

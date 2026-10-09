@@ -1,0 +1,132 @@
+// cortex.mesh.v1 — agent team strategy patterns and coordination topologies (CER-2638).
+//
+// Encodes team aggregates, strategy patterns (hierarchical, consensus, pipeline,
+// scatter-gather, adversarial), member roles, and delegation/handoff policies.
+syntax = "proto3";
+
+package cortex.mesh.v1;
+
+import "google/protobuf/timestamp.proto";
+
+// Lifecycle state of an agent team.
+enum TeamLifecycle {
+  TEAM_LIFECYCLE_UNSPECIFIED = 0;
+  TEAM_LIFECYCLE_FORMING = 1;
+  TEAM_LIFECYCLE_ACTIVE = 2;
+  TEAM_LIFECYCLE_PAUSED = 3;
+  TEAM_LIFECYCLE_DISBANDED = 4;
+}
+
+// Strategy pattern topology discriminator.
+enum TeamStrategyKind {
+  TEAM_STRATEGY_KIND_UNSPECIFIED = 0;
+  TEAM_STRATEGY_KIND_HIERARCHICAL = 1;
+  TEAM_STRATEGY_KIND_PEER_CONSENSUS = 2;
+  TEAM_STRATEGY_KIND_PIPELINE = 3;
+  TEAM_STRATEGY_KIND_SCATTER_GATHER = 4;
+  TEAM_STRATEGY_KIND_ADVERSARIAL = 5;
+}
+
+// Consensus voting rule for PeerConsensus strategy.
+enum ConsensusRule {
+  CONSENSUS_RULE_UNSPECIFIED = 0;
+  CONSENSUS_RULE_SIMPLE_MAJORITY = 1;
+  CONSENSUS_RULE_SUPERMAJORITY = 2;
+  CONSENSUS_RULE_UNANIMOUS = 3;
+  CONSENSUS_RULE_CUSTOM_THRESHOLD = 4;
+}
+
+// Configuration for Hierarchical strategy (Lead/Subagents).
+message HierarchicalConfig {
+  string lead_peer_id = 1;
+  uint32 max_subagent_depth = 2;
+  bool allow_dynamic_spawning = 3;
+}
+
+// Configuration for PeerConsensus strategy (Deliberative panel).
+message PeerConsensusConfig {
+  ConsensusRule voting_rule = 1;
+  uint32 custom_threshold_percent = 2;
+  uint32 min_quorum_members = 3;
+  uint32 deliberation_timeout_ms = 4;
+}
+
+// A single stage in a Pipeline strategy.
+message PipelineStage {
+  uint32 stage_index = 1;
+  string stage_name = 2;
+  string assigned_role = 3;
+  string expected_schema_uri = 4;
+}
+
+// Configuration for Pipeline strategy (Sequential handoffs).
+message PipelineConfig {
+  repeated PipelineStage stages = 1;
+  bool strict_chain_of_custody = 2;
+}
+
+// Configuration for ScatterGather strategy (Map-reduce / worker pool fanout).
+message ScatterGatherConfig {
+  string aggregator_peer_id = 1;
+  string target_pool = 2;
+  uint32 min_workers = 3;
+  uint32 aggregation_timeout_ms = 4;
+}
+
+// Configuration for Adversarial strategy (Generator / Critic / Verifier).
+message AdversarialConfig {
+  string generator_role = 1;
+  string critic_role = 2;
+  string verifier_role = 3;
+  uint32 max_critique_rounds = 4;
+}
+
+// Complete strategy configuration value.
+message TeamStrategy {
+  TeamStrategyKind kind = 1;
+  HierarchicalConfig hierarchical = 2;
+  PeerConsensusConfig consensus = 3;
+  PipelineConfig pipeline = 4;
+  ScatterGatherConfig scatter_gather = 5;
+  AdversarialConfig adversarial = 6;
+}
+
+// Delegation bounds and constraints.
+message DelegationPolicy {
+  uint32 max_recursion_depth = 1;
+  uint32 max_concurrent_subtasks = 2;
+  uint64 token_budget_cap = 3;
+  uint32 lease_ttl_seconds = 4;
+}
+
+// Typed artifact handoff contract between team members or pipeline stages.
+message HandoffContract {
+  string contract_id = 1;
+  string source_peer_id = 2;
+  string target_peer_id = 3;
+  string artifact_schema_uri = 4;
+  string required_evidence_tier = 5;
+  uint32 timeout_seconds = 6;
+}
+
+// A member of a team.
+message TeamMember {
+  string peer_id = 1;
+  string team_role = 2;
+  repeated string capability_attenuation = 3;
+  google.protobuf.Timestamp joined_at = 4;
+}
+
+// Team aggregate root.
+message Team {
+  string id = 1;
+  string name = 2;
+  uint64 revision = 3;
+  TeamLifecycle state = 4;
+  TeamStrategy strategy = 5;
+  DelegationPolicy delegation_policy = 6;
+  repeated TeamMember members = 7;
+  repeated HandoffContract active_handoffs = 8;
+  google.protobuf.Timestamp created_at = 9;
+  google.protobuf.Timestamp updated_at = 10;
+}

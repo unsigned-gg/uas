@@ -69,6 +69,27 @@ Decision, Christian, 2026-10-08: rig is evaluated and pinned at 0.44.0 (MIT).
 The template does not include it. A repo adopts it when it needs model calls.
 It calls models through the LiteLLM gateway, not vendor APIs.
 
+### toml
+
+Decision, Christian, 2026-10-09: `toml` is pinned at 0.8 (MIT OR Apache-2.0).
+Used in `cas-engine` and `cas-cli` to parse `.saga/flows/*.toml` macro-orchestration
+definitions and workflow templates.
+
+### Vendored estate contracts and schemas
+
+To integrate with other estate components without creating circular workspace
+dependencies or heavy binary links, CAS vendors interface schemas and contracts:
+
+| Component | Upstream repository | Path in CAS | Licensor / Licence | Role in CAS |
+|---|---|---|---|---|
+| LeanSpec | `codervisor/leanspec` | `vendor/leanspec/` | MIT | LeanSpec methodology templates and skills |
+| Soma OS | `unsigned-gg/soma-os` | `vendor/soma/schemas/` | BSL 1.1 (unsigned-gg) | JSON schemas for containment and dispatch |
+| Cortex Mesh | `cerebral-work/cortex` | `vendor/cortex/proto/` | Proprietary (Cerebral) | Protocol Buffers for mesh RPC and messaging |
+| Saga Orchestrator | `unsigned-gg/saga` | `vendor/saga/flows/`, `vendor/saga/contracts/` | BSL 1.1 (unsigned-gg) | Workflow definitions and domain contract types |
+
+Each directory includes a README or VENDORED note recording upstream commits, dates, and licensing terms.
+
+
 ### CAS dependencies from the research
 
 The CAS research names the projects below. Date of this list: 2026-10-08.

@@ -1,0 +1,127 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SignedContainmentAttestation",
+  "description": "The value of `JobStatus.containment_attestation`, carried as JSON text\n(§5).",
+  "type": "object",
+  "properties": {
+    "jws": {
+      "description": "RFC 7515 compact serialization with a DETACHED payload:\n`<b64url(header)>..<b64url(signature)>`. The header is exactly\n`{\"alg\":\"ES256\",\"x5c\":[leaf, intermediates…]}` (§4).",
+      "type": "string"
+    },
+    "payload": {
+      "$ref": "#/$defs/ContainmentAttestationPayload"
+    }
+  },
+  "required": [
+    "payload",
+    "jws"
+  ],
+  "$defs": {
+    "AppliedContainment": {
+      "description": "What the executor OBSERVED it enforced for one run.\n\nExecutor-attested. A reader records it as attested by the executor, never\nas verified by the reader.",
+      "type": "object",
+      "properties": {
+        "enforced_by": {
+          "description": "One entry per enforced layer.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/EnforcedLayer"
+          }
+        },
+        "profile": {
+          "description": "The profile the executor resolved.",
+          "type": "string"
+        },
+        "profile_digest": {
+          "description": "The digest of the profile the executor resolved. Must equal the\nrequest's [`Containment::profile_digest`]; a difference means the\nregistry changed and the executor should have refused.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "profile",
+        "profile_digest",
+        "enforced_by"
+      ]
+    },
+    "ContainmentAttestationPayload": {
+      "description": "What blackwall-serve signs for one job (§3).\n\n**Checked** by reflex: `typ`, `iat`, `action_id`, `run_custody_hash`,\n`containment_sha256`, `applied`. **Signed but informational**:\n`escapement_attempt` and `trace_id`, which reflex does not seal.",
+      "type": "object",
+      "properties": {
+        "action_id": {
+          "description": "The reflex action id, relayed verbatim from the task payload's\n`action.id` (§6). Never copied from the escapement task id.",
+          "type": "string"
+        },
+        "applied": {
+          "description": "What serve observed it enforced, by value.",
+          "$ref": "#/$defs/AppliedContainment"
+        },
+        "containment_sha256": {
+          "description": "[`crate::containment::Containment::sha256`] of the request serve\nreceived, deserialized into `Containment` first — never a hash over\nthe received bytes (§3).",
+          "type": "string"
+        },
+        "escapement_attempt": {
+          "description": "escapement's 0-based attempt counter for this dispatch, verbatim from\n`JobView.attempt`. Named for its source: `TaskResult.attempt` is a\ndifferent counter.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "iat": {
+          "description": "When serve signed, in unix seconds. The chain is validated as of this\ninstant (Q3b).",
+          "type": "integer",
+          "format": "uint64",
+          "maximum": 9007199254740991,
+          "minimum": 0
+        },
+        "run_custody_hash": {
+          "description": "blackwall's run hash for this job. reflex seals `run_ref` FROM this\nsigned value, which is the replay defence (§7).",
+          "type": "string"
+        },
+        "trace_id": {
+          "description": "The W3C trace id serve received: 32 lowercase hex. The trace id only;\nthe parent span is escapement's by construction and could never match\nreflex's seal. `null` when the dispatch carried no `traceparent`\n(the header is optional on the edge). The key is ALWAYS present, so\nthe signer and the verifier canonicalize the same key set (wX:p1's\nruling (a) on soma#495).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "typ": {
+          "description": "Always [`ATTESTATION_TYP`].",
+          "type": "string",
+          "const": "soma.containment-attestation.v1"
+        }
+      },
+      "required": [
+        "typ",
+        "iat",
+        "action_id",
+        "escapement_attempt",
+        "run_custody_hash",
+        "trace_id",
+        "containment_sha256",
+        "applied"
+      ]
+    },
+    "EnforcedLayer": {
+      "description": "One layer the executor observed in force.",
+      "type": "object",
+      "properties": {
+        "evidence": {
+          "description": "The observation BY VALUE: a compact JSON extract of what was read (a\njail probe result, the CiliumEndpoint policy status, the guest and\nhost kernel identities), carried as JSON text so it is byte-stable in\nthe record. Never a label, a stamp, or a reference to an object that\nmay be garbage-collected before anyone audits it. Empty is no evidence.",
+          "type": "string"
+        },
+        "layer": {
+          "description": "`\"landlock\"`, `\"landlock-exec\"`, `\"kata\"`, `\"cnp\"`, `\"tetragon\"` — an\nopen set; the requirement is whatever the profile's `required_layers`\nnames.",
+          "type": "string"
+        },
+        "observed_at": {
+          "description": "RFC 3339 time of the observation.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "layer",
+        "evidence",
+        "observed_at"
+      ]
+    }
+  }
+}

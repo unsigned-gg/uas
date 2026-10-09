@@ -1,0 +1,273 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Calibration",
+  "description": "The whole calibration read over a chain — the body of\n`GET /v1/calibration`, serialized whole.",
+  "type": "object",
+  "properties": {
+    "decisions": {
+      "description": "Decision records considered — `audit` records only.",
+      "type": "integer",
+      "format": "uint64",
+      "minimum": 0
+    },
+    "findings": {
+      "description": "Signals 1 and 2, thresholded.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Finding"
+      }
+    },
+    "grants": {
+      "description": "Per-grant evidence, keyed `\"agent/verb\"`.",
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/GrantEvidence"
+      }
+    },
+    "kinds": {
+      "description": "Every record on the chain by kind, so a rate over 22 of 49 records\nsays so rather than reading as a rate over the chain.",
+      "$ref": "#/$defs/Kinds"
+    },
+    "through_seq": {
+      "description": "Highest sequence folded, or `null` for an empty chain. marrow always\nsends the key; the schema lists it as optional-and-nullable because\nthat is how every `Option` renders in this crate (`#[schemars(required)]`\nwould drop the `null` arm, which is the wrong direction).",
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "uint64",
+      "minimum": 0
+    },
+    "unattended": {
+      "description": "Signal 3 — unattended expiry.",
+      "$ref": "#/$defs/Measurable"
+    },
+    "unattributable": {
+      "description": "Decision records carrying no tier — sealed before reflex recorded one.\nCounted, never bucketed into a tier nobody chose.",
+      "type": "integer",
+      "format": "uint64",
+      "minimum": 0
+    }
+  },
+  "required": [
+    "decisions",
+    "kinds",
+    "unattributable",
+    "grants",
+    "findings",
+    "unattended"
+  ],
+  "$defs": {
+    "Finding": {
+      "description": "What the evidence argues for on one grant. Internally tagged on `signal`.\n\nA finding is a **judgment**, not a raw count: reflexd computes it against\n`marrow::Thresholds::default()` hardcoded at the route, and the thresholds\nare not on the wire (deficit recorded on the §1c row).",
+      "oneOf": [
+        {
+          "description": "Every RED here was approved. The gate is asking about something the\nperson does not actually arbitrate.",
+          "type": "object",
+          "properties": {
+            "agent": {
+              "type": "string"
+            },
+            "approved": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0
+            },
+            "decided": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0
+            },
+            "policy": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "signal": {
+              "type": "string",
+              "const": "too_conservative"
+            },
+            "verb": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "signal",
+            "agent",
+            "verb",
+            "approved",
+            "decided"
+          ]
+        },
+        {
+          "description": "Automatic decisions here are going wrong at a rate a person would\nprobably want to see first.",
+          "type": "object",
+          "properties": {
+            "adverse": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0
+            },
+            "agent": {
+              "type": "string"
+            },
+            "policy": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "signal": {
+              "type": "string",
+              "const": "too_permissive"
+            },
+            "total": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0
+            },
+            "verb": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "signal",
+            "agent",
+            "verb",
+            "adverse",
+            "total"
+          ]
+        }
+      ]
+    },
+    "GrantEvidence": {
+      "description": "The calibration evidence for one `(agent, verb)` grant.",
+      "type": "object",
+      "properties": {
+        "auto_adverse": {
+          "description": "…that ended adversely (`failed` / `unresolved`).",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "auto_total": {
+          "description": "Decisions taken at GREEN or YELLOW — the tiers that proceed without a\nperson.",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "policy": {
+          "description": "The most recent policy citation seen for this pair, so an argument\nnames the version it is arguing about.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "red_approved": {
+          "description": "…of which the founder approved.",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "red_rejected": {
+          "description": "…of which the founder refused.",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "red_total": {
+          "description": "Decisions taken at RED for this pair.",
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "red_total",
+        "red_approved",
+        "red_rejected",
+        "auto_total",
+        "auto_adverse"
+      ]
+    },
+    "Kinds": {
+      "description": "How many records of each kind a chain holds. The sum is the chain length;\n`Calibration::decisions` counts only the `audit` lines among them.",
+      "type": "object",
+      "properties": {
+        "amendment": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "audit": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "decision": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "decision_act": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        },
+        "other": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "audit",
+        "decision",
+        "decision_act",
+        "amendment",
+        "other"
+      ]
+    },
+    "Measurable": {
+      "description": "A signal that cannot be computed yet, distinguished from one that computes\nto nothing. Externally tagged, snake_case: `{\"measured\": N}` or\n`{\"not_yet\": {\"reason\": …}}`.\n\n**Not-computable is its own state on this wire and must never render as a\nmeasured zero.** Reporting \"0 expired cards\" when no mechanism can produce\nan expiry would be a lie in the shape of a measurement.",
+      "oneOf": [
+        {
+          "description": "Computed from the chain.",
+          "type": "object",
+          "properties": {
+            "measured": {
+              "type": "integer",
+              "format": "uint64",
+              "minimum": 0
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "measured"
+          ]
+        },
+        {
+          "description": "Not computable, and why.",
+          "type": "object",
+          "properties": {
+            "not_yet": {
+              "type": "object",
+              "properties": {
+                "reason": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "reason"
+              ]
+            }
+          },
+          "additionalProperties": false,
+          "required": [
+            "not_yet"
+          ]
+        }
+      ]
+    }
+  }
+}

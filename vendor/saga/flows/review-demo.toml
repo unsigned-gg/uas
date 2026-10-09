@@ -1,0 +1,31 @@
+[flow]
+name = "review-demo"
+description = "Demo flow for saga bootstrap: echo, verify, gate."
+
+[params.repo]
+required = true
+default = "unsigned-gg/saga"
+
+[[step]]
+id = "echo-impl"
+title = "Echo implementation"
+kind = "impl"
+agent = "claude"
+prompt = "Reply with exactly: SAGA DEMO OK (repo is {{params.repo}})"
+
+[[step]]
+id = "verify"
+title = "Verify the echo"
+kind = "test"
+agent = "claude"
+deps = ["echo-impl"]
+verify_cmd = ["true"]
+prompt = "Confirm the previous step printed SAGA DEMO OK."
+
+[[step]]
+id = "approve"
+title = "Operator approval"
+kind = "gate"
+gate = "heimdal:approval"
+inputs = ["verify"]
+prompt = "Approve this demo run."

@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "DispatchResponse",
+  "description": "The `POST /v1/mcp/tools/dispatch` response (blackwall-serve\n`McpDispatchResponse`). A 202 means the job is QUEUED, not run.",
+  "type": "object",
+  "properties": {
+    "job_id": {
+      "description": "blackwall's ULID job id — the audit record's `dispatch_ref`.",
+      "type": "string"
+    },
+    "prompt_hash": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "queued_at": {
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "required": [
+    "job_id"
+  ]
+}

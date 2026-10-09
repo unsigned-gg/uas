@@ -14,3 +14,9 @@
 
 # blackwall custody store (local runs; never committed)
 .blackwall/
+
+# IDE
+.idea/
+.vscode/
+.zed/
+

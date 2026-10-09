@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "DispatchRequest",
+  "description": "The `POST /v1/mcp/tools/dispatch` request body.",
+  "type": "object",
+  "properties": {
+    "max_tokens": {
+      "description": "Completion-token cap for the run; uncapped when absent.",
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "uint32",
+      "minimum": 0
+    },
+    "model": {
+      "description": "Model identifier for the run; blackwall defaults when absent.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "project": {
+      "description": "The blackwall project the run executes under (`\"soma\"`).",
+      "type": "string"
+    },
+    "prompt": {
+      "description": "The prompt to run. blackwall-serve requires either this (non-empty)\nor `task`; with both set, `task` wins (blackwall's own precedence).\nEmpty is omitted from the wire — blackwall's field is optional and a\ntask-resolved dispatch has no inline prompt — matching\n[`crate::payload::CustodyPayload::prompt`], so the direct and the\nqueued path serialize the same dispatch (EST-209).",
+      "type": "string"
+    },
+    "provider": {
+      "description": "Provider hint (`\"gateway\"`); blackwall defaults when absent.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "task": {
+      "description": "A named task (`tasks/<name>/prompt.md` in the executing repo) to\nresolve the prompt from instead of `prompt` (EST-209).",
+      "type": [
+        "string",
+        "null"
+      ]
+    }
+  },
+  "required": [
+    "project"
+  ]
+}

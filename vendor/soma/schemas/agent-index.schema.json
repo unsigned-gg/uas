@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "AgentIndex",
+  "description": "The `GET /agent` index: which server answered, which build, and the topics\nit serves.",
+  "type": "object",
+  "properties": {
+    "build": {
+      "description": "Human-readable build label, e.g. `reflex 0.1.0`. Informative only.",
+      "type": "string"
+    },
+    "describe_only": {
+      "description": "Always `true`: nothing under `/agent` changes state. A consumer that\nreads `false` trusts nothing else in the body. `const: true` in the\nschema, so a conformance check refuses `false`.",
+      "type": "boolean",
+      "const": true
+    },
+    "git_sha": {
+      "description": "The full 40-hex lowercase commit the binary was built from, embedded\nat build time. **Absent when unknown** — never `null`, never `\"\"`,\nnever a guess (spec §2); a consumer reads absence as \"build unknown\".",
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "server": {
+      "description": "The server's name, e.g. `reflexd`.",
+      "type": "string"
+    },
+    "topics": {
+      "description": "The six common topics first, in spec §3 order, then any\nserver-specific ones.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/TopicRef"
+      }
+    }
+  },
+  "required": [
+    "server",
+    "build",
+    "describe_only",
+    "topics"
+  ],
+  "$defs": {
+    "TopicRef": {
+      "description": "One entry in [`AgentIndex::topics`].",
+      "type": "object",
+      "properties": {
+        "href": {
+          "description": "Where the topic is served, e.g. `/agent/setup`.",
+          "type": "string"
+        },
+        "summary": {
+          "description": "One sentence, for an index or a tool description.",
+          "type": "string"
+        },
+        "topic": {
+          "description": "The topic's name, e.g. `setup`.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "topic",
+        "summary",
+        "href"
+      ]
+    }
+  }
+}

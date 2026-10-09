@@ -1,0 +1,117 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "FailBody",
+  "description": "The `POST /tasks/fail` request body (soma#281, EST-186) — the terminal\nreport for a run the runner gave up on: blackwall 404 (unresolved, never\nre-dispatched), watch-budget expiry, repeated dispatch failure. A runner\nnever leaves a task `assigned`.",
+  "type": "object",
+  "properties": {
+    "error": {
+      "description": "The reason, non-empty (escapement rejects a blank one with 400 and\nretains at most 2048 chars).",
+      "type": "string"
+    },
+    "id": {
+      "description": "The task id — the action id.",
+      "type": "string"
+    },
+    "result": {
+      "description": "The partial custody record, when the run got far enough to have one\n(`custody`, blackwall `job_id`, `exit: err`).",
+      "anyOf": [
+        {
+          "$ref": "#/$defs/TaskResult"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "required": [
+    "id",
+    "error"
+  ],
+  "$defs": {
+    "Exit": {
+      "description": "How the run ended, as the runner reports it.",
+      "type": "string",
+      "enum": [
+        "ok",
+        "err",
+        "unknown"
+      ]
+    },
+    "TaskResult": {
+      "description": "The runner's report — the `result` object of `POST /tasks/complete`,\ncarried verbatim on the completed [`JobView`] (bounded, 8 KiB).\n\n`custody` names WHERE the run's record lives: `\"blackwall-serve\"` for\nthe in-cluster runner (EST-185), `\"fleet:<agent>\"` for the workstation\nshim's local store. A card surfaced from fleet custody is real but its\nsettle hop resolves against blackwall-serve, which never saw the run —\nwhich is why the value is carried onto the card rather than hidden.",
+      "type": "object",
+      "properties": {
+        "attempt": {
+          "description": "The shim's retry counter.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        },
+        "changeset": {
+          "description": "The run's changeset hash, if the executor produced one.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "containment_attestation": {
+          "description": "blackwall-serve's signed containment attestation: the exact text of\n`JobStatus.containment_attestation` (CER-2276 §5), a\n[`crate::attestation::SignedContainmentAttestation`]. It has always\nbeen null so far; the runner has never filled it. The runner\ncopies these bytes and never parses or rebuilds them, so a change in\ntransit is visible against serve's own record. It counts against the\n8 KiB result bound; an attestation that does not fit fails the run and\nis never truncated.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "custody": {
+          "description": "Where the custody record lives. Absent = unknown, which a consumer\nmust render as unknown, never as \"in the cluster\".",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "error": {
+          "description": "Error detail when `exit` is `err`.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "exit": {
+          "description": "Absent on the wire reads as [`Exit::Unknown`]: escapement bounds the\nobject at 8 KiB and says nothing about which keys must be present.",
+          "$ref": "#/$defs/Exit"
+        },
+        "job_id": {
+          "description": "blackwall-serve's ULID job id, when the run went through serve.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "run_hash": {
+          "description": "blackwall's content-addressed run hash — the durable custody pointer.\nPresent iff the run completed under custody; the runner captures it\nat report time because after a pod replacement the job id resolves\nto nothing.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "run_hash_prefix": {
+          "description": "The workstation shim's fallback when it could only recover a prefix.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "world": {
+          "description": "The world commit linking parent → child tree.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    }
+  }
+}

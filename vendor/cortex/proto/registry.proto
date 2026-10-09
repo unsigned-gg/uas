@@ -1,0 +1,97 @@
+// cortex.mesh.v1 — registry RPC bodies: register, heartbeat, deregister,
+// list, and the cortex-join token exchange. Auth travels as gRPC metadata,
+// not in these messages: `x-cortex-register-secret` for Register/MintJoin,
+// `authorization: Bearer <peer token>` for everything else.
+syntax = "proto3";
+
+package cortex.mesh.v1;
+
+import "cortex/mesh/v1/peer.proto";
+import "google/protobuf/empty.proto";
+
+message RegisterRequest {
+  string role = 1;
+  string session_ref = 2;
+  // Requested cadence; the server clamps and returns the value it will
+  // hold the peer to.
+  int32 heartbeat_secs = 3;
+  Identity identity = 4;
+}
+
+message RegisterResponse {
+  string peer_id = 1;
+  // The minted bearer token, revealed exactly once. The registry stores
+  // only its hash; losing it means re-registering.
+  string token = 2;
+  int32 heartbeat_secs = 3;
+  // The role the peer was registered under. Needed on Join, where the
+  // caller presents only an opaque join token and learns its role from the
+  // reply (CER-2113: the first real join stored an empty role). Register
+  // echoes the requested role. Additive (PROTOCOL.md rule 1).
+  string role = 4;
+}
+
+message HeartbeatRequest {
+  string peer_id = 1;
+  // Optional self-asserted status. Unspecified = leave unchanged. Only
+  // IDLE/WORKING/BLOCKED are peer-assertable; STALE/OFFLINE are the
+  // sweeper's and are refused with INVALID_ARGUMENT.
+  PeerStatus status = 2;
+  // Optional identity update-in-place: a pane that changes directory
+  // changes lane. Empty message = leave unchanged.
+  Identity identity = 3;
+}
+
+message PeerRequest {
+  string peer_id = 1;
+}
+
+message ListPeersRequest {
+  // The caller's own peer id — pairs with the bearer token for auth.
+  string peer_id = 1;
+  // Optional filters. All empty = every live peer.
+  string subject = 2;
+  string project = 3;
+  string role = 4;
+}
+
+message ListPeersResponse {
+  repeated Peer peers = 1;
+}
+
+// cortex-join (CER-2113): the operator mints a one-time token for a human;
+// the newcomer redeems it and is registered atomically under service-<user>.
+message MintJoinRequest {
+  string user = 1;
+  int64 ttl_secs = 2;
+  // "human" (default when empty) or "agent": a long-running machine peer that
+  // is role-addressable but may not register lanes.
+  string kind = 3;
+  // The pool the token redeems into (CER-2362); empty = a lane/agent token
+  // as before. The pool must exist and be enabled. WS0 refuses a set pool
+  // UNIMPLEMENTED.
+  string pool = 4;
+}
+
+message MintJoinResponse {
+  string join_token = 1;
+  string role = 2;
+  int64 expires_in_secs = 3;
+  // "agent" when an agent token was minted; empty for a human token.
+  string kind = 4;
+}
+
+message JoinRequest {
+  string join_token = 1;
+  string session_ref = 2;
+  int32 heartbeat_secs = 3;
+}
+
+service MeshRegistry {
+  rpc Register(RegisterRequest) returns (RegisterResponse);
+  rpc Heartbeat(HeartbeatRequest) returns (google.protobuf.Empty);
+  rpc Deregister(PeerRequest) returns (google.protobuf.Empty);
+  rpc ListPeers(ListPeersRequest) returns (ListPeersResponse);
+  rpc MintJoin(MintJoinRequest) returns (MintJoinResponse);
+  rpc Join(JoinRequest) returns (RegisterResponse);
+}

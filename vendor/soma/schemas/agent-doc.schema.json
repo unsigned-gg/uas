@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "AgentDoc",
+  "description": "One topic's answer, `GET /agent/{topic}`.",
+  "type": "object",
+  "properties": {
+    "build": {
+      "description": "Human-readable build label. Informative only.",
+      "type": "string"
+    },
+    "git_sha": {
+      "description": "As [`AgentIndex::git_sha`]: absent when unknown, never `null`.",
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "markdown": {
+      "description": "The instructions, as markdown for a model to read.",
+      "type": "string"
+    },
+    "see_also": {
+      "description": "Where to read further: other topics, routes, in-repo specs.",
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "server": {
+      "description": "The server's name, e.g. `reflexd`.",
+      "type": "string"
+    },
+    "summary": {
+      "description": "One sentence, the same one the index carries.",
+      "type": "string"
+    },
+    "topic": {
+      "description": "The topic's name.",
+      "type": "string"
+    }
+  },
+  "required": [
+    "server",
+    "build",
+    "topic",
+    "summary",
+    "markdown",
+    "see_also"
+  ]
+}
