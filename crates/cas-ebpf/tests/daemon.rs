@@ -14,7 +14,7 @@ use std::{
 use cas_ebpf::{
     client::DaemonClient,
     daemon::Daemon,
-    handle::FakeProbeHandle,
+    handle::{FakeProbeHandle, ProbeHandle},
     protocol::{StreamLine, MAX_LINE},
     EbpfError, ExecEvent,
 };
@@ -30,11 +30,17 @@ struct Fixture {
 
 impl Fixture {
     async fn start() -> Self {
+        Self::start_with(|daemon| daemon).await
+    }
+
+    async fn start_with(
+        configure: impl FnOnce(Daemon<FakeProbeHandle>) -> Daemon<FakeProbeHandle>,
+    ) -> Self {
         let n = NEXT.fetch_add(1, Ordering::SeqCst);
         let path =
             std::env::temp_dir().join(format!("cas-ebpfd-test-{}-{n}.sock", std::process::id()));
         let handle = Arc::new(Mutex::new(FakeProbeHandle::new().expect("fake")));
-        let daemon = Daemon::new(Arc::clone(&handle), path.clone());
+        let daemon = configure(Daemon::new(Arc::clone(&handle), path.clone()));
         let server = tokio::spawn(daemon.serve());
         let fixture = Self {
             path,
@@ -322,4 +328,144 @@ fn connect_to_a_missing_socket_is_daemon_unavailable() {
     let path = std::env::temp_dir().join("cas-ebpfd-test-missing.sock");
     let err = DaemonClient::connect(&path).expect_err("no daemon");
     assert!(matches!(err, EbpfError::DaemonUnavailable { .. }), "{err}");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn untrack_of_a_pid_this_peer_did_not_track_is_refused() {
+    if rustix::process::geteuid().is_root() {
+        eprintln!("skipped: running as root, every pid is untrackable");
+        return;
+    }
+    let fx = Fixture::start().await;
+    // The kernel side already tracks this pid, but not through this peer.
+    fx.handle
+        .lock()
+        .expect("lock")
+        .track(std::process::id(), 1)
+        .expect("track");
+    let path = fx.path.clone();
+    let err = tokio::task::spawn_blocking(move || {
+        let mut client = DaemonClient::connect(&path).expect("connect");
+        client
+            .untrack(std::process::id())
+            .expect_err("not ours to untrack")
+    })
+    .await
+    .expect("join");
+    assert!(
+        matches!(&err, EbpfError::Protocol(reason) if reason.contains("is not tracked by uid")),
+        "{err}"
+    );
+    assert_eq!(
+        fx.handle.lock().expect("lock").tracked().len(),
+        1,
+        "still tracked"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn track_quota_per_uid_is_enforced() {
+    if rustix::process::geteuid().is_root() {
+        eprintln!("skipped: running as root, quota does not apply");
+        return;
+    }
+    let fx = Fixture::start_with(|daemon| daemon.with_track_quota(1)).await;
+    let path = fx.path.clone();
+    let mut child = std::process::Command::new("sleep")
+        .arg("30")
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .expect("spawn sleep");
+    let child_pid = child.id();
+    let err = tokio::task::spawn_blocking(move || {
+        let mut client = DaemonClient::connect(&path).expect("connect");
+        client
+            .track(std::process::id(), 1)
+            .expect("first track fits the quota");
+        // Tracking the same pid again is not a new entry.
+        client
+            .track(std::process::id(), 1)
+            .expect("re-track of the same pid");
+        let err = client
+            .track(child_pid, std::process::id())
+            .expect_err("over quota");
+        client
+            .untrack(std::process::id())
+            .expect("untrack frees the slot");
+        client
+            .track(child_pid, std::process::id())
+            .expect("fits again");
+        err
+    })
+    .await
+    .expect("join");
+    let _ = child.kill();
+    let _ = child.wait();
+    assert!(
+        matches!(&err, EbpfError::Protocol(reason) if reason.contains("track quota 1 reached")),
+        "{err}"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn stream_delivers_only_this_peers_events() {
+    if rustix::process::geteuid().is_root() {
+        eprintln!("skipped: running as root, the stream is unfiltered");
+        return;
+    }
+    let fx = Fixture::start().await;
+    let path = fx.path.clone();
+    let (ready_tx, ready_rx) = std::sync::mpsc::channel();
+    let reader = tokio::task::spawn_blocking(move || {
+        let client = DaemonClient::connect(&path).expect("connect");
+        let mut stream = client.stream().expect("stream");
+        ready_tx.send(()).expect("ready");
+        stream.next().expect("a line").expect("a frame")
+    });
+    tokio::task::spawn_blocking(move || ready_rx.recv().expect("subscribed"))
+        .await
+        .expect("join");
+    let me = rustix::process::geteuid().as_raw();
+    {
+        let mut handle = fx.handle.lock().expect("lock");
+        handle
+            .push(ExecEvent::new(
+                1,
+                4_000_001,
+                1,
+                me + 1,
+                "other",
+                "/usr/bin/other",
+            ))
+            .expect("push");
+        handle
+            .push(ExecEvent::new(2, 4_000_002, 1, me, "mine", "/usr/bin/mine"))
+            .expect("push");
+    }
+    let line = tokio::time::timeout(Duration::from_secs(5), reader)
+        .await
+        .expect("event arrived in time")
+        .expect("join");
+    match line {
+        StreamLine::Event(record) => {
+            assert_eq!(record.uid, me);
+            assert_eq!(
+                record.filename, "/usr/bin/mine",
+                "the other user's event was filtered"
+            );
+        }
+        other => panic!("expected an event, got {other:?}"),
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn socket_group_is_set_when_asked() {
+    use std::os::unix::fs::MetadataExt;
+    let gid = rustix::process::getegid().as_raw();
+    let fx = Fixture::start_with(move |daemon| daemon.with_socket_gid(Some(gid))).await;
+    let meta = std::fs::metadata(&fx.path).expect("stat");
+    assert_eq!(meta.gid(), gid);
+    assert_eq!(meta.permissions().mode() & 0o777, 0o660);
 }

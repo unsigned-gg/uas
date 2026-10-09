@@ -65,10 +65,13 @@ Facts, measured 2026-10-09 on ceres (kernel `6.6.87.2-microsoft-standard-WSL2`):
     `pid` at 24, `prio` at 28. Corrected the same way; an earlier draft said 12.
     The pid is the exiting task id. For a main thread it equals the tgid.
 - **T8: Priority Clamping Behavior on Linux [verified]:** `setpriority(PRIO_PROCESS, tgid, 19)`
-  modifies only the calling or targeted main thread. A 4-thread process after
-  `renice -n 19 -p` yielded `{main: 19, t1: 0, t2: 0, t3: 0}` because worker pools
-  (rustc and cargo) spawn threads immediately. In contrast, `setpriority(PRIO_PGRP, pgid, 19)`
-  sets the entire process group and all future child threads to nice 19.
+  modifies only the targeted main thread. A 4-thread process after
+  `renice -n 19 -p` yielded `{main: 19, t1: 0, t2: 0, t3: 0}` (python probe, ceres,
+  2026-10-09), and worker pools (rustc and cargo) spawn threads immediately.
+  `setpriority(PRIO_PGRP, pgid, 19)` sets every thread of every process in the group
+  and all future children to nice 19. Both halves are re-proven on every CI run by
+  `crates/cas-ebpf/tests/clamp.rs`, which spawns a 4-task child and reads each
+  tid's nice from `/proc/<pid>/task/*/stat`.
 - **T9: Kernel Capability Requirements [verified]:** Tracefs and BPF loading require
   `CAP_BPF`, `CAP_PERFMON`, and `CAP_SYS_NICE`. `kernel.unprivileged_bpf_disabled` is `2`.
 - **T10: Clean-Room Boundary [verified]:** Clean-room implementation using Aya (`aya 0.14.0`,
@@ -159,7 +162,10 @@ flowchart TD
      tgid as its value.
    - Propagates tracking to all child worker processes automatically. The key of
      `TRACKED_PIDS` is a task id; the main thread's tid equals the tgid, so the exec
-     lookup by tgid hits. Thread tids enter at clone and leave at thread exit.
+     lookup by tgid hits. Thread tids enter at clone and leave at thread exit, so a
+     thread-heavy worker (rustc, cargo) spends map entries while it runs. The map
+     holds 1024 entries for every client together; the daemon caps each non-root uid
+     at 256 tracked roots, and a refused insert is counted, not silent.
 
 2. **`sched_process_exec` Probe:**
    - Reads `pid` (offset 12) and `filename` from `__data_loc char[]` (offset 8).
@@ -168,8 +174,9 @@ flowchart TD
        `bpf_get_current_uid_gid`, the timestamp via `bpf_ktime_get_ns`, and `ppid`
        from the `TRACKED_PIDS` value.
      - Reserves an `ExecEvent` in the `AUDIT_EVENTS` ring buffer and submits it.
-       When `reserve` fails, increments `DROPPED_EVENTS` (a one-entry
-       `PerCpuArray<u64>`) instead.
+       When `reserve` fails, increments `DROPPED_EVENTS[0]` (a two-slot
+       `PerCpuArray<u64>`) instead. Slot 1 counts fork inserts refused because
+       `TRACKED_PIDS` was full; `Probes::tracking_failures` reads it.
      - The kernel does not read the process group. The daemon checks the nice value
        of the pid on every event and re-clamps when it is above 19 (see below).
 
@@ -193,12 +200,16 @@ flowchart TD
   and invokes `setpriority(PRIO_PGRP, pgid, 19)` before `execve`.
 - **Thread Inheritance:** All threads created by rustc and cargo inherit nice 19
   from process group launch.
-- **Anti-Escape Defense:** `setsid()` and `setpgid()` do not change a nice value,
-  and an unprivileged process cannot raise its own priority (`RLIMIT_NICE` is 0 by
-  default). The clamp therefore survives a group escape on its own. As a second
-  line, `cas-ebpfd` reads the nice value of the pid on every exec event of a
-  tracked process and re-clamps it with `setpriority(PRIO_PROCESS, pid, 19)` when
-  it is above 19 (`clamp::reclamp_if_needed`).
+- **Anti-Escape Defense:** `setsid()` and `setpgid()` do not change a nice value.
+  With the default `RLIMIT_NICE` of 0 an unprivileged process cannot raise its own
+  priority, so the clamp survives a group escape on its own; a PAM or systemd limit
+  that raises `RLIMIT_NICE` weakens that, which is why the second line exists.
+  `cas-ebpfd` reads the nice value of the pid on every exec event of a tracked
+  process and re-clamps it with `setpriority(PRIO_PROCESS, pid, 19)` when the nice
+  value is below 19, that is, when the process got a higher priority than the
+  worker floor (`clamp::reclamp_if_needed`). The daemon skips a process whose
+  effective uid differs from its real uid (a setuid binary), so it never renices a
+  privileged process on a tracked worker's behalf. The 200 ms poll bounds the delay.
 - **System Call Safety:** The userspace side calls `setpgid`, `setpriority` and
   `getpgid` through `rustix` (`clamp.rs`), so it needs no `unsafe`. The one unsafe
   call site is `CommandExt::pre_exec` in the caller (`cas-pool`, and the gate in
@@ -243,10 +254,17 @@ The audit digest records exact execution sequence for Saga receipts:
   ```
 - **Socket Permissions:** `/run/cas/ebpf.sock` is bound under umask `0117` and then set
   to mode `0660`, group `docker` or `ctodie`. It never exists with a wider mode.
-- **Peer Rule:** the daemon reads `SO_PEERCRED` on every connection and refuses one
+- **Peer Rules:** the daemon reads `SO_PEERCRED` on every connection and refuses one
   without it. `track` is accepted only for a pid whose real uid (`/proc/<pid>/status`)
-  equals the peer's uid. A root peer may track any pid. Without this rule a socket-group
-  member could make the root daemon renice another user's process tree.
+  equals the peer's uid, and only up to the per-uid quota (256 by default). `untrack`
+  is accepted only for a pid that peer tracked. `stream` delivers only events whose
+  uid is the peer's; `status` counts only the peer's pids. A root peer is exempt from
+  all of these. Without the rules a socket-group member could make the root daemon
+  renice another user's process tree, untrack another user's worker, fill the map,
+  or read every user's exec records.
+- **Socket Group:** `cas-ebpfd --socket-group <name>` resolves the group in
+  `/etc/group` and `chown`s the socket to it after bind. The unit passes `ctodie`.
+  Without it the socket is `root:root` and an unprivileged `cas-pool` gets `EACCES`.
 - **UDS Protocol** (`protocol.rs`): one JSON object per line, request then
   response, at most 4096 bytes per line. A longer line closes the connection.
   Anything not on this list gets `{"ok":false,"error":"..."}` and the connection
@@ -257,7 +275,7 @@ The audit digest records exact execution sequence for Saga receipts:
   | `{"op":"track","pid":N,"ppid":P}` | `{"ok":true}` |
   | `{"op":"untrack","pid":N}` | `{"ok":true}` |
   | `{"op":"status"}` | `{"ok":true,"tracked":K,"dropped_events":D}` |
-  | `{"op":"stream"}` | `{"ok":true}`, then one `{"event":{...}}` line per `ExecEvent` (fields `timestamp_ns`, `pid`, `ppid`, `uid`, `comm`, `filename`) and a `{"dropped":N}` line whenever the dropped counter grows, until the client closes |
+  | `{"op":"stream"}` | `{"ok":true}`, then one `{"event":{...}}` line per `ExecEvent` of the peer's uid (fields `timestamp_ns`, `pid`, `ppid`, `uid`, `comm`, `filename`), a `{"dropped":N}` line with the kernel's running drop total whenever it grows, and a `{"lagged":N}` line when this client fell behind by `N` event lines, until the client closes |
 
   `cas-pool` calls `track` right after `spawn` returns, with the child pid and its
   own pid as `ppid`. The fork probe then covers everything the worker starts. An

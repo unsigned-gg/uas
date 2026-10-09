@@ -36,16 +36,38 @@ pub const BPF_OBJECT: &[u8] = include_bytes!("../ebpf/cas-ebpf.o");
 pub const TRACKED_PIDS_MAP: &str = "TRACKED_PIDS";
 /// Name of the BPF ring buffer that carries [`ExecEvent`] records.
 pub const AUDIT_EVENTS_MAP: &str = "AUDIT_EVENTS";
-/// Name of the per-cpu array that counts records the kernel could not reserve.
+/// Name of the per-cpu counter array. Slot [`DROPPED_RING_SLOT`] counts records
+/// the kernel could not reserve; slot [`DROPPED_TRACK_SLOT`] counts fork inserts
+/// refused because `TRACKED_PIDS` was full.
 pub const DROPPED_EVENTS_MAP: &str = "DROPPED_EVENTS";
+/// See [`DROPPED_EVENTS_MAP`].
+pub const DROPPED_RING_SLOT: u32 = 0;
+/// See [`DROPPED_EVENTS_MAP`].
+pub const DROPPED_TRACK_SLOT: u32 = 1;
 /// Capacity of `TRACKED_PIDS` (spec 0014 D9).
 pub const TRACKED_PIDS_CAPACITY: u32 = 1024;
 /// Size of `AUDIT_EVENTS` in bytes (spec 0014 D6).
 pub const AUDIT_RING_BYTES: u32 = 256 * 1024;
 
-/// Tracepoint programs in the object, as `(program name, category, tracepoint)`.
-pub const TRACEPOINTS: [(&str, &str, &str); 3] = [
-    ("cas_sched_process_exec", "sched", "sched_process_exec"),
-    ("cas_sched_process_fork", "sched", "sched_process_fork"),
-    ("cas_sched_process_exit", "sched", "sched_process_exit"),
+/// Tracepoint programs in the object, as `(program name, category, tracepoint, label)`.
+/// The label is the `category/name` form used in errors.
+pub const TRACEPOINTS: [(&str, &str, &str, &str); 3] = [
+    (
+        "cas_sched_process_exec",
+        "sched",
+        "sched_process_exec",
+        "sched/sched_process_exec",
+    ),
+    (
+        "cas_sched_process_fork",
+        "sched",
+        "sched_process_fork",
+        "sched/sched_process_fork",
+    ),
+    (
+        "cas_sched_process_exit",
+        "sched",
+        "sched_process_exit",
+        "sched/sched_process_exit",
+    ),
 ];

@@ -96,9 +96,10 @@ pub enum StreamLine {
     /// `{"event":{...}}`: one exec of a tracked pid.
     Event(ExecRecord),
     /// `{"dropped":N}`: the kernel dropped records. `N` is the running total
-    /// of the kernel counter. When this client fell behind, `N` is instead
-    /// the number of event lines it missed.
+    /// of the kernel counter.
     Dropped(u64),
+    /// `{"lagged":N}`: this client fell behind and missed `N` event lines.
+    Lagged(u64),
 }
 
 /// Parses one request line.
@@ -197,6 +198,14 @@ mod tests {
         assert_eq!(
             serde_json::from_str::<StreamLine>(&text).expect("de"),
             dropped
+        );
+
+        let lagged = StreamLine::Lagged(4);
+        let text = serde_json::to_string(&lagged).expect("ser");
+        assert_eq!(text, r#"{"lagged":4}"#);
+        assert_eq!(
+            serde_json::from_str::<StreamLine>(&text).expect("de"),
+            lagged
         );
     }
 }

@@ -13,7 +13,7 @@ use aya::{
 
 use crate::{
     error::EbpfError, handle::ProbeHandle, probe, wire::ExecEvent, AUDIT_EVENTS_MAP, BPF_OBJECT,
-    DROPPED_EVENTS_MAP, TRACEPOINTS, TRACKED_PIDS_MAP,
+    DROPPED_EVENTS_MAP, DROPPED_RING_SLOT, DROPPED_TRACK_SLOT, TRACEPOINTS, TRACKED_PIDS_MAP,
 };
 
 /// The loaded kernel program and its maps (spec 0014 D3, D9).
@@ -47,7 +47,7 @@ impl Probes {
 
         let mut ebpf = Ebpf::load(BPF_OBJECT)?;
 
-        for (name, category, tracepoint) in TRACEPOINTS {
+        for (name, category, tracepoint, label) in TRACEPOINTS {
             let program: &mut TracePoint = ebpf
                 .program_mut(name)
                 .ok_or(EbpfError::ProgramMissing { name })?
@@ -58,7 +58,7 @@ impl Probes {
                 .map_err(|source| EbpfError::ProgramLoadFailed { name, source })?;
             program.attach(category, tracepoint).map_err(|source| {
                 EbpfError::AttachTracepointFailed {
-                    name: attach_name(tracepoint),
+                    name: label,
                     source,
                 }
             })?;
@@ -80,18 +80,25 @@ impl Probes {
     }
 }
 
-impl std::fmt::Debug for Probes {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Probes").finish_non_exhaustive()
+impl Probes {
+    /// Fork inserts the kernel refused because `TRACKED_PIDS` was full, summed over cpus.
+    /// A non-zero value means some child of a tracked worker escaped tracking.
+    pub fn tracking_failures(&self) -> Result<u64, EbpfError> {
+        self.counter(DROPPED_TRACK_SLOT)
+    }
+
+    fn counter(&self, slot: u32) -> Result<u64, EbpfError> {
+        let values = self
+            .dropped
+            .get(&slot, 0)
+            .map_err(|e| map_err(DROPPED_EVENTS_MAP, e))?;
+        Ok(values.iter().sum())
     }
 }
 
-/// The `category/name` label for an attach error. The set is fixed by `TRACEPOINTS`.
-fn attach_name(tracepoint: &str) -> &'static str {
-    match tracepoint {
-        "sched_process_exec" => "sched/sched_process_exec",
-        "sched_process_fork" => "sched/sched_process_fork",
-        _ => "sched/sched_process_exit",
+impl std::fmt::Debug for Probes {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Probes").finish_non_exhaustive()
     }
 }
 
@@ -127,11 +134,7 @@ impl ProbeHandle for Probes {
     }
 
     fn dropped_events(&self) -> Result<u64, EbpfError> {
-        let values = self
-            .dropped
-            .get(&0, 0)
-            .map_err(|e| map_err(DROPPED_EVENTS_MAP, e))?;
-        Ok(values.iter().sum())
+        self.counter(DROPPED_RING_SLOT)
     }
 
     fn next_event(&mut self) -> Option<ExecEvent> {

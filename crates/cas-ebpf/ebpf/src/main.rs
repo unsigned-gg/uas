@@ -41,6 +41,13 @@ pub struct ExecEvent {
 }
 
 const _: () = assert!(core::mem::size_of::<ExecEvent>() == 168);
+const _: () = assert!(core::mem::offset_of!(ExecEvent, timestamp_ns) == 0);
+const _: () = assert!(core::mem::offset_of!(ExecEvent, pid) == 8);
+const _: () = assert!(core::mem::offset_of!(ExecEvent, ppid) == 12);
+const _: () = assert!(core::mem::offset_of!(ExecEvent, uid) == 16);
+const _: () = assert!(core::mem::offset_of!(ExecEvent, comm) == 20);
+const _: () = assert!(core::mem::offset_of!(ExecEvent, filename) == 36);
+const _: () = assert!(core::mem::offset_of!(ExecEvent, _pad) == 164);
 
 /// Tracked task ids. Key is a task id, value is the parent tgid.
 #[map]
@@ -50,9 +57,23 @@ static TRACKED_PIDS: HashMap<u32, u32> = HashMap::with_max_entries(1024, 0);
 #[map]
 static AUDIT_EVENTS: RingBuf = RingBuf::with_byte_size(256 * 1024, 0);
 
-/// Count of events lost because the ring buffer was full.
+/// Per-cpu counters. Slot 0: events lost because the ring buffer was full.
+/// Slot 1: fork inserts refused because `TRACKED_PIDS` was full.
 #[map]
-static DROPPED_EVENTS: PerCpuArray<u64> = PerCpuArray::with_max_entries(1, 0);
+static DROPPED_EVENTS: PerCpuArray<u64> = PerCpuArray::with_max_entries(2, 0);
+
+/// Slot of the ring-buffer drop counter.
+const DROPPED_RING: u32 = 0;
+/// Slot of the tracking-insert failure counter.
+const DROPPED_TRACK: u32 = 1;
+
+/// Adds one to a `DROPPED_EVENTS` slot. Per-cpu, so no atomic is needed.
+fn bump(slot: u32) {
+    if let Some(counter) = DROPPED_EVENTS.get_ptr_mut(slot) {
+        // SAFETY: the pointer comes from a per-cpu map slot valid for this call.
+        unsafe { *counter += 1 };
+    }
+}
 
 /// Offset of the `__data_loc` filename field in `sched_process_exec`.
 const EXEC_FILENAME_LOC: usize = 8;
@@ -82,10 +103,7 @@ fn try_sched_process_exec(ctx: &TracePointContext) {
         None => return,
     };
     let Some(mut entry) = AUDIT_EVENTS.reserve::<ExecEvent>(0) else {
-        if let Some(slot) = DROPPED_EVENTS.get_ptr_mut(0) {
-            // SAFETY: the pointer comes from a per-cpu map slot valid for this call.
-            unsafe { *slot += 1 };
-        }
+        bump(DROPPED_RING);
         return;
     };
     let mut filename = [0u8; 128];
@@ -129,7 +147,14 @@ fn try_sched_process_fork(ctx: &TracePointContext) {
     let Ok(child_pid) = (unsafe { ctx.read_at::<i32>(FORK_CHILD_PID) }) else {
         return;
     };
-    let _ = TRACKED_PIDS.insert(&(child_pid as u32), &parent_tgid, 0);
+    // Thread clones insert their tid too; exit removes it. A full map (1024
+    // entries) refuses the insert, and the child escapes tracking: count it.
+    if TRACKED_PIDS
+        .insert(&(child_pid as u32), &parent_tgid, 0)
+        .is_err()
+    {
+        bump(DROPPED_TRACK);
+    }
 }
 
 /// Tracepoint probe for `sched/sched_process_exit`.

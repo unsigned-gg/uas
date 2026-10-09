@@ -8,7 +8,7 @@ After=local-fs.target
 
 [Service]
 Type=simple
-ExecStart=/usr/local/bin/cas-ebpfd --socket /run/cas/ebpf.sock
+ExecStart=/usr/local/bin/cas-ebpfd --socket /run/cas/ebpf.sock --socket-group ctodie
 Restart=on-failure
 RestartSec=2
 User=root
