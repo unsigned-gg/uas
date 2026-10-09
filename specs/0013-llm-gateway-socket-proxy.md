@@ -1,0 +1,120 @@
+---
+status: complete
+created: 2026-10-09
+tags: [sandbox, router, proxy, unix-socket, gateway, phase-2]
+priority: high
+depends_on: [0010-landlock-ruleset-and-abi-probe, 0011-network-namespace-isolation, 0012-sandbox-escape-suite, 0004-dependency-and-licence-policy]
+---
+
+# 0013-llm-gateway-socket-proxy
+
+## Overview
+
+A worker in the jail (spec 0010) and the network namespace (spec 0011) can
+reach no network. It still has to call models through the LiteLLM gateway
+and send telemetry. This spec gives it one door: a Unix socket inside its
+workspace, served by a proxy that lets only gateway calls through and adds
+the gateway key itself (CER-2718, parent CER-2681).
+
+The first draft came from the agy lane (`session-agy-ceres-estate-w25-p3`)
+on 2026-10-09; its facts and filter rules are kept. Its runtime decision is
+replaced by Christian's ruling below.
+
+Facts, measured 2026-10-09 on ceres (kernel `6.6.87.2-microsoft-standard-WSL2`,
+Landlock ABI 3, unprivileged):
+
+- Spec 0012 row `uds_connect_out`: a jailed worker can `connect` to a
+  pathname Unix socket under `$HOME`, with and without the network
+  namespace. Landlock below ABI v6 does not mediate `connect` on pathname
+  sockets, and `CLONE_NEWNET` isolates only abstract sockets. The proxy's
+  allowlist is therefore the boundary, not the jail.
+- The worker preset (spec 0010) grants every access beneath the workspace,
+  so a socket at `<workspace>/.ipc/llm.sock` needs no new rule.
+- Spec 0004 approves `tokio` for `cas-router`, `cas-deck` and
+  `cas-storage`, not for `cas-sandbox`. `reqwest` with `rustls` needs cmake
+  at build time.
+- The public gateway host has been unstable since 2026-07 (OPS-603). The
+  tailnet (`http://llm.tail769bd2.ts.net`) and in-cluster
+  (`http://llm.llm:4000`) hosts speak plain HTTP.
+
+## Design
+
+### Decisions
+
+| # | Decision | Who, when |
+|---|---|---|
+| D1 | The proxy lives in `cas-router`, on `tokio`. `cas-sandbox` keeps only the socket mount: the `.ipc` directory and the path convention. Layering holds: sandbox sits above router. | Christian, 2026-10-09, by interview in the CAS lane |
+| D2 | Upstream is plain HTTP to the tailnet or in-cluster gateway. No `reqwest`, no TLS stack now. | Christian, 2026-10-09, by interview in the CAS lane |
+| D3 | The socket is `<workspace>/.ipc/llm.sock`. `cas_sandbox::ipc::ensure_ipc_dir` creates `.ipc` with mode `0700`. | agy lane draft, kept; CAS lane, 2026-10-09 |
+| D4 | Allowlist: `POST` to `/v1/chat/completions`, `/v1/embeddings`, `/v1/telemetry`; `GET` and `POST` to `/v1/models` and below. A prefix matches at the end, before `/` or before `?`. Everything else is `403`. `..` segments and `//` are `403`. Only origin-form targets are accepted, so `CONNECT` and absolute URLs are `403`. | agy lane draft, kept; CAS lane, 2026-10-09 |
+| D5 | The worker never holds the key. The proxy reads it from a file outside the workspace at start, drops any `Authorization` the worker sent, and adds its own. `Debug` on the config redacts it. | agy lane draft, kept; CAS lane, 2026-10-09 |
+| D6 | One request per connection, `Connection: close` on both sides. Request head capped at 16 KiB (`431`). Bodies need `Content-Length`; `Transfer-Encoding` is `411`. Hop-by-hop headers and `Host` are dropped; `Host` is rewritten to the upstream host. | CAS lane, 2026-10-09 |
+| D7 | `tokio` enters the workspace with the approved features plus `io-util`, a feature of the same crate that `AsyncReadExt` and `AsyncWriteExt` need. Recorded in spec 0004 as a lane amendment. | CAS lane, 2026-10-09 |
+
+Christian corrects any of these in place.
+
+### Shape
+
+```text
+jailed worker --HTTP/1.1--> <ws>/.ipc/llm.sock --cas-router::uds_proxy--> TCP http://<gateway>
+                              (cas-sandbox::ipc)      allowlist, key, Host rewrite
+```
+
+`cas_router::ProxyHandle::start(config)` binds the socket, runs the
+listener on its own runtime thread, and on drop or `shutdown()` stops the
+listener, joins the thread and removes the socket file. `ProxyConfig`
+carries the socket path, the upstream `SocketAddr`, the `Host` value, the
+allowlist and the token (`with_key_file`).
+
+The pool (phase 3) wires it: create the workspace, `ensure_ipc_dir`, start
+the proxy with the key file, spawn the worker through `netns::isolate` and
+`launch`. This spec ships the two halves and the gate that joins them.
+
+### Errors
+
+`cas_router::ProxyError`: `Bind`, `KeyFile`, `Runtime`. A rejected request
+gets an HTTP status and a one-line reason that never carries upstream data
+or the key: `400`, `403`, `411`, `431`, `505`, and `502` when the upstream
+cannot be reached.
+
+### Out of scope
+
+Prefix-hash routing (spec 0001, phase 4). TLS to the public host. Response
+filtering. Rate limits. The pool's wiring.
+
+## Plan
+
+- [x] `cas_sandbox::ipc` with `socket_path` and `ensure_ipc_dir`.
+- [x] `cas_router::uds_proxy` with `ProxyConfig`, `ProxyHandle`, the parser, the allowlist and the forwarder; unit tests for the filter and the redaction.
+- [x] Spec 0012 row `uds_connect_out` and the gap note updated with the measurement.
+- [x] Integration test `uds_proxy` in `cas-sandbox`: a jailed worker (in the namespace where the host allows it) gets `200` through the socket with the key injected and the `Host` rewritten; `CONNECT`, `/admin/keys`, `/etc/passwd`, a `..` path and `PUT` get `403`; a 20 KiB head gets `431`; the worker cannot read the key file; the socket file is gone after shutdown.
+- [x] `tokio` in the workspace; spec 0004 note; CHANGELOG line; `specs/README.md` row.
+
+## Test
+
+```bash
+cargo test -p cas-sandbox -j 2 --test uds_proxy
+cargo test -p cas-router -j 2
+```
+
+Passing means exit 0 for both. The gate uses a fake gateway on
+`127.0.0.1` that echoes the `Host` and `Authorization` it received, so no
+real gateway is called. On a host without Landlock the gate prints
+`skipped` and passes. Add `-- --nocapture` to see one line per check. Also
+run `make check`, `make hygiene` and `make smoke`.
+
+## Notes
+
+Alternative for D1, from the agy draft: `std::thread` and blocking I/O in
+`cas-sandbox`. Rejected by Christian's ruling; the proxy is model-call
+egress, which is the router's job.
+
+Alternative for D6: chunked request bodies. Not needed by the OpenAI-style
+clients the estate uses; they send `Content-Length`. Add it when a client
+needs it.
+
+References:
+
+- `specs/0004-dependency-and-licence-policy.md` (tokio row, reqwest row)
+- `~/.agents/sops/blast-radius-and-estate-ops.md` (gateway hosts and keys)
+- RFC 9112 (HTTP/1.1 message syntax), hop-by-hop headers
