@@ -11,6 +11,7 @@ repository.workspace = true
 
 [dependencies]
 landlock = { workspace = true }
+rustix = { workspace = true }
 thiserror = { workspace = true }
 
 [lints.rust]

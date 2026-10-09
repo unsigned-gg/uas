@@ -13,6 +13,7 @@ use std::sync::Mutex;
 use landlock::{RulesetCreated, RulesetError, RulesetStatus};
 
 use crate::error::SandboxError;
+use crate::netns::NETNS_REFUSED_ERRNO;
 
 /// `ENOTRECOVERABLE`. The child reports a refused jail with this errno. std forwards
 /// only a raw OS error from `pre_exec` to the parent and turns anything else into
@@ -42,16 +43,17 @@ pub fn jail(command: &mut Command, ruleset: RulesetCreated) -> &mut Command {
 /// jail never runs, and the error says so.
 ///
 /// `JailRefused` is the launcher's own verdict: `no_new_privs` was not set, the
-/// ruleset was not enforced, or the kernel refused without an errno. A kernel errno
-/// from `landlock_restrict_self` or `prctl` arrives unchanged in `Spawn`.
+/// ruleset was not enforced, or the kernel refused without an errno. `NetnsRefused`
+/// comes from a `netns::isolate` hook on the same command. A kernel errno from
+/// `landlock_restrict_self` or `prctl` arrives unchanged in `Spawn`.
 pub fn launch(ruleset: RulesetCreated, command: &mut Command) -> Result<Child, SandboxError> {
-    jail(command, ruleset).spawn().map_err(|err| {
-        if err.raw_os_error() == Some(JAIL_REFUSED_ERRNO) {
-            SandboxError::JailRefused
-        } else {
-            SandboxError::Spawn(err)
-        }
-    })
+    jail(command, ruleset)
+        .spawn()
+        .map_err(|err| match err.raw_os_error() {
+            Some(JAIL_REFUSED_ERRNO) => SandboxError::JailRefused,
+            Some(NETNS_REFUSED_ERRNO) => SandboxError::NetnsRefused,
+            _ => SandboxError::Spawn(err),
+        })
 }
 
 /// Runs in the child. Refuses to continue unless the ruleset is enforced and
