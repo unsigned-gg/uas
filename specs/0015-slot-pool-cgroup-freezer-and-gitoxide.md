@@ -1,0 +1,124 @@
+---
+status: planned
+created: 2026-10-09
+tags: [pool, gitoxide, cgroup, freezer, phase-3]
+priority: high
+depends_on: [0001-cas-architecture-and-crate-layout, 0004-dependency-and-licence-policy, 0007-lease-rules, 0010-landlock-ruleset-and-abi-probe, 0011-network-namespace-isolation]
+---
+
+# 0015-slot-pool-cgroup-freezer-and-gitoxide
+
+## Overview
+
+Host `ceres` executes many concurrent agent tasks. Spawning unbounded workers
+or allocating physical Git worktrees on host disk causes disk exhaustion and
+CPU starvation. Spec 0001 invariant 4.2 and Global Config mandate strict host
+throttling (`-j 2`).
+
+This spec defines the worker slot manager in `cas-pool` (Phase 3, CER-2682):
+- **CER-2722**: Slot allocation, lease tracking, and concurrency limits.
+- **CER-2723**: Warm worktree forks with in-process gitoxide (`gix`).
+- **CER-2724**: Worker suspend and resume using the Linux cgroup v2 freezer.
+
+## Design
+
+### Decisions
+
+| # | Decision | Who, when |
+|---|---|---|
+| D1 | Slot concurrency limit: `cas-pool` enforces a strict capacity limit (`max_slots`, default 2 on host ceres). Requests exceeding capacity are rejected or placed in a bounded queue. | CAS lane, 2026-10-09 |
+| D2 | Worktree isolation via `gix`: Worktrees share the base repository object store. `gix` creates ephemeral checkouts in `/workspace/slots/<slot-id>`. It resets dirty files on reclaim without invoking `git` CLI sub-processes. | CAS lane, 2026-10-09 |
+| D3 | Process suspension via cgroup v2: `cas-pool` creates `/sys/fs/cgroup/cas/slot-<id>`. It writes `1` to `cgroup.freeze` to suspend workers, and `0` to thaw them. | CAS lane, 2026-10-09 |
+| D4 | Graceful freezer fallback: If cgroup v2 is not writable, `cas-pool` falls back to POSIX `SIGSTOP` and `SIGCONT` signals sent to the worker process group. | CAS lane, 2026-10-09 |
+| D5 | Runtime choice (closing Gap 1): `cas-pool` uses standard OS threads with `std::sync` primitives for slot management. Thread blocking operations handle synchronous `gix` disk operations and cgroup file I/O. | CAS lane, 2026-10-09 |
+
+### Architecture and Lifecycle
+
+```mermaid
+stateDiagram-v2
+    [*] --> Idle
+    Idle --> Leased: allocate(lease_id)
+    Leased --> Running: spawn_worker()
+    Running --> Suspended: freeze()
+    Suspended --> Running: thaw()
+    Running --> Reclaiming: exit / terminate()
+    Suspended --> Reclaiming: terminate()
+    Reclaiming --> Idle: gix_reset_worktree()
+    Reclaiming --> [*]: pool_shutdown()
+```
+
+### Slot States and Operations
+
+1. **`Idle`**: The slot has an initialized, clean worktree directory. No process runs.
+2. **`Leased`**: A caller acquired a `SlotLease` governed by `cas-domain` lease rules (spec 0007).
+3. **`Running`**: Sandboxed worker process executes with Landlock (spec 0010) and private network namespace (spec 0011).
+4. **`Suspended`**: Process execution halted via `cgroup.freeze` (or `SIGSTOP`). Memory and file descriptors remain intact.
+5. **`Reclaiming`**: Worker reaped. Ephemeral `.ipc` sockets unlinked. In-process `gix` restores index and removes untracked files.
+
+### Cgroup v2 Freezer Interface
+
+- **Cgroup Path**: `/sys/fs/cgroup/cas/slot-<slot-id>`
+- **Freeze Command**:
+  1. Open `/sys/fs/cgroup/cas/slot-<slot-id>/cgroup.freeze`.
+  2. Write `"1\n"`.
+  3. Poll `/sys/fs/cgroup/cas/slot-<slot-id>/cgroup.events` until `frozen 1` appears.
+- **Thaw Command**:
+  1. Open `/sys/fs/cgroup/cas/slot-<slot-id>/cgroup.freeze`.
+  2. Write `"0\n"`.
+  3. Poll `cgroup.events` until `frozen 0` appears.
+- **Latency Target**: Suspend and thaw operations complete within 10 milliseconds.
+
+### In-Process Gitoxide Worktrees
+
+- `cas-pool` depends on `gix = "0.88.0"` (spec 0004 approved pin).
+- Base repository stays read-only at `/workspace/base-repo`.
+- On slot provision:
+  - Create slot workspace at `/workspace/slots/<slot-id>`.
+  - Initialize Git working directory linked to the shared object database.
+  - Check out target branch head without disk duplication.
+- On slot reclaim:
+  - Discard untracked files and revert unstaged modifications.
+  - Return worktree to pristine HEAD state in under 100 milliseconds.
+
+### Error Handling
+
+```rust
+#[derive(Debug, thiserror::Error)]
+pub enum PoolError {
+    #[error("slot pool capacity exhausted (max {0})")]
+    CapacityExhausted(usize),
+    #[error("slot {0} lease expired")]
+    LeaseExpired(cas_domain::SlotId),
+    #[error("cgroup freezer error: {0}")]
+    Freezer(String),
+    #[error("gitoxide operation failed: {0}")]
+    Gitoxide(String),
+    #[error("worker process spawn failed: {0}")]
+    Spawn(#[from] std::io::Error),
+}
+```
+
+## Plan
+
+- [ ] Add `gix = "0.88.0"` and `rustix = "1.1.5"` to `crates/cas-pool/Cargo.toml`.
+- [ ] Implement `cas_pool::slot::Slot` state machine and `SlotPool` allocation queue (CER-2722).
+- [ ] Implement `cas_pool::worktree::WarmWorktree` using in-process `gix` checkouts and resets (CER-2723).
+- [ ] Implement `cas_pool::freezer::CgroupFreezer` with `SIGSTOP` fallback (CER-2724).
+- [ ] Write integration test `tests/slot_lifecycle.rs` verifying:
+  - Allocation respects `max_slots` concurrency ceiling.
+  - Freeze suspends process CPU execution and thaw resumes it.
+  - Reclaim restores modified files to clean commit state via `gix`.
+- [ ] Update `specs/README.md` and `CHANGELOG.md`.
+
+## Test
+
+Run integration and unit tests for `cas-pool`:
+
+```bash
+cargo test -p cas-pool -j 2
+```
+
+## Notes
+
+- **Kernel Requirement**: Cgroup v2 unified hierarchy must be mounted at `/sys/fs/cgroup`. On WSL2 kernel 6.6, systemd mounts cgroup v2 by default.
+- **Resource Protection**: Host throttling is preserved because active slots never exceed the configured worker cap.

@@ -10,7 +10,8 @@ NEXTEST_PROFILE ?= default
 ORG ?= cerebral-work
 
 .PHONY: help build fmt fmt-check clippy test doc-test deny check ci hygiene typos machete \
-	spec-check toolchain-check smoke audit sbom doc release-notes custody-check pgt-install new-repo template-check
+	spec-check toolchain-check smoke audit sbom doc release-notes custody-check pgt-install new-repo template-check \
+	ebpf-build ebpf-test
 
 help: ## List targets
 	awk 'BEGIN { FS = ":.*## " } /^[a-zA-Z0-9_-]+:.*## / { printf "  %-16s %s\n", $$1, $$2 }' $(MAKEFILE_LIST)
@@ -68,6 +69,16 @@ smoke: ## Build the CLI, run it, check the domain crate has no I/O
 		exit 1
 	fi
 	echo "smoke: ok"
+
+ebpf-build: ## Build the kernel eBPF artifact into crates/cas-ebpf/ebpf/cas-ebpf.o
+	PATH="$$HOME/.local/share/mise/shims:$$PATH" cargo +nightly build \
+		--manifest-path crates/cas-ebpf/ebpf/Cargo.toml \
+		--target bpfel-unknown-none -Z build-std=core --release -j $(JOBS)
+	cp crates/cas-ebpf/ebpf/target/bpfel-unknown-none/release/cas-ebpf-ebpf crates/cas-ebpf/ebpf/cas-ebpf.o
+	sha256sum crates/cas-ebpf/ebpf/cas-ebpf.o
+
+ebpf-test: ## Run real eBPF probe integration tests (requires sudo)
+	sudo -E env "PATH=$$PATH" cargo test -p cas-ebpf --test '*' -j $(JOBS) -- --nocapture
 
 audit: ## Check dependencies for known advisories
 	cargo audit
