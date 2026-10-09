@@ -131,7 +131,7 @@ metadata, read 2026-10-09.
 | Crate | Version | Licence | Used by | Phase | Conditions |
 |---|---|---|---|---|---|
 | `landlock` | 0.4.7 | MIT OR Apache-2.0 | cas-sandbox | 2 | none |
-| `rustix` | 1.1.5 | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT | cas-sandbox, cas-pool | 2, 3 | default-features off; `std`, `process`, `thread`, `fs`, `mount` |
+| `rustix` | 1.1.5 | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT | cas-sandbox, cas-pool | 2, 3 | default-features off; `std`, `process`, `thread`, `fs`, `mount`. In use since spec 0011 (2026-10-09) with `std`, `thread`, `process`, `fs` |
 | `aya` | 0.14.0 | MIT OR Apache-2.0 | cas-ebpf (loader) | 2 | MSRV 1.87 |
 | `aya-ebpf` | 0.2.1 | MIT OR Apache-2.0 | kernel-side BPF program, outside the workspace build | 2 | nightly, rust-src, bpf-linker; program object declares `Dual MIT/GPL` |
 | `aya-log`, `aya-log-ebpf` | 0.3.0, 0.2.0 | MIT OR Apache-2.0 | cas-ebpf | 2 | only if the BPF program logs |

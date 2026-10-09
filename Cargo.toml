@@ -38,6 +38,8 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 toml = "0.8"
 # Landlock LSM rulesets for the worker filesystem jail (spec 0010, CER-2715).
 landlock = "0.4.7"
+# unshare, procfs writes and the lo ioctl for the worker network namespace (spec 0011, CER-2717).
+rustix = { version = "1.1.5", default-features = false, features = ["std", "thread", "process", "fs"] }
 
 # Example of a private git dependency (record it in specs/0004 before first use):
 # pgt-core = { git = "https://github.com/cerebral-work/pgt", rev = "54d90f5" }
