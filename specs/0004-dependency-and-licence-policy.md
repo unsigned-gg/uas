@@ -143,7 +143,7 @@ metadata, read 2026-10-09.
 | `aya` | 0.14.0 | MIT OR Apache-2.0 | cas-ebpf (loader) | 2 | MSRV 1.87 |
 | `aya-ebpf` | 0.2.1 | MIT OR Apache-2.0 | kernel-side BPF program, outside the workspace build | 2 | nightly, rust-src, bpf-linker; program object declares `Dual MIT/GPL` |
 | `aya-log`, `aya-log-ebpf` | 0.3.0, 0.2.0 | MIT OR Apache-2.0 | cas-ebpf | 2 | only if the BPF program logs |
-| `libc` | 0.2.169 | MIT OR Apache-2.0 | cas-ebpf | 2 | default-features off; `std`; for setpriority PRIO_PGRP |
+| `libc` | 0.2.169 | MIT OR Apache-2.0 | none | 2 | pinned, NOT in the workspace: `rustix` 1.1.5 (already approved) provides `setpgid` and `setpriority_pgrp` without `unsafe`, so cas-ebpf uses it instead (lane Claude, 2026-10-09) |
 | `gix` | 0.88.0 | MIT OR Apache-2.0 | cas-pool | 3 | default-features off, minimal features; MSRV 1.88; fallback 0.87.1 |
 | `agent-client-protocol` | 2.2.0 | Apache-2.0 | cas-acp | 3 | MSRV 1.88; 3.x is under 14 days old |
 | `tokio` | 1.53.1 | MIT | cas-router, cas-deck, cas-storage | 4, 5, 6 | default-features off; `rt-multi-thread`, `macros`, `net`, `time`, `sync`. The cas-pool runtime stays open (spec 0001 gap 1). In use since spec 0013 (2026-10-09) in cas-router, plus `io-util` (a feature of the same crate, needed by `AsyncReadExt` and `AsyncWriteExt`; CAS lane amendment, the operator corrects it in place) |

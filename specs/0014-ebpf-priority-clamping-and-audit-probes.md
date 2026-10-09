@@ -1,5 +1,5 @@
 ---
-status: planned
+status: in-progress
 created: 2026-10-09
 tags: [ebpf, aya, tracepoint, autonice, audit, phase-2]
 priority: high
@@ -56,10 +56,14 @@ Facts, measured 2026-10-09 on ceres (kernel `6.6.87.2-microsoft-standard-WSL2`):
     `bpf_probe_read_kernel_str_bytes`. At exec tracepoint, `comm` already contains
     the new basename (15 chars + null); `bpf_get_current_comm` matches without
     in-kernel path parsing.
-  - `/sys/kernel/tracing/events/sched/sched_process_fork/format`: `parent_pid` at
-    offset 16, `child_pid` at offset 20.
-  - `/sys/kernel/tracing/events/sched/sched_process_exit/format`: `pid` at offset 12,
-    `prio` at offset 16.
+  - `/sys/kernel/tracing/events/sched/sched_process_fork/format`: `parent_comm[16]` at
+    offset 8, `parent_pid` at 24, `child_comm[16]` at 28, `child_pid` at 44. Corrected
+    2026-10-09 by lane Claude from the format file; an earlier draft said 16 and 20.
+    Both pids are task ids: a thread clone reports the new tid. The probe takes the
+    parent tgid from `bpf_get_current_pid_tgid() >> 32`, not from the field.
+  - `/sys/kernel/tracing/events/sched/sched_process_exit/format`: `comm[16]` at 8,
+    `pid` at 24, `prio` at 28. Corrected the same way; an earlier draft said 12.
+    The pid is the exiting task id. For a main thread it equals the tgid.
 - **T8: Priority Clamping Behavior on Linux [verified]:** `setpriority(PRIO_PROCESS, tgid, 19)`
   modifies only the calling or targeted main thread. A 4-thread process after
   `renice -n 19 -p` yielded `{main: 19, t1: 0, t2: 0, t3: 0}` because worker pools
@@ -93,7 +97,7 @@ Facts, measured 2026-10-09 on ceres (kernel `6.6.87.2-microsoft-standard-WSL2`):
 |---|---|---|
 | D1 | Clean-room Aya implementation: Build probe loader with `aya` 0.14.0 (MIT OR Apache-2.0). Never import or vendor `neutral-engineering/autonice` (GPL-2.0). | Spec 0004 & the operator, 2026-10-09 |
 | D2 | Licensing boundary: The kernel-side BPF program declares `Dual MIT/GPL` in its license section to permit GPL-only BPF helpers. Crate `cas-ebpf` remains proprietary. Subcrate uses `MIT OR Apache-2.0`. | the operator, 2026-10-09 |
-| D3 | Compile and packaging boundary: Kernel BPF bytecode crate lives at `crates/cas-ebpf/ebpf` outside monorepo workspace. Pre-compiled object `cas-ebpf.o` is committed with SHA-256 and build command. `build.rs` rebuilds when nightly and `bpf-linker` exist; embeds `cas-ebpf.o` via `include_bytes!`. Workspace builds on stable Rust. | CAS lanes, 2026-10-09 |
+| D3 | Compile and packaging boundary: Kernel BPF bytecode crate lives at `crates/cas-ebpf/ebpf` outside monorepo workspace. Pre-compiled object `cas-ebpf.o` is committed next to `cas-ebpf.o.sha256`; `make ebpf-build` rebuilds both (reproducible: two builds on ceres gave the same hash, 2026-10-09). `build.rs` never rebuilds; it refuses to compile the crate when the object and the recorded hash disagree. The crate embeds `cas-ebpf.o` via `include_bytes!`. Workspace builds on stable Rust. | CAS lanes, 2026-10-09 |
 | D4 | Priority clamping mechanism (R2): `cas-pool` creates a dedicated process group (`setpgid(0, 0)`) for each worker slot and calls `setpriority(PRIO_PGRP, pgid, 19)` once before exec. All threads and child processes inherit nice 19 without privileges or race conditions. | the operator ruling, 2026-10-09 |
 | D5 | Narrowed scope & anti-escape monitoring (R1): No host-wide autonice. Clamping applies exclusively to worker process trees registered in `TRACKED_PIDS` by `cas-pool`. The eBPF probe detects if a child process leaves its group (`setsid` or `setpgid`) and triggers re-clamping. Target compiler basenames serve as optional audit tags. | the operator ruling, 2026-10-09 |
 | D6 | Execution audit ring buffer (R4): CER-2720 narrowed to exec and exit events. BPF ring buffer (`AUDIT_EVENTS`, 256 KiB) streams structured 168-byte `ExecEvent` records. Openat and connect are out of Phase 2. | the operator ruling, 2026-10-09 |
@@ -149,19 +153,28 @@ flowchart TD
 ### Tracepoint Probes & Maps
 
 1. **`sched_process_fork` Probe:**
-   - Reads `parent_pid` (offset 16) and `child_pid` (offset 20).
-   - If `parent_pid` exists in `TRACKED_PIDS`, inserts `child_pid` into `TRACKED_PIDS`.
-   - Propagates tracking to all child worker processes automatically.
+   - Takes the parent tgid from `bpf_get_current_pid_tgid() >> 32` and reads
+     `child_pid` (offset 44).
+   - If the parent tgid exists in `TRACKED_PIDS`, inserts `child_pid` with the parent
+     tgid as its value.
+   - Propagates tracking to all child worker processes automatically. The key of
+     `TRACKED_PIDS` is a task id; the main thread's tid equals the tgid, so the exec
+     lookup by tgid hits. Thread tids enter at clone and leave at thread exit.
 
 2. **`sched_process_exec` Probe:**
    - Reads `pid` (offset 12) and `filename` from `__data_loc char[]` (offset 8).
    - If `pid` exists in `TRACKED_PIDS`:
-     - Reads command basename via `bpf_get_current_comm`.
-     - Populates `ExecEvent` struct and submits to `AUDIT_EVENTS` ring buffer.
-     - Checks process group ID; if process escaped group, notifies daemon to re-clamp.
+     - Reads command basename via `bpf_get_current_comm`, the uid via
+       `bpf_get_current_uid_gid`, the timestamp via `bpf_ktime_get_ns`, and `ppid`
+       from the `TRACKED_PIDS` value.
+     - Reserves an `ExecEvent` in the `AUDIT_EVENTS` ring buffer and submits it.
+       When `reserve` fails, increments `DROPPED_EVENTS` (a one-entry
+       `PerCpuArray<u64>`) instead.
+     - The kernel does not read the process group. The daemon checks the nice value
+       of the pid on every event and re-clamps when it is above 19 (see below).
 
 3. **`sched_process_exit` Probe:**
-   - Reads `pid` (offset 12).
+   - Reads `pid` (offset 24).
    - If `pid` exists in `TRACKED_PIDS`, deletes `pid` from `TRACKED_PIDS`.
    - Prevents stale entries from exhausting the 1024-entry hash map.
 
@@ -180,11 +193,18 @@ flowchart TD
   and invokes `setpriority(PRIO_PGRP, pgid, 19)` before `execve`.
 - **Thread Inheritance:** All threads created by rustc and cargo inherit nice 19
   from process group launch.
-- **Anti-Escape Defense:** If an adversarial or misconfigured process executes
-  `setsid()` or `setpgid()` to escape its process group, `cas-ebpfd` re-clamps
-  the process using `setpriority(PRIO_PROCESS, pid, 19)`.
-- **System Call Safety:** Any raw syscall is annotated with `#[allow(unsafe_code)]`
-  and a descriptive `// SAFETY:` comment per AGENTS.md rule 14.
+- **Anti-Escape Defense:** `setsid()` and `setpgid()` do not change a nice value,
+  and an unprivileged process cannot raise its own priority (`RLIMIT_NICE` is 0 by
+  default). The clamp therefore survives a group escape on its own. As a second
+  line, `cas-ebpfd` reads the nice value of the pid on every exec event of a
+  tracked process and re-clamps it with `setpriority(PRIO_PROCESS, pid, 19)` when
+  it is above 19 (`clamp::reclamp_if_needed`).
+- **System Call Safety:** The userspace side calls `setpgid`, `setpriority` and
+  `getpgid` through `rustix` (`clamp.rs`), so it needs no `unsafe`. The one unsafe
+  call site is `CommandExt::pre_exec` in the caller (`cas-pool`, and the gate in
+  `tests/clamp.rs`), annotated with `#[allow(unsafe_code)]` and a `// SAFETY:`
+  comment per AGENTS.md rule 14. The kernel program's `unsafe` blocks carry the
+  same comments.
 
 ### Audit Hash (`run_hash`) Specification
 
@@ -222,10 +242,22 @@ The audit digest records exact execution sequence for Saga receipts:
   WantedBy=multi-user.target
   ```
 - **Socket Permissions:** `/run/cas/ebpf.sock` created with mode `0660`, group `docker` or `ctodie`.
-- **UDS Protocol:** Minimal length-delimited JSON-RPC or binary command frame:
-  - `Track { pid: u32 }` -> `Ok`
-  - `Untrack { pid: u32 }` -> `Ok`
-  - `StreamEvents { slot_id: String }` -> Streaming `ExecEvent` frames
+- **UDS Protocol** (`protocol.rs`): one JSON object per line, request then
+  response, at most 4096 bytes per line. A longer line closes the connection.
+  Anything not on this list gets `{"ok":false,"error":"..."}` and the connection
+  stays open.
+
+  | request | response |
+  |---|---|
+  | `{"op":"track","pid":N,"ppid":P}` | `{"ok":true}` |
+  | `{"op":"untrack","pid":N}` | `{"ok":true}` |
+  | `{"op":"status"}` | `{"ok":true,"tracked":K,"dropped_events":D}` |
+  | `{"op":"stream"}` | `{"ok":true}`, then one `{"event":{...}}` line per `ExecEvent` (fields `timestamp_ns`, `pid`, `ppid`, `uid`, `comm`, `filename`) and a `{"dropped":N}` line whenever the dropped counter grows, until the client closes |
+
+  `cas-pool` calls `track` right after `spawn` returns, with the child pid and its
+  own pid as `ppid`. The fork probe then covers everything the worker starts. An
+  exec the worker performs before the `track` call lands is not recorded; the
+  worker's own first exec is the launcher's, which `cas-pool` knows already.
 - **Unprivileged Fallback:** When `/run/cas/ebpf.sock` is absent, `cas-pool` falls back
   to `PRIO_PGRP` clamping alone and records audit status as `unattested`.
 
