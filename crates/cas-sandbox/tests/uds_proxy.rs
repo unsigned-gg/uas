@@ -32,9 +32,10 @@ const BODY: &str = r#"{"model":"glm-5.2","messages":[{"role":"user","content":"h
 
 /// Send one request over the socket and return `(status, body)`.
 fn request(socket: &Path, raw: &str) -> io::Result<(u16, String)> {
+    // A real client does not half-close after the request; the proxy must answer
+    // after reading exactly Content-Length bytes.
     let mut stream = UnixStream::connect(socket)?;
     stream.write_all(raw.as_bytes())?;
-    stream.shutdown(std::net::Shutdown::Write)?;
     let mut response = String::new();
     stream.read_to_string(&mut response)?;
     let status = response
@@ -112,6 +113,35 @@ fn helper_requests() {
         "a".repeat(20 * 1024)
     );
     report("oversized", request(&socket, &huge));
+    report("dup_length", request(&socket, "POST /v1/embeddings HTTP/1.1\r\nhost: x\r\ncontent-length: 3\r\ncontent-length: 4\r\n\r\nabcd"));
+    report(
+        "encoded_traversal",
+        request(
+            &socket,
+            "GET /v1/models/%2e%2e/admin HTTP/1.1\r\nhost: x\r\n\r\n",
+        ),
+    );
+    // A stalled body: the head promises 100 bytes, 10 arrive. The proxy must give
+    // up within its timeout and the next request must still work.
+    let stalled = (|| -> io::Result<(u16, String)> {
+        let mut stream = UnixStream::connect(&socket)?;
+        stream.write_all(
+            b"POST /v1/embeddings HTTP/1.1\r\nhost: x\r\ncontent-length: 100\r\n\r\n0123456789",
+        )?;
+        let mut response = String::new();
+        stream.read_to_string(&mut response)?;
+        let status = response
+            .split_whitespace()
+            .nth(1)
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(0);
+        Ok((status, format!("len{}", response.len())))
+    })();
+    report("stalled_body", stalled);
+    report(
+        "after_stall",
+        request(&socket, "GET /v1/models HTTP/1.1\r\nhost: x\r\n\r\n"),
+    );
     // The key file sits outside the workspace; the jail must deny it.
     println!(
         "check=read_key_file status=0 body={}",
@@ -245,10 +275,11 @@ fn a_jailed_worker_reaches_the_gateway_only_through_the_allowlist() -> TestResul
     ipc::ensure_ipc_dir(&ws)?;
     let socket = ipc::socket_path(&ws);
     let (upstream, _upstream_thread) = fake_upstream()?;
-    let proxy = ProxyHandle::start(
-        ProxyConfig::new(socket.clone(), upstream, UPSTREAM_HOST.to_string())
-            .with_key_file(&key_file)?,
-    )?;
+    let mut config = ProxyConfig::new(socket.clone(), upstream, UPSTREAM_HOST.to_string())
+        .with_key_file(&key_file)?;
+    // Short budget so the stalled-body check finishes quickly.
+    config.request_timeout = std::time::Duration::from_secs(2);
+    let proxy = ProxyHandle::start(config)?;
     assert!(socket.exists(), "the proxy bound its socket");
 
     let netns_ok = namespace_available()?;
@@ -301,6 +332,24 @@ fn a_jailed_worker_reaches_the_gateway_only_through_the_allowlist() -> TestResul
         assert_eq!(get(name).0, 403, "{name}: {:?}", get(name));
     }
     assert_eq!(get("oversized").0, 431);
+    assert_eq!(get("dup_length").0, 400, "{:?}", get("dup_length"));
+    assert_eq!(
+        get("encoded_traversal").0,
+        403,
+        "{:?}",
+        get("encoded_traversal")
+    );
+    assert_eq!(
+        get("stalled_body").0,
+        0,
+        "a stalled body gets no response, only a close: {:?}",
+        get("stalled_body")
+    );
+    assert_eq!(
+        get("after_stall").0,
+        200,
+        "the proxy keeps serving after a stalled worker"
+    );
     assert_eq!(
         get("read_key_file").1,
         "errno13",

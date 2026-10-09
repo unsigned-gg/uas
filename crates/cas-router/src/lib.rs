@@ -8,5 +8,6 @@
 pub mod uds_proxy;
 
 pub use uds_proxy::{
-    ProxyConfig, ProxyError, ProxyHandle, DEFAULT_ALLOWED_PATHS, MAX_HEADER_BYTES,
+    ProxyConfig, ProxyError, ProxyHandle, DEFAULT_GET_PREFIXES, DEFAULT_POST_PATHS,
+    MAX_HEADER_BYTES,
 };
