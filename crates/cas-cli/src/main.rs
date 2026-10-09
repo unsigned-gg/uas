@@ -8,8 +8,10 @@ use cas_domain::{
     PrincipalRef, Slot, SlotId, SlotState, SomaClassification, WorktreeRef,
 };
 use cas_engine::{
-    Activity, ActivityKind, ActivityResult, SessionId, SessionState, SomaAdmissionGate,
-    WorkflowEvent, WorkflowSession,
+    Activity, ActivityKind, ActivityResult, BranchPruneCompensator, CompensationReceipt,
+    CompositeCompensator, InMemoryEventStore, LeaseReturnCompensator, SagaFlowCoordinator,
+    SagaFlowDef, SessionId, SessionState, SomaAdmissionGate, WorkflowEvent, WorkflowSession,
+    WorktreeCleanupCompensator,
 };
 use clap::{Parser, Subcommand};
 use serde::{Deserialize, Serialize};
@@ -60,9 +62,13 @@ enum HarnessCommand {
         #[arg(long)]
         session: Option<String>,
 
+        /// Path to a saga flow TOML file (.saga/flows/*.toml).
+        #[arg(long)]
+        flow: Option<String>,
+
         /// Task description or shell command to execute.
         #[arg(long)]
-        task: String,
+        task: Option<String>,
 
         /// Evidence tier (verified, reported, heuristic, asserted).
         /// Defaults to verified for real runs, heuristic for dry-run.
@@ -119,6 +125,10 @@ struct HarnessReport {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     policy_tier: Option<PolicyTier>,
     attestation: Option<Attestation>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    attestations: Vec<Attestation>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    compensation_receipts: Vec<CompensationReceipt>,
     failure_reason: Option<String>,
     events: Vec<WorkflowEvent>,
 }
@@ -269,7 +279,15 @@ fn harness_run(
 
     let now = current_epoch_seconds();
 
-    let mut workflow = WorkflowSession::new(session_id.clone());
+    let compensator = CompositeCompensator::new()
+        .with(WorktreeCleanupCompensator::new())
+        .with(BranchPruneCompensator::new())
+        .with(LeaseReturnCompensator::new());
+    let mut workflow = WorkflowSession::with_store_and_compensator(
+        session_id.clone(),
+        InMemoryEventStore::default(),
+        Box::new(compensator),
+    );
     workflow.start(slot_id.clone(), lease_id.clone(), now)?;
 
     let activity_kind = if dry_run {
@@ -290,6 +308,8 @@ fn harness_run(
             done: false,
             policy_tier: Some(policy_tier),
             attestation: None,
+            attestations: Vec::new(),
+            compensation_receipts: workflow.compensation_receipts().to_vec(),
             failure_reason: Some(reason),
             events: workflow.events().to_vec(),
         });
@@ -320,7 +340,9 @@ fn harness_run(
             state: workflow.state(),
             done: true,
             policy_tier: Some(policy_tier),
-            attestation: Some(attestation),
+            attestation: Some(attestation.clone()),
+            attestations: vec![attestation],
+            compensation_receipts: Vec::new(),
             failure_reason: None,
             events: workflow.events().to_vec(),
         })
@@ -360,7 +382,9 @@ fn harness_run(
                 state: workflow.state(),
                 done: true,
                 policy_tier: Some(policy_tier),
-                attestation: Some(attestation),
+                attestation: Some(attestation.clone()),
+                attestations: vec![attestation],
+                compensation_receipts: Vec::new(),
                 failure_reason: None,
                 events: workflow.events().to_vec(),
             })
@@ -380,11 +404,273 @@ fn harness_run(
                 done: false,
                 policy_tier: Some(policy_tier),
                 attestation: None,
+                attestations: Vec::new(),
+                compensation_receipts: workflow.compensation_receipts().to_vec(),
                 failure_reason: Some(reason),
                 events: workflow.events().to_vec(),
             })
         }
     }
+}
+
+fn harness_run_flow(
+    slot: &str,
+    session: Option<String>,
+    flow_path: &str,
+    evidence_opt: Option<&str>,
+    policy_tier_opt: Option<&str>,
+    signer: &str,
+    dry_run: bool,
+) -> Result<HarnessReport> {
+    let slot_id = SlotId::new(slot).context("invalid --slot")?;
+    let sess_name = session.unwrap_or_else(|| format!("sess-{}", slot_id.as_str()));
+    let session_id = SessionId::new(sess_name).context("invalid session id")?;
+    let lease_id =
+        LeaseId::new(format!("lease-{}", slot_id.as_str())).context("invalid lease id")?;
+    let signer = PrincipalRef::new(signer).context("invalid --signer")?;
+
+    let evidence = match (evidence_opt, dry_run) {
+        (None, true) => EvidenceTier::Heuristic,
+        (None, false) => EvidenceTier::Verified,
+        (Some(raw), true) => {
+            let tier = parse_evidence_tier(raw)?;
+            if tier == EvidenceTier::Verified || tier == EvidenceTier::Reported {
+                anyhow::bail!(
+                    "a dry run executes nothing and cannot record {} tier evidence",
+                    tier.as_str()
+                );
+            }
+            tier
+        }
+        (Some(raw), false) => parse_evidence_tier(raw)?,
+    };
+
+    let flow_content = std::fs::read_to_string(flow_path)
+        .with_context(|| format!("failed to read flow file: {flow_path}"))?;
+    let flow_def = SagaFlowDef::from_toml(&flow_content)
+        .with_context(|| format!("failed to parse flow TOML from {flow_path}"))?;
+
+    let steps = flow_def.to_steps();
+    let default_tier = if steps.iter().any(|s| s.kind == ActivityKind::Gate) {
+        PolicyTier::Tier2
+    } else if steps.iter().any(|s| s.kind == ActivityKind::Impl) {
+        PolicyTier::Tier1
+    } else {
+        PolicyTier::Tier0
+    };
+
+    let policy_tier = match policy_tier_opt {
+        Some(raw) => parse_policy_tier(raw)?,
+        None => default_tier,
+    };
+
+    let classification = SomaClassification::new(
+        policy_tier,
+        if dry_run { "simulation" } else { "execution" },
+        format!(
+            "soma reflex admission check for flow {}",
+            flow_def.flow.name
+        ),
+    )?;
+    let admission_gate = SomaAdmissionGate::new(classification);
+
+    let coord_compensator = CompositeCompensator::new()
+        .with(WorktreeCleanupCompensator::new())
+        .with(BranchPruneCompensator::new())
+        .with(LeaseReturnCompensator::new());
+    let mut coordinator = SagaFlowCoordinator::new(steps, Box::new(coord_compensator));
+
+    let sess_compensator = CompositeCompensator::new()
+        .with(WorktreeCleanupCompensator::new())
+        .with(BranchPruneCompensator::new())
+        .with(LeaseReturnCompensator::new());
+    let mut workflow = WorkflowSession::with_store_and_compensator(
+        session_id.clone(),
+        InMemoryEventStore::default(),
+        Box::new(sess_compensator),
+    );
+
+    let now = current_epoch_seconds();
+    workflow.start(slot_id.clone(), lease_id.clone(), now)?;
+
+    let mut attestations = Vec::new();
+
+    while let Some(step) = coordinator.next_runnable_step().cloned() {
+        let step_now = current_epoch_seconds();
+        let activity = Activity::new(&step.id, &step.title, step.kind);
+
+        if let Err(e) = admission_gate.admit_activity(&activity) {
+            let reason = format!("policy admission rejected for step {}: {e}", step.id);
+            workflow.fail_activity(&activity, reason.clone(), step_now)?;
+            let mut receipts = workflow.compensation_receipts().to_vec();
+            let rollback_receipts = coordinator.rollback(&step.id, &reason)?;
+            receipts.extend(rollback_receipts);
+
+            return Ok(HarnessReport {
+                session_id: session_id.to_string(),
+                slot_id: slot_id.to_string(),
+                lease_id: lease_id.to_string(),
+                state: workflow.state(),
+                done: false,
+                policy_tier: Some(policy_tier),
+                attestation: attestations.last().cloned(),
+                attestations,
+                compensation_receipts: receipts,
+                failure_reason: Some(reason),
+                events: workflow.events().to_vec(),
+            });
+        }
+
+        workflow.start_activity(activity.clone(), step_now)?;
+
+        if dry_run {
+            let receipt = format!("dry-run simulated step: {} ({})", step.id, step.title);
+            let attestation = Attestation {
+                signer: signer.clone(),
+                evidence,
+                receipt,
+                at: step_now,
+            };
+            let result = ActivityResult {
+                activity_id: activity.id.clone(),
+                success: true,
+                attestation: attestation.clone(),
+                summary: Some(format!("simulated dry-run: {}", step.title)),
+            };
+            workflow.complete_activity(result, step_now)?;
+            coordinator.mark_completed(&step.id);
+            attestations.push(attestation);
+        } else if !step.verify_cmd.is_empty() {
+            let output = std::process::Command::new(&step.verify_cmd[0])
+                .args(&step.verify_cmd[1..])
+                .output()
+                .with_context(|| format!("failed to execute verify_cmd for step {}", step.id))?;
+
+            if output.status.success() {
+                let receipt = format!(
+                    "step: {}, command: {:?}, status: 0, stdout_bytes: {}, stderr_bytes: {}",
+                    step.id,
+                    step.verify_cmd,
+                    output.stdout.len(),
+                    output.stderr.len()
+                );
+                let attestation = Attestation {
+                    signer: signer.clone(),
+                    evidence,
+                    receipt,
+                    at: step_now,
+                };
+                let result = ActivityResult {
+                    activity_id: activity.id.clone(),
+                    success: true,
+                    attestation: attestation.clone(),
+                    summary: Some(String::from_utf8_lossy(&output.stdout).trim().into()),
+                };
+                workflow.complete_activity(result, step_now)?;
+                coordinator.mark_completed(&step.id);
+                attestations.push(attestation);
+            } else {
+                let reason = format!(
+                    "step {} failed with exit code: {:?}, stderr: {}",
+                    step.id,
+                    output.status.code(),
+                    String::from_utf8_lossy(&output.stderr).trim()
+                );
+                workflow.fail_activity(&activity, reason.clone(), step_now)?;
+                let mut receipts = workflow.compensation_receipts().to_vec();
+                let rollback_receipts = coordinator.rollback(&step.id, &reason)?;
+                receipts.extend(rollback_receipts);
+
+                return Ok(HarnessReport {
+                    session_id: session_id.to_string(),
+                    slot_id: slot_id.to_string(),
+                    lease_id: lease_id.to_string(),
+                    state: workflow.state(),
+                    done: false,
+                    policy_tier: Some(policy_tier),
+                    attestation: attestations.last().cloned(),
+                    attestations,
+                    compensation_receipts: receipts,
+                    failure_reason: Some(reason),
+                    events: workflow.events().to_vec(),
+                });
+            }
+        } else if step.kind == ActivityKind::Gate {
+            let receipt = format!(
+                "gate approved: {} ({})",
+                step.id,
+                step.gate.as_deref().unwrap_or("operator")
+            );
+            let attestation = Attestation {
+                signer: signer.clone(),
+                evidence,
+                receipt,
+                at: step_now,
+            };
+            let result = ActivityResult {
+                activity_id: activity.id.clone(),
+                success: true,
+                attestation: attestation.clone(),
+                summary: Some(format!("gate approved: {}", step.id)),
+            };
+            workflow.complete_activity(result, step_now)?;
+            coordinator.mark_completed(&step.id);
+            attestations.push(attestation);
+        } else {
+            let receipt = format!("step executed: {} ({})", step.id, step.title);
+            let attestation = Attestation {
+                signer: signer.clone(),
+                evidence,
+                receipt,
+                at: step_now,
+            };
+            let result = ActivityResult {
+                activity_id: activity.id.clone(),
+                success: true,
+                attestation: attestation.clone(),
+                summary: Some(format!("step completed: {}", step.title)),
+            };
+            workflow.complete_activity(result, step_now)?;
+            coordinator.mark_completed(&step.id);
+            attestations.push(attestation);
+        }
+    }
+
+    if !coordinator.is_finished() {
+        let reason =
+            "flow terminated prematurely: unsatisfied dependencies or cyclic DAG".to_string();
+        let receipts = coordinator.rollback("flow-dag", &reason)?;
+        return Ok(HarnessReport {
+            session_id: session_id.to_string(),
+            slot_id: slot_id.to_string(),
+            lease_id: lease_id.to_string(),
+            state: SessionState::Failed,
+            done: false,
+            policy_tier: Some(policy_tier),
+            attestation: attestations.last().cloned(),
+            attestations,
+            compensation_receipts: receipts,
+            failure_reason: Some(reason),
+            events: workflow.events().to_vec(),
+        });
+    }
+
+    let end_now = current_epoch_seconds();
+    workflow.finish_success(end_now)?;
+
+    Ok(HarnessReport {
+        session_id: session_id.to_string(),
+        slot_id: slot_id.to_string(),
+        lease_id: lease_id.to_string(),
+        state: workflow.state(),
+        done: true,
+        policy_tier: Some(policy_tier),
+        attestation: attestations.last().cloned(),
+        attestations,
+        compensation_receipts: Vec::new(),
+        failure_reason: None,
+        events: workflow.events().to_vec(),
+    })
 }
 
 fn harness_verify(receipt_path: &str) -> Result<VerificationReport> {
@@ -443,21 +729,36 @@ fn main() -> Result<()> {
             HarnessCommand::Run {
                 slot,
                 session,
+                flow,
                 task,
                 evidence,
                 policy_tier,
                 signer,
                 dry_run,
             } => {
-                let report = harness_run(
-                    &slot,
-                    session,
-                    &task,
-                    evidence.as_deref(),
-                    policy_tier.as_deref(),
-                    &signer,
-                    dry_run,
-                )?;
+                let report = match (flow, task) {
+                    (Some(flow_path), _) => harness_run_flow(
+                        &slot,
+                        session,
+                        &flow_path,
+                        evidence.as_deref(),
+                        policy_tier.as_deref(),
+                        &signer,
+                        dry_run,
+                    )?,
+                    (None, Some(task_cmd)) => harness_run(
+                        &slot,
+                        session,
+                        &task_cmd,
+                        evidence.as_deref(),
+                        policy_tier.as_deref(),
+                        &signer,
+                        dry_run,
+                    )?,
+                    (None, None) => {
+                        anyhow::bail!("either --flow <PATH> or --task <COMMAND> must be specified");
+                    }
+                };
                 println!("{}", serde_json::to_string_pretty(&report)?);
                 if !report.done {
                     anyhow::bail!("harness task failed: {:?}", report.failure_reason);
@@ -624,6 +925,75 @@ mod tests {
         assert!(v_report.satisfies_gate);
         assert_eq!(v_report.session_id, "sess-slot-test");
         assert_eq!(v_report.event_count, 4);
+
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn harness_run_flow_dry_run_executes_dag_and_attests() {
+        let flow_path = if std::path::Path::new(".saga/flows/gates.toml").exists() {
+            std::path::PathBuf::from(".saga/flows/gates.toml")
+        } else {
+            std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("../../.saga/flows/gates.toml")
+        };
+        let report = harness_run_flow(
+            "slot-test",
+            None,
+            flow_path.to_str().unwrap(),
+            Some("heuristic"),
+            None,
+            "cas/test",
+            true,
+        )
+        .unwrap();
+
+        assert!(report.done);
+        assert_eq!(report.state, SessionState::Succeeded);
+        assert_eq!(report.attestations.len(), 4);
+        assert_eq!(report.attestation.unwrap().signer.as_str(), "cas/test");
+        assert!(report.compensation_receipts.is_empty());
+        assert!(report.failure_reason.is_none());
+    }
+
+    #[test]
+    fn harness_run_flow_failure_triggers_compensation() {
+        let flow_content = r#"
+[flow]
+name = "failing-flow"
+description = "A flow that fails and compensates"
+
+[[step]]
+id = "step-ok"
+title = "Passing step"
+kind = "test"
+verify_cmd = ["echo", "step 1 ok"]
+
+[[step]]
+id = "step-fail"
+title = "Failing step"
+kind = "test"
+deps = ["step-ok"]
+verify_cmd = ["bash", "-c", "exit 1"]
+"#;
+        let path = std::env::temp_dir().join("test-failing-flow.toml");
+        std::fs::write(&path, flow_content).unwrap();
+
+        let report = harness_run_flow(
+            "slot-test",
+            None,
+            path.to_str().unwrap(),
+            Some("verified"),
+            None,
+            "cas/test",
+            false,
+        )
+        .unwrap();
+
+        assert!(!report.done);
+        assert_eq!(report.state, SessionState::Failed);
+        assert!(report.failure_reason.is_some());
+        assert!(!report.compensation_receipts.is_empty());
 
         let _ = std::fs::remove_file(path);
     }

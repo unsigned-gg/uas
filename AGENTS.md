@@ -29,6 +29,9 @@ is a different system.
 | `xtask/` | Repo tasks in Rust: `spec-check` and `toolchain-check`. The package name stays `xtask`. |
 | `specs/` | LeanSpec specs and the registry `specs/README.md`. |
 | `vendor/leanspec/` | Vendored LeanSpec method (MIT). Do not edit. |
+| `vendor/soma/` | Vendored Soma OS containment and dispatch JSON schemas. |
+| `vendor/cortex/` | Vendored Cortex Mesh v1 Protocol Buffer definitions. |
+| `vendor/saga/` | Vendored Saga workflow templates and domain contracts. |
 | `.agents/skills/` | Skills for agents. |
 | `.claude/` | Claude Code settings and hooks. |
 | `docs/`, `engineering/` | Docs for people. Engineering notes. |

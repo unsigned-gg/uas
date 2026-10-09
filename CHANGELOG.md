@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Saga compensation runner, replay durability, and vendored contracts (CER-2677, CER-2678, CER-2679): `cas-engine` adds backward saga compensators (`WorktreeCleanupCompensator`, `BranchPruneCompensator`, `LeaseReturnCompensator`, `CompositeCompensator`), event log replay, and flow execution; `cas-cli` adds headless flow runner `cas harness run --flow <path>`; vendored domain schemas, protobufs, and flow templates from Soma, Cortex, and Saga under `vendor/`.
 - Spec 0008 and service edge integration modules connecting CAS Substrate to estate pillars (CER-2676): `cas-domain` adds `PolicyTier` and `SomaClassification`; `cas-engine` adds `SomaAdmissionGate`, `ReverieClient`, `CortexMeshEvent`, `SettleCard` and `SettleQueue`, and `SagaFlowCoordinator` with backward rollback; `cas-cli` adds `--policy-tier` admission checking.
 - Blackwall custody setup (CER-2671): `blackwall.toml` (claude provider, `make check` and `make hygiene` as the verify gate, PRs into `development`, automerge off), the `tasks/` library with the first task `harness-evidence`, the `custody-run` skill, `make custody-check`, and `.blackwall/` ignored.
 - `cas-engine` workflow sessions, activities, and event log with `cas harness` CLI runner and `.saga/flows/cas-builder.toml` dogfood flow.
