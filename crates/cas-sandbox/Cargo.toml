@@ -10,6 +10,8 @@ authors.workspace = true
 repository.workspace = true
 
 [dependencies]
+landlock = { workspace = true }
+thiserror = { workspace = true }
 
 [lints.rust]
 # Spec 0001 decision 2026-10-09: this crate makes raw syscalls. unsafe is denied,

@@ -103,7 +103,7 @@ the first use.
 | gitoxide (`gix`) | MIT OR Apache-2.0 | `cas-pool`: in-process worktrees and checkpoints | evaluated, unpinned, NOT approved | `repos/gitoxide.md` line 15 (licence), lines 100-111 (role) |
 | autumn-harvest | MIT OR Apache-2.0 | `cas-engine`: durable workflows | evaluated, unpinned, NOT approved | `repos/autumn-harvest.md` line 15 |
 | aya | MIT OR Apache-2.0 (not in the research; `aya-rs/aya` workspace `Cargo.toml`, read 2026-10-08) | `cas-ebpf`: eBPF programs and loader | evaluated, unpinned, NOT approved | `repos/neutral-engineering.md` section 2.1 |
-| a Landlock crate | to choose | `cas-sandbox`: filesystem rulesets | not chosen | `rust-native-agent-substrate.md` section 3.3 |
+| `landlock` 0.4.7 | MIT OR Apache-2.0 | `cas-sandbox`: filesystem rulesets | approved 2026-10-09, pinned, in use (spec 0010) | `rust-native-agent-substrate.md` section 3.3 |
 | madstack (`pgray/madstack`: Axum, Maud, htmx) | MIT | `cas-deck`: operator dashboard | evaluated, unpinned, NOT approved | `repos/madstack.md` |
 | rig-core 0.44 | MIT | model calls through the LiteLLM gateway, on need | pinned at 0.44.0 by the decision above, not in the workspace | `0xPlaygrounds/rig` |
 
@@ -118,10 +118,11 @@ object declares `Dual MIT/GPL` in its `license` section, as the aya template
 does. Only that program object carries it. The userspace loader and every
 other crate stay proprietary, and `deny.toml` still denies GPL crates.
 
-### CAS epic dependency list (draft, 2026-10-09)
+### CAS epic dependency list (approved 2026-10-09)
 
-Status: PROPOSED. the operator ruled to approve the dependency list once, up
-front, for the parked epic run. This table is the list to approve. No crate
+Status: APPROVED. the operator ruled to approve the dependency list once, up
+front, for the parked epic run, and approved this whole table with its
+conditions on 2026-10-09 by interview in the CAS lane (w25:p1). No crate
 enters a `Cargo.toml` until the row is approved and the ticket that needs it
 starts. Each pin is the newest version published on or before 2026-09-25 (14
 days before research). Versions, licences and MSRV come from crates.io
