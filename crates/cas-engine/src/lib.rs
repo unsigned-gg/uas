@@ -70,7 +70,7 @@ pub use compensator::{
     BranchPruneCompensator, CompensationReceipt, Compensator, CompositeCompensator,
     LeaseReturnCompensator, NoopCompensator, RecordingCompensator, WorktreeCleanupCompensator,
 };
-pub use cortex::{CortexMeshEvent, SettleCard, SettleQueue, SettleStatus};
+pub use cortex::{CortexMeshEvent, MeshIntent, SettleCard, SettleQueue, SettleStatus};
 pub use error::EngineError;
 pub use event::{EventStore, InMemoryEventStore, WorkflowEvent};
 pub use reverie::{InMemoryReverieClient, ReverieClient, ReverieContextQuery, ReverieMemoryRecord};
