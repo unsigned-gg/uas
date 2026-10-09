@@ -136,7 +136,11 @@ fn jailed_worker_has_only_loopback() -> TestResult {
         .build()?;
     let mut command = probe_command()?;
     netns::isolate(&mut command);
-    let output = launch(ruleset, &mut command)?.wait_with_output()?;
+    let child = launch(ruleset, &mut command).inspect_err(|err| {
+        eprintln!("launch failed: {err}");
+        print_host_diagnostics();
+    })?;
+    let output = child.wait_with_output()?;
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(output.status.success(), "worker failed: {stderr}");
     let stdout = String::from_utf8_lossy(&output.stdout);
@@ -158,4 +162,42 @@ fn jailed_worker_has_only_loopback() -> TestResult {
         "a WAN connect must fail with ENETUNREACH"
     );
     Ok(())
+}
+
+/// Facts about the host that decide whether a namespace can be made. Printed
+/// only when the worker could not start, so a CI log says why.
+fn print_host_diagnostics() {
+    if let Ok(status) = fs::read_to_string("/proc/self/status") {
+        for line in status.lines() {
+            if line.starts_with("Cap")
+                || line.starts_with("Seccomp")
+                || line.starts_with("NoNewPrivs")
+            {
+                eprintln!("diag: {line}");
+            }
+        }
+    }
+    for path in [
+        "/proc/sys/user/max_user_namespaces",
+        "/proc/sys/kernel/unprivileged_userns_clone",
+    ] {
+        match fs::read_to_string(path) {
+            Ok(value) => eprintln!("diag: {path} = {}", value.trim()),
+            Err(err) => eprintln!("diag: {path}: {err}"),
+        }
+    }
+    for args in [["-n", "true"], ["-Urn", "true"]] {
+        match Command::new("unshare").args(args).output() {
+            Ok(out) => eprintln!(
+                "diag: unshare {} -> {} {}",
+                args[0],
+                out.status,
+                String::from_utf8_lossy(&out.stderr).trim()
+            ),
+            Err(err) => eprintln!("diag: unshare {}: {err}", args[0]),
+        }
+    }
+    if let Ok(release) = fs::read_to_string("/proc/sys/kernel/osrelease") {
+        eprintln!("diag: kernel {}", release.trim());
+    }
 }
