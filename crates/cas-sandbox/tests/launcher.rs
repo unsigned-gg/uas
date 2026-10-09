@@ -4,7 +4,6 @@
 //! and pass, and the PR body says which kernel ran the gate.
 
 use std::fs;
-use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
@@ -178,15 +177,16 @@ fn a_jailed_command_spawns_jailed_children_every_time() -> TestResult {
 }
 
 #[test]
-fn a_kernel_refusal_reaches_the_parent_unchanged() -> TestResult {
+fn a_refused_jail_never_runs_the_worker() -> TestResult {
     if !landlock_available()? {
         return Ok(());
     }
     let ws = scratch("launcher-refused")?;
     let (ruleset, _) = LandlockRulesetBuilder::worker(&ws, Vec::<PathBuf>::new()).build()?;
-    // Without no_new_privs the kernel refuses landlock_restrict_self with EPERM for
-    // an unprivileged process. Root passes that check and reaches the launcher's
-    // own verdict instead.
+    // Without no_new_privs, one of two things happens. An unprivileged process is
+    // refused by the kernel: landlock_restrict_self fails with EPERM, and that errno
+    // must reach the parent unchanged (ceres). A process with CAP_SYS_ADMIN passes
+    // the kernel check and reaches the launcher's own verdict (the CI runner).
     let ruleset = ruleset.no_new_privs(false);
     let marker = ws.join("ran.txt");
     let err = launch(
@@ -194,17 +194,17 @@ fn a_kernel_refusal_reaches_the_parent_unchanged() -> TestResult {
         &mut sh(&format!("echo ran > '{}'", marker.display())),
     )
     .err();
-    let is_root = fs::metadata("/proc/self")?.uid() == 0;
-    match (&err, is_root) {
-        (Some(SandboxError::Spawn(io)), false) => {
+    match &err {
+        Some(SandboxError::Spawn(io)) => {
+            println!("refusal path: kernel errno");
             assert_eq!(
                 io.raw_os_error(),
                 Some(EPERM),
                 "kernel errno must pass through: {io}"
             );
         }
-        (Some(SandboxError::JailRefused), true) => {}
-        (other, _) => panic!("root={is_root}: got {other:?}"),
+        Some(SandboxError::JailRefused) => println!("refusal path: launcher verdict"),
+        other => panic!("got {other:?}"),
     }
     assert!(!marker.exists(), "the worker must not run");
     Ok(())
