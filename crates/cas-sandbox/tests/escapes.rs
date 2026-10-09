@@ -11,7 +11,7 @@ use std::env;
 use std::fs;
 use std::io;
 use std::net::{SocketAddr, TcpStream, UdpSocket};
-use std::os::unix::fs::{symlink, PermissionsExt};
+use std::os::unix::fs::{symlink, MetadataExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::Duration;
@@ -66,6 +66,19 @@ fn helper_attacks() {
         "write_etc",
         describe(fs::write("/etc/cas-escape-test", b"x")),
     );
+    report(
+        "append_etc_passwd",
+        describe(fs::OpenOptions::new().append(true).open("/etc/passwd")),
+    );
+    let ssh = Path::new(&env::var_os("HOME").unwrap_or_default()).join(".ssh");
+    report(
+        "read_home_ssh",
+        if ssh.exists() {
+            describe(fs::read_dir(&ssh))
+        } else {
+            "absent".into()
+        },
+    );
     report("write_root", describe(fs::write("/cas-escape-test", b"x")));
     report(
         "read_outside",
@@ -87,8 +100,15 @@ fn helper_attacks() {
         "hardlink_out",
         describe(fs::hard_link(&inside_file, outside.join("linked.txt"))),
     );
-    // Execute from the write-only scratch class (spec 0010 D7).
-    let tmp_bin = env::temp_dir().join(format!("cas-escape-true-{}", std::process::id()));
+    // Execute: the same copy of /usr/bin/true runs from the workspace and not
+    // from /tmp, the write-only scratch class (spec 0010 D7). /tmp is literal:
+    // the preset names /tmp, not $TMPDIR.
+    let ws_bin = ws.join("true-copy");
+    let staged = fs::copy("/usr/bin/true", &ws_bin)
+        .and_then(|_| fs::set_permissions(&ws_bin, fs::Permissions::from_mode(0o755)));
+    report("stage_ws_binary", describe(staged));
+    report("exec_from_ws", describe(Command::new(&ws_bin).status()));
+    let tmp_bin = PathBuf::from(format!("/tmp/cas-escape-true-{}", std::process::id()));
     let staged = fs::copy("/usr/bin/true", &tmp_bin)
         .and_then(|_| fs::set_permissions(&tmp_bin, fs::Permissions::from_mode(0o755)));
     report("stage_tmp_binary", describe(staged));
@@ -101,6 +121,8 @@ fn helper_attacks() {
         "grandchild_nnp",
         sh_stdout("grep NoNewPrivs /proc/self/status"),
     );
+    let grand_ws = format!("echo x > '{}'", ws.join("grand-ws.txt").display());
+    report("grandchild_write_ws", sh_status(&grand_ws));
     let grand = format!("echo x > '{}'", outside.join("grand.txt").display());
     report("grandchild_write_home", sh_status(&grand));
     report("setuid_sudo", sudo_probe());
@@ -187,11 +209,18 @@ fn ping_probe() -> String {
         .args(["-c", "1", "-W", "1", "1.1.1.1"])
         .output()
     {
-        Ok(out) => format!(
-            "exit{} {}",
-            out.status.code().unwrap_or(-1),
-            String::from_utf8_lossy(&out.stderr).trim()
-        ),
+        Ok(out) if out.status.success() => "reached".into(),
+        Ok(out) => {
+            let stderr = String::from_utf8_lossy(&out.stderr);
+            if stderr.contains("socktype: SOCK_RAW") {
+                // The raw socket could not be opened at all.
+                "raw-socket-denied".into()
+            } else if stderr.to_ascii_lowercase().contains("unreachable") {
+                "no-route".into()
+            } else {
+                format!("exit{} {}", out.status.code().unwrap_or(-1), stderr.trim())
+            }
+        }
         Err(err) => describe::<()>(Err(err)),
     }
 }
@@ -302,6 +331,13 @@ fn run_matrix(with_netns: bool) -> TestResult {
         "escapes-ws"
     })?;
     let netns_ok = with_netns && namespace_available()?;
+    if with_netns && !netns_ok {
+        eprintln!("skipped: the first matrix run already covers a host without a namespace");
+        return Ok(());
+    }
+    // Landlock's refer check runs only when the rename or link stays on one
+    // mount; across mounts the kernel answers EXDEV before any LSM hook.
+    let same_mount = fs::metadata(&ws)?.dev() == fs::metadata(&outside)?.dev();
 
     let (ruleset, _) = LandlockRulesetBuilder::worker(&ws, Vec::<PathBuf>::new())
         .allow_read_exec(target_dir()?)
@@ -324,10 +360,15 @@ fn run_matrix(with_netns: bool) -> TestResult {
     let get = |name: &str| results.get(name).map(String::as_str).unwrap_or("missing");
     let denied = |name: &str| {
         let value = get(name).to_string();
-        assert!(
-            value == format!("errno{EACCES}") || value == format!("errno{EXDEV}"),
-            "{name}: {value}"
-        );
+        if same_mount {
+            assert_eq!(value, format!("errno{EACCES}"), "{name} on one mount");
+        } else {
+            assert!(
+                value == format!("errno{EACCES}") || value == format!("errno{EXDEV}"),
+                "{name} across mounts: {value}"
+            );
+            println!("{name}: cross-mount, Landlock's refer check not exercised");
+        }
     };
 
     // Filesystem.
@@ -338,6 +379,11 @@ fn run_matrix(with_netns: bool) -> TestResult {
     );
     assert_eq!(get("write_home"), format!("errno{EACCES}"));
     assert_eq!(get("write_etc"), format!("errno{EACCES}"));
+    assert_eq!(get("append_etc_passwd"), format!("errno{EACCES}"));
+    match get("read_home_ssh") {
+        "absent" => {}
+        other => assert_eq!(other, format!("errno{EACCES}"), "read_home_ssh"),
+    }
     assert_eq!(get("write_root"), format!("errno{EACCES}"));
     assert_eq!(get("read_outside"), format!("errno{EACCES}"));
     assert_eq!(
@@ -349,6 +395,12 @@ fn run_matrix(with_netns: bool) -> TestResult {
     assert_eq!(get("prep_movable"), "ok");
     denied("rename_out");
     denied("hardlink_out");
+    assert_eq!(get("stage_ws_binary"), "ok");
+    assert_eq!(
+        get("exec_from_ws"),
+        "ok",
+        "the same copy runs from the workspace"
+    );
     assert_eq!(
         get("stage_tmp_binary"),
         "ok",
@@ -373,6 +425,12 @@ fn run_matrix(with_netns: bool) -> TestResult {
     // Privilege.
     assert_eq!(get("nnp"), "1");
     assert_eq!(get("grandchild_nnp"), "NoNewPrivs: 1");
+    assert_eq!(
+        get("grandchild_write_ws"),
+        "exit0",
+        "the grandchild shell works"
+    );
+    assert!(ws.join("grand-ws.txt").exists());
     assert_ne!(
         get("grandchild_write_home"),
         "exit0",
@@ -388,11 +446,10 @@ fn run_matrix(with_netns: bool) -> TestResult {
         assert_eq!(get("tcp_wan"), format!("errno{ENETUNREACH}"));
         assert_eq!(get("udp_wan"), format!("errno{ENETUNREACH}"));
         assert_eq!(get("interfaces"), "lo");
-        let ping = get("ping_raw");
-        assert!(
-            ping == "absent" || (!ping.starts_with("exit0") && !ping.starts_with("ok")),
-            "ping_raw: {ping}"
-        );
+        match get("ping_raw") {
+            "absent" | "raw-socket-denied" | "no-route" => {}
+            other => panic!("ping_raw: {other}"),
+        }
     } else {
         assert_eq!(get("network"), "skipped");
     }
