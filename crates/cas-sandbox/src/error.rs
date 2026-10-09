@@ -17,4 +17,10 @@ pub enum SandboxError {
     /// The probe thread could not start or did not finish.
     #[error("the landlock probe thread failed: {0}")]
     ProbeThread(String),
+    /// The child could not enter the jail, so it never ran. Spec 0010, "Launcher".
+    #[error("the worker could not enter the jail (EPERM from pre_exec); it did not run")]
+    JailRefused,
+    /// `spawn` failed for a reason other than the jail.
+    #[error("cannot spawn the worker: {0}")]
+    Spawn(#[source] std::io::Error),
 }
