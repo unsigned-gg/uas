@@ -118,25 +118,57 @@ async fn track_reaches_the_handle() {
     );
 }
 
+/// A pid in `/proc` whose real uid is not ours, with that uid. `None` when every
+/// visible process is ours (a container where pid 1 is the runner itself).
+fn foreign_pid() -> Option<(u32, u32)> {
+    let me = rustix::process::geteuid().as_raw();
+    for entry in std::fs::read_dir("/proc").ok()?.flatten() {
+        let pid: u32 = match entry.file_name().to_string_lossy().parse() {
+            Ok(pid) => pid,
+            Err(_) => continue,
+        };
+        let status = match std::fs::read_to_string(entry.path().join("status")) {
+            Ok(status) => status,
+            Err(_) => continue,
+        };
+        let uid = status
+            .lines()
+            .find_map(|line| line.strip_prefix("Uid:"))
+            .and_then(|rest| rest.split_whitespace().next())
+            .and_then(|uid| uid.parse::<u32>().ok());
+        if let Some(uid) = uid {
+            if uid != me {
+                return Some((pid, uid));
+            }
+        }
+    }
+    None
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn track_of_another_users_pid_is_refused() {
     if rustix::process::geteuid().is_root() {
         eprintln!("skipped: running as root, every pid is trackable");
         return;
     }
+    let Some((pid, uid)) = foreign_pid() else {
+        eprintln!("skipped: every visible process belongs to this uid");
+        return;
+    };
     let fx = Fixture::start().await;
     let path = fx.path.clone();
     let err = tokio::task::spawn_blocking(move || {
         let mut client = DaemonClient::connect(&path).expect("connect");
-        // pid 1 belongs to root. The connection is still usable afterwards.
-        let err = client.track(1, 0).expect_err("init is not ours");
+        // The connection is still usable after a refusal.
+        let err = client.track(pid, 0).expect_err("not our pid");
         assert_eq!(client.status().expect("status"), (0, 0));
         err
     })
     .await
     .expect("join");
+    let wanted = format!("belongs to uid {uid}");
     assert!(
-        matches!(&err, EbpfError::Protocol(reason) if reason.contains("belongs to uid 0")),
+        matches!(&err, EbpfError::Protocol(reason) if reason.contains(&wanted)),
         "{err}"
     );
     assert!(fx.handle.lock().expect("lock").tracked().is_empty());
@@ -238,8 +270,10 @@ async fn stream_delivers_an_event_even_when_reclamp_fails() {
     tokio::task::spawn_blocking(move || ready_rx.recv().expect("subscribed"))
         .await
         .expect("join");
-    // The pid does not exist, so reclamp_if_needed fails with ESRCH. The event must still arrive.
+    // The pid does not exist, so reclamp_if_needed fails with ESRCH. The event must still
+    // arrive. Its uid is ours, or the stream filter would drop it.
     let fake_pid = 4_000_000;
+    let me = rustix::process::geteuid().as_raw();
     fx.handle
         .lock()
         .expect("lock")
@@ -247,7 +281,7 @@ async fn stream_delivers_an_event_even_when_reclamp_fails() {
             9,
             fake_pid,
             1,
-            1000,
+            me,
             "rustc",
             "/usr/bin/rustc",
         ))
