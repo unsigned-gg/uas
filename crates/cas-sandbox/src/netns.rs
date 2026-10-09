@@ -14,7 +14,7 @@ use std::process::Command;
 use rustix::fs::{open, Mode, OFlags};
 use rustix::io::Errno;
 use rustix::ioctl::{ioctl, Opcode, Updater};
-use rustix::process::{getgid, getuid};
+use rustix::process::{getegid, geteuid};
 use rustix::thread::{unshare_unsafe, UnshareFlags};
 
 /// `ENONET`. The child reports a failed namespace with this errno; `exec` never
@@ -57,23 +57,24 @@ fn enter_private_netns() -> io::Result<()> {
     #[allow(unsafe_code)]
     let direct = unsafe { unshare_unsafe(UnshareFlags::NEWNET) };
     match direct {
-        Ok(()) => {}
-        Err(Errno::PERM) => {
-            let uid = getuid().as_raw();
-            let gid = getgid().as_raw();
-            // SAFETY: as above; the user namespace is for this child alone.
-            #[allow(unsafe_code)]
-            let both = unsafe { unshare_unsafe(UnshareFlags::NEWUSER | UnshareFlags::NEWNET) };
-            both.map_err(|_| refused())?;
-            let mut line = [0u8; 32];
-            write_proc(c"/proc/self/setgroups", b"deny").map_err(|_| refused())?;
-            write_proc(c"/proc/self/gid_map", identity_map(&mut line, gid))
-                .map_err(|_| refused())?;
-            write_proc(c"/proc/self/uid_map", identity_map(&mut line, uid))
-                .map_err(|_| refused())?;
-        }
+        // CAP_SYS_ADMIN got the namespace; CAP_NET_ADMIN may still be missing
+        // for the lo ioctl. If it is, fall through to a user namespace, which
+        // grants both over a fresh namespace.
+        Ok(()) if loopback_up().is_ok() => return Ok(()),
+        Ok(()) | Err(Errno::PERM) => {}
         Err(_) => return Err(refused()),
     }
+    // The single-line maps may only name the writer's effective ids.
+    let uid = geteuid().as_raw();
+    let gid = getegid().as_raw();
+    // SAFETY: as above; the user namespace is for this child alone.
+    #[allow(unsafe_code)]
+    let both = unsafe { unshare_unsafe(UnshareFlags::NEWUSER | UnshareFlags::NEWNET) };
+    both.map_err(|_| refused())?;
+    let mut line = [0u8; 32];
+    write_proc(c"/proc/self/setgroups", b"deny").map_err(|_| refused())?;
+    write_proc(c"/proc/self/gid_map", identity_map(&mut line, gid)).map_err(|_| refused())?;
+    write_proc(c"/proc/self/uid_map", identity_map(&mut line, uid)).map_err(|_| refused())?;
     loopback_up().map_err(|_| refused())
 }
 
