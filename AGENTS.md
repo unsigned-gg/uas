@@ -73,6 +73,7 @@ Run `make help` for the full list. These targets are the contract.
 | `make toolchain-check` | Compare `rust-toolchain.toml` with the installed Rust. |
 | `make smoke` | Build the CLI, run `cas --version`, check the domain has no I/O. |
 | `make release-notes VERSION=x.y.z` | Roll `[Unreleased]` into a version heading. |
+| `make custody-check` | Check the blackwall custody setup (`blackwall doctor`). See the `custody-run` skill. |
 | `make new-repo NAME=<name>` | Rename the template into a new repo. |
 | `make template-check` | Check that the template and a renamed copy both build. |
 
@@ -86,6 +87,7 @@ Skills are in `.agents/skills/<name>/SKILL.md`. Read the skill before you start 
 | `release` | You cut a version. | `.agents/skills/release/SKILL.md` |
 | `ci-triage` | A CI run is red. | `.agents/skills/ci-triage/SKILL.md` |
 | `new-repo` | You make a repo from this template. | `.agents/skills/new-repo/SKILL.md` |
+| `custody-run` | You run agent work under blackwall custody. | `.agents/skills/custody-run/SKILL.md` |
 
 ## Approval routes
 

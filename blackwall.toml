@@ -1,0 +1,32 @@
+# Blackwall custody config. SOP: ~/.agents/sops/blackwall-custody-process.md.
+# Chain: start (jailed) -> settle -> reconcile (runs [verify]) -> pr -> merge by hand.
+# Every key has a BLACKWALL_* environment twin that wins over this file.
+
+[defaults]
+# claude is the only provider that records the delta trace: one OpDelta
+# {seq, tool, paths} per tool call, read with `blackwall run trace <hash>`.
+# gateway is single-shot and produces no changeset; omp produces no trace.
+provider = "claude"
+model = "sonnet"
+
+[verify]
+# The gate the PR will face, run fail-closed in reconcile's temporary worktree.
+command = "make check JOBS=2 && make hygiene JOBS=2"
+
+[pr]
+# Feature PRs target development (specs/0003). The blackwall default is main.
+base = "development"
+
+[merge]
+# blackwall 1.2.0 merge-gate squash-merges with no head pin. This repo merges
+# with a merge commit pinned to the head, so merge-gate only reports `ready`
+# and a person or lane runs `gh pr merge <N> --merge --match-head-commit <sha>`.
+automerge = false
+
+[budget]
+# Per-run token cap; task.toml budget_tokens overrides, --budget-tokens beats both.
+max_tokens_per_run = 200000
+
+[observability]
+# Estate data-lake ingest edge (OPS-828): alloy-gateway OTLP over the tailnet.
+otlp_endpoint = "http://alloy-otlp.tail769bd2.ts.net:4318/v1/traces"

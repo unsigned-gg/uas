@@ -10,7 +10,7 @@ NEXTEST_PROFILE ?= default
 ORG ?= cerebral-work
 
 .PHONY: help build fmt fmt-check clippy test doc-test deny check ci hygiene typos machete \
-	spec-check toolchain-check smoke audit sbom doc release-notes pgt-install new-repo template-check
+	spec-check toolchain-check smoke audit sbom doc release-notes custody-check pgt-install new-repo template-check
 
 help: ## List targets
 	awk 'BEGIN { FS = ":.*## " } /^[a-zA-Z0-9_-]+:.*## / { printf "  %-16s %s\n", $$1, $$2 }' $(MAKEFILE_LIST)
@@ -87,6 +87,9 @@ release-notes: ## Roll CHANGELOG and bump version (VERSION=x.y.z)
 		{ print }' CHANGELOG.md > CHANGELOG.md.tmp
 	mv CHANGELOG.md.tmp CHANGELOG.md
 	echo "release-notes: set version $(VERSION). Review the diff, then open a PR to development."
+
+custody-check: ## Check the blackwall custody setup (blackwall doctor)
+	blackwall doctor
 
 pgt-install: ## Install the pgt CLI into .tools/bin
 	cargo install --git https://github.com/cerebral-work/pgt --rev 54d90f5 pgt --root .tools --locked
