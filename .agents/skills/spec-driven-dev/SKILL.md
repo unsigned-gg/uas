@@ -9,7 +9,7 @@ A new concept or an architecture change starts as a spec in `specs/`. This is a 
 
 Read these first:
 - `vendor/leanspec/SKILL.md` - the LeanSpec method.
-- `vendor/leanspec/spec-template.md` - the spec shape.
+- `.agents/skills/spec-driven-dev/spec-template.md` - the spec shape with EARS requirements syntax.
 - `vendor/leanspec/first-principles.md` - why specs stay short.
 - `specs/README.md` - the registry of current specs.
 
@@ -23,7 +23,7 @@ Read these first:
 ## Phase 2: Create
 
 1. Make `specs/NNNN-kebab-slug.md`. Use 4 digits.
-2. Start from `vendor/leanspec/spec-template.md`.
+2. Start from `.agents/skills/spec-driven-dev/spec-template.md`.
 3. Write the frontmatter: `status: planned`, `created: YYYY-MM-DD`. Add `tags`, `priority` and `depends_on` when they apply.
 4. Write the H1 as `# NNNN-slug`. It must match the file name.
 5. Add the five sections in this order: `## Overview`, `## Design`, `## Plan`, `## Test`, `## Notes`.
@@ -33,10 +33,17 @@ Read these first:
 
 1. In Overview, state what and why now. Date every number.
 2. In Design, record each decision with who made it and when.
-3. In Plan, write a checklist. Each item must be verifiable.
-4. In Test, put at least one fenced command. State what a pass means.
-5. Keep the spec under 300 lines. Above 400 lines the check fails. Split it into sub-spec files (`vendor/leanspec/sub-spec-files.md`).
-6. Run the check:
+3. In Design, write all requirements using EARS syntax under `### Requirements (EARS)`:
+   - **Ubiquitous**: `The <system> shall <action>.`
+   - **Event-driven**: `WHEN <trigger>, the <system> shall <action>.`
+   - **State-driven**: `WHILE <state>, the <system> shall <action>.`
+   - **Unwanted behavior**: `IF <condition>, THEN the <system> shall <action>.`
+   - **Optional feature**: `WHERE <feature>, the <system> shall <action>.`
+   - **Complex**: `WHILE <state>, WHEN <trigger>, the <system> shall <action>.`
+4. In Plan, write a checklist. Each item must be verifiable.
+5. In Test, put at least one fenced command. State what a pass means.
+6. Keep the spec under 300 lines. Above 400 lines the check fails. Split it into sub-spec files (`vendor/leanspec/sub-spec-files.md`).
+7. Run the check:
 
 ```bash
 make spec-check

@@ -27,6 +27,14 @@ Measured 2026-10-08:
 
 ## Design
 
+### Requirements (EARS)
+
+- **Ubiquitous:** The CI system shall execute Rust jobs on ephemeral `ci-rust` runners using the pre-baked toolchain.
+- **Ubiquitous:** The build pipeline shall configure `Swatinem/rust-cache` with write access restricted to `development` and `main`.
+- **Event-driven:** WHEN commits land on `main`, the CI system shall execute SBOM generation and `release-plz` publishing.
+- **State-driven:** WHILE running inside CI runner pods, the system shall execute jobs without mutating the read-only rustup directory.
+- **Unwanted behavior:** IF a runner attempts toolchain installation or network toolchain download, THEN the job shall fail immediately.
+
 ### Runner lanes
 
 | Lane | Label | Use |
