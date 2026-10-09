@@ -13,6 +13,7 @@
 pub mod abi;
 pub mod canon;
 pub mod error;
+pub mod ipc;
 pub mod launcher;
 pub mod netns;
 pub mod ruleset;
