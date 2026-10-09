@@ -35,6 +35,14 @@ Facts, measured and recorded 2026-10-09:
 
 ## Design
 
+### Requirements (EARS)
+
+- **Ubiquitous:** The `cas-deck` dashboard shall render operator UI components using Axum and Maud without Node.js dependencies.
+- **Ubiquitous:** The dashboard shall display verification evidence tiers with standard badge colors (Green for `verified`).
+- **Event-driven:** WHEN an operator submits a settle card decision, `cas-deck` shall forward the decision to Cortex.
+- **State-driven:** WHILE streaming slot telemetry, the dashboard shall push live updates over Server-Sent Events to htmx frontends.
+- **Unwanted behavior:** IF communication with Cortex fails, THEN the dashboard shall display an error notification and prevent submissions.
+
 ### Decisions
 
 | # | Decision | Who, when |

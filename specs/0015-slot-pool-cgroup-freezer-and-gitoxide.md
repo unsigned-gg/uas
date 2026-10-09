@@ -22,6 +22,14 @@ This spec defines the worker slot manager in `cas-pool` (Phase 3, CER-2682):
 
 ## Design
 
+### Requirements (EARS)
+
+- **Ubiquitous:** The `cas-pool` slot manager shall enforce host concurrency limits (`max_slots = 2`) on worker allocations.
+- **Ubiquitous:** The pool shall manage ephemeral worktrees using in-process `gix` operations without external `git` subprocesses.
+- **Event-driven:** WHEN freezing an inactive worker, the pool shall write `1` to `cgroup.freeze`.
+- **State-driven:** WHILE reclaiming an expired slot, the pool shall reap child processes and reset worktree state.
+- **Unwanted behavior:** IF cgroup v2 operations fail, THEN the pool shall fallback to POSIX `SIGSTOP` and `SIGCONT` signals.
+
 ### Decisions
 
 | # | Decision | Who, when |

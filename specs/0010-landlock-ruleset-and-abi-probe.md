@@ -38,6 +38,14 @@ Facts, measured 2026-10-09 on ceres:
 
 ## Design
 
+### Requirements (EARS)
+
+- **Ubiquitous:** The sandbox shall probe the kernel Landlock ABI on an isolated thread without confining the host process.
+- **Ubiquitous:** The sandbox shall canonicalize all filesystem paths before adding them to Landlock access rules.
+- **Event-driven:** WHEN spawning a sandboxed worker, the launcher shall apply Landlock restrictions in `pre_exec` between fork and exec.
+- **State-driven:** WHILE running within the sandbox, the worker shall possess write permissions strictly inside its assigned workspace root.
+- **Unwanted behavior:** IF the host kernel does not support Landlock ABI v1, THEN the sandbox builder shall fail immediately.
+
 ### Decisions
 
 | # | Decision | Who, when |

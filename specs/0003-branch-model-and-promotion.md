@@ -23,6 +23,14 @@ diffs `origin/development` everywhere.
 
 ## Design
 
+### Requirements (EARS)
+
+- **Ubiquitous:** The repository shall enforce PR-only integration with signed commits and merge commits without squashing.
+- **Ubiquitous:** The repository branch protections shall block force-pushes and deletions on `development` and `main`.
+- **Event-driven:** WHEN merging a promotion PR from `development` to `main`, the lane shall pin the head commit and verify green CI.
+- **Event-driven:** WHEN commits land on `main`, the release automation shall execute the `release` workflow.
+- **Unwanted behavior:** IF a push targets `main` or `development` directly, THEN repository guards and branch protections shall reject the push.
+
 ### Branches
 
 | Branch | Role |

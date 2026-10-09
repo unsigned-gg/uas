@@ -22,6 +22,14 @@ Substrate slots governed by Saga workflows, proving the runtime invariants on ho
 
 ## Design
 
+### Requirements (EARS)
+
+- **Ubiquitous:** The dogfooding harness shall execute builder agents within Substrate slots governed by Saga workflows.
+- **Ubiquitous:** The engine shall record activity transitions in an append-only event store for replay recovery.
+- **Event-driven:** WHEN a builder task completes, the engine shall emit a verified attestation containing command digests and exit codes.
+- **State-driven:** WHILE executing activities on host `ceres`, the harness shall enforce Blackwall custody and host throttling (`-j 2`).
+- **Unwanted behavior:** IF a worker crashes or restarts, THEN the engine shall recover execution by replaying events without re-spending model tokens.
+
 ### 1. Macro and Micro Orchestration Boundary
 
 Development uses a two-tier orchestration model:

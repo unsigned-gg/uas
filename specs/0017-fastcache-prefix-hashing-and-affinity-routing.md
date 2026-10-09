@@ -34,6 +34,14 @@ Facts, measured and recorded 2026-10-09:
 
 ## Design
 
+### Requirements (EARS)
+
+- **Ubiquitous:** The `cas-router` shall serialize and hash prompt prefixes deterministically using SHA-256 for replica affinity.
+- **Event-driven:** WHEN a completion request arrives, `cas-router` shall select the target replica using rendezvous hashing.
+- **Event-driven:** WHEN streaming tokens contain `<think>` tags, the router shall route thought traces to telemetry and clean tokens to clients.
+- **State-driven:** WHILE polling replica health endpoints, the router shall trip circuit breakers after two consecutive probe failures.
+- **Unwanted behavior:** IF a chosen replica becomes unavailable, THEN the router shall fail over to the next healthy replica.
+
 ### Decisions
 
 | # | Decision | Who, when |
