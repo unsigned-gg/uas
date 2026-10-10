@@ -24,11 +24,14 @@
 //! pid 0 are refused.
 
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, BTreeSet},
     io,
     os::unix::fs::PermissionsExt,
     path::{Path, PathBuf},
-    sync::{Arc, Mutex, MutexGuard},
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Arc, Mutex, MutexGuard,
+    },
     time::Duration,
 };
 
@@ -40,10 +43,11 @@ use tokio::{
 };
 
 use crate::{
+    audit::RunHash,
     clamp,
     error::EbpfError,
     handle::ProbeHandle,
-    protocol::{parse_request, Request, Response, StreamLine, MAX_LINE},
+    protocol::{parse_request, ReceiptFrame, Request, Response, StreamLine, MAX_LINE},
     wire::ExecEvent,
 };
 
@@ -58,17 +62,128 @@ const NAMESPACE_REFUSAL: &str = "peer pid namespace differs from the daemon's";
 /// Default number of pids one non-root uid may track at once. `TRACKED_PIDS`
 /// has 1024 entries shared by every client and every thread clone.
 pub const DEFAULT_TRACK_QUOTA: usize = 256;
+/// Most pids one receipt window keeps in its member set (spec 0014 D14).
+const MEMBER_CAP: usize = 4096;
 
-struct Shared<H> {
-    handle: Arc<Mutex<H>>,
+/// One root's receipt window (spec 0014 D14).
+struct Window {
+    /// The uid that tracked the root.
+    uid: u32,
+    /// The connection that opened the window. Closing it discards the window.
+    conn: u64,
+    /// Namespace pids of the tree: the root, and every non-zero `ns_pid` absorbed.
+    members: BTreeSet<u32>,
+    /// The transcript. Its counters are the window's `events` and `dropped_events`.
+    transcript: RunHash,
+    first_ns: u64,
+    last_ns: u64,
+    /// `false` after `untrack`: the window stays readable and absorbs nothing more.
+    open: bool,
+}
+
+impl Window {
+    fn open(root: u32, uid: u32, conn: u64) -> Self {
+        Self {
+            uid,
+            conn,
+            members: BTreeSet::from([root]),
+            transcript: RunHash::new(),
+            first_ns: 0,
+            last_ns: 0,
+            open: true,
+        }
+    }
+
+    /// Absorbs one record into the transcript and grows the member set.
+    fn absorb(&mut self, event: &ExecEvent) {
+        if self.transcript.events() == 0 {
+            self.first_ns = event.timestamp_ns;
+        }
+        self.last_ns = event.timestamp_ns;
+        self.transcript.absorb(event);
+        if event.ns_pid != 0 && !self.members.contains(&event.ns_pid) {
+            if self.members.len() >= MEMBER_CAP {
+                self.transcript.record_dropped(1);
+            } else {
+                self.members.insert(event.ns_pid);
+            }
+        }
+    }
+
+    fn frame(&self) -> ReceiptFrame {
+        ReceiptFrame {
+            run_hash: self.transcript.clone().finish().run_hash,
+            events: self.transcript.events(),
+            dropped_events: self.transcript.dropped_events(),
+            first_ns: self.first_ns,
+            last_ns: self.last_ns,
+        }
+    }
+}
+
+/// Everything the reader task and the requests share. One lock, so one drain
+/// runs at a time and a drain is always taken before the answer (spec 0014 D14).
+#[derive(Default)]
+struct Ledger {
     /// Pids tracked through this daemon, with the uid that tracked each. The
     /// handle has no count call, so `status` prunes this map against the
     /// kernel map (exit removes entries).
-    tracked: Mutex<BTreeMap<u32, u32>>,
+    tracked: BTreeMap<u32, u32>,
+    /// Receipt windows, keyed by root pid.
+    windows: BTreeMap<u32, Window>,
+    /// The last dropped total applied to the windows.
+    last_dropped: u64,
+}
+
+impl Ledger {
+    /// Root pids whose member set holds `pid`, in any window state.
+    fn holders(&self, pid: u32) -> Vec<u32> {
+        self.windows
+            .iter()
+            .filter(|(_, w)| w.members.contains(&pid))
+            .map(|(root, _)| *root)
+            .collect()
+    }
+
+    /// Places one record (spec 0014 D14). The parent pid is tried first, then
+    /// the event's own pid. A single match that is an open window absorbs the
+    /// record. A single match that is closed discards it. Anything else is
+    /// unplaced and charged to every open window of its uid, or of uid 0.
+    fn place(&mut self, event: &ExecEvent) {
+        let mut matched = self.holders(event.ppid);
+        if matched.is_empty() && event.ns_pid != 0 {
+            matched = self.holders(event.ns_pid);
+        }
+        match matched.as_slice() {
+            [root] => {
+                if let Some(window) = self.windows.get_mut(root) {
+                    if window.open {
+                        window.absorb(event);
+                    }
+                }
+            }
+            _ => {
+                for window in self
+                    .windows
+                    .values_mut()
+                    .filter(|w| w.open && (w.uid == event.uid || w.uid == 0))
+                {
+                    window.transcript.record_dropped(1);
+                }
+            }
+        }
+    }
+}
+
+struct Shared<H> {
+    handle: Arc<Mutex<H>>,
+    ledger: Mutex<Ledger>,
     events: broadcast::Sender<StreamLine>,
     track_quota: usize,
     /// The pid namespace a peer must share, as `[dev, ino]`.
     pid_namespace: [u64; 2],
+    /// The id the next connection gets. Windows carry the id of their connection.
+    next_conn: AtomicU64,
 }
 
 /// The daemon: a probe handle served on a Unix socket.
@@ -134,10 +249,11 @@ impl<H: ProbeHandle + Send + 'static> Daemon<H> {
         let (events, _) = broadcast::channel(STREAM_BACKLOG);
         let shared = Arc::new(Shared {
             handle: self.handle,
-            tracked: Mutex::new(BTreeMap::new()),
+            ledger: Mutex::new(Ledger::default()),
             events,
             track_quota: self.track_quota,
             pid_namespace,
+            next_conn: AtomicU64::new(1),
         });
         let mut reader = tokio::spawn(reader_task(Arc::clone(&shared)));
         loop {
@@ -213,30 +329,40 @@ async fn reader_task<H: ProbeHandle + Send + 'static>(
     let fd = lock(&shared.handle).event_fd().try_clone_to_owned()?;
     let afd = tokio::io::unix::AsyncFd::new(fd)?;
     let mut tick = tokio::time::interval(POLL_INTERVAL);
-    let mut last_dropped = 0u64;
     loop {
         tokio::select! {
             ready = afd.readable() => {
                 let mut guard = ready?;
-                drain(&shared, &mut last_dropped);
+                {
+                    let mut ledger = lock(&shared.ledger);
+                    drain(&shared.handle, &mut ledger, &shared.events);
+                }
                 guard.clear_ready();
             }
-            _ = tick.tick() => drain(&shared, &mut last_dropped),
+            _ = tick.tick() => {
+                let mut ledger = lock(&shared.ledger);
+                drain(&shared.handle, &mut ledger, &shared.events);
+            }
         }
     }
 }
 
-/// Reads every queued record, re-clamps, broadcasts, then checks the dropped counter.
-fn drain<H: ProbeHandle>(shared: &Shared<H>, last_dropped: &mut u64) {
-    let (events, dropped) = {
-        let mut handle = lock(&shared.handle);
-        let mut events: Vec<ExecEvent> = Vec::new();
+/// Reads every queued record, re-clamps, places each in the receipt windows,
+/// broadcasts, then applies the growth of the dropped counter to the open windows.
+fn drain<H: ProbeHandle>(
+    handle: &Mutex<H>,
+    ledger: &mut Ledger,
+    events: &broadcast::Sender<StreamLine>,
+) {
+    let (batch, dropped) = {
+        let mut handle = lock(handle);
+        let mut batch: Vec<ExecEvent> = Vec::new();
         while let Some(event) = handle.next_event() {
-            events.push(event);
+            batch.push(event);
         }
-        (events, handle.dropped_events())
+        (batch, handle.dropped_events())
     };
-    for event in events {
+    for event in batch {
         // A setuid binary runs with an effective uid that differs from the real
         // one. Never renice such a process, even if a tracked worker exec'd it.
         // /proc and setpriority take pids of this process's namespace.
@@ -251,13 +377,18 @@ fn drain<H: ProbeHandle>(shared: &Shared<H>, last_dropped: &mut u64) {
         } else {
             reclamp_event(pid);
         }
+        ledger.place(&event);
         // No receivers is normal: nobody is streaming.
-        let _ = shared.events.send(StreamLine::Event(event.record()));
+        let _ = events.send(StreamLine::Event(event.record()));
     }
     match dropped {
-        Ok(total) if total > *last_dropped => {
-            *last_dropped = total;
-            let _ = shared.events.send(StreamLine::Dropped(total));
+        Ok(total) if total > ledger.last_dropped => {
+            let delta = total - ledger.last_dropped;
+            ledger.last_dropped = total;
+            for window in ledger.windows.values_mut().filter(|w| w.open) {
+                window.transcript.record_dropped(delta);
+            }
+            let _ = events.send(StreamLine::Dropped(total));
         }
         Ok(_) => {}
         Err(e) => tracing::debug!(error = %e, "dropped counter unreadable"),
@@ -285,10 +416,16 @@ fn reclamp_event(pid: u32) {
 }
 
 async fn connection<H: ProbeHandle + Send + 'static>(shared: Arc<Shared<H>>, stream: UnixStream) {
+    let conn = shared.next_conn.fetch_add(1, Ordering::Relaxed);
+    let _windows = ConnWindows {
+        shared: Arc::clone(&shared),
+        conn,
+    };
     let peer = match stream.peer_cred() {
         Ok(cred) => Peer {
             uid: cred.uid(),
             pid: cred.pid().and_then(|pid| u32::try_from(pid).ok()),
+            conn,
         },
         Err(e) => {
             tracing::warn!(error = %e, "refusing a connection without peer credentials");
@@ -300,12 +437,28 @@ async fn connection<H: ProbeHandle + Send + 'static>(shared: Arc<Shared<H>>, str
     }
 }
 
-/// The credentials of a connected client (`SO_PEERCRED`).
+/// Discards the receipt windows of a connection when it ends, on every path.
+struct ConnWindows<H> {
+    shared: Arc<Shared<H>>,
+    conn: u64,
+}
+
+impl<H> Drop for ConnWindows<H> {
+    fn drop(&mut self) {
+        lock(&self.shared.ledger)
+            .windows
+            .retain(|_, window| window.conn != self.conn);
+    }
+}
+
+/// The credentials of a connected client (`SO_PEERCRED`), and its connection id.
 #[derive(Clone, Copy, Debug)]
 struct Peer {
     uid: u32,
     /// The peer's pid in the daemon's namespace, when the kernel reports one.
     pid: Option<u32>,
+    /// The daemon's id for this connection. Its windows carry it.
+    conn: u64,
 }
 
 impl Peer {
@@ -401,14 +554,36 @@ fn dispatch<H: ProbeHandle>(shared: &Shared<H>, request: Request, peer: Peer) ->
     match request {
         Request::Track { pid: 0, .. } => Response::failure("pid 0 cannot be tracked"),
         Request::Untrack { pid: 0 } => Response::failure("pid 0 cannot be untracked"),
+        Request::Receipt { pid: 0 } | Request::Forget { pid: 0 } => {
+            Response::failure("pid 0 has no receipt window")
+        }
         Request::Track { pid, ppid } => {
             if let Err(reason) = peer.may_track(pid) {
                 tracing::warn!(uid = peer.uid, pid, %reason, "track refused");
                 return Response::failure(reason);
             }
-            let mut tracked = lock(&shared.tracked);
-            let mine = tracked.values().filter(|uid| **uid == peer.uid).count();
-            if peer.uid != 0 && !tracked.contains_key(&pid) && mine >= shared.track_quota {
+            let mut ledger = lock(&shared.ledger);
+            drain(&shared.handle, &mut ledger, &shared.events);
+            if ledger.windows.get(&pid).is_some_and(|w| !w.open) {
+                let reason = format!("pid {pid} has a closed receipt window; forget it first");
+                tracing::warn!(uid = peer.uid, pid, %reason, "track refused");
+                return Response::failure(reason);
+            }
+            // A window counts toward the quota until it is forgotten, once per pid.
+            let held: BTreeSet<u32> = ledger
+                .tracked
+                .iter()
+                .filter(|(_, uid)| **uid == peer.uid)
+                .map(|(pid, _)| *pid)
+                .chain(
+                    ledger
+                        .windows
+                        .iter()
+                        .filter(|(_, w)| w.uid == peer.uid)
+                        .map(|(pid, _)| *pid),
+                )
+                .collect();
+            if peer.uid != 0 && !held.contains(&pid) && held.len() >= shared.track_quota {
                 let reason = format!(
                     "track quota {} reached for uid {}",
                     shared.track_quota, peer.uid
@@ -418,15 +593,24 @@ fn dispatch<H: ProbeHandle>(shared: &Shared<H>, request: Request, peer: Peer) ->
             }
             match lock(&shared.handle).track(pid, ppid) {
                 Ok(()) => {
-                    tracked.insert(pid, peer.uid);
+                    ledger.tracked.insert(pid, peer.uid);
+                    ledger
+                        .windows
+                        .entry(pid)
+                        .or_insert_with(|| Window::open(pid, peer.uid, peer.conn));
                     Response::ack()
                 }
                 Err(e) => Response::failure(e.to_string()),
             }
         }
         Request::Untrack { pid } => {
-            let mut tracked = lock(&shared.tracked);
-            let owner = tracked.get(&pid).copied();
+            let mut ledger = lock(&shared.ledger);
+            drain(&shared.handle, &mut ledger, &shared.events);
+            let owner = ledger
+                .tracked
+                .get(&pid)
+                .copied()
+                .or_else(|| ledger.windows.get(&pid).map(|w| w.uid));
             if peer.uid != 0 && owner != Some(peer.uid) {
                 let reason = format!("pid {pid} is not tracked by uid {}", peer.uid);
                 tracing::warn!(uid = peer.uid, pid, %reason, "untrack refused");
@@ -434,20 +618,56 @@ fn dispatch<H: ProbeHandle>(shared: &Shared<H>, request: Request, peer: Peer) ->
             }
             match lock(&shared.handle).untrack(pid) {
                 Ok(()) => {
-                    tracked.remove(&pid);
+                    ledger.tracked.remove(&pid);
+                    if let Some(window) = ledger.windows.get_mut(&pid) {
+                        window.open = false;
+                    }
                     Response::ack()
                 }
                 Err(e) => Response::failure(e.to_string()),
             }
         }
+        Request::Receipt { pid } => {
+            let mut ledger = lock(&shared.ledger);
+            drain(&shared.handle, &mut ledger, &shared.events);
+            match ledger.windows.get(&pid) {
+                None => Response::failure(format!("pid {pid} has no receipt window")),
+                Some(window) if peer.uid != 0 && window.uid != peer.uid => {
+                    Response::failure(format!("pid {pid} is not tracked by uid {}", peer.uid))
+                }
+                Some(window) => Response::Receipt {
+                    receipt: window.frame(),
+                },
+            }
+        }
+        Request::Forget { pid } => {
+            let mut ledger = lock(&shared.ledger);
+            let owner = ledger.windows.get(&pid).map(|w| w.uid);
+            match owner {
+                None => Response::failure(format!("pid {pid} has no receipt window")),
+                Some(uid) if peer.uid != 0 && uid != peer.uid => {
+                    Response::failure(format!("pid {pid} is not tracked by uid {}", peer.uid))
+                }
+                Some(_) => {
+                    ledger.windows.remove(&pid);
+                    Response::ack()
+                }
+            }
+        }
         Request::Status => {
-            let mut tracked = lock(&shared.tracked);
+            let mut ledger = lock(&shared.ledger);
             let handle = lock(&shared.handle);
-            tracked.retain(|pid, _| handle.is_tracked(*pid).unwrap_or(false));
+            ledger
+                .tracked
+                .retain(|pid, _| handle.is_tracked(*pid).unwrap_or(false));
             let count = if peer.uid == 0 {
-                tracked.len()
+                ledger.tracked.len()
             } else {
-                tracked.values().filter(|uid| **uid == peer.uid).count()
+                ledger
+                    .tracked
+                    .values()
+                    .filter(|uid| **uid == peer.uid)
+                    .count()
             };
             match handle.dropped_events() {
                 Ok(dropped) => Response::status(count as u64, dropped),
@@ -538,7 +758,11 @@ mod tests {
     fn a_peer_must_have_a_pid_in_the_daemons_namespace() {
         let own = namespace_of("self").expect("own namespace");
         let me = std::process::id();
-        let peer = |pid| Peer { uid: 0, pid };
+        let peer = |pid| Peer {
+            uid: 0,
+            pid,
+            conn: 0,
+        };
         assert!(peer(Some(me)).shares_namespace(own));
         assert!(!peer(Some(me)).shares_namespace([own[0], own[1] + 1]));
         assert!(!peer(None).shares_namespace(own));

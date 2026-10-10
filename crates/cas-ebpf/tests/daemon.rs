@@ -12,6 +12,7 @@ use std::{
 };
 
 use cas_ebpf::{
+    audit::RunHash,
     clamp::{nice_of, WORKER_NICE},
     client::DaemonClient,
     daemon::Daemon,
@@ -428,7 +429,18 @@ async fn track_quota_per_uid_is_enforced() {
             .expect_err("over quota");
         client
             .untrack(std::process::id())
-            .expect("untrack frees the slot");
+            .expect("untrack closes the window");
+        // D14: the closed window still counts until it is forgotten.
+        let still_full = client
+            .track(child_pid, std::process::id())
+            .expect_err("closed window holds the slot");
+        assert!(
+            matches!(&still_full, EbpfError::Protocol(r) if r.contains("track quota 1 reached")),
+            "{still_full}"
+        );
+        client
+            .forget(std::process::id())
+            .expect("forget frees the slot");
         client
             .track(child_pid, std::process::id())
             .expect("fits again");
@@ -690,4 +702,245 @@ async fn pid_zero_cannot_be_tracked_or_untracked() {
     );
     assert_eq!(replies[2], r#"{"ok":true,"tracked":0,"dropped_events":0}"#);
     assert!(fx.handle.lock().expect("lock").tracked().is_empty());
+}
+
+/// The uid of this process. Every fake event carries it.
+fn own_uid() -> u32 {
+    rustix::process::getuid().as_raw()
+}
+
+/// Pids far above any live pid (`kernel.pid_max` is 4194304 on ceres), so a
+/// fake event never names a real process.
+const FAKE_PID: u32 = 4_000_000;
+
+/// The `run_hash` of a transcript made of `events`, in order.
+fn expected_hash(events: &[ExecEvent]) -> String {
+    let mut run = RunHash::new();
+    for event in events {
+        run.absorb(event);
+    }
+    run.finish().run_hash
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn receipts_of_two_interleaved_roots_hash_their_own_events() {
+    let fx = Fixture::start().await;
+    let path = fx.path.clone();
+    let mut child = spawn_sleeper();
+    let (root_a, root_b) = (std::process::id(), child.id());
+    let uid = own_uid();
+    let a_root = ExecEvent::new(10, root_a, 1, uid, "a", "/a");
+    let b_root = ExecEvent::new(20, root_b, 1, uid, "b", "/b");
+    // ppid names a member of the tree it belongs to (D14 placement).
+    let a_child = ExecEvent::new(30, FAKE_PID + 1, root_a, uid, "ac", "/ac");
+    let b_child = ExecEvent::new(50, FAKE_PID + 3, root_b, uid, "bc", "/bc");
+    // Phase 1: both windows open before any record is pushed.
+    let mut client = tokio::task::spawn_blocking(move || {
+        let mut client = DaemonClient::connect(&path).expect("connect");
+        client.track(root_a, 1).expect("track a");
+        client.track(root_b, 1).expect("track b");
+        client
+    })
+    .await
+    .expect("join");
+    // Phase 2: interleave the records.
+    {
+        let mut handle = fx.handle.lock().expect("lock");
+        for event in [a_root, b_root, a_child, b_child] {
+            handle.push(event).expect("push");
+        }
+    }
+    // Phase 3: read both windows on the same connection.
+    let (a, b) = tokio::task::spawn_blocking(move || {
+        let receipts = (client.receipt(root_a), client.receipt(root_b));
+        (receipts.0, receipts.1)
+    })
+    .await
+    .expect("join");
+    let _ = child.kill();
+    let _ = child.wait();
+    let (a, b) = (a.expect("receipt a"), b.expect("receipt b"));
+    assert_eq!(a.run_hash, expected_hash(&[a_root, a_child]));
+    assert_eq!(b.run_hash, expected_hash(&[b_root, b_child]));
+    assert_ne!(a.run_hash, b.run_hash);
+    assert_eq!(
+        (a.events, a.dropped_events, a.first_ns, a.last_ns),
+        (2, 0, 10, 30)
+    );
+    assert_eq!(
+        (b.events, b.dropped_events, b.first_ns, b.last_ns),
+        (2, 0, 20, 50)
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn receipt_dropped_events_are_charged_only_to_windows_open_at_the_drop() {
+    let fx = Fixture::start().await;
+    let path = fx.path.clone();
+    let mut child = spawn_sleeper();
+    let (root_a, root_b) = (std::process::id(), child.id());
+    let handle = Arc::clone(&fx.handle);
+    let (a, b) = tokio::task::spawn_blocking(move || {
+        let mut client = DaemonClient::connect(&path).expect("connect");
+        client.track(root_a, 1).expect("track a");
+        handle.lock().expect("lock").add_dropped(2);
+        // The track drains first, so the 2 drops land on a and not on b.
+        client.track(root_b, 1).expect("track b");
+        handle.lock().expect("lock").add_dropped(1);
+        (client.receipt(root_a), client.receipt(root_b))
+    })
+    .await
+    .expect("join");
+    let _ = child.kill();
+    let _ = child.wait();
+    assert_eq!(a.expect("a").dropped_events, 3);
+    assert_eq!(b.expect("b").dropped_events, 1);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn receipt_an_unplaced_event_is_charged_to_each_open_window_of_its_uid() {
+    let fx = Fixture::start().await;
+    let path = fx.path.clone();
+    let mut child = spawn_sleeper();
+    let (root_a, root_b) = (std::process::id(), child.id());
+    let uid = own_uid();
+    let stray = ExecEvent::new(40, FAKE_PID + 10, FAKE_PID + 11, uid, "x", "/x");
+    let mut client = tokio::task::spawn_blocking(move || {
+        let mut client = DaemonClient::connect(&path).expect("connect");
+        client.track(root_a, 1).expect("track a");
+        client.track(root_b, 1).expect("track b");
+        client
+    })
+    .await
+    .expect("join");
+    fx.handle.lock().expect("lock").push(stray).expect("push");
+    let receipts =
+        tokio::task::spawn_blocking(move || (client.receipt(root_a), client.receipt(root_b)))
+            .await
+            .expect("join");
+    let _ = child.kill();
+    let _ = child.wait();
+    for receipt in [receipts.0, receipts.1] {
+        let receipt = receipt.expect("receipt");
+        assert_eq!((receipt.events, receipt.dropped_events), (0, 1));
+        assert_eq!(receipt.run_hash, expected_hash(&[]));
+        assert_eq!((receipt.first_ns, receipt.last_ns), (0, 0));
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn receipt_untrack_keeps_the_window_readable_and_refuses_a_retrack() {
+    let fx = Fixture::start().await;
+    let path = fx.path.clone();
+    let second_path = fx.path.clone();
+    let me = std::process::id();
+    let uid = own_uid();
+    let first = ExecEvent::new(10, me, 1, uid, "a", "/a");
+    let late = ExecEvent::new(90, me, 1, uid, "late", "/late");
+    let mut client = tokio::task::spawn_blocking(move || {
+        let mut client = DaemonClient::connect(&path).expect("connect");
+        client.track(me, 1).expect("track");
+        client
+    })
+    .await
+    .expect("join");
+    fx.handle.lock().expect("lock").push(first).expect("push");
+    // Untrack drains first, so `first` is absorbed before the window closes.
+    let mut client = tokio::task::spawn_blocking(move || {
+        client.untrack(me).expect("untrack");
+        client
+    })
+    .await
+    .expect("join");
+    // An event after the close is not absorbed into the closed window.
+    fx.handle.lock().expect("lock").push(late).expect("push");
+    let (readable, retrack) = tokio::task::spawn_blocking(move || {
+        let mut other = DaemonClient::connect(&second_path).expect("connect");
+        let retrack = other.track(me, 1);
+        (client.receipt(me), retrack)
+    })
+    .await
+    .expect("join");
+    let readable = readable.expect("closed window stays readable");
+    assert_eq!(readable.events, 1);
+    assert_eq!(readable.run_hash, expected_hash(&[first]));
+    assert!(
+        matches!(&retrack, Err(EbpfError::Protocol(r)) if r.contains("closed")),
+        "{retrack:?}"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn receipt_of_an_untracked_pid_is_refused() {
+    let fx = Fixture::start().await;
+    let path = fx.path.clone();
+    let (never, zero) = tokio::task::spawn_blocking(move || {
+        let mut client = DaemonClient::connect(&path).expect("connect");
+        // Positive control: an open window of this connection is readable.
+        let me = std::process::id();
+        client.track(me, 1).expect("track");
+        client.receipt(me).expect("control: open window reads");
+        (client.receipt(FAKE_PID + 20), client.receipt(0))
+    })
+    .await
+    .expect("join");
+    assert!(matches!(never, Err(EbpfError::Protocol(_))), "{never:?}");
+    assert!(matches!(zero, Err(EbpfError::Protocol(_))), "{zero:?}");
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn receipt_forget_discards_the_window_and_leaves_tracking_alone() {
+    let fx = Fixture::start().await;
+    let path = fx.path.clone();
+    let me = std::process::id();
+    let after = tokio::task::spawn_blocking(move || {
+        let mut client = DaemonClient::connect(&path).expect("connect");
+        client.track(me, 1).expect("track");
+        client
+            .receipt(me)
+            .expect("control: window reads before forget");
+        client.forget(me).expect("forget");
+        client.receipt(me)
+    })
+    .await
+    .expect("join");
+    assert!(matches!(after, Err(EbpfError::Protocol(_))), "{after:?}");
+    // Kernel tracking is unchanged by forget.
+    assert_eq!(fx.handle.lock().expect("lock").tracked(), vec![(me, 1)]);
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn receipt_a_closed_connection_discards_its_windows() {
+    let fx = Fixture::start().await;
+    let path = fx.path.clone();
+    let me = std::process::id();
+    let owner = path.clone();
+    tokio::task::spawn_blocking(move || {
+        let mut client = DaemonClient::connect(&owner).expect("connect");
+        client.track(me, 1).expect("track");
+        client
+            .receipt(me)
+            .expect("control: own window reads before close");
+    })
+    .await
+    .expect("join");
+    // The daemon notices the close asynchronously, so poll for the refusal.
+    let deadline = Instant::now() + Duration::from_secs(5);
+    loop {
+        let probe = path.clone();
+        let refused = tokio::task::spawn_blocking(move || {
+            DaemonClient::connect(&probe)
+                .expect("connect")
+                .receipt(me)
+                .is_err()
+        })
+        .await
+        .expect("join");
+        if refused {
+            break;
+        }
+        assert!(Instant::now() < deadline, "window outlived its connection");
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    assert_eq!(fx.handle.lock().expect("lock").tracked(), vec![(me, 1)]);
 }
