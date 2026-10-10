@@ -185,7 +185,7 @@ mod tests {
         let text = serde_json::to_string(&event).expect("ser");
         assert_eq!(
             text,
-            r#"{"event":{"timestamp_ns":1,"pid":2,"ppid":3,"uid":4,"comm":"cc","filename":"/usr/bin/cc"}}"#
+            r#"{"event":{"timestamp_ns":1,"pid":2,"ns_pid":2,"ppid":3,"uid":4,"comm":"cc","filename":"/usr/bin/cc"}}"#
         );
         assert_eq!(
             serde_json::from_str::<StreamLine>(&text).expect("de"),
