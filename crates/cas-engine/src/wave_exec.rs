@@ -541,9 +541,17 @@ impl WaveExecutor {
             cost_source: CostSource::None,
             at: now,
         };
+        // A Halted record can appear while this step waits for the lock: check again under it.
         let reconciled = {
             let _lock = self.lock()?;
-            self.landing().reconcile(&input)?
+            if self.any_halted()? {
+                None
+            } else {
+                Some(self.landing().reconcile(&input)?)
+            }
+        };
+        let Some(reconciled) = reconciled else {
+            return self.halt(ws, wave, HaltReason::WaveHalted, facts, None, false, now);
         };
         let receipt = match reconciled {
             ReconcileOutcome::Reconciled(receipt) => receipt,
@@ -676,7 +684,7 @@ impl WaveExecutor {
                 }
                 CriticVerdict::NoDefects => {}
             }
-            if self.config.open_prs {
+            if self.config.open_prs && brec.facts.pr.is_none() {
                 if self.any_halted()? {
                     return self.halt(ws, wave, HaltReason::WaveHalted, last, None, false, now);
                 }
@@ -684,7 +692,10 @@ impl WaveExecutor {
                     Ok(opened) => {
                         brec.facts.pr = opened.facts().pr_number;
                         brec.receipt = Some(opened);
-                        self.save(&brec)?;
+                        {
+                            let _lock = self.lock()?;
+                            self.save(&brec)?;
+                        }
                         last = brec.facts.clone();
                     }
                     Err(_) => {
@@ -767,16 +778,23 @@ impl WaveExecutor {
         let tree = self.config.scratch_dir.join(id);
         let passed = {
             let _lock = self.lock()?;
-            let result = self.probe_session(&tree, &base, &ws.step.verify_cmd);
-            let tree_arg = tree.to_string_lossy().into_owned();
-            let repo = self.config.repo_dir.clone();
-            let _ = self.run(
-                &repo,
-                "git",
-                &["worktree", "remove", "--force", &tree_arg],
-                None,
-            );
-            result?
+            if self.any_halted()? {
+                None
+            } else {
+                let result = self.probe_session(&tree, &base, &ws.step.verify_cmd);
+                let tree_arg = tree.to_string_lossy().into_owned();
+                let repo = self.config.repo_dir.clone();
+                let _ = self.run(
+                    &repo,
+                    "git",
+                    &["worktree", "remove", "--force", &tree_arg],
+                    None,
+                );
+                Some(result?)
+            }
+        };
+        let Some(passed) = passed else {
+            return self.halt(ws, wave, HaltReason::WaveHalted, facts, None, false, now);
         };
         if passed {
             self.passed(ws, wave, facts, None, now)
@@ -861,16 +879,20 @@ impl WaveExecutor {
         receipt: Option<LandingReceipt>,
         now: u64,
     ) -> Result<StepResult, WaveError> {
-        let rec = StepRecord {
-            step: ws.step.id.clone(),
-            role: ws.role,
-            outcome: WaveOutcome::Passed,
-            facts: facts.clone(),
-            receipt: receipt.clone(),
-            at: now,
-            seq: self.next_seq()?,
-        };
-        self.save(&rec)?;
+        {
+            // The sequence number and the write share one lock hold, so two steps never tie.
+            let _lock = self.lock()?;
+            let rec = StepRecord {
+                step: ws.step.id.clone(),
+                role: ws.role,
+                outcome: WaveOutcome::Passed,
+                facts: facts.clone(),
+                receipt: receipt.clone(),
+                at: now,
+                seq: self.next_seq()?,
+            };
+            self.save(&rec)?;
+        }
         Ok(StepResult {
             outcome: StepOutcome::Passed,
             event: Some(self.event(ws, wave, WaveOutcome::Passed, &facts, now)),
@@ -894,16 +916,19 @@ impl WaveExecutor {
         let outcome = WaveOutcome::Halted {
             reason: reason.name().to_owned(),
         };
-        let rec = StepRecord {
-            step: ws.step.id.clone(),
-            role: ws.role,
-            outcome: outcome.clone(),
-            facts: facts.clone(),
-            receipt: receipt.clone(),
-            at: now,
-            seq: self.next_seq()?,
-        };
-        self.save(&rec)?;
+        {
+            let _lock = self.lock()?;
+            let rec = StepRecord {
+                step: ws.step.id.clone(),
+                role: ws.role,
+                outcome: outcome.clone(),
+                facts: facts.clone(),
+                receipt: receipt.clone(),
+                at: now,
+                seq: self.next_seq()?,
+            };
+            self.save(&rec)?;
+        }
         let compensation = if compensate {
             self.compensate_passed(reason.name(), now)?
         } else {
@@ -927,7 +952,7 @@ impl WaveExecutor {
             .into_iter()
             .filter(|r| r.outcome == WaveOutcome::Passed)
             .collect();
-        passed.sort_by(|a, b| b.seq.cmp(&a.seq));
+        passed.sort_by(|a, b| (b.seq, b.at, &b.step).cmp(&(a.seq, a.at, &a.step)));
         let compensator = WaveCompensator {
             config: self.config.clone(),
             records: passed.clone(),
@@ -1136,7 +1161,19 @@ impl WaveExecutor {
             path: path.clone(),
             source,
         })?;
-        fs::write(&path, bytes).map_err(|source| WaveError::Io { path, source })
+        // Write a sibling temp file, then rename it over the record. A reader sees the old
+        // record or the new one, never a truncated one. `records` reads `.json` files only.
+        let tmp = self.config.state_dir.join(format!("{}.tmp", rec.step));
+        let write = File::create(&tmp).and_then(|mut f| {
+            f.write_all(&bytes)?;
+            f.sync_all()
+        });
+        write
+            .and_then(|()| fs::rename(&tmp, &path))
+            .map_err(|source| {
+                let _ = fs::remove_file(&tmp);
+                WaveError::Io { path, source }
+            })
     }
 
     fn load(&self, step: &str) -> Result<Option<StepRecord>, WaveError> {
