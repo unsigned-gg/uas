@@ -57,6 +57,7 @@ Facts from 2026-10-10, read at `origin/development` `065015a`:
 - **Event-driven:** WHEN adding an external dependency, the developer shall document rationale in workspace dependencies and update this specification.
 - **State-driven:** WHILE building eBPF kernel probe objects, the build system shall declare dual MIT/GPL licensing for kernel compatibility.
 - **Unwanted behavior:** IF a dependency introduces copyleft terms or unapproved git sources, THEN `cargo deny check` shall fail the build.
+- **Unwanted behavior:** IF a crate that a pin table here pins, and a workspace member declares directly, is not in `Cargo.lock` at the pinned version, THEN `make hygiene` shall fail (`cargo xtask pin-check`, D3).
 
 ### Decisions
 
@@ -64,6 +65,7 @@ Facts from 2026-10-10, read at `origin/development` `065015a`:
 |---|---|---|
 | D1 | `cas-acp` keeps the umbrella crate `agent-client-protocol` 2.2.0 for now, with its transitive pull (F1). `cas-acp` stays sync and starts no runtime (F2). The later path is the schema-only crate `agent-client-protocol-schema`: pin it here, then switch, if the pull grows at a version bump or `cas-acp` starts a runtime. | lane w25:p1, 2026-10-10 (the operator may override) |
 | D2 | The workspace `rust-version` is 1.89, the highest MSRV in the lockfile (`uuid` 1.28.0, F3, F4). The wave 2 brief said 1.88 from `aya` (1.87) and ACP (1.88); F4 shows 1.88 fails. Rejected: 1.88 plus `cargo update uuid --precise <older>`, because the next `cargo update` undoes a lockfile downgrade of a transitive crate. The bump adds no crate and no licence. `toolchain-check` passes while `rust-version` is not above the pinned channel 1.94.1. | lane w25:p1, 2026-10-10 (the operator may override) |
+| D3 | The pin tables bind `Cargo.lock`. `cargo xtask pin-check`, in `make hygiene`, fails when a crate in a `\| Crate \| Version \|` table that a workspace member declares directly is not locked at the table version. `tokio` is pinned `=1.53.1` in the root `Cargo.toml` and re-locked: the caret `1.53.1` had let `Cargo.lock` resolve 1.53.2 since 6ec6011 [verified, at 30196f9; spec 0026 D3]. 1.53.1 is the reviewed version; a move to 1.53.2 is a reviewed upgrade that amends the row. New rows from 2026-10-10 on use an `=` requirement; older caret rows are held by the check. | cas-engineer, 2026-10-10, CER-2798; foreman recommendation (the operator may override) |
 
 ### Licence rules
 
@@ -211,7 +213,7 @@ project, 522 packages, 2026-10-09):
 Status: pinned by the lane (cas-engineer w10:pM), 2026-10-10. This is not the
 approved epic list above. No crate enters a `Cargo.toml` until spec 0026 P1 starts.
 the operator ruled 0026 D1 [reported, 2026-10-10]: `tonic` and `prost` 0.14 go here; the other
-rows are lane pins (0026 D3). The versions are the ones
+rows are lane pins (0026 D3). Each row enters a `Cargo.toml` with an `=` requirement (D3). The versions are the ones
 cortex@c7fdb85 uses (0026 F6). Licences read from each crate's `Cargo.toml` in the
 local cargo registry, 2026-10-10. MSRV of the tonic crates is 1.88, under D2's 1.89.
 
