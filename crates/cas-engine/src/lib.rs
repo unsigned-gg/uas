@@ -76,7 +76,7 @@ pub use compensator::{
 pub use cortex::{CortexMeshEvent, MeshIntent, SettleCard, SettleQueue, SettleStatus};
 pub use cpm::{CpmSchedule, CpmStepSchedule};
 pub use error::EngineError;
-pub use event::{EventStore, InMemoryEventStore, WorkflowEvent};
+pub use event::{EventStore, InMemoryEventStore, WaveOutcome, WorkflowEvent};
 pub use landing::{
     LandingActivity, LandingConfig, LandingError, LandingInput, LandingOutcome, ReconcileOutcome,
 };
