@@ -1,12 +1,26 @@
-//! ACP over stdio, against a mocked pool. Spec 0016 (A1), Tests section.
+//! ACP over stdio, against a mocked pool. Spec 0016 (A1, A2), Tests section.
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
+use cas_acp::server::SessionEnd;
 use cas_acp::{AcpConfig, AcpServer, PoolPort};
 use cas_domain::{Budget, Lease, LeaseToken, PrincipalRef, SlotId};
 use cas_pool::PoolError;
 use serde_json::Value;
+
+thread_local! {
+    // A thread-local, not a static: cargo test runs tests as threads in one process.
+    static NOW: Cell<u64> = const { Cell::new(1_000) };
+}
+
+fn now() -> u64 {
+    NOW.with(Cell::get)
+}
+
+fn set_now(t: u64) {
+    NOW.with(|cell| cell.set(t));
+}
 
 /// Records every call. Acquire grants the slot the lease names.
 #[derive(Clone, Default)]
@@ -14,6 +28,7 @@ struct MockPool {
     log: Rc<RefCell<Vec<String>>>,
     full: bool,
     suspend_fails: bool,
+    release_fails: bool,
 }
 
 impl MockPool {
@@ -47,21 +62,41 @@ impl PoolPort for MockPool {
         self.log
             .borrow_mut()
             .push(format!("release:{}:{}", slot.as_str(), token.expose()));
+        if self.release_fails {
+            return Err(PoolError::NoActiveLease(slot.clone()));
+        }
         Ok(())
     }
 }
 
-fn now() -> u64 {
-    1_000
-}
-
+/// Resets the clock to 1000, so every test starts from the same time.
 fn config() -> AcpConfig {
+    set_now(1_000);
     AcpConfig {
         slots: vec![SlotId::new("slot-1").unwrap()],
         budget: Budget::new(10_000, 600).unwrap(),
         lease_secs: 600,
         holder: PrincipalRef::new("cas-acp").unwrap(),
         clock: now,
+    }
+}
+
+fn two_slot_config() -> AcpConfig {
+    let mut config = config();
+    config.slots.push(SlotId::new("slot-2").unwrap());
+    config
+}
+
+/// A writer whose every write fails, as a closed pipe does.
+struct FailingWriter;
+
+impl std::io::Write for FailingWriter {
+    fn write(&mut self, _buf: &[u8]) -> std::io::Result<usize> {
+        Err(std::io::Error::from(std::io::ErrorKind::BrokenPipe))
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
     }
 }
 
@@ -76,10 +111,34 @@ fn serve(server: &mut AcpServer<MockPool>, input: &str) -> Vec<Value> {
         .collect()
 }
 
+/// Hand one frame to the server at the current clock. Parse the response, if any.
+fn frames_of(server: &mut AcpServer<MockPool>, line: &str) -> Vec<Value> {
+    server
+        .handle_frame(line)
+        .into_iter()
+        .map(|reply| serde_json::from_str(&reply).unwrap())
+        .collect()
+}
+
+fn session_id_of(frames: &[Value]) -> String {
+    frames[0]["result"]["sessionId"]
+        .as_str()
+        .unwrap()
+        .to_string()
+}
+
+fn cancel_line(session_id: &str) -> String {
+    format!(
+        r#"{{"jsonrpc":"2.0","method":"session/cancel","params":{{"sessionId":"{session_id}"}}}}"#
+    )
+}
+
 const INITIALIZE: &str =
     r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":1}}"#;
 const SESSION_NEW: &str =
     r#"{"jsonrpc":"2.0","id":2,"method":"session/new","params":{"cwd":"/work","mcpServers":[]}}"#;
+const SESSION_NEW_AGAIN: &str =
+    r#"{"jsonrpc":"2.0","id":3,"method":"session/new","params":{"cwd":"/work","mcpServers":[]}}"#;
 
 #[test]
 fn initialize_returns_v1() {
@@ -95,13 +154,13 @@ fn initialize_returns_v1() {
 fn session_new_allocates_slot() {
     let pool = MockPool::default();
     let mut server = AcpServer::new(pool.clone(), config());
-    let frames = serve(&mut server, &format!("{SESSION_NEW}\n"));
+    let frames = frames_of(&mut server, SESSION_NEW);
     assert_eq!(frames.len(), 1);
     assert_eq!(frames[0]["id"], 2);
-    let session_id = frames[0]["result"]["sessionId"].as_str().unwrap();
+    let session_id = session_id_of(&frames);
     assert_eq!(pool.calls(), vec!["acquire:slot-1".to_string()]);
     assert_eq!(
-        server.workflow_state(session_id),
+        server.workflow_state(&session_id),
         Some(cas_engine::SessionState::Running)
     );
 }
@@ -122,16 +181,10 @@ fn session_new_capacity_error() {
 fn cancel_freezes_then_releases() {
     let pool = MockPool::default();
     let mut server = AcpServer::new(pool.clone(), config());
-    let opened = serve(&mut server, &format!("{SESSION_NEW}\n"));
-    let session_id = opened[0]["result"]["sessionId"]
-        .as_str()
-        .unwrap()
-        .to_string();
+    let opened = frames_of(&mut server, SESSION_NEW);
+    let session_id = session_id_of(&opened);
 
-    let cancel = format!(
-        r#"{{"jsonrpc":"2.0","method":"session/cancel","params":{{"sessionId":"{session_id}"}}}}"#
-    );
-    let frames = serve(&mut server, &format!("{cancel}\n"));
+    let frames = frames_of(&mut server, &cancel_line(&session_id));
 
     assert!(
         frames.is_empty(),
@@ -149,6 +202,7 @@ fn cancel_freezes_then_releases() {
         server.workflow_state(&session_id).is_none(),
         "cancelled session is closed"
     );
+    assert_eq!(server.session_end(&session_id), Some(SessionEnd::Cancelled));
 }
 
 #[test]
@@ -179,16 +233,10 @@ fn suspend_failure_still_releases() {
         ..MockPool::default()
     };
     let mut server = AcpServer::new(pool.clone(), config());
-    let opened = serve(&mut server, &format!("{SESSION_NEW}\n"));
-    let session_id = opened[0]["result"]["sessionId"]
-        .as_str()
-        .unwrap()
-        .to_string();
+    let opened = frames_of(&mut server, SESSION_NEW);
+    let session_id = session_id_of(&opened);
 
-    let cancel = format!(
-        r#"{{"jsonrpc":"2.0","method":"session/cancel","params":{{"sessionId":"{session_id}"}}}}"#
-    );
-    let frames = serve(&mut server, &format!("{cancel}\n"));
+    let frames = frames_of(&mut server, &cancel_line(&session_id));
 
     assert!(
         frames.is_empty(),
@@ -263,15 +311,12 @@ fn null_id_request_gets_32600_with_null_id() {
 fn cancel_sent_with_an_id_is_32601_with_that_id() {
     let pool = MockPool::default();
     let mut server = AcpServer::new(pool.clone(), config());
-    let opened = serve(&mut server, &format!("{SESSION_NEW}\n"));
-    let session_id = opened[0]["result"]["sessionId"]
-        .as_str()
-        .unwrap()
-        .to_string();
+    let opened = frames_of(&mut server, SESSION_NEW);
+    let session_id = session_id_of(&opened);
     let cancel = format!(
         r#"{{"jsonrpc":"2.0","id":9,"method":"session/cancel","params":{{"sessionId":"{session_id}"}}}}"#
     );
-    let frames = serve(&mut server, &format!("{cancel}\n"));
+    let frames = frames_of(&mut server, &cancel);
     assert_eq!(ids_and_codes(&frames), vec![(Value::from(9), -32601)]);
     assert_eq!(
         pool.calls(),
@@ -343,15 +388,148 @@ fn session_new_with_missing_params_is_32602() {
 fn second_session_on_one_slot_is_32001_without_a_pool_call() {
     let pool = MockPool::default();
     let mut server = AcpServer::new(pool.clone(), config());
-    let first = serve(&mut server, &format!("{SESSION_NEW}\n"));
+    let first = frames_of(&mut server, SESSION_NEW);
     assert!(
         first[0]["result"]["sessionId"].is_string(),
         "frames: {first:?}"
     );
-    let second = serve(
-        &mut server,
-        "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"session/new\",\"params\":{\"cwd\":\"/work\",\"mcpServers\":[]}}\n",
-    );
+    let second = frames_of(&mut server, SESSION_NEW_AGAIN);
     assert_eq!(ids_and_codes(&second), vec![(Value::from(3), -32001)]);
     assert_eq!(pool.calls(), vec!["acquire:slot-1".to_string()]);
+}
+
+#[test]
+fn lease_expiry_boundary_releases_on_next_frame() {
+    let pool = MockPool::default();
+    let mut server = AcpServer::new(pool.clone(), config());
+    let first = session_id_of(&frames_of(&mut server, SESSION_NEW));
+
+    set_now(1_599);
+    let control = frames_of(&mut server, SESSION_NEW_AGAIN);
+    assert_eq!(ids_and_codes(&control), vec![(Value::from(3), -32001)]);
+
+    set_now(1_600);
+    let second = frames_of(&mut server, SESSION_NEW_AGAIN);
+    assert!(
+        second[0]["result"]["sessionId"].is_string(),
+        "frames: {second:?}"
+    );
+    let calls = pool.calls();
+    assert_eq!(calls.len(), 4, "calls: {calls:?}");
+    assert_eq!(calls[0], "acquire:slot-1");
+    assert_eq!(calls[1], "suspend:slot-1");
+    assert!(
+        calls[2].starts_with("release:slot-1:token-"),
+        "calls: {calls:?}"
+    );
+    assert_eq!(calls[3], "acquire:slot-1");
+    assert_eq!(server.session_end(&first), Some(SessionEnd::Expired));
+}
+
+#[test]
+fn tick_expires_without_a_frame() {
+    let pool = MockPool::default();
+    let mut server = AcpServer::new(pool.clone(), config());
+    let id = session_id_of(&frames_of(&mut server, SESSION_NEW));
+
+    set_now(1_600);
+    assert_eq!(server.tick(), vec![id.clone()]);
+    let after_first = pool.calls();
+    assert!(
+        after_first.iter().any(|c| c.starts_with("release:slot-1:")),
+        "calls: {after_first:?}"
+    );
+
+    assert!(server.tick().is_empty(), "a second tick ends nothing");
+    assert_eq!(
+        pool.calls(),
+        after_first,
+        "a second tick calls no pool method"
+    );
+    assert_eq!(server.session_end(&id), Some(SessionEnd::Expired));
+}
+
+#[test]
+fn eof_releases_every_session() {
+    let pool = MockPool::default();
+    let mut server = AcpServer::new(pool.clone(), two_slot_config());
+    let a = session_id_of(&frames_of(&mut server, SESSION_NEW));
+    let b = session_id_of(&frames_of(&mut server, SESSION_NEW_AGAIN));
+
+    serve(&mut server, "");
+
+    let calls = pool.calls();
+    for slot in ["slot-1", "slot-2"] {
+        assert!(
+            calls.contains(&format!("suspend:{slot}")),
+            "calls: {calls:?}"
+        );
+        assert!(
+            calls
+                .iter()
+                .any(|c| c.starts_with(&format!("release:{slot}:"))),
+            "calls: {calls:?}"
+        );
+    }
+    assert_eq!(server.session_end(&a), Some(SessionEnd::Disconnected));
+    assert_eq!(server.session_end(&b), Some(SessionEnd::Disconnected));
+}
+
+#[test]
+fn transport_error_releases_every_session() {
+    let pool = MockPool::default();
+    let mut server = AcpServer::new(pool.clone(), config());
+    let input = format!("{SESSION_NEW}\n");
+
+    let result = server.serve(input.as_bytes(), FailingWriter);
+
+    assert!(result.is_err(), "a write error must return Err");
+    let calls = pool.calls();
+    assert_eq!(calls.len(), 3, "calls: {calls:?}");
+    assert_eq!(calls[0], "acquire:slot-1");
+    assert_eq!(calls[1], "suspend:slot-1");
+    assert!(calls[2].starts_with("release:slot-1:"), "calls: {calls:?}");
+}
+
+#[test]
+fn eof_release_failure_still_ends_the_session() {
+    let pool = MockPool {
+        release_fails: true,
+        ..MockPool::default()
+    };
+    let mut server = AcpServer::new(pool.clone(), two_slot_config());
+    let a = session_id_of(&frames_of(&mut server, SESSION_NEW));
+    let b = session_id_of(&frames_of(&mut server, SESSION_NEW_AGAIN));
+
+    serve(&mut server, "");
+
+    let releases = pool
+        .calls()
+        .iter()
+        .filter(|c| c.starts_with("release:"))
+        .count();
+    assert_eq!(releases, 2, "calls: {:?}", pool.calls());
+    assert_eq!(server.session_end(&a), Some(SessionEnd::Disconnected));
+    assert_eq!(server.session_end(&b), Some(SessionEnd::Disconnected));
+}
+
+#[test]
+fn expired_session_cancel_is_a_noop() {
+    let pool = MockPool::default();
+    let mut server = AcpServer::new(pool.clone(), config());
+    let id = session_id_of(&frames_of(&mut server, SESSION_NEW));
+
+    set_now(1_600);
+    let _ = frames_of(&mut server, INITIALIZE);
+    assert_eq!(server.session_end(&id), Some(SessionEnd::Expired));
+    let before = pool.calls();
+
+    let frames = frames_of(&mut server, &cancel_line(&id));
+
+    assert!(
+        frames.is_empty(),
+        "a cancel for an ended session sends no frame"
+    );
+    assert_eq!(pool.calls(), before, "the cancel makes no pool call");
+    assert_eq!(server.session_end(&id), Some(SessionEnd::Expired));
 }
