@@ -15,7 +15,7 @@ depends_on: [0004-dependency-and-licence-policy, 0005-ci-cache-and-runners, 0033
 The Kube-rs Integration Plan v5 gives this repository a dependency set it has
 never had: `kube`, `k8s-openapi`, `schemars`, and two estate crates that do not
 exist on crates.io yet, `unsigned-k8s-core` and `unsigned-k8s-api` [reported: the
-plan, at `/tmp/research-surfaces/cas-ears/kube-rs-plan.md`]. AGENTS.md rule 12
+plan, at `/tmp/research-surfaces/uas-ears/kube-rs-plan.md`]. AGENTS.md rule 12
 says every external dependency is pinned and recorded in spec 0004 before first
 use. This spec says what is pinned, at which versions and why, what the licence
 check finds, how the two unpublished crates are reached before publication, how
@@ -104,7 +104,7 @@ In this order, because rule 12 records before it uses:
 ```bash
 cargo deny check licenses && \
   make pin-check JOBS=2 && \
-  cargo build -p cas-operator -j 2 --features k8s && \
+  cargo build -p uas-operator -j 2 --features k8s && \
   make features JOBS=2
 ```
 
@@ -127,7 +127,7 @@ when the allow is removed.
 
 ## Notes
 
-- **Takeover.** This spec was drafted by the cas spec pane w10:pN. That pane's
+- **Takeover.** This spec was drafted by the uas spec pane w10:pN. That pane's
   workspace was re-laid before its second review round and its mesh role was
   gone, so the integrating lane applied the critic's round-two points itself and
   re-verified every fact above with its own commands. The pane's own measurements
