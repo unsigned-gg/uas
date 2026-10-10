@@ -410,13 +410,22 @@ mod tests {
         let dir = temp_repo("lock");
         let ws_lock = dir.join("Cargo.lock");
         let ebpf_lock = dir.join(EBPF_DIR).join("Cargo.lock");
-        // Both locks missing: the workspace lock is named.
+        let (ws, ebpf) = (
+            ws_lock.display().to_string(),
+            ebpf_lock.display().to_string(),
+        );
+        // Both locks missing: the error names the root lock and not the eBPF lock.
         let err = format!("{:#}", check_root(&dir).unwrap_err());
-        assert!(err.contains("Cargo.lock"), "{err}");
-        // The workspace lock only: the eBPF lock is named.
+        assert!(err.contains(&ws) && !err.contains(&ebpf), "{err}");
+        // The eBPF lock only: the error still names the root lock.
+        fs::write(&ebpf_lock, "").unwrap();
+        let err = format!("{:#}", check_root(&dir).unwrap_err());
+        assert!(err.contains(&ws) && !err.contains(&ebpf), "{err}");
+        // The root lock only: the error names the eBPF lock and not the root lock.
+        fs::remove_file(&ebpf_lock).unwrap();
         fs::write(&ws_lock, "").unwrap();
         let err = format!("{:#}", check_root(&dir).unwrap_err());
-        assert!(err.contains(&ebpf_lock.display().to_string()), "{err}");
+        assert!(err.contains(&ebpf) && !err.contains(&ws), "{err}");
         // Control: both locks present, the check runs.
         fs::write(&ebpf_lock, "").unwrap();
         assert!(check_root(&dir).is_ok());
