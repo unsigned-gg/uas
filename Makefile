@@ -127,21 +127,28 @@ new-repo: ## Rename the template (NAME=<kebab> [ORG=cerebral-work])
 	fi
 	snake="$${name//-/_}"
 	upper="$${snake^^}"
-	git mv crates/cas-domain "crates/$$name-domain"
-	git mv crates/cas-cli "crates/$$name-cli"
+	# Every crate that carries the prefix moves, not a hard-coded pair (CER-2813).
+	for d in crates/cas-*; do
+		[ -d "$$d" ] || continue
+		git mv "$$d" "crates/$$name-$${d#crates/cas-}"
+	done
 	git ls-files -z | while IFS= read -r -d '' f; do
 		# vendor/ is upstream text; the new-repo skill stays verbatim as the
-		# record of how this repo was made from the template.
-		case "$$f" in vendor/*|Cargo.lock|.agents/skills/new-repo/*) continue ;; esac
+		# record of how this repo was made from the template; specs/ keeps its
+		# file names and slug references, so its prose is renamed by hand in
+		# the post-cutover change (spec 0037 D4), never by this loop.
+		case "$$f" in vendor/*|Cargo.lock|.agents/skills/new-repo/*|specs/*) continue ;; esac
 		[ -f "$$f" ] || continue
 		grep -Iq . "$$f" || continue
-		# The bare token is matched on word boundaries so that a word which
-		# merely contains it is never rewritten.
+		# The repo name first, then the bare token on word boundaries, so that
+		# `case`, `broadcast` and `replicas` are never rewritten. `\b` sits
+		# between `s` and `-`, so `cas-pool` still becomes `<name>-pool`.
 		sed -i \
-			-e "s#cerebral-work/cas#$$org/$$name#g" \
-			-e "s#cas#$$name#g" \
-			-e "s/CAS_/$${upper}_/g" \
-			-e "s/cas_/$${snake}_/g" \
+			-e "s#cerebral-work/cas-substrate#$$org/$$name#g" \
+			-e "s/\bcas-substrate\b/$$name/g" \
+			-e "s/\bCAS_/$${upper}_/g" \
+			-e "s/\bcas_/$${snake}_/g" \
+			-e "s/\bcas\b/$$name/g" \
 			-e "s/\bskel\b/$$name/g" \
 			"$$f"
 	done
@@ -172,7 +179,7 @@ template-check: ## Run check, spec-check, smoke, then prove the rename in a temp
 	cargo fmt --all --check
 	cargo build --workspace -j $(JOBS)
 	$(MAKE) -f Makefile spec-check
-	if grep -rIn -E '\bskel\b|cas_|CAS_' --exclude-dir={target,.git,vendor} . | grep -v '^\./\.agents/skills/new-repo/'; then
+	if grep -rIn -E '\bskel\b|\bcas_|\bCAS_|\bcas\b' --exclude-dir={target,.git,vendor,specs} . | grep -v '^\./\.agents/skills/new-repo/'; then
 		echo "template-check: leftover 'cas' after rename" >&2
 		exit 1
 	fi
