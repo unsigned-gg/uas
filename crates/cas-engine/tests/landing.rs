@@ -44,6 +44,7 @@ fn fake_tool(dir: &Path, name: &str) {
          echo \"{name} $*\" >> \"{d}/argv.log\"\n\
          case \" $* \" in *\" --body - \"*) cat > \"{d}/{name}-$1.stdin\";; esac\n\
          f=\"{d}/{name}-$1\"\n\
+         if [ -f \"$f.kill\" ]; then kill -9 $$; fi\n\
          if [ -f \"$f.out\" ]; then cat \"$f.out\"; fi\n\
          if [ -f \"$f.code\" ]; then exit \"$(cat \"$f.code\")\"; fi\n\
          exit 0\n",
@@ -69,6 +70,11 @@ fn canned(dir: &Path, key: &str, code: Option<i32>, stdout: &str) {
         fs::write(dir.join(format!("{key}.code")), code.to_string()).unwrap();
     }
     fs::write(dir.join(format!("{key}.out")), stdout).unwrap();
+}
+
+/// Make `<tool>-<subcommand>` kill itself with SIGKILL, so it exits with no code.
+fn signaled(dir: &Path, key: &str) {
+    fs::write(dir.join(format!("{key}.kill")), "").unwrap();
 }
 
 /// The repo's `blackwall.toml`, with the `[verify]` command that the repo sets.
@@ -198,7 +204,7 @@ fn landing_nonzero_verify_opens_no_pr() {
     let scratch = Scratch::new("landing_nonzero_verify_opens_no_pr");
     let dir = scratch.path();
     write_blackwall_toml_with_verify(dir);
-    // blackwall at soma ec076f6 exits 3 when the verify gate fails (spec 0022 F14).
+    // blackwall exits 3 when the verify gate fails. The soma lane reported this (spec 0022 F14, reported).
     canned(dir, "blackwall-reconcile", Some(3), "verify failed\n");
     let outcome = run_landing(dir, false);
 
@@ -439,5 +445,80 @@ fn landing_pr_body_shows_unattested_dropped_count() {
     assert_eq!(
         parsed.facts().audit,
         AuditStatus::Unattested { dropped_events: 3 }
+    );
+}
+
+#[test]
+fn landing_reconcile_killed_by_signal_is_error() {
+    let scratch = Scratch::new("landing_reconcile_killed_by_signal_is_error");
+    let dir = scratch.path();
+    write_blackwall_toml_with_verify(dir);
+    signaled(dir, "blackwall-reconcile");
+    let result = try_landing(dir, &input(false));
+    assert!(
+        matches!(
+            result,
+            Err(LandingError::UnexpectedExit {
+                step: "reconcile",
+                code: None,
+                ..
+            })
+        ),
+        "a signal is a LandingError with no receipt (spec 0022 D7): {result:?}"
+    );
+    let log = argv_log(dir);
+    assert!(
+        !log.iter().any(|line| line.starts_with("blackwall pr")),
+        "a killed reconcile must not open a PR: {log:?}"
+    );
+}
+
+#[test]
+fn landing_reconcile_exit_four_is_error() {
+    let scratch = Scratch::new("landing_reconcile_exit_four_is_error");
+    let dir = scratch.path();
+    write_blackwall_toml_with_verify(dir);
+    canned(dir, "blackwall-reconcile", Some(4), "reconcile error\n");
+    let result = try_landing(dir, &input(false));
+    assert!(
+        matches!(
+            result,
+            Err(LandingError::UnexpectedExit {
+                step: "reconcile",
+                code: Some(4),
+                ..
+            })
+        ),
+        "only exit 3 is the verify gate; exit 4 is a LandingError (spec 0022 D7): {result:?}"
+    );
+    let log = argv_log(dir);
+    assert!(
+        !log.iter().any(|line| line.starts_with("blackwall pr")),
+        "exit 4 must not open a PR: {log:?}"
+    );
+}
+
+#[test]
+fn landing_pr_exit_three_is_error() {
+    let scratch = Scratch::new("landing_pr_exit_three_is_error");
+    let dir = scratch.path();
+    write_blackwall_toml_with_verify(dir);
+    canned(
+        dir,
+        "blackwall-pr",
+        Some(3),
+        "https://github.com/cerebral-work/cas-substrate/pull/61\n",
+    );
+    let result = try_landing(dir, &input(false));
+    assert!(
+        matches!(
+            result,
+            Err(LandingError::UnexpectedExit {
+                step: "pr",
+                code: Some(3),
+                ..
+            })
+        ),
+        "exit 3 is the verify gate for reconcile only; pr exit 3 is a LandingError (spec 0022 D7): {result:?}"
     );
 }
