@@ -7,7 +7,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::{EvidenceTier, SlotId};
+use crate::{EvidenceTier, PrincipalRef, SlotId};
 
 /// Audit state of the slot run that produced a changeset (spec 0014).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -51,6 +51,10 @@ pub struct LandingFacts {
     pub base_sha: String,
     /// True when the base was not an ancestor of the development head. Nothing landed.
     pub stale_base: bool,
+    /// The development head that the base was checked against. `Some` iff `stale_base`
+    /// (spec 0022 D9). Absent on receipts written before D9.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub development_head: Option<String>,
     /// The verify command from the repository's `blackwall.toml`. `None` when the file sets
     /// none. Without one, the tier cannot be `verified`.
     pub verify_cmd: Option<String>,
@@ -70,6 +74,15 @@ pub struct LandingFacts {
     pub at: u64,
 }
 
+/// A human raise of a landing's evidence tier above its computed tier (spec 0022 D10).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct HumanRaise {
+    /// The person who raised the tier.
+    pub by: PrincipalRef,
+    /// When the raise was made, in epoch seconds.
+    pub at: u64,
+}
+
 /// A landing receipt whose evidence tier follows the tier rule.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(try_from = "RawLandingReceipt")]
@@ -77,12 +90,15 @@ pub struct LandingReceipt {
     #[serde(flatten)]
     facts: LandingFacts,
     evidence: EvidenceTier,
+    /// The human raise that lifts the evaluator cap, when one was made (spec 0022 D10).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    human_raise: Option<HumanRaise>,
 }
 
 /// A rejected landing receipt.
 #[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
 pub enum LandingReceiptError {
-    /// The evidence tier is not the tier the rule gives for these facts.
+    /// The evidence tier is above the computed tier and no human raise names it.
     #[error(
         "evidence {evidence:?} does not follow from verify exit {verify_exit:?} \
          and evaluator_touched {evaluator_touched}: the rule gives {expected:?}"
@@ -97,6 +113,27 @@ pub enum LandingReceiptError {
         /// The evaluator flag the receipt records.
         evaluator_touched: bool,
     },
+    /// The human raise names a tier above the tier the verify gate allows.
+    #[error(
+        "evidence {evidence:?} is above the ceiling {ceiling:?} that verify exit \
+         {verify_exit:?} allows, even with a human raise"
+    )]
+    RaiseAboveCeiling {
+        /// The tier the receipt claims.
+        evidence: EvidenceTier,
+        /// The highest tier the verify gate allows.
+        ceiling: EvidenceTier,
+        /// The verify exit code the receipt records.
+        verify_exit: Option<i32>,
+    },
+    /// `stale_base` and `development_head` disagree. The head is recorded only for a stale base.
+    #[error("stale_base {stale_base} does not match development_head {development_head:?}")]
+    StaleBaseHead {
+        /// The stale flag the receipt records.
+        stale_base: bool,
+        /// The development head the receipt records.
+        development_head: Option<String>,
+    },
 }
 
 /// The wire form that a receipt must pass before it is accepted.
@@ -105,17 +142,34 @@ struct RawLandingReceipt {
     #[serde(flatten)]
     facts: LandingFacts,
     evidence: EvidenceTier,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    human_raise: Option<HumanRaise>,
 }
 
 impl LandingReceipt {
-    /// Build a receipt. The evidence tier follows from the facts.
-    pub fn new(facts: LandingFacts) -> Self {
+    /// Build a receipt. The evidence tier follows from the facts and no human raise applies.
+    pub fn new(facts: LandingFacts) -> Result<Self, LandingReceiptError> {
         let evidence = Self::evidence_for(
             facts.verify_cmd.as_deref(),
             facts.verify_exit,
             facts.evaluator_touched,
         );
-        Self { facts, evidence }
+        Self::with_evidence(facts, evidence, None)
+    }
+
+    /// Build a receipt with a stored tier and an optional human raise. The same check runs
+    /// as when a receipt is read back, so a receipt that cannot be read back cannot be built.
+    pub fn with_evidence(
+        facts: LandingFacts,
+        evidence: EvidenceTier,
+        human_raise: Option<HumanRaise>,
+    ) -> Result<Self, LandingReceiptError> {
+        check(&facts, evidence, human_raise.as_ref())?;
+        Ok(Self {
+            facts,
+            evidence,
+            human_raise,
+        })
     }
 
     /// The tier rule: `verified` iff a verify command is set, reconcile exited zero and no
@@ -141,30 +195,78 @@ impl LandingReceipt {
     pub fn evidence(&self) -> EvidenceTier {
         self.evidence
     }
+
+    /// The human raise of this landing, when one was made.
+    pub fn human_raise(&self) -> Option<&HumanRaise> {
+        self.human_raise.as_ref()
+    }
 }
 
 impl TryFrom<RawLandingReceipt> for LandingReceipt {
     type Error = LandingReceiptError;
 
     fn try_from(raw: RawLandingReceipt) -> Result<Self, Self::Error> {
-        let expected = Self::evidence_for(
-            raw.facts.verify_cmd.as_deref(),
-            raw.facts.verify_exit,
-            raw.facts.evaluator_touched,
-        );
-        if raw.evidence != expected {
-            return Err(LandingReceiptError::EvidenceMismatch {
-                evidence: raw.evidence,
-                expected,
-                verify_exit: raw.facts.verify_exit,
-                evaluator_touched: raw.facts.evaluator_touched,
-            });
-        }
+        check(&raw.facts, raw.evidence, raw.human_raise.as_ref())?;
         Ok(Self {
             facts: raw.facts,
             evidence: raw.evidence,
+            human_raise: raw.human_raise,
         })
     }
+}
+
+/// The rank of a tier. Higher is stronger: `verified` > `reported` > `heuristic` > `asserted`.
+fn rank(tier: EvidenceTier) -> u8 {
+    match tier {
+        EvidenceTier::Verified => 3,
+        EvidenceTier::Reported => 2,
+        EvidenceTier::Heuristic => 1,
+        EvidenceTier::Asserted => 0,
+    }
+}
+
+/// The whole receipt rule (spec 0022 D2, D9, D10).
+///
+/// The stale-base head must agree with the stale flag. The stored tier must not exceed the
+/// computed tier. Above the computed tier, only a human raise is allowed, and the raise lifts
+/// the evaluator cap only: the tier must stay within the ceiling that ignores the evaluator.
+fn check(
+    facts: &LandingFacts,
+    evidence: EvidenceTier,
+    human_raise: Option<&HumanRaise>,
+) -> Result<(), LandingReceiptError> {
+    if facts.stale_base != facts.development_head.is_some() {
+        return Err(LandingReceiptError::StaleBaseHead {
+            stale_base: facts.stale_base,
+            development_head: facts.development_head.clone(),
+        });
+    }
+    let computed = LandingReceipt::evidence_for(
+        facts.verify_cmd.as_deref(),
+        facts.verify_exit,
+        facts.evaluator_touched,
+    );
+    if rank(evidence) <= rank(computed) {
+        return Ok(());
+    }
+    if human_raise.is_none() {
+        return Err(LandingReceiptError::EvidenceMismatch {
+            evidence,
+            expected: computed,
+            verify_exit: facts.verify_exit,
+            evaluator_touched: facts.evaluator_touched,
+        });
+    }
+    let ceiling =
+        LandingReceipt::evidence_for(facts.verify_cmd.as_deref(), facts.verify_exit, false);
+    if rank(evidence) > rank(ceiling) {
+        return Err(LandingReceiptError::RaiseAboveCeiling {
+            evidence,
+            ceiling,
+            verify_exit: facts.verify_exit,
+        });
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -181,6 +283,7 @@ mod tests {
             changeset_hash: "blake3-deadbeef".into(),
             base_sha: "056d7c7".into(),
             stale_base: false,
+            development_head: None,
             verify_cmd: Some("make check JOBS=2 && make hygiene JOBS=2".into()),
             verify_exit,
             branch: Some("blackwall/bw-0123456789".into()),
@@ -193,7 +296,7 @@ mod tests {
 
     #[test]
     fn landing_receipt_roundtrip() {
-        let receipt = LandingReceipt::new(facts(Some(0), false));
+        let receipt = LandingReceipt::new(facts(Some(0), false)).unwrap();
         let json = serde_json::to_string(&receipt).unwrap();
         assert!(json.contains("\"evidence\":\"verified\""), "{json}");
         let back: LandingReceipt = serde_json::from_str(&json).unwrap();
@@ -212,7 +315,7 @@ mod tests {
         for (verify_cmd, verify_exit, touched, want) in cases {
             let mut f = facts(verify_exit, touched);
             f.verify_cmd = verify_cmd.map(str::to_owned);
-            let receipt = LandingReceipt::new(f);
+            let receipt = LandingReceipt::new(f).unwrap();
             assert_eq!(
                 receipt.evidence(),
                 want,
@@ -223,7 +326,7 @@ mod tests {
 
     #[test]
     fn landing_receipt_rejects_verified_with_nonzero_exit() {
-        let receipt = LandingReceipt::new(facts(Some(1), false));
+        let receipt = LandingReceipt::new(facts(Some(1), false)).unwrap();
         let json = serde_json::to_string(&receipt).unwrap();
         assert!(json.contains("\"evidence\":\"reported\""), "{json}");
         let forged = json.replace("\"evidence\":\"reported\"", "\"evidence\":\"verified\"");
@@ -234,7 +337,7 @@ mod tests {
     fn landing_receipt_unattested_keeps_dropped_count() {
         let mut f = facts(Some(0), false);
         f.audit = AuditStatus::Unattested { dropped_events: 3 };
-        let receipt = LandingReceipt::new(f);
+        let receipt = LandingReceipt::new(f).unwrap();
         let json = serde_json::to_string(&receipt).unwrap();
         assert!(json.contains("\"dropped_events\":3"), "{json}");
         let back: LandingReceipt = serde_json::from_str(&json).unwrap();
@@ -242,5 +345,115 @@ mod tests {
             back.facts().audit,
             AuditStatus::Unattested { dropped_events: 3 }
         );
+    }
+
+    fn raise(who: &str) -> HumanRaise {
+        HumanRaise {
+            by: PrincipalRef::new(who).unwrap(),
+            at: 2_000,
+        }
+    }
+
+    #[test]
+    fn landing_receipt_rejects_raise_without_human() {
+        // Exit 0 and a verify command, but the evaluator changed: the computed tier is reported.
+        let f = facts(Some(0), true);
+        let got = LandingReceipt::with_evidence(f, EvidenceTier::Verified, None);
+        assert!(
+            matches!(
+                got,
+                Err(LandingReceiptError::EvidenceMismatch {
+                    evidence: EvidenceTier::Verified,
+                    expected: EvidenceTier::Reported,
+                    ..
+                })
+            ),
+            "{got:?}"
+        );
+    }
+
+    #[test]
+    fn landing_receipt_rejects_raise_to_verified_with_nonzero_exit() {
+        // The human raise lifts the evaluator cap only. Exit 1 caps the tier at reported.
+        let f = facts(Some(1), false);
+        let got = LandingReceipt::with_evidence(
+            f,
+            EvidenceTier::Verified,
+            Some(raise("ctodie@cerebral.work")),
+        );
+        assert!(
+            matches!(
+                got,
+                Err(LandingReceiptError::RaiseAboveCeiling {
+                    evidence: EvidenceTier::Verified,
+                    ceiling: EvidenceTier::Reported,
+                    ..
+                })
+            ),
+            "{got:?}"
+        );
+    }
+
+    #[test]
+    fn landing_receipt_accepts_human_raise_over_evaluator_cap() {
+        let f = facts(Some(0), true);
+        let receipt = LandingReceipt::with_evidence(
+            f,
+            EvidenceTier::Verified,
+            Some(raise("ctodie@cerebral.work")),
+        )
+        .unwrap();
+        assert_eq!(receipt.evidence(), EvidenceTier::Verified);
+        let json = serde_json::to_string(&receipt).unwrap();
+        assert!(json.contains("\"human_raise\""), "{json}");
+        let back: LandingReceipt = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, receipt);
+        let by = back.human_raise().map(|r| r.by.as_str().to_owned());
+        assert_eq!(by.as_deref(), Some("ctodie@cerebral.work"));
+    }
+
+    #[test]
+    fn landing_receipt_accepts_tier_below_computed() {
+        let receipt =
+            LandingReceipt::with_evidence(facts(Some(0), false), EvidenceTier::Reported, None)
+                .unwrap();
+        assert_eq!(receipt.evidence(), EvidenceTier::Reported);
+        assert_eq!(receipt.human_raise(), None);
+    }
+
+    #[test]
+    fn landing_receipt_stale_base_records_development_head() {
+        let mut stale = facts(Some(0), false);
+        stale.stale_base = true;
+        stale.development_head = Some("ffeedd0011".into());
+        let receipt = LandingReceipt::new(stale.clone()).unwrap();
+        let json = serde_json::to_string(&receipt).unwrap();
+        let back: LandingReceipt = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, receipt);
+        assert_eq!(back.facts().development_head.as_deref(), Some("ffeedd0011"));
+
+        let mut no_head = stale.clone();
+        no_head.development_head = None;
+        assert!(matches!(
+            LandingReceipt::new(no_head),
+            Err(LandingReceiptError::StaleBaseHead { .. })
+        ));
+
+        let mut fresh_with_head = facts(Some(0), false);
+        fresh_with_head.development_head = Some("ffeedd0011".into());
+        assert!(matches!(
+            LandingReceipt::new(fresh_with_head),
+            Err(LandingReceiptError::StaleBaseHead { .. })
+        ));
+    }
+
+    #[test]
+    fn landing_receipt_wire_omits_absent_fields() {
+        let receipt = LandingReceipt::new(facts(Some(0), false)).unwrap();
+        let json = serde_json::to_string(&receipt).unwrap();
+        assert!(!json.contains("development_head"), "{json}");
+        assert!(!json.contains("human_raise"), "{json}");
+        let back: LandingReceipt = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, receipt);
     }
 }
