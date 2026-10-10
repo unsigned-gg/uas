@@ -138,22 +138,22 @@ and the key.
 
 ### Decisions
 
-| # | Decision | Source |
-|---|---|---|
-| D1 | Saga's yggdrasil types at `cerebral-work/saga@b526308` own the schema (F6); this repo vendors no copy. | Lane w25:p1 brief, 2026-10-10 |
-| D2 | team-check enforces saga's own topology and team checks (F7): the D2 list below. | Lane w25:p1 brief; widened to F7 by uas-engineer, 2026-10-10 |
-| D3 | A persona file's frontmatter `name` equals its stem, so a rename cannot leave a dangling persona. | Lane w25:p1 brief, 2026-10-10 |
-| D4 | The comment block atop `teams.toml` records the operator's rulings and stays prose; no check reads it (F11). | Lane w25:p1 brief, 2026-10-10 |
-| D5 | Acceptance: team-check, plus `team show` exit 0 where saga runs. | Brief: `team show` only; uas-engineer, 2026-10-10 (F10); the operator to rule |
-| D6 | Member role equals slot role (`topologies.toml` line 6), stricter than saga (F10). | Lane w25:p1 brief, 2026-10-10; proposed, the operator to rule |
-| D7 | A team's `topology` names a table in this repo's `topologies.toml`; to use a saga built-in, copy it in. | uas-engineer, 2026-10-10; proposed |
-| D8 | A key outside the D8 list below fails the check; saga ignores it (F10). | uas-engineer, 2026-10-10; proposed |
-| D9 | xtask takes `toml = { workspace = true }`, no new crate or version; spec 0004 `### toml` names `xtask`. | AGENTS.md rule 12; uas-engineer, 2026-10-10 |
-| D10 | `make team-check` runs `cargo xtask team-check` and joins `make hygiene`. | Lane w25:p1 brief, 2026-10-10 |
-| D11 | A persona is kebab-case, so it cannot name a path outside `.claude/agents/`. | uas-engineer, 2026-10-10 |
-| D12 | Saga rules at runtime on its checks; team-check pre-flights them and alone checks the F10 faults. | Brief, amended by uas-engineer, 2026-10-10 |
-| D13 | A table that lacks a key the D8 list requires fails, as saga's serde parse does (F14). | uas-engineer, 2026-10-10; proposed |
-| D14 | A `harness` is a saga model-table key: the D14 note below. | uas-engineer, 2026-10-10; read from the file, as saga does (F11); proposed |
+| # | Decision | Rationale | Source |
+|---|---|---|---|
+| D1 | Saga at `cerebral-work/saga@b526308` owns the schema (F6). | Only saga reads them (F4); `vendor/saga` lacks the types (F5). | w25:p1 brief, 2026-10-10 |
+| D2 | team-check enforces saga's own checks (F7): the D2 list. | Saga's fallback misnames faults (F9). | w25:p1 brief; widened by uas-engineer, 2026-10-10 |
+| D3 | A persona file's frontmatter `name` equals its stem. | A rename cannot then leave a dangling persona. | w25:p1 brief, 2026-10-10 |
+| D4 | The comment atop `teams.toml` records the operator's rulings and stays prose. | Its tier mapping fits `claude` only (F11). | w25:p1 brief, 2026-10-10 |
+| D5 | Acceptance: team-check, plus `team show` exit 0 where saga runs. | `team show` passes three faults (F10). | Brief amended by uas-engineer, 2026-10-10; the operator to rule |
+| D6 | Member role equals slot role. | `topologies.toml` line 6: teams set harness, effort, persona. | w25:p1 brief, 2026-10-10; proposed, the operator to rule |
+| D7 | A team's `topology` names a table in `topologies.toml`. | team-check cannot see saga's built-ins; copy one in. | uas-engineer, 2026-10-10; proposed |
+| D8 | A key outside the D8 list fails the check. | Saga ignores it, so a misspelt key drops a value (F10). | uas-engineer, 2026-10-10; proposed |
+| D9 | xtask uses the workspace `toml`; no new crate or version. | Spec 0004 pins `toml` 0.8 (F12); rule 12 wants `xtask` listed. | uas-engineer, 2026-10-10 |
+| D10 | `make team-check` runs `cargo xtask team-check`, in `make hygiene`. | It joins `spec-check` and `pin-check` there. | w25:p1 brief, 2026-10-10 |
+| D11 | A persona is kebab-case. | It cannot then name a path outside `.claude/agents/` (F14). | uas-engineer, 2026-10-10 |
+| D12 | Saga rules at runtime; team-check pre-flights its checks. | Only team-check catches F10's faults. | w25:p1 brief, amended by uas-engineer, 2026-10-10 |
+| D13 | A table that lacks a key the D8 list requires fails. | Saga's serde parse rejects it too (F14). | uas-engineer, 2026-10-10; proposed |
+| D14 | `harness` must be a saga model-table name (D14 note). | Saga's doc says so (line 1117) but runs any name (F14). | uas-engineer, 2026-10-10; proposed |
 
 D10 to D13 were split from D2, D3, D5 and D8, in order, in critic round one; D14 is new.
 
@@ -179,8 +179,7 @@ required. Split: `from`, `direction`, `ratio`, `new`, all required.
 
 D14 note: a `harness` is `claude`, `omp`, `opencode`, `agy`, or the lower-cased name of a
 `[models.<key>]` table in `.saga/models.toml` if it exists; a file that does not parse is a fault.
-Saga overlays that file on the four (F11), so it adds names and removes none. The set is read, not
-fixed, because saga's doc calls a harness a model-table key (line 1117). Saga runs any name (F14).
+Saga overlays that file on the four (F11), so it adds names and removes none.
 
 ### Requirements (EARS)
 
@@ -192,18 +191,18 @@ fixed, because saga's doc calls a harness a model-table key (line 1117). Saga ru
 - **[REQ-0046-02]** (Ubiquitous): team-check shall require each topology to have at least one
   slot, a non-empty `label` per slot, a slot `role` from the eight saga role names, and exactly
   one split fewer than its slots.
-- **[REQ-0046-03]** (Event-driven): WHEN team-check walks a topology's splits in order, it
-  shall reject a split whose `from` no earlier step introduced, whose `from` or `new` is not
-  below the slot count, whose `new` is already present (slot 0 included), whose `direction` is
-  not `right` or `down`, or whose `ratio` is outside the open interval (0, 1).
+- **[REQ-0046-03]** (Ubiquitous): team-check shall walk each topology's splits in order and
+  reject a split whose `from` is neither slot 0 nor introduced by an earlier split, whose `from`
+  or `new` is not below the slot count, whose `new` is already present (slot 0 included), whose
+  `direction` is not `right` or `down`, or whose `ratio` is outside the open interval (0, 1).
 - **[REQ-0046-04]** (Ubiquitous): team-check shall require each team's `topology` to name a
   table in `.saga/topologies.toml`, and its members to assign every slot of that topology
   exactly once, with no member `slot` at or past the slot count.
 - **[REQ-0046-05]** (Ubiquitous): team-check shall require each member's `role` to equal the
   `role` of its topology slot.
-- **[REQ-0046-06]** (State-driven): WHILE a member or a `[roles.<role>]` table sets `harness`
-  or `effort`, team-check shall require `harness` to be a D14 name and `effort` in {low,
-  medium, high, max}; a member that omits either shall pass.
+- **[REQ-0046-06]** (Optional feature): WHERE a member or a `[roles.<role>]` table sets
+  `harness` or `effort`, team-check shall require a set `harness` to be a D14 name and a set
+  `effort` to be `low`, `medium`, `high` or `max`.
 - **[REQ-0046-07]** (Unwanted): IF a member names a `persona` that does not match
   `^[a-z0-9]+(-[a-z0-9]+)*$` or has no file `.claude/agents/<persona>.md`, THEN team-check
   shall fail and name the slot and persona.
