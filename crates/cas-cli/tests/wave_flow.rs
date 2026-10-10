@@ -1183,6 +1183,7 @@ fn gate_case(name: &str, log: &str, blackwall_exit: i32) -> Gate {
     fs::create_dir_all(&repo).unwrap();
     // The custody checkout: init-head, and the task files that admission reads.
     write(&repo.join(".blackwall/init-head"), "aaa\n");
+    write(&repo.join("blackwall.toml"), "[merge]\nautomerge = false\n");
     write(&repo.join("tasks/wave-x-build/prompt.md"), "Build.\n");
     write(
         &repo.join("tasks/wave-x-build/task.toml"),
@@ -1353,4 +1354,56 @@ fn wave_merge_gate_refuses_failed_admission() {
         &run_gate_with(&g, false),
         "merge_on_green needs open_prs",
     );
+}
+
+#[test]
+fn wave_merge_gate_refuses_no_repo() {
+    let g = gate_case("gate-no-repo", "G\\n", 0);
+    // The cwd holds a valid custody tree, and neither --repo nor CAS_WAVE_REPO names it.
+    let out = cas(&g.repo, &g.home)
+        .env("CAS_WAVE_OPEN_PRS", "1")
+        .env("PATH", &g.bin)
+        .args(["wave", "merge-gate", "--flow"])
+        .arg(&g.src)
+        .args(["--builder", "wave-x-build", "--state-dir"])
+        .arg(&g.state)
+        .output()
+        .unwrap();
+    assert_gate_refused(&g, &out, "--repo");
+    // Control: CAS_WAVE_REPO names the tree, so it runs.
+    let ok = cas(&g.home, &g.home)
+        .env("CAS_WAVE_OPEN_PRS", "1")
+        .env("CAS_WAVE_REPO", &g.repo)
+        .env("PATH", &g.bin)
+        .args(["wave", "merge-gate", "--flow"])
+        .arg(&g.src)
+        .args(["--builder", "wave-x-build", "--state-dir"])
+        .arg(&g.state)
+        .output()
+        .unwrap();
+    assert_eq!(ok.status.code(), Some(0), "stderr: {}", stderr(&ok));
+}
+
+#[test]
+fn wave_merge_gate_refuses_armed_toml() {
+    let g = gate_case("gate-armed", "G\\n", 0);
+    for armed in [
+        "[merge]\nautomerge = true\n",
+        "[merge]\nautomerge = \"true\"\n",
+    ] {
+        write(&g.repo.join("blackwall.toml"), armed);
+        assert_gate_refused(&g, &run_gate(&g), "automerge");
+    }
+}
+
+#[test]
+fn wave_merge_gate_refuses_unparseable_toml() {
+    let g = gate_case("gate-bad-toml", "G\\n", 0);
+    write(
+        &g.repo.join("blackwall.toml"),
+        "[merge\nautomerge = = true\n",
+    );
+    assert_gate_refused(&g, &run_gate(&g), "blackwall.toml");
+    fs::remove_file(g.repo.join("blackwall.toml")).unwrap();
+    assert_gate_refused(&g, &run_gate(&g), "blackwall.toml");
 }

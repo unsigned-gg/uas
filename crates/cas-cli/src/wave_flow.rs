@@ -476,6 +476,21 @@ pub fn run_merge_gate(args: &StepArgs, env: &WaveEnv, cwd: &Path) -> i32 {
     }
 }
 
+/// Whether `<repo>/blackwall.toml` leaves merge-gate unarmed. `Err` names why not.
+fn unarmed(repo: &Path) -> std::result::Result<(), String> {
+    let path = repo.join("blackwall.toml");
+    let text = fs::read_to_string(&path).map_err(|e| format!("read {}: {e}", path.display()))?;
+    let value: toml::Value =
+        toml::from_str(&text).map_err(|e| format!("{} does not parse: {e}", path.display()))?;
+    match value.get("merge").and_then(|m| m.get("automerge")) {
+        None | Some(toml::Value::Boolean(false)) => Ok(()),
+        Some(other) => Err(format!(
+            "{} sets [merge] automerge = {other}; merge-gate stays unarmed",
+            path.display()
+        )),
+    }
+}
+
 fn merge_gate_inner(args: &StepArgs, env: &WaveEnv, cwd: &Path) -> Result<i32> {
     let text = match fs::read_to_string(&args.flow) {
         Ok(text) => text,
@@ -490,6 +505,12 @@ fn merge_gate_inner(args: &StepArgs, env: &WaveEnv, cwd: &Path) -> Result<i32> {
         Ok(plan) => plan,
         Err(err) => return refuse(format!("plan {}: {err}", args.flow)),
     };
+    // The repo comes from `--repo` or `CAS_WAVE_REPO`, never from the working directory: saga
+    // may run this step in a run worktree that the shim agent has edited (D2, F16).
+    if args.repo.is_none() && set(&env.repo).is_none() {
+        eprintln!("merge-gate refused: name the custody checkout with --repo or CAS_WAVE_REPO");
+        return Ok(1);
+    }
     let config = step_config(args, env, &def.flow.name, &merge, cwd);
     let repo = config.repo_dir.clone();
     let path_env = config.path_env.clone();
@@ -505,6 +526,13 @@ fn merge_gate_inner(args: &StepArgs, env: &WaveEnv, cwd: &Path) -> Result<i32> {
             "merge-gate refused: no .blackwall/init-head in {}; this is not the custody checkout",
             repo.display()
         );
+        return Ok(1);
+    }
+    // Merge-gate stays unarmed while EST-558 stands: the reviewed `blackwall.toml` must exist,
+    // parse, and not set `[merge] automerge = true` (F23, D15). The PR that arms merge-gate
+    // lifts this refusal.
+    if let Err(reason) = unarmed(&repo) {
+        eprintln!("merge-gate refused: {reason}");
         return Ok(1);
     }
     let argv = match exec.merge_gate_argv(&args.step) {
