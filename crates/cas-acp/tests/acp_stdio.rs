@@ -533,3 +533,82 @@ fn expired_session_cancel_is_a_noop() {
     assert_eq!(pool.calls(), before, "the cancel makes no pool call");
     assert_eq!(server.session_end(&id), Some(SessionEnd::Expired));
 }
+
+#[test]
+fn blank_frame_still_expires_due_sessions() {
+    let pool = MockPool::default();
+    let mut server = AcpServer::new(pool.clone(), config());
+    let id = session_id_of(&frames_of(&mut server, SESSION_NEW));
+
+    set_now(1_600);
+    let frames = serve(&mut server, "\n");
+
+    assert!(frames.is_empty(), "a blank line gets no reply: {frames:?}");
+    assert_eq!(
+        server.session_end(&id),
+        Some(SessionEnd::Expired),
+        "the expiry check runs before the blank line is skipped"
+    );
+    let calls = pool.calls();
+    assert!(
+        calls.iter().any(|c| c.starts_with("release:slot-1:")),
+        "calls: {calls:?}"
+    );
+}
+
+/// Yields `data`, then every read fails, as a broken transport does.
+struct ReadFailsAfter {
+    data: &'static [u8],
+    pos: usize,
+}
+
+impl std::io::Read for ReadFailsAfter {
+    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+        let available = std::io::BufRead::fill_buf(self)?;
+        let n = available.len().min(buf.len());
+        buf[..n].copy_from_slice(&available[..n]);
+        std::io::BufRead::consume(self, n);
+        Ok(n)
+    }
+}
+
+impl std::io::BufRead for ReadFailsAfter {
+    fn fill_buf(&mut self) -> std::io::Result<&[u8]> {
+        if self.pos < self.data.len() {
+            Ok(&self.data[self.pos..])
+        } else {
+            Err(std::io::Error::other("read failed"))
+        }
+    }
+
+    fn consume(&mut self, amount: usize) {
+        self.pos += amount;
+    }
+}
+
+#[test]
+fn read_error_releases_every_session() {
+    let pool = MockPool::default();
+    let mut server = AcpServer::new(pool.clone(), config());
+    let input = ReadFailsAfter {
+        data: format!("{SESSION_NEW}\n").leak().as_bytes(),
+        pos: 0,
+    };
+
+    let result = server.serve(input, Vec::new());
+
+    assert!(result.is_err(), "a read error must return Err");
+    let calls = pool.calls();
+    assert_eq!(calls.len(), 3, "calls: {calls:?}");
+    assert_eq!(calls[0], "acquire:slot-1");
+    assert_eq!(calls[1], "suspend:slot-1");
+    assert!(calls[2].starts_with("release:slot-1:"), "calls: {calls:?}");
+}
+
+#[test]
+fn handle_frame_rejects_an_oversize_line_before_parsing() {
+    let mut server = AcpServer::new(MockPool::default(), config());
+    let line = "a".repeat(cas_acp::server::MAX_FRAME_BYTES + 1);
+    let frames = frames_of(&mut server, &line);
+    assert_eq!(ids_and_codes(&frames), vec![(Value::Null, -32600)]);
+}
