@@ -53,6 +53,7 @@ In accordance with estate orchestration rules:
 - **Wave execution and rollback:**
   - Waves execute sequentially; steps within a wave execute concurrently up to the concurrency limit.
   - Failure in any step halts the current wave and triggers compensators in reverse order for all completed steps across all previous and current waves.
+  - Compensation continues past a failed compensator. The rollback returns Err only when at least one receipt has `success: false`, and the Err carries every receipt (spec 0009, CER-2783).
 
 ## Tasks
 
