@@ -216,6 +216,7 @@ landing activity's principal.
 | D9 | A stale base records both commits on the receipt, `base_sha` and `development_head`, not only on the `StaleBase` outcome. `development_head` is `Some` iff `stale_base`. | CAS lane w25:p1, 2026-10-10, P5a critic finding (the operator can override) |
 | D10 | For P5b: the receipt's `try_from` check allows the spec 0023 D3 human raise. Tier order: `verified` > `reported` > `heuristic` > `asserted` (`EvidenceTier` derives no `Ord`, so P5b adds an explicit rank). The stored tier shall not exceed the computed tier (D2) unless `human_raise` is `Some(HumanRaise { by: PrincipalRef, at: u64 })`, which names who raised it and when. A raise lifts only the evaluator cap: the stored tier shall not exceed the tier computed with `evaluator_touched = false`, so no raise gives `verified` without exit 0 and a `[verify]` command. A stored tier below the computed tier is accepted. | CAS lane w25:p1, 2026-10-10, P5a critic finding (the operator can override) |
 | D11 | D4's PR-body record goes through `blackwall pr <run> --base <pr_base> --body -` (F13). The activity writes to stdin a fenced block: the line `` ```json ``, then `serde_json::to_string_pretty` of the receipt, then the line `` ``` ``. It is the receipt after reconcile: `verify_exit` 0, `branch` set, `pr_number` null, because the PR does not exist yet. The `Opened` receipt adds `pr_number`; both have the same tier, since the tier rule (D2) does not read `branch` or `pr_number`. Alternatives considered: a Markdown table (people read it, no program can read it back); blackwall's own body (no receipt). | CAS lane w25:p1, 2026-10-10 (the operator can override) |
+| D12 | Spec 0025 amends this spec. `AuditStatus` gains `NotAudited` for a wave Builder with no CAS slot: `run_hash` is empty and `cpu_cap` is `"uncapped"`; landing proceeds, as D4 allows. `LandingActivity` splits into `reconcile` and `open_pr`; `land` keeps calling both, so a caller can put a critic between them. | cas-engineer, 2026-10-10, spec 0025 D1 and D9 (the operator can override) |
 
 ## Plan
 
@@ -272,6 +273,8 @@ worktree or a tree with no store (F16), and a non-zero exit fails the gate.
   F12 marked superseded, D7 rewritten for exit 3, D11 added, the PR-body
   requirement made event-driven, a reconcile-exit requirement added, P5b
   ticked, P5c planned.
+- Amendment log: 2026-10-10, from spec 0025: D12 (`NotAudited`, the
+  `reconcile`/`open_pr` split).
 - Queue label: this spec was "0027 custody landing" on the lane's candidate list
   (`~/handoffs/2026-10-09/cas-ears-spec-queue.md`); spec numbers are sequential,
   so it is 0022.
