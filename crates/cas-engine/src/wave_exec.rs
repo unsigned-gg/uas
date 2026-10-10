@@ -1220,11 +1220,13 @@ impl WaveExecutor {
                     path: path.clone(),
                     source,
                 })?;
-                let rec = serde_json::from_slice(&bytes)
+                let rec: StepRecord = serde_json::from_slice(&bytes)
                     .map_err(|source| WaveError::Record { path, source })?;
                 out.push(rec);
             }
         }
+        // Directory order is arbitrary: read the records oldest first, ties broken on time and id.
+        out.sort_by(|a, b| (a.seq, a.at, &a.step).cmp(&(b.seq, b.at, &b.step)));
         Ok(out)
     }
 
