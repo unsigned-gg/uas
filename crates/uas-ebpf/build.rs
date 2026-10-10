@@ -9,7 +9,10 @@
 use sha2::{Digest, Sha256};
 use std::{env, fs, path::PathBuf, process};
 
+include!("../../build-support/build_rev.rs");
+
 fn main() {
+    emit_build_rev();
     let Ok(manifest_dir) = env::var("CARGO_MANIFEST_DIR") else {
         fail("CARGO_MANIFEST_DIR is unset");
     };
