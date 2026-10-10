@@ -25,6 +25,29 @@ Measured 2026-10-08:
 - Runner pods are ephemeral and have no volumes. A cache must live off the pod.
 - sccache on R2 exists only in reverie. Its stats are never checked there.
 - The `ci-kernel` runner is live (OPS-1660). It admits pods with uid 0 and bounding set {BPF, PERFMON}, read-only tracefs. [reported, mesh c73dfbe3, 2026-10-10]
+- The `ci-kernel` node, read from the `ebpf-live` job logs of runs 38027008230,
+  38027192645 and 38028859773 [verified 2026-10-10,
+  `gh api repos/cerebral-work/cas-substrate/actions/jobs/<id>/logs` for jobs
+  114139866137, 114141577624 and 114145388796]:
+  - Kernel `6.18.51-talos`. CapPrm, CapEff and CapBnd are `000000c000000000`:
+    BPF and PERFMON only. BTF is at `/sys/kernel/btf/vmlinux` (8148564 bytes).
+  - `sched_process_fork` has `__data_loc` comm fields, so `parent_pid` is at 12
+    and `child_pid` at 20 (24 and 44 on ceres). The fields the program reads
+    from exec (`filename` 8, `pid` 12) and exit (`pid` 24) match ceres. Spec
+    0014 T16 and D13 hold the detail.
+  - `unshare -Upf --fork` fails with `Operation not permitted`, so the nested
+    live case prints its allowed skip line there. The green run 38028859773
+    passed 9 with that skip. The cause, no user namespaces on the node, is
+    [asserted]: the log shows only the error.
+  - Per-run toolchain cost, from the step start times: 22 s in run 38027192645
+    and 19 s in run 38028859773 (install-action under 1 s, pinned nightly 8 to
+    11 s, drift rebuild 10 to 11 s). Run 38027008230 stopped at the `zstd`
+    install group, because `sudo` cannot escalate in the pod. The two later runs
+    have no such group.
+  - The jobs ran in runner group `ent-default`. `runs-on` must name the group:
+    `{group: ent-default, labels: [ci-kernel]}`, as `ci.yml` does.
+- The runner image is `ci-rust-runner:v0.1.7`, which adds `zstd`, on both
+  runner sets. [reported, `unsigned-gg/unsigned-paas@103f6d19:CHANGELOG.md`]
 
 ## Design
 
@@ -45,8 +68,8 @@ Measured 2026-10-08:
 | Lane | Label | Use |
 |---|---|---|
 | `ci-rust` | `runs-on: {group: ent-default, labels: [ci-rust]}` | Rust jobs. 10 CPU. Rust 1.94.1, rustfmt, clippy, cargo-deny, typos. |
-| `self-hosted` | `self-hosted` | Jobs without Rust. Example: `secrets`. |
-| `ci-kernel` | `runs-on: [self-hosted, ci-kernel]` | The live eBPF gate, job `ebpf-live`. Uid 0 in the pod, bounding set {BPF, PERFMON}, tracefs read-only. Same image as `ci-rust`: Rust 1.94.1 only, no nightly, no bpf-linker. One runner at a time, scales from zero. |
+| `self-hosted` | `runs-on: {group: ent-default, labels: [self-hosted]}` | Jobs without Rust. Example: `secrets`. |
+| `ci-kernel` | `runs-on: {group: ent-default, labels: [ci-kernel]}` | The live eBPF gate, job `ebpf-live`. Uid 0 in the pod, bounding set {BPF, PERFMON}, tracefs read-only. Same image as `ci-rust` (`v0.1.7`): Rust 1.94.1 and `zstd`, no nightly, no bpf-linker. The job installs the pinned nightly and bpf-linker on each run. One runner at a time, scales from zero. |
 
 ### Workflows and jobs
 
