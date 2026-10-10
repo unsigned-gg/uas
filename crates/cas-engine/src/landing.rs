@@ -74,7 +74,8 @@ pub enum LandingOutcome {
     Opened(LandingReceipt),
     /// `blackwall reconcile` exited non-zero. No pull request was opened.
     VerifyFailed(LandingReceipt),
-    /// `blackwall.toml` has no `[verify]` command. No pull request was opened.
+    /// `blackwall.toml` has no `[verify]` command. Nothing was reconciled and no pull
+    /// request was opened.
     NoVerifyGate(LandingReceipt),
     /// The base is not an ancestor of the development head. Nothing was applied.
     StaleBase {
@@ -142,8 +143,8 @@ impl LandingActivity {
         Self { config }
     }
 
-    /// Land one changeset: read the verify command, check the base, reconcile, then open
-    /// the pull request.
+    /// Land one changeset: read the verify command, check the base, refuse without a
+    /// verify gate, reconcile, then open the pull request.
     pub fn land(&self, input: &LandingInput) -> Result<LandingOutcome, LandingError> {
         let verify_cmd = read_verify_cmd(&self.config.repo_dir)?;
         let base = input.base_sha.as_str();
@@ -163,6 +164,13 @@ impl LandingActivity {
             code => return Err(unexpected("merge-base", code, &ancestor)),
         }
 
+        if verify_cmd.is_none() {
+            // Fail closed: the custody process opens no PR without a verify gate,
+            // and reconcile is skipped too so no `blackwall/` branch is created.
+            let receipt = self.receipt(input, None, None, None, None, false);
+            return Ok(LandingOutcome::NoVerifyGate(receipt));
+        }
+
         let run = input.blackwall_run.as_str();
         let branch = format!("blackwall/{}", short_run(run));
         let reconcile = self.run(
@@ -176,12 +184,6 @@ impl LandingActivity {
         if reconcile_exit != 0 {
             let receipt = self.receipt(input, verify_cmd, Some(reconcile_exit), None, None, false);
             return Ok(LandingOutcome::VerifyFailed(receipt));
-        }
-
-        if verify_cmd.is_none() {
-            // Fail closed: the custody process opens no PR without a verify gate.
-            let receipt = self.receipt(input, None, None, None, None, false);
-            return Ok(LandingOutcome::NoVerifyGate(receipt));
         }
 
         let pr_base = self.config.pr_base.as_str();

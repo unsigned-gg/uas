@@ -261,4 +261,8 @@ fn landing_missing_verify_is_reported() {
         !log.iter().any(|line| line.starts_with("blackwall pr")),
         "no verify gate must not open a PR: {log:?}"
     );
+    assert!(
+        !log.iter().any(|line| line.starts_with("blackwall reconcile")),
+        "no verify gate must not reconcile either (it would create a branch): {log:?}"
+    );
 }
