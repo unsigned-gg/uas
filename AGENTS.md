@@ -33,7 +33,7 @@ is a different system.
 | `vendor/cortex/` | Vendored Cortex Mesh v1 Protocol Buffer definitions. |
 | `vendor/saga/` | Vendored Saga workflow templates and domain contracts. |
 | `.agents/skills/` | Skills for agents. |
-| `.claude/` | Claude Code settings and hooks. |
+| `.claude/` | Claude Code settings and hooks. `.claude/agents/` holds the repo's subagents (builder, eBPF builder, critic, engineer, foreman); see `.claude/agents/README.md`. |
 | `docs/`, `engineering/` | Docs for people. Engineering notes. |
 
 Layering: from the top layer down, `deck > acp > engine > pool > sandbox, ebpf > router > domain`.
