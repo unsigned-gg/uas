@@ -7,6 +7,7 @@ depends_on: [0001-cas-architecture-and-crate-layout, 0008-soma-cortex-saga-rever
 ---
 
 # 0025-wave-execution-on-the-custody-chain
+**HELD 2026-10-10 (Christian, in session, lane w25:p1): wave execution is a saga domain; cas-substrate implements no more of it. The landed code stays as is, unarmed; the migration shape is to be ruled.**
 
 ## Overview
 
