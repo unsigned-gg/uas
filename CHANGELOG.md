@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- `cargo xtask` finds the repo from the working directory, not from a path compiled into the binary, so two clones that share a `CARGO_TARGET_DIR` check their own files. `pin-check` fails on a malformed pin row (empty crate name, version not `X.Y.Z`, unequal counts) and names the line (spec 0004 D3).
 - The wave readiness pre-read runs `timeout -k 5 30 gh pr view`, so a hung `gh` cannot block a step. Exit 124 or 137 records nothing; exit 125, 126 or 127 from `timeout` is an executor error (spec 0025 D15).
 
 ### Changed
