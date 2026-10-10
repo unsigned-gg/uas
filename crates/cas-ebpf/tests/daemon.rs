@@ -583,7 +583,21 @@ async fn reclamp_follows_ns_pid_and_skips_an_unresolved_one() {
         .expect("join");
     assert!(line.contains(r#""ns_pid":0"#), "{line}");
     assert!(line.contains(&format!(r#""pid":{}"#, decoy.id())), "{line}");
-    assert_eq!(own_thread_nices(), before, "the daemon renice itself");
+    // Tokio and spawn_blocking start and stop threads between the two reads, so
+    // compare the threads that exist in both snapshots, not the sets themselves.
+    let after = own_thread_nices();
+    let shared: Vec<u32> = before
+        .keys()
+        .filter(|tid| after.contains_key(tid))
+        .copied()
+        .collect();
+    assert!(!shared.is_empty(), "no thread survived both snapshots");
+    for tid in shared {
+        assert_eq!(
+            after[&tid], before[&tid],
+            "the daemon reniced its own thread {tid}"
+        );
+    }
     assert_eq!(nice_of(decoy.id()).expect("nice"), inherited, "decoy");
 
     let _ = target.kill();
