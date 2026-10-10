@@ -136,11 +136,12 @@ the critic and the PR review remain the line for that (spec 0002).
 | D3 | A touched evaluator caps the tier at `reported`; it does not block the PR. Alternatives considered: block landing until a human clears it; no special handling. | the operator, interview in lane w25:p1, 2026-10-10: flag and cap at `reported` |
 | D4 | The evaluator file list for this repo: `Makefile`, `.github/workflows/**`, `blackwall.toml`, `deny.toml`, `rust-toolchain.toml`, `_typos.toml`, `.config/nextest.toml`, `xtask/**`. | CAS lane w25:p1, 2026-10-10 |
 | D5 | Budget exhaustion freezes the slot and reports; it never kills. Saga decides. | CAS lane w25:p1, 2026-10-10 |
+| D6 | Extends D4 with the Cargo, clippy and rustfmt config that the verify command reads: `**/.cargo/config`, `**/.cargo/config.toml`, `**/clippy.toml`, `**/.clippy.toml`, `**/rustfmt.toml`, `**/.rustfmt.toml`. A `**/` pattern matches at the root too. `runner = "true"` in either Cargo file turns a failing `cargo test` into exit 0; the legacy `.cargo/config` still loads, with a warning [verified, 2026-10-10, cargo 1.94.1 scratch crate: exit 0 with each file, 101 without]. An `[alias] nextest` shadows `cargo nextest` [verified, 2026-10-10, cargo 1.94.1: "user-defined alias `nextest` is shadowing an external subcommand"]. Clippy and rustfmt read each name above at the root and in a member crate [verified, 2026-10-10, cargo 1.94.1 scratch workspace: an invalid file fails each run]. Found by critic-0025-3. | CAS lane w25:p1, 2026-10-10 (the operator can override) |
 
 ## Plan
 
 - [x] the operator ruled D3 (2026-10-10): flag and cap at `reported`.
-- [ ] `cas-domain`: `EVALUATOR_PATHS` constant and `is_evaluator_path(&Path)`
+- [ ] `cas-domain`: `EVALUATOR_PATHS` constant (D4 and D6) and `is_evaluator_path(&Path)`
   with a test for every entry and a negative control (`crates/cas-domain/src/lib.rs`
   is not an evaluator path). Spec 0025 package P9a builds it.
 - [ ] Spec 0022's `LandingReceipt` gains `evaluator_touched: bool` and
