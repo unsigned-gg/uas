@@ -59,6 +59,12 @@ fn defaults(name: &str) -> Vec<Rule> {
             r("*", b"", "", 0),
         ],
         "claude" => vec![r("*", b"VERDICT: NO DEFECTS\nreviewed\n", "", 0)],
+        // No `cas` code merges or reads checks (spec 0025 D15): these two answer 99.
+        "gh" => vec![
+            r("pr merge*", b"", "", 99),
+            r("pr checks*", b"", "", 99),
+            r("*", b"", "", 0),
+        ],
         _ => vec![r("*", b"", "", 0)],
     }
 }
@@ -428,15 +434,12 @@ fn wave_not_ready_dep_record_missing() {
     );
 }
 
-#[test]
-fn wave_not_ready_upstream_not_merged() {
-    let env = Env::new("wave_not_ready_upstream_not_merged");
-    // The upstream head is not an ancestor of development. The base check still passes.
-    env.tool(
-        "git",
-        vec![r("merge-base --is-ancestor f00dfeed0001 *", b"", "", 1)],
-    );
-    let steps = [
+const HEX: &str = "4e7c000000000000000000000000000000000000";
+const PREREAD: &str = "gh pr view 57 --json mergeCommit --jq .mergeCommit.oid";
+
+/// Two chained Builders, each with its Critic.
+fn chain_steps() -> [SagaStep; 4] {
+    [
         builder("build-a"),
         critic("review-a", "build-a"),
         step(
@@ -447,23 +450,249 @@ fn wave_not_ready_upstream_not_merged() {
             &[],
         ),
         critic("review-b", "build-b"),
-    ];
-    let exec = executor(&env, &steps);
+    ]
+}
+
+/// Run build-a and review-a with pull requests on (PR 57), then return the executor.
+fn with_pr_57(env: &Env) -> WaveExecutor {
+    let exec = with_open_prs(env, &chain_steps());
     assert_eq!(
         exec.run_step("build-a", 1).unwrap().outcome,
         StepOutcome::Passed
     );
-    // Case 1: a Builder whose upstream Builder is unmerged is not ready.
-    assert_eq!(
-        exec.run_step("build-b", 1).unwrap().outcome,
-        StepOutcome::NotReady(NotReady::UpstreamNotMerged("build-a".into()))
-    );
-    // Case 2: a Critic whose own Builder passed but is unmerged is ready: claude runs.
     assert_eq!(
         exec.run_step("review-a", 1).unwrap().outcome,
         StepOutcome::Passed
     );
-    assert!(env.argv().iter().any(|l| l.starts_with("claude -p")));
+    exec
+}
+
+fn merge_read(out: &'static [u8], code: i32) -> Vec<Rule> {
+    vec![r("pr view * --json mergeCommit *", out, "", code)]
+}
+
+/// The fake `gh` answers 99 to `pr merge` and `pr checks`; no run may call either.
+fn assert_no_merge_calls(env: &Env) {
+    let argv = env.argv();
+    assert!(
+        !argv
+            .iter()
+            .any(|l| l.starts_with("gh pr merge") || l.starts_with("gh pr checks")),
+        "{argv:?}"
+    );
+}
+
+fn record_text(env: &Env, id: &str) -> String {
+    fs::read_to_string(env.state.join(format!("{id}.json"))).unwrap()
+}
+
+#[test]
+fn wave_admit_refuses_merge_without_open_prs() {
+    let env = Env::new("wave_admit_refuses_merge_without_open_prs");
+    let mut config = env.config();
+    config.merge_on_green = true;
+    let exec = WaveExecutor::new(config.clone(), WavePlan::plan(&chain_steps(), 2).unwrap());
+    assert_eq!(exec.admit(), Err(AdmitError::MergeWithoutOpenPrs));
+    assert!(exec.run_step("build-a", 1).is_err());
+    assert!(env.argv().is_empty(), "{:?}", env.argv());
+    // Control: with pull requests on, the plan is admitted.
+    config.open_prs = true;
+    let exec = WaveExecutor::new(config, WavePlan::plan(&chain_steps(), 2).unwrap());
+    assert_eq!(exec.admit(), Ok(()));
+}
+
+#[test]
+fn wave_preread_records_merge_commit() {
+    let env = Env::new("wave_preread_records_merge_commit");
+    let exec = with_pr_57(&env);
+    env.tool(
+        "gh",
+        merge_read(b"4e7c000000000000000000000000000000000000\n", 0),
+    );
+    assert_eq!(
+        exec.run_step("build-b", 2).unwrap().outcome,
+        StepOutcome::Passed
+    );
+    assert!(has_line(&env.argv(), PREREAD), "{:?}", env.argv());
+    let rec: serde_json::Value = serde_json::from_str(&record_text(&env, "build-a")).unwrap();
+    assert_eq!(rec["merge_commit"], HEX);
+    assert_eq!(rec["receipt"]["merge_commit"], HEX);
+    assert_eq!(rec["receipt"]["pr_number"], 57);
+    assert_no_merge_calls(&env);
+}
+
+#[test]
+fn wave_not_ready_upstream_not_merged() {
+    let cases: [(&str, &'static [u8], i32); 5] = [
+        ("empty", b"", 0),
+        ("null", b"null\n", 0),
+        ("39hex", b"4e7c00000000000000000000000000000000000\n", 0),
+        ("exit1", b"4e7c000000000000000000000000000000000000\n", 1),
+        ("upper", b"4E7C000000000000000000000000000000000000\n", 0),
+    ];
+    for (name, out, code) in cases {
+        let env = Env::new(&format!("wave_not_ready_upstream_not_merged_{name}"));
+        let exec = with_pr_57(&env);
+        env.tool("gh", merge_read(out, code));
+        let before = record_text(&env, "build-a");
+        let got = exec.run_step("build-b", 2).unwrap();
+        assert_eq!(
+            got.outcome,
+            StepOutcome::NotReady(NotReady::UpstreamNotMerged("build-a (PR 57)".into())),
+            "{name}"
+        );
+        assert!(has_line(&env.argv(), PREREAD), "{name}");
+        assert_eq!(
+            record_text(&env, "build-a"),
+            before,
+            "{name}: record unchanged"
+        );
+        assert!(
+            !env.state.join("build-b.json").exists(),
+            "{name}: no record"
+        );
+        assert!(
+            !env.argv()
+                .iter()
+                .any(|l| l.starts_with("blackwall start --task build-b")),
+            "{name}"
+        );
+        assert_no_merge_calls(&env);
+    }
+}
+
+#[test]
+fn wave_not_ready_merge_commit_not_in_base() {
+    let env = Env::new("wave_not_ready_merge_commit_not_in_base");
+    let exec = with_pr_57(&env);
+    env.tool(
+        "gh",
+        merge_read(b"4e7c000000000000000000000000000000000000\n", 0),
+    );
+    env.tool(
+        "git",
+        vec![r(
+            "merge-base --is-ancestor 4e7c000000000000000000000000000000000000 *",
+            b"",
+            "",
+            1,
+        )],
+    );
+    for _ in 0..2 {
+        assert_eq!(
+            exec.run_step("build-b", 2).unwrap().outcome,
+            StepOutcome::NotReady(NotReady::UpstreamNotMerged("build-a (PR 57)".into()))
+        );
+    }
+    // The commit is recorded, so the second call reads nothing: one pre-read in all.
+    let rec: serde_json::Value = serde_json::from_str(&record_text(&env, "build-a")).unwrap();
+    assert_eq!(rec["merge_commit"], HEX);
+    let reads = env.argv().iter().filter(|l| *l == PREREAD).count();
+    assert_eq!(reads, 1, "{:?}", env.argv());
+    assert_no_merge_calls(&env);
+}
+
+#[test]
+fn wave_not_ready_upstream_no_pr_uses_head_ancestry() {
+    for (merged, want) in [(0, true), (1, false)] {
+        let env = Env::new(&format!("wave_not_ready_upstream_no_pr_{merged}"));
+        env.tool(
+            "git",
+            vec![r(
+                "merge-base --is-ancestor f00dfeed0001 056d7c7abcdef",
+                b"",
+                "",
+                merged,
+            )],
+        );
+        let exec = executor(&env, &chain_steps());
+        for id in ["build-a", "review-a"] {
+            assert_eq!(exec.run_step(id, 1).unwrap().outcome, StepOutcome::Passed);
+        }
+        let out = exec.run_step("build-b", 2).unwrap().outcome;
+        if want {
+            assert_eq!(out, StepOutcome::Passed);
+        } else {
+            assert_eq!(
+                out,
+                StepOutcome::NotReady(NotReady::UpstreamNotMerged("build-a (no PR)".into()))
+            );
+        }
+        assert!(
+            !env.argv().iter().any(|l| l.starts_with("gh ")),
+            "no PR, no pre-read"
+        );
+    }
+}
+
+#[test]
+fn wave_merge_gate_argv_exact() {
+    let env = Env::new("wave_merge_gate_argv_exact");
+    env.tool("git", vec![r("log --format=%G? *", b"G\nG\n", "", 0)]);
+    let exec = with_pr_57(&env);
+    let argv = exec.merge_gate_argv("build-a").unwrap();
+    assert_eq!(
+        argv,
+        [
+            "blackwall",
+            "merge-gate",
+            "57",
+            "--watch",
+            "--timeout",
+            "900"
+        ]
+    );
+    assert!(has_line(
+        &env.argv(),
+        &format!("git log --format=%G? {BASE}..{HEAD}")
+    ));
+    assert!(
+        !env.argv().iter().any(|l| l.starts_with("gh ")),
+        "it runs no gh"
+    );
+}
+
+#[test]
+fn wave_merge_gate_refuses_unsigned() {
+    for (name, log) in [("n", &b"G\nN\n"[..]), ("none", &b""[..])] {
+        let env = Env::new(&format!("wave_merge_gate_refuses_unsigned_{name}"));
+        let exec = with_pr_57(&env);
+        let log: &'static [u8] = Box::leak(log.to_vec().into_boxed_slice());
+        env.tool("git", vec![r("log --format=%G? *", log, "", 0)]);
+        let err = exec.merge_gate_argv("build-a").unwrap_err().to_string();
+        assert!(err.contains("unsigned"), "{name}: {err}");
+    }
+}
+
+#[test]
+fn wave_merge_gate_refuses_no_pr() {
+    let env = Env::new("wave_merge_gate_refuses_no_pr");
+    let exec = executor(&env, &chain_steps());
+    // No Passed record yet.
+    let err = exec.merge_gate_argv("build-a").unwrap_err().to_string();
+    assert!(err.contains("no passed record"), "{err}");
+    for id in ["build-a", "review-a"] {
+        exec.run_step(id, 1).unwrap();
+    }
+    // Passed, but the PR never opened.
+    let err = exec.merge_gate_argv("build-a").unwrap_err().to_string();
+    assert!(err.contains("no PR"), "{err}");
+}
+
+#[test]
+fn wave_merge_gate_refuses_halted() {
+    let env = Env::new("wave_merge_gate_refuses_halted");
+    let exec = with_pr_57(&env);
+    let halted = r#"{"step":"other-step","role":"Builder","outcome":{"result":"halted","reason":"VerifyFailed"},"at":1,"seq":9}"#;
+    fs::write(env.state.join("other-step.json"), halted).unwrap();
+    let err = exec.merge_gate_argv("build-a").unwrap_err().to_string();
+    assert!(err.contains("halted"), "{err}");
+    // The Halted check comes first: no signature read.
+    assert!(
+        !env.argv().iter().any(|l| l.starts_with("git log")),
+        "{:?}",
+        env.argv()
+    );
 }
 
 // Builder.
