@@ -71,6 +71,10 @@ pub struct LandingFacts {
     pub branch: Option<String>,
     /// The pull request number, when one was opened.
     pub pr_number: Option<u64>,
+    /// The merge commit of the pull request. Spec 0025 D15: set only from a `gh pr view`
+    /// pre-read.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub merge_commit: Option<String>,
     /// True when the changeset touched an evaluator file (spec 0023 D3).
     pub evaluator_touched: bool,
     /// Where the cost figures came from (spec 0023 D2).
@@ -201,6 +205,12 @@ impl LandingReceipt {
         self.evidence
     }
 
+    /// The same receipt with the merge commit set. The tier and the human raise stay.
+    pub fn with_merge_commit(mut self, oid: String) -> Self {
+        self.facts.merge_commit = Some(oid);
+        self
+    }
+
     /// The human raise of this landing, when one was made.
     pub fn human_raise(&self) -> Option<&HumanRaise> {
         self.human_raise.as_ref()
@@ -293,6 +303,7 @@ mod tests {
             verify_exit,
             branch: Some("blackwall/bw-0123456789".into()),
             pr_number: Some(57),
+            merge_commit: None,
             evaluator_touched,
             cost_source: CostSource::None,
             at: 1_000,
@@ -388,6 +399,37 @@ mod tests {
         );
         let back: LandingReceipt = serde_json::from_str(&json).unwrap();
         assert_eq!(back.facts().audit, AuditStatus::NotAudited);
+    }
+
+    #[test]
+    fn landing_receipt_merge_commit_absent_is_none() {
+        let receipt = LandingReceipt::new(facts(Some(0), false)).unwrap();
+        let json = serde_json::to_string(&receipt).unwrap();
+        assert!(
+            !json.contains("merge_commit"),
+            "None is not serialized: {json}"
+        );
+        let back: LandingReceipt = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.facts().merge_commit, None, "absent is None");
+        let oid = "4e7c000000000000000000000000000000000000".to_owned();
+        let raised = LandingReceipt::with_evidence(
+            facts(Some(0), true),
+            EvidenceTier::Verified,
+            Some(raise("alice")),
+        )
+        .unwrap();
+        for r in [receipt, raised] {
+            let (tier, human) = (r.evidence(), r.human_raise().cloned());
+            let merged = r.with_merge_commit(oid.clone());
+            assert_eq!(merged.facts().merge_commit.as_deref(), Some(oid.as_str()));
+            assert_eq!(
+                (merged.evidence(), merged.human_raise().cloned()),
+                (tier, human)
+            );
+            let json = serde_json::to_string(&merged).unwrap();
+            let back: LandingReceipt = serde_json::from_str(&json).unwrap();
+            assert_eq!(back, merged, "Some round-trips");
+        }
     }
 
     fn raise(who: &str) -> HumanRaise {
