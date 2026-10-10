@@ -12,6 +12,7 @@ use std::{
 };
 
 use cas_ebpf::{
+    clamp::{nice_of, WORKER_NICE},
     client::DaemonClient,
     daemon::Daemon,
     handle::{FakeProbeHandle, ProbeHandle},
@@ -502,4 +503,177 @@ async fn socket_group_is_set_when_asked() {
     let meta = std::fs::metadata(&fx.path).expect("stat");
     assert_eq!(meta.gid(), gid);
     assert_eq!(meta.permissions().mode() & 0o777, 0o660);
+}
+
+/// A `sleep 30` child with no stdio. The caller kills and reaps it.
+fn spawn_sleeper() -> std::process::Child {
+    std::process::Command::new("sleep")
+        .arg("30")
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .expect("spawn sleep")
+}
+
+/// Connects, sends `stream` and reads the ack. The daemon subscribes before it
+/// acks, so no event pushed after this returns is missed.
+fn raw_stream(path: &Path) -> BufReader<UnixStream> {
+    let mut stream = UnixStream::connect(path).expect("connect");
+    stream
+        .set_read_timeout(Some(Duration::from_secs(5)))
+        .expect("timeout");
+    stream.write_all(b"{\"op\":\"stream\"}\n").expect("write");
+    let mut reader = BufReader::new(stream);
+    let mut ack = String::new();
+    reader.read_line(&mut ack).expect("ack");
+    assert_eq!(ack.trim_end(), r#"{"ok":true}"#);
+    reader
+}
+
+/// The nice value of every thread of this process, by tid.
+fn own_thread_nices() -> std::collections::BTreeMap<u32, i32> {
+    std::fs::read_dir("/proc/self/task")
+        .expect("task dir")
+        .flatten()
+        .filter_map(|entry| entry.file_name().to_string_lossy().parse::<u32>().ok())
+        .filter_map(|tid| nice_of(tid).ok().map(|nice| (tid, nice)))
+        .collect()
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn reclamp_follows_ns_pid_and_skips_an_unresolved_one() {
+    let mut target = spawn_sleeper();
+    let mut decoy = spawn_sleeper();
+    let inherited = nice_of(target.id()).expect("nice of target");
+    if inherited >= WORKER_NICE {
+        let _ = target.kill();
+        let _ = decoy.kill();
+        let _ = target.wait();
+        let _ = decoy.wait();
+        eprintln!("skipped: this process already runs at nice {inherited}");
+        return;
+    }
+    assert_eq!(nice_of(decoy.id()).expect("nice of decoy"), inherited);
+    let fx = Fixture::start().await;
+    let path = fx.path.clone();
+    let reader = tokio::task::spawn_blocking(move || raw_stream(&path))
+        .await
+        .expect("join");
+    let me = rustix::process::geteuid().as_raw();
+
+    // The global pid names the decoy. Only the namespace pid names the target.
+    let mut event = ExecEvent::new(1, decoy.id(), 1, me, "sleep", "/usr/bin/sleep");
+    event.ns_pid = target.id();
+    fx.handle.lock().expect("lock").push(event).expect("push");
+    let (reader, _line) = tokio::task::spawn_blocking(move || next_line(reader))
+        .await
+        .expect("join");
+    // The daemon re-clamps before it broadcasts, so the frame means it is done.
+    assert_eq!(nice_of(target.id()).expect("nice"), WORKER_NICE, "target");
+    assert_eq!(nice_of(decoy.id()).expect("nice"), inherited, "decoy");
+
+    // ns_pid 0 is unresolved: the daemon must not touch its own threads.
+    let before = own_thread_nices();
+    let mut event = ExecEvent::new(2, decoy.id(), 1, me, "sleep", "/usr/bin/sleep");
+    event.ns_pid = 0;
+    fx.handle.lock().expect("lock").push(event).expect("push");
+    let (_reader, line) = tokio::task::spawn_blocking(move || next_line(reader))
+        .await
+        .expect("join");
+    assert!(line.contains(r#""ns_pid":0"#), "{line}");
+    assert!(line.contains(&format!(r#""pid":{}"#, decoy.id())), "{line}");
+    assert_eq!(own_thread_nices(), before, "the daemon renice itself");
+    assert_eq!(nice_of(decoy.id()).expect("nice"), inherited, "decoy");
+
+    let _ = target.kill();
+    let _ = decoy.kill();
+    let _ = target.wait();
+    let _ = decoy.wait();
+}
+
+fn next_line(mut reader: BufReader<UnixStream>) -> (BufReader<UnixStream>, String) {
+    let mut line = String::new();
+    reader.read_line(&mut line).expect("a stream line");
+    (reader, line)
+}
+
+const NAMESPACE_REFUSAL: &str =
+    r#"{"ok":false,"error":"peer pid namespace differs from the daemon's"}"#;
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_peer_in_another_pid_namespace_is_refused_on_its_first_request() {
+    let mut child = spawn_sleeper();
+    let child_pid = child.id();
+    let me = std::process::id();
+    let track = format!(r#"{{"op":"track","pid":{child_pid},"ppid":{me}}}"#);
+
+    // The daemon believes its own namespace is (1, 1), so this peer differs.
+    let refusing = Fixture::start_with(|daemon| daemon.with_pid_namespace([1, 1])).await;
+    let path = refusing.path.clone();
+    let (reply, closed) = tokio::task::spawn_blocking(move || {
+        let mut stream = UnixStream::connect(&path).expect("connect");
+        stream
+            .set_read_timeout(Some(Duration::from_secs(5)))
+            .expect("timeout");
+        stream.write_all(track.as_bytes()).expect("write");
+        stream.write_all(b"\n").expect("write");
+        let mut reader = BufReader::new(stream);
+        let mut reply = String::new();
+        reader.read_line(&mut reply).expect("reply");
+        let mut rest = String::new();
+        let n = reader.read_line(&mut rest).unwrap_or(usize::MAX);
+        (reply.trim_end().to_string(), n == 0)
+    })
+    .await
+    .expect("join");
+    assert_eq!(reply, NAMESPACE_REFUSAL);
+    assert!(closed, "the daemon keeps a refused connection open");
+    assert!(refusing.handle.lock().expect("lock").tracked().is_empty());
+
+    // Control: the default daemon reads its own namespace, which this peer shares.
+    let accepting = Fixture::start().await;
+    let path = accepting.path.clone();
+    tokio::task::spawn_blocking(move || {
+        let mut client = DaemonClient::connect(&path).expect("connect");
+        client
+            .track(child_pid, me)
+            .expect("same namespace is served");
+    })
+    .await
+    .expect("join");
+    assert_eq!(
+        accepting.handle.lock().expect("lock").tracked(),
+        vec![(child_pid, me)]
+    );
+    let _ = child.kill();
+    let _ = child.wait();
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn pid_zero_cannot_be_tracked_or_untracked() {
+    let fx = Fixture::start().await;
+    let path = fx.path.clone();
+    let replies = tokio::task::spawn_blocking(move || {
+        raw_exchange(
+            &path,
+            &[
+                r#"{"op":"track","pid":0,"ppid":1}"#,
+                r#"{"op":"untrack","pid":0}"#,
+                r#"{"op":"status"}"#,
+            ],
+        )
+    })
+    .await
+    .expect("join");
+    assert_eq!(
+        replies[0],
+        r#"{"ok":false,"error":"pid 0 cannot be tracked"}"#
+    );
+    assert_eq!(
+        replies[1],
+        r#"{"ok":false,"error":"pid 0 cannot be untracked"}"#
+    );
+    assert_eq!(replies[2], r#"{"ok":true,"tracked":0,"dropped_events":0}"#);
+    assert!(fx.handle.lock().expect("lock").tracked().is_empty());
 }

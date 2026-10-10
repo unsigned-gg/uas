@@ -26,13 +26,13 @@ This spec defines eBPF tracepoint instrumentation and priority clamping in `cas-
   loads BPF programs, owns maps, and serves unprivileged `cas-pool` clients
   over a Unix Domain Socket (UDS).
 
-Parent tickets: CER-2682, CER-2683.
+Parent tickets: CER-2682, CER-2683. Nested pid namespace fix: CER-2773 (T14, D12).
 
 Facts, measured 2026-10-09 on ceres (kernel `6.6.87.2-microsoft-standard-WSL2`):
 - **T1: Toolchain Installation [verified]:** `bpf-linker 0.11.1` installed via mise (musl binary, SLSA sha256 `c974140662f783c37bf0267436409caa8f4708ec10b558d9d1c594385489fe2f`). Standard `cargo install` fails without system LLVM 23.
 - **T2: Toolchain Inventory [verified]:** `rustup toolchain list` contains stable, nightly, and 1.94.1.
 - **T3: Nightly rust-src Component [verified]:** Installed via `rustup component add rust-src --toolchain nightly` (`1.101.0-nightly (ea137335b 2026-10-05)`).
-- **T4: Bytecode Compilation [verified]:** `crates/cas-ebpf/ebpf` builds under nightly with `-Z build-std=core` into a 7,864 byte ELF (`cas-ebpf.o`). Sections: `tracepoint`, `license`, `maps`. No `.BTF` section needed.
+- **T4: Bytecode Compilation [verified]:** `crates/cas-ebpf/ebpf` builds under nightly with `-Z build-std=core` into a 8,568 byte ELF (measured 2026-10-10 after D12; 7,864 before) (`cas-ebpf.o`). Sections: `tracepoint`, `license`, `maps`. No `.BTF` section needed.
 - **T5: Subcrate Manifests [verified]:** Subcrate contains independent `Cargo.toml`, `rust-toolchain.toml`, and `.cargo/config.toml` targeting `bpfel-unknown-none`.
 - **T6: Autogroup Configuration [verified]:** `CONFIG_SCHED_AUTOGROUP` is NOT set on WSL2 (`/proc/self/autogroup` ENOENT).
 - **T7: Tracepoint Layouts [verified]:** Formats on ceres: `sched_process_exec` (`filename` at 8, `pid` at 12); `sched_process_fork` (`parent_comm` at 8, `parent_pid` at 24, `child_comm` at 28, `child_pid` at 44; parent tgid from `bpf_get_current_pid_tgid() >> 32`); `sched_process_exit` (`comm` at 8, `pid` at 24, `prio` at 28). Main thread pid equals tgid.
@@ -42,6 +42,8 @@ Facts, measured 2026-10-09 on ceres (kernel `6.6.87.2-microsoft-standard-WSL2`):
 - **T11: Dual Licensing Position [verified]:** Kernel BPF program declares `Dual MIT/GPL` in `license`. Userspace loader and crate remain proprietary.
 - **T12: CI Capability Invariant [verified]:** Unprivileged `ci-rust` embeds committed `cas-ebpf.o`. Live integration tests run via `make ebpf-test` under sudo on ceres.
 - **T13: Pid namespaces [verified 2026-10-10, lane w25:p1]:** Host `ceres` runs under a pid namespace (pid 1 is systemd; `/proc/self/ns/pid` inode 4026532221). The sched tracepoint fields and `bpf_get_current_pid_tgid` carry global pids. A `bpf_printk` build showed kernel tgid 2107147 for a process reporting userspace pid 1935786. Therefore, map lookups keyed by userspace pid failed (4 of 8 live gate failures). With the namespace translation architecture, the live gate passes 8 of 8 (`make ebpf-test`, sudo, 2026-10-10). The ELF bytecode size is 7,864 bytes with sha256 `8bdc59b358377b336c6776e10899b69542ad37374ce2e4481e48384d2743e95b`.
+- **T14: Nested pid namespaces [2026-10-10]:** The helper `bpf_get_ns_current_pid_tgid` succeeds only when the configured `(dev, ino)` is the exact active pid namespace of `current`; otherwise it returns `-EINVAL` and zeroes its output [reported, torvalds/linux@ffc2532:kernel/bpf/helpers.c lines 582-613, tag v6.6; not re-measured live on ceres]. At 056d7c7, `current_ids()` returns `None` on that failure, and the exec and fork handlers return early [verified, `git show 056d7c7:crates/cas-ebpf/ebpf/src/main.rs`]. So a nested child of a tracked task enters `TRACKED_PIDS` at fork, but its exec is not audited and its own children are not tracked. Exit still removes `TRACKED_PIDS[gpid]`; it skips only the `NS_TO_GLOBAL` and `TRACK_REQUESTS` cleanup.
+- **T15: Reachability [2026-10-10]:** An unprivileged task enters a nested pid namespace: lane w25:p1 measured daemon ns 4026532221 and nested ns 4026534408 [reported, CER-2773]. A re-run of `unshare -Upf --fork readlink /proc/self/ns/pid` gave 4026534720, because each run makes a new namespace [verified]. `NSpid` in `/proc/self/status` of the nested task lists two pids, so the task has a pid in the outer namespace that the helper cannot return [verified, `unshare -Upf --fork sh -c 'grep NSpid /proc/self/status'`]. The sandbox launcher unshares `NEWUSER|NEWNET` when a direct `NEWNET` is refused [verified, `git show 056d7c7:crates/cas-sandbox/src/netns.rs`]. That nothing in a slot blocks a further pid unshare is [asserted].
 
 ## Design
 
@@ -56,11 +58,15 @@ Facts, measured 2026-10-09 on ceres (kernel `6.6.87.2-microsoft-standard-WSL2`):
 - **Event-driven:** WHEN a tracked process forks, the probe shall insert the child global pid into `TRACKED_PIDS` with the parent namespace tgid.
 - **Event-driven:** WHEN process exec or exit events fire, the eBPF probe shall stream structured `ExecEvent` records and update `run_hash`.
 - **Event-driven:** WHEN submitting an `ExecEvent`, the probe shall populate `ns_pid` with the namespace tgid and `pid` with the global tgid.
-- **Event-driven:** WHEN a tracked task exits, the probe shall evict its global pid from `TRACKED_PIDS`, its namespace pid from `NS_TO_GLOBAL`, and if group leader, evict from `TRACK_REQUESTS`.
-- **State-driven:** WHILE tracking worker processes, `cas-ebpfd` shall read the nice value of every tracked pid that execs and re-clamp it to `nice 19` using `ns_pid`.
+- **Event-driven:** WHEN a tracked task exits, the probe shall evict its global pid from `TRACKED_PIDS` and, when the task has a namespace pid, evict it from `NS_TO_GLOBAL` and, if group leader, from `TRACK_REQUESTS`.
+- **State-driven:** WHILE tracking worker processes, `cas-ebpfd` shall read the nice value of every tracked pid that execs and re-clamp it to `nice 19` using a non-zero `ns_pid`.
 - **State-driven:** WHILE `PIDNS_CONFIG` contains zeroes (`[0, 0]`), the probes shall use global pids directly without namespace translation.
 - **Unwanted behavior:** IF `TRACKED_PIDS` is full during promotion or fork insertion, THEN the probe shall increment `DROPPED_EVENTS[1]` (`tracking_failures`) and leave the process untracked.
 - **Unwanted behavior:** IF the ring buffer is full when an exec event occurs, THEN the probe shall increment `DROPPED_EVENTS[0]` (`dropped_events`).
+- **Unwanted behavior:** IF `bpf_get_ns_current_pid_tgid` fails for `current`, THEN the probes shall use its global tgid with `ns_pid` 0, keep it in `TRACKED_PIDS`, the audit stream and exit eviction, and shall not read or write `TRACK_REQUESTS` or `NS_TO_GLOBAL` for it (D12).
+- **Unwanted behavior:** IF an `ExecEvent` carries `ns_pid` 0, THEN `cas-ebpfd` shall not read `/proc` or call `setpriority` for it, shall stream the record, and shall log it as unresolved.
+- **Unwanted behavior:** IF a `track` or `untrack` request names pid 0, THEN `cas-ebpfd` shall refuse it.
+- **Unwanted behavior:** IF the `SO_PEERCRED` pid of a peer is absent or 0, or its `/proc/<pid>/ns/pid` differs from the daemon's, THEN `cas-ebpfd` shall answer its first request with `{"ok":false,"error":"peer pid namespace differs from the daemon's"}` and close the connection.
 
 ### Decisions
 
@@ -68,15 +74,16 @@ Facts, measured 2026-10-09 on ceres (kernel `6.6.87.2-microsoft-standard-WSL2`):
 |---|---|---|
 | D1 | Clean-room Aya implementation: Build probe loader with `aya` 0.14.0 (MIT OR Apache-2.0). Never import or vendor `neutral-engineering/autonice` (GPL-2.0). | Spec 0004 & the operator, 2026-10-09 |
 | D2 | Licensing boundary: The kernel-side BPF program declares `Dual MIT/GPL` in its license section to permit GPL-only BPF helpers. Crate `cas-ebpf` remains proprietary. Subcrate uses `MIT OR Apache-2.0`. | the operator, 2026-10-09 |
-| D3 | Compile and packaging boundary: Kernel BPF bytecode crate lives at `crates/cas-ebpf/ebpf` outside monorepo workspace. Pre-compiled object `cas-ebpf.o` is committed next to `cas-ebpf.o.sha256`; `make ebpf-build` rebuilds both (reproducible: two builds on ceres gave the same hash, 2026-10-09). `build.rs` never rebuilds; it refuses to compile the crate when the object and the recorded hash disagree. The crate embeds `cas-ebpf.o` via `include_bytes!`. Workspace builds on stable Rust. Object sha256 `8bdc59b358377b336c6776e10899b69542ad37374ce2e4481e48384d2743e95b` (7,864 bytes). | CAS lanes, 2026-10-09 |
+| D3 | Compile and packaging boundary: Kernel BPF bytecode crate lives at `crates/cas-ebpf/ebpf` outside monorepo workspace. Pre-compiled object `cas-ebpf.o` is committed next to `cas-ebpf.o.sha256`; `make ebpf-build` rebuilds both (reproducible: two builds on ceres gave the same hash, 2026-10-09). `build.rs` never rebuilds; it refuses to compile the crate when the object and the recorded hash disagree. The crate embeds `cas-ebpf.o` via `include_bytes!`. Workspace builds on stable Rust. The committed `cas-ebpf.o.sha256` is the record of the current object; T13 gives the hash measured 2026-10-10. | CAS lanes, 2026-10-09 |
 | D4 | Priority clamping mechanism (R2): `cas-pool` creates a dedicated process group (`setpgid(0, 0)`) for each worker slot and calls `setpriority(PRIO_PGRP, pgid, 19)` once before exec. All threads and child processes inherit nice 19 without privileges or race conditions. | the operator ruling, 2026-10-09 |
-| D5 | Narrowed scope & anti-escape monitoring (R1): No host-wide autonice. Clamping applies exclusively to worker process trees registered in `TRACKED_PIDS` by `cas-pool`. The eBPF probe detects if a child process leaves its group (`setsid` or `setpgid`) and triggers re-clamping. Target compiler basenames serve as optional audit tags. | the operator ruling, 2026-10-09 |
+| D5 | Narrowed scope & anti-escape monitoring (R1): No host-wide autonice. Clamping applies exclusively to worker process trees that `cas-pool` registers with a `track` request (promoted into `TRACKED_PIDS`, D11). The eBPF probe detects if a child process leaves its group (`setsid` or `setpgid`) and triggers re-clamping. Target compiler basenames serve as optional audit tags. | the operator ruling, 2026-10-09 |
 | D6 | Execution audit ring buffer (R4): CER-2720 narrowed to exec and exit events. BPF ring buffer (`AUDIT_EVENTS`, 256 KiB) streams structured 168-byte `ExecEvent` records. Openat and connect are out of Phase 2. | the operator ruling, 2026-10-09 |
 | D7 | SHA-256 `run_hash` execution transcript digest (D-E): Incremental SHA-256 digest over 168-byte `#[repr(C)]` little-endian records in ring-buffer delivery order. Serves as execution transcript proof in Saga receipts. Dropped-event counter tracks ring-buffer overflows. | the operator ruling, 2026-10-09 |
 | D8 | Privileged daemon architecture (`cas-ebpfd`, R3): A dedicated root systemd unit `cas-ebpfd` runs with `CAP_BPF`, `CAP_PERFMON`, and `CAP_SYS_NICE`. It owns maps and ring buffers, serving unprivileged `cas-pool` over a UDS with strict allowlist (`track`, `untrack`, `stream_events`). `cas-pool` remains unprivileged. | the operator ruling, 2026-10-09 |
-| D9 | Map lifecycle & eviction (D-F): Loader API provides `track(pid)` and `untrack(pid)`. `sched_process_exit` probe automatically evicts exited PIDs from `TRACKED_PIDS` (1024 entries), preventing map leaks. | CAS lanes, 2026-10-09 |
+| D9 | Map lifecycle & eviction (D-F): Loader API provides `track(pid, ppid)`, which writes a `TRACK_REQUESTS` entry (D11), and `untrack(pid)`. `sched_process_exit` evicts the exited task from `TRACKED_PIDS` (1024 entries) by global pid, from `NS_TO_GLOBAL` when it has a namespace pid, and a group leader's request from `TRACK_REQUESTS`, preventing map leaks. | CAS lanes, 2026-10-09; wording amended by lane w25:p1, 2026-10-10 |
 | D10 | Dependency pins & error handling: Pinned: `aya = "0.14.0"`, `aya-ebpf = "0.2.1"`, `sha2 = "0.11.0"`, `rustix = "1.1.5"`. Uses `thiserror` for typed `EbpfError`. | Spec 0004 & CAS lanes, 2026-10-09 |
 | D11 | PID namespace translation and promotion architecture: The daemon resolves `/proc/self/ns/pid` dev/ino into `PIDNS_CONFIG`. Probes translate via `bpf_get_ns_current_pid_tgid`. Userspace track requests are queued in `TRACK_REQUESTS` and promoted to `TRACKED_PIDS` on first fork or exec, populating `NS_TO_GLOBAL`. `ExecEvent` carries `ns_pid` at offset 164 for userspace re-clamping. | the operator ruling & CAS lanes, 2026-10-10 |
+| D12 | Nested pid namespaces (T14, T15): when the helper fails, the probes fall back to the global tgid with `ns_pid` 0, so nested tasks stay tracked, audited and evicted. The fallback never uses 0 as a map key: no `TRACK_REQUESTS` lookup and no `NS_TO_GLOBAL` write or remove, so a nested task is tracked only by fork inheritance. The daemon reports `ns_pid` 0 as unresolved (the task has a pid in the daemon's namespace, but the helper cannot name it), never re-clamps it, and refuses `track` and `untrack` of pid 0. A peer whose `/proc/<pid>/ns/pid` differs from the daemon's, or whose `SO_PEERCRED` pid is absent or 0, is refused, root included. | Lane w25:p1, 2026-10-10, under the land-on-green rule for its own repo; the operator can override |
 
 ### Architecture and Flow
 
@@ -115,9 +122,9 @@ flowchart TD
 
 ### Tracepoint Probes & Maps
 
-1. **`sched_process_fork` Probe:** Intercepts process clone and fork events. Reads `child_pid` (offset 44) from tracepoint record. Checks whether parent is tracked via `promote(&ids)`. If parent is tracked, inserts `(child_pid, parent_nstgid)` into `TRACKED_PIDS`. If `TRACKED_PIDS` is full, increments `DROPPED_EVENTS[1]` (`tracking_failures`), signifying an escaped child process.
-2. **`sched_process_exec` Probe:** Intercepts `execve` events. Translates `current` via `current_ids()`. Invokes `promote(&ids)` to promote any pending `TRACK_REQUESTS`. If tracked, populates `NS_TO_GLOBAL`, reads process metadata (`comm`, `uid`, `filename`, timestamp), and writes a 168-byte `ExecEvent` to `AUDIT_EVENTS` (256 KiB ring buffer). Reservation failure increments `DROPPED_EVENTS[0]` (`dropped_events`).
-3. **`sched_process_exit` Probe:** Intercepts process termination. Removes exiting global `gpid` from `TRACKED_PIDS`. Resolves namespace IDs and removes `nspid` from `NS_TO_GLOBAL`. When a thread group leader exits (`gpid == gtgid`), removes `nstgid` from `TRACK_REQUESTS`.
+1. **`sched_process_fork` Probe:** Intercepts process clone and fork events. Reads `child_pid` (offset 44) from tracepoint record. Checks whether parent is tracked via `promote(&ids)`. If parent is tracked, inserts `(child_pid, parent_nstgid)` into `TRACKED_PIDS` (value 0 when the parent is in a nested namespace, D12). If `TRACKED_PIDS` is full, increments `DROPPED_EVENTS[1]` (`tracking_failures`), signifying an escaped child process.
+2. **`sched_process_exec` Probe:** Intercepts `execve` events. Translates `current` via `current_ids()` (global tgid and `ns_pid` 0 when the helper fails, D12). Invokes `promote(&ids)` to promote any pending `TRACK_REQUESTS`. If tracked and resolved, populates `NS_TO_GLOBAL`; if tracked, reads process metadata (`comm`, `uid`, `filename`, timestamp), and writes a 168-byte `ExecEvent` to `AUDIT_EVENTS` (256 KiB ring buffer). Reservation failure increments `DROPPED_EVENTS[0]` (`dropped_events`).
+3. **`sched_process_exit` Probe:** Intercepts process termination. Removes exiting global `gpid` from `TRACKED_PIDS`. When the namespace IDs resolve, removes `nspid` from `NS_TO_GLOBAL`. When a thread group leader exits (`gpid == gtgid`), removes `nstgid` from `TRACK_REQUESTS`.
 4. **Counters (`DROPPED_EVENTS`):** A two-slot `PerCpuArray<u64>`:
    - Slot 0: Ring-buffer reserve failures (`ProbeHandle::dropped_events`, emitted on `{"dropped":N}` lines).
    - Slot 1: Fork inserts and track promotions refused because `TRACKED_PIDS` was full (`Probes::tracking_failures`); a non-zero count indicates a child worker escaped tracking.
@@ -132,8 +139,8 @@ The eBPF subsystem manages translation through five dedicated BPF maps:
 |---|---|---|---|---|---|
 | `PIDNS_CONFIG` | `Array<[u64; 2]>` | `u32` (index 0) | `[u64; 2]` (`[dev, ino]`) | 1 | Daemon writes at load; kernel reads via `bpf_get_ns_current_pid_tgid`. `[0, 0]` disables translation. |
 | `TRACK_REQUESTS` | `HashMap<u32, u32>` | `u32` (`ns_tgid`) | `u32` (`ns_ppid`) | 1024 | Userspace writes via `track(pid, ppid)`; stores pending track requests in namespace coordinates. |
-| `TRACKED_PIDS` | `HashMap<u32, u32>` | `u32` (`global_tgid`/`child_pid`) | `u32` (`ns_ppid`) | 1024 | Kernel writes upon promotion or child fork; keys tracking by global task ID. |
-| `NS_TO_GLOBAL` | `HashMap<u32, u32>` | `u32` (`ns_pid`) | `u32` (`global_pid`) | 1024 | Kernel writes upon promotion or exec; maps namespace pid to global task ID for `untrack` and `is_tracked`. |
+| `TRACKED_PIDS` | `HashMap<u32, u32>` | `u32` (`global_tgid`/`child_pid`) | `u32` (`ns_ppid`, 0 if unresolved) | 1024 | Kernel writes upon promotion or child fork; keys tracking by global task ID. |
+| `NS_TO_GLOBAL` | `HashMap<u32, u32>` | `u32` (`ns_pid`) | `u32` (`global_pid`) | 1024 | Kernel writes upon promotion or exec of a resolved task; maps namespace pid to global task ID for `untrack` and `is_tracked`. |
 | `AUDIT_EVENTS` | `RingBuf` | N/A | `ExecEvent` (168 bytes) | 256 KiB | Kernel writes on tracked exec; userspace drainer consumes in order. |
 | `DROPPED_EVENTS` | `PerCpuArray<u64>` | `u32` (slot 0 or 1) | `u64` (counter) | 2 | Per-CPU drop counters. Slot 0: ring buffer drops; Slot 1: tracking insert/promotion refusals. |
 
@@ -149,8 +156,9 @@ Because userspace cannot determine the kernel's global PID for a newly spawned p
    - If `gtgid` is absent, the probe queries `TRACK_REQUESTS` for `nstgid`.
    - When matched, the probe promotes the process by inserting `(gtgid, ns_ppid)` into `TRACKED_PIDS` and `(nstgid, gtgid)` into `NS_TO_GLOBAL`.
    - If `TRACKED_PIDS` is full, the probe increments `DROPPED_EVENTS[1]` (`tracking_failures`) and aborts tracking.
-3. **Fork Inheritance Phase:** When a tracked process forks, `sched_process_fork` intercepts the event. The parent's global PID is tracked, and the probe inserts `(child_pid, parent_nstgid)` directly into `TRACKED_PIDS`.
+3. **Fork Inheritance Phase:** When a tracked process forks, `sched_process_fork` intercepts the event. The parent's global PID is tracked, and the probe inserts `(child_pid, parent_nstgid)` directly into `TRACKED_PIDS`. Known limit (CER-2773 item 4): a forked child gets an `NS_TO_GLOBAL` entry only at its own exec, so `is_tracked(ns_pid)` reads false for it until then, while the kernel tracks it.
 4. **Eviction Phase:** When a process exits, `sched_process_exit` removes `gpid` from `TRACKED_PIDS` and `nspid` from `NS_TO_GLOBAL`. When the thread group leader exits (`gpid == gtgid`), it also removes `nstgid` from `TRACK_REQUESTS`.
+5. **Nested Namespace Fallback (D12):** When the helper fails, the probe has no namespace IDs. It uses `gtgid`, skips `TRACK_REQUESTS` and `NS_TO_GLOBAL`, emits `ns_pid` 0, and still evicts `gpid` at exit.
 
 #### `ExecEvent` Memory Layout (168 bytes)
 
@@ -160,13 +168,13 @@ Because userspace cannot determine the kernel's global PID for a newly spawned p
 |---|---|---|---|---|
 | `timestamp_ns` | `u64` | 0 | 8 | Monotonic timestamp from `bpf_ktime_get_ns()`. |
 | `pid` | `u32` | 8 | 4 | Global kernel thread group ID (`gtgid`). |
-| `ppid` | `u32` | 12 | 4 | Parent thread group ID in the daemon's PID namespace. |
+| `ppid` | `u32` | 12 | 4 | Parent thread group ID in the daemon's PID namespace; 0 when unresolved. |
 | `uid` | `u32` | 16 | 4 | User ID from `bpf_get_current_uid_gid()`. |
 | `comm` | `[u8; 16]` | 20 | 16 | Process command name from `bpf_get_current_comm()`. |
 | `filename` | `[u8; 128]` | 36 | 128 | Executed file path read from tracepoint context. |
-| `ns_pid` | `u32` | 164 | 4 | Process thread group ID in the daemon's PID namespace (`nstgid`). |
+| `ns_pid` | `u32` | 164 | 4 | Process thread group ID in the daemon's PID namespace (`nstgid`); 0 when unresolved (D12). |
 
-The daemon uses `ns_pid` to re-clamp priority via `setpriority(PRIO_PROCESS, ns_pid, 19)`. Because the daemon shares the PID namespace with workers, `ns_pid` resolves directly without privilege leaks or cross-namespace ambiguity.
+The daemon uses `ns_pid` to re-clamp priority via `setpriority(PRIO_PROCESS, ns_pid, 19)`. A non-zero `ns_pid` names the task in the daemon's namespace. `ns_pid` 0 means unresolved (D12): the daemon logs the event and does not re-clamp, because `who` 0 names the caller itself.
 
 ### Priority Clamping Invariants
 
@@ -208,7 +216,7 @@ The daemon uses `ns_pid` to re-clamp priority via `setpriority(PRIO_PROCESS, ns_
   WantedBy=multi-user.target
   ```
 - **Socket & Permissions:** Bound under umask `0117`, mode `0660`, owned by `--socket-group` (default `ctodie`).
-- **Peer Rules (SO_PEERCRED):** The daemon reads `SO_PEERCRED` on every connection and rejects connections without credentials. `track` is capped per non-root UID at 256 PIDs (`daemon::DEFAULT_TRACK_QUOTA`, `Daemon::with_track_quota`). Requests exceeding quota return `{"ok":false,"error":"track quota 256 reached for uid U"}`. Reason: `TRACKED_PIDS` (1024 entries) is shared across all clients and thread clones spend entries while running. Target process UID must equal peer UID (`/proc/<pid>/status`). `untrack` requires peer ownership. `stream` delivers only the peer's UID events. Root peers are exempt from all quotas and restrictions.
+- **Peer Rules (SO_PEERCRED):** The daemon reads `SO_PEERCRED` on every connection and rejects connections without credentials. `track` is capped per non-root UID at 256 PIDs (`daemon::DEFAULT_TRACK_QUOTA`, `Daemon::with_track_quota`). Requests exceeding quota return `{"ok":false,"error":"track quota 256 reached for uid U"}`. Reason: `TRACKED_PIDS` (1024 entries) is shared across all clients and thread clones spend entries while running. Target process UID must equal peer UID (`/proc/<pid>/status`). `untrack` requires peer ownership. `stream` delivers only the peer's UID events. Root peers are exempt from the quota and the uid rules. Every peer, root included, is refused when its `SO_PEERCRED` pid is absent or 0 or its pid namespace differs from the daemon's (D12).
 - **UDS Protocol:** JSON lines, max 4096 bytes per line:
   - `{"op":"track","pid":N,"ppid":P}` -> `{"ok":true}`
   - `{"op":"untrack","pid":N}` -> `{"ok":true}`
@@ -239,7 +247,7 @@ pub enum EbpfError {
 - [x] Create standalone eBPF subcrate `crates/cas-ebpf/ebpf/`.
 - [x] Configure nightly toolchain and `bpf-linker` via mise.
 - [x] Implement kernel tracepoint probes (`sched_process_exec`, `sched_process_fork`, `sched_process_exit`).
-- [x] Compile and verify relocatable ELF object (`cas-ebpf.o`, 7,864 bytes, Dual MIT/GPL, reproducible hash).
+- [x] Compile and verify relocatable ELF object (`cas-ebpf.o`, 8,568 bytes, Dual MIT/GPL, reproducible hash).
 - [x] Add `cas-ebpf.o` artifact, SHA-256 hash file, and `make ebpf-build` recipe.
 - [x] Implement `build.rs` in `cas-ebpf` that refuses to build when the object and the hash file disagree.
 - [x] Implement userspace BPF loader and map bindings in `cas-ebpf` (`loader::Probes`).
@@ -250,15 +258,22 @@ pub enum EbpfError {
 - [x] Live gate on ceres (`make ebpf-test`, sudo, 2026-10-10): attach, event capture with `ns_pid`, fork propagation, exit eviction, counters pass 8 of 8.
 - [ ] Wire `cas-pool` (spec 0015): `enter_clamped_group` in `pre_exec`, `DaemonClient::track` after spawn, `AuditReceipt` into Saga receipt, `unattested` fallback.
 - [ ] Install the unit on ceres (`crates/cas-ebpf/cas-ebpfd.service`), operator-run.
+- [x] Nested namespace fix (D12, CER-2773): fallback in the probes, `ns_pid != pid` fixtures, the global-keyed exit assertion, the peer namespace check; sonnet builder.
+- [x] Re-run the live gate with `nested_pid_namespace_exec_is_audited` (ceres, sudo `make ebpf-test`, 2026-10-10: 9 passed, 0 failed); object 8,568 bytes, sha256 `e49eb9e7c912...`.
 - [x] Update `specs/README.md` (status in-progress).
 
 ## Test
 
 ```bash
-# Unit tests in workspace (unprivileged, probe-and-skip)
-cargo test -p cas-ebpf -j 2 --lib
+# Unit and integration tests (unprivileged; live cases print `skipped` without CAP_BPF)
+cargo nextest run -p cas-ebpf --build-jobs 2
 
-# Real eBPF probe integration tests (requires sudo on ceres)
+# Kernel object: the rebuild must reproduce the committed object and hash
+make ebpf-build JOBS=2 && git diff --exit-code -- crates/cas-ebpf/ebpf/
+
+# Real eBPF probe integration tests (requires sudo on ceres). Includes the
+# nested case `nested_pid_namespace_exec_is_audited` (D12) and the
+# global-keyed `exit_evicts_the_child_from_the_map`.
 make ebpf-test JOBS=2
 ```
 
