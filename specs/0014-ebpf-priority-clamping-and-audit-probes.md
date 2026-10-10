@@ -32,7 +32,7 @@ Facts, measured 2026-10-09 on ceres (kernel `6.6.87.2-microsoft-standard-WSL2`):
 - **T1: Toolchain Installation [verified]:** `bpf-linker 0.11.1` installed via mise (musl binary, SLSA sha256 `c974140662f783c37bf0267436409caa8f4708ec10b558d9d1c594385489fe2f`). Standard `cargo install` fails without system LLVM 23.
 - **T2: Toolchain Inventory [verified]:** `rustup toolchain list` contains stable, nightly, and 1.94.1.
 - **T3: Nightly rust-src Component [verified]:** Installed via `rustup component add rust-src --toolchain nightly` (`1.101.0-nightly (ea137335b 2026-10-05)`).
-- **T4: Bytecode Compilation [verified]:** `crates/cas-ebpf/ebpf` builds under nightly with `-Z build-std=core` into a 7,864 byte ELF (`cas-ebpf.o`). Sections: `tracepoint`, `license`, `maps`. No `.BTF` section needed.
+- **T4: Bytecode Compilation [verified]:** `crates/cas-ebpf/ebpf` builds under nightly with `-Z build-std=core` into a 8,568 byte ELF (measured 2026-10-10 after D12; 7,864 before) (`cas-ebpf.o`). Sections: `tracepoint`, `license`, `maps`. No `.BTF` section needed.
 - **T5: Subcrate Manifests [verified]:** Subcrate contains independent `Cargo.toml`, `rust-toolchain.toml`, and `.cargo/config.toml` targeting `bpfel-unknown-none`.
 - **T6: Autogroup Configuration [verified]:** `CONFIG_SCHED_AUTOGROUP` is NOT set on WSL2 (`/proc/self/autogroup` ENOENT).
 - **T7: Tracepoint Layouts [verified]:** Formats on ceres: `sched_process_exec` (`filename` at 8, `pid` at 12); `sched_process_fork` (`parent_comm` at 8, `parent_pid` at 24, `child_comm` at 28, `child_pid` at 44; parent tgid from `bpf_get_current_pid_tgid() >> 32`); `sched_process_exit` (`comm` at 8, `pid` at 24, `prio` at 28). Main thread pid equals tgid.
@@ -247,7 +247,7 @@ pub enum EbpfError {
 - [x] Create standalone eBPF subcrate `crates/cas-ebpf/ebpf/`.
 - [x] Configure nightly toolchain and `bpf-linker` via mise.
 - [x] Implement kernel tracepoint probes (`sched_process_exec`, `sched_process_fork`, `sched_process_exit`).
-- [x] Compile and verify relocatable ELF object (`cas-ebpf.o`, 7,864 bytes, Dual MIT/GPL, reproducible hash).
+- [x] Compile and verify relocatable ELF object (`cas-ebpf.o`, 8,568 bytes, Dual MIT/GPL, reproducible hash).
 - [x] Add `cas-ebpf.o` artifact, SHA-256 hash file, and `make ebpf-build` recipe.
 - [x] Implement `build.rs` in `cas-ebpf` that refuses to build when the object and the hash file disagree.
 - [x] Implement userspace BPF loader and map bindings in `cas-ebpf` (`loader::Probes`).
@@ -258,8 +258,8 @@ pub enum EbpfError {
 - [x] Live gate on ceres (`make ebpf-test`, sudo, 2026-10-10): attach, event capture with `ns_pid`, fork propagation, exit eviction, counters pass 8 of 8.
 - [ ] Wire `cas-pool` (spec 0015): `enter_clamped_group` in `pre_exec`, `DaemonClient::track` after spawn, `AuditReceipt` into Saga receipt, `unattested` fallback.
 - [ ] Install the unit on ceres (`crates/cas-ebpf/cas-ebpfd.service`), operator-run.
-- [ ] Nested namespace fix (D12, CER-2773): fallback in the probes, `ns_pid != pid` fixtures, the global-keyed exit assertion, the peer namespace check; sonnet builder.
-- [ ] Re-run the live gate with `nested_pid_namespace_exec_is_audited` (operator-run); record the new object size and hash.
+- [x] Nested namespace fix (D12, CER-2773): fallback in the probes, `ns_pid != pid` fixtures, the global-keyed exit assertion, the peer namespace check; sonnet builder.
+- [x] Re-run the live gate with `nested_pid_namespace_exec_is_audited` (ceres, sudo `make ebpf-test`, 2026-10-10: 9 passed, 0 failed); object 8,568 bytes, sha256 `e49eb9e7c912...`.
 - [x] Update `specs/README.md` (status in-progress).
 
 ## Test
