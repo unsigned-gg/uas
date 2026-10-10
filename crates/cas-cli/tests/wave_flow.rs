@@ -992,7 +992,7 @@ fn wave_step_executor_error_halts_and_exits_3() {
     );
     write(
         &repo.join("tasks/wave-x-build/task.toml"),
-        "provider = \"claude\"\nmodel = \"haiku\"\n",
+        "provider = \"claude\"\nmodel = \"sonnet\"\n",
     );
     // A PATH with git and no blackwall: the Builder's first call cannot start.
     let bin = home.join("bin");
@@ -1187,7 +1187,7 @@ fn gate_case(name: &str, log: &str, blackwall_exit: i32) -> Gate {
     write(&repo.join("tasks/wave-x-build/prompt.md"), "Build.\n");
     write(
         &repo.join("tasks/wave-x-build/task.toml"),
-        "model = \"haiku\"\n",
+        "model = \"sonnet\"\n",
     );
     let real_git = std::env::var_os("PATH")
         .and_then(|p| {
