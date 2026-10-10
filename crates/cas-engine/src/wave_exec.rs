@@ -937,7 +937,9 @@ impl WaveExecutor {
                         (format!("{up} (PR {pr})"), rec.facts.merge_commit.clone())
                     }
                 };
-                let merged = match tip {
+                // The reason carries git's exit code. Exit 128 means git does not hold the
+                // commit: the checkout needs a fetch.
+                let reason = match tip {
                     Some(tip) => {
                         let out = self.run(
                             &repo,
@@ -945,12 +947,19 @@ impl WaveExecutor {
                             &["merge-base", "--is-ancestor", &tip, &base],
                             None,
                         )?;
-                        out.status.code() == Some(0)
+                        match out.status.code() {
+                            Some(0) => None,
+                            Some(128) => Some(format!(
+                                "{named}: git merge-base exit 128; run git fetch origin"
+                            )),
+                            Some(code) => Some(format!("{named}: git merge-base exit {code}")),
+                            None => Some(format!("{named}: git merge-base ended by a signal")),
+                        }
                     }
-                    None => false,
+                    None => Some(named),
                 };
-                if !merged {
-                    return Ok(Err(NotReady::UpstreamNotMerged(named)));
+                if let Some(reason) = reason {
+                    return Ok(Err(NotReady::UpstreamNotMerged(reason)));
                 }
             }
         }

@@ -581,7 +581,9 @@ fn wave_not_ready_merge_commit_not_in_base() {
     for _ in 0..2 {
         assert_eq!(
             exec.run_step("build-b", 2).unwrap().outcome,
-            StepOutcome::NotReady(NotReady::UpstreamNotMerged("build-a (PR 57)".into()))
+            StepOutcome::NotReady(NotReady::UpstreamNotMerged(
+                "build-a (PR 57): git merge-base exit 1".into()
+            ))
         );
     }
     // The commit is recorded, so the second call reads nothing: one pre-read in all.
@@ -590,6 +592,35 @@ fn wave_not_ready_merge_commit_not_in_base() {
     let reads = env.argv().iter().filter(|l| *l == PREREAD).count();
     assert_eq!(reads, 1, "{:?}", env.argv());
     assert_no_merge_calls(&env);
+}
+
+#[test]
+fn wave_not_ready_merge_commit_unfetched() {
+    let env = Env::new("wave_not_ready_merge_commit_unfetched");
+    let exec = with_pr_57(&env);
+    env.tool(
+        "gh",
+        merge_read(b"4e7c000000000000000000000000000000000000\n", 0),
+    );
+    // git exits 128 on a commit it does not hold: the checkout lacks the merge commit.
+    env.tool(
+        "git",
+        vec![r(
+            "merge-base --is-ancestor 4e7c000000000000000000000000000000000000 *",
+            b"",
+            "",
+            128,
+        )],
+    );
+    let got = exec.run_step("build-b", 2).unwrap().outcome;
+    let StepOutcome::NotReady(NotReady::UpstreamNotMerged(reason)) = got else {
+        panic!("not an upstream wait: {got:?}");
+    };
+    assert!(reason.contains("build-a (PR 57)"), "{reason}");
+    assert!(
+        reason.contains("128") && reason.contains("fetch origin"),
+        "{reason}"
+    );
 }
 
 #[test]
@@ -615,7 +646,9 @@ fn wave_not_ready_upstream_no_pr_uses_head_ancestry() {
         } else {
             assert_eq!(
                 out,
-                StepOutcome::NotReady(NotReady::UpstreamNotMerged("build-a (no PR)".into()))
+                StepOutcome::NotReady(NotReady::UpstreamNotMerged(
+                    "build-a (no PR): git merge-base exit 1".into()
+                ))
             );
         }
         assert!(

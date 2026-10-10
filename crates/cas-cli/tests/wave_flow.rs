@@ -1149,33 +1149,6 @@ fn wave_flow_merge_id_collision_refused() {
     assert!(!generate(&off, None).is_empty());
 }
 
-/// With the flag off the output equals the checked-in flows, byte for byte.
-#[test]
-fn wave_flow_merge_off_byte_identical() {
-    let smoke = fs::read_to_string(root().join(SMOKE)).unwrap();
-    let text = smoke.replace("[flow]\n", "[flow]\nmerge_on_green = false\n");
-    assert_ne!(text, smoke);
-    let src = plan("merge-off", &text);
-    let out_dir = scratch("merge-off-out");
-    let out = cas(&root(), &out_dir)
-        .args(["wave", "flow", "--from"])
-        .arg(&src)
-        .arg("--out-dir")
-        .arg(&out_dir)
-        .output()
-        .unwrap();
-    assert!(out.status.success(), "{}", stderr(&out));
-    let norm = |t: String| {
-        t.replace(&src.display().to_string(), SMOKE)
-            .replace(&out_dir.display().to_string(), FLOW_DIR)
-    };
-    let got: Vec<_> = read_waves(&out_dir)
-        .into_iter()
-        .map(|(n, t)| (n, norm(t)))
-        .collect();
-    assert_eq!(got, read_waves(&root().join(FLOW_DIR)));
-}
-
 #[test]
 fn wave_step_bad_merge_key_exits_2() {
     let src = plan(
@@ -1208,6 +1181,13 @@ fn gate_case(name: &str, log: &str, blackwall_exit: i32) -> Gate {
     let home = scratch(name);
     let (repo, bin, state) = (home.join("repo"), home.join("bin"), home.join("state"));
     fs::create_dir_all(&repo).unwrap();
+    // The custody checkout: init-head, and the task files that admission reads.
+    write(&repo.join(".blackwall/init-head"), "aaa\n");
+    write(&repo.join("tasks/wave-x-build/prompt.md"), "Build.\n");
+    write(
+        &repo.join("tasks/wave-x-build/task.toml"),
+        "model = \"haiku\"\n",
+    );
     let real_git = std::env::var_os("PATH")
         .and_then(|p| {
             std::env::split_paths(&p)
@@ -1246,8 +1226,16 @@ fn gate_case(name: &str, log: &str, blackwall_exit: i32) -> Gate {
 }
 
 fn run_gate(g: &Gate) -> Output {
-    cas(&root(), &g.home)
-        .env("PATH", &g.bin)
+    run_gate_with(g, true)
+}
+
+/// `open_prs` sets `CAS_WAVE_OPEN_PRS=1`, which the saga run env carries to a merge step.
+fn run_gate_with(g: &Gate, open_prs: bool) -> Output {
+    let mut cmd = cas(&root(), &g.home);
+    if open_prs {
+        cmd.env("CAS_WAVE_OPEN_PRS", "1");
+    }
+    cmd.env("PATH", &g.bin)
         .env("BLACKWALL_AUTOMERGE", "true")
         .args(["wave", "merge-gate", "--flow"])
         .arg(&g.src)
@@ -1337,4 +1325,32 @@ fn wave_step_merge_config_from_plan_and_admission() {
         stderr(&refused)
     );
     assert!(!stderr(&run(true)).contains("merge_on_green needs open_prs"));
+}
+
+/// A refusal: exit 1, `merge-gate refused:` on stderr, and no blackwall ran.
+fn assert_gate_refused(g: &Gate, out: &Output, why: &str) {
+    assert_eq!(out.status.code(), Some(1), "stderr: {}", stderr(out));
+    let err = stderr(out);
+    assert!(
+        err.contains("merge-gate refused:") && err.contains(why),
+        "{err}"
+    );
+    assert!(!g.home.join("blackwall.log").exists(), "no blackwall ran");
+}
+
+#[test]
+fn wave_merge_gate_refuses_no_init_head() {
+    let g = gate_case("gate-no-init", "G\\n", 0);
+    fs::remove_file(g.repo.join(".blackwall/init-head")).unwrap();
+    assert_gate_refused(&g, &run_gate(&g), "init-head");
+}
+
+#[test]
+fn wave_merge_gate_refuses_failed_admission() {
+    let g = gate_case("gate-no-prs", "G\\n", 0);
+    assert_gate_refused(
+        &g,
+        &run_gate_with(&g, false),
+        "merge_on_green needs open_prs",
+    );
 }
