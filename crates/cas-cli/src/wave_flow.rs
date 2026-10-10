@@ -476,14 +476,19 @@ pub fn run_merge_gate(args: &StepArgs, env: &WaveEnv, cwd: &Path) -> i32 {
     }
 }
 
-/// Whether `<repo>/blackwall.toml` leaves merge-gate unarmed. `Err` names why not.
+/// Whether `<repo>/blackwall.toml` says `[merge] automerge = false`. Fail closed: an absent key,
+/// another value or a file that is missing or does not parse is `Err`, and it names why.
 fn unarmed(repo: &Path) -> std::result::Result<(), String> {
     let path = repo.join("blackwall.toml");
     let text = fs::read_to_string(&path).map_err(|e| format!("read {}: {e}", path.display()))?;
     let value: toml::Value =
         toml::from_str(&text).map_err(|e| format!("{} does not parse: {e}", path.display()))?;
     match value.get("merge").and_then(|m| m.get("automerge")) {
-        None | Some(toml::Value::Boolean(false)) => Ok(()),
+        Some(toml::Value::Boolean(false)) => Ok(()),
+        None => Err(format!(
+            "{} has no [merge] automerge = false; merge-gate stays unarmed",
+            path.display()
+        )),
         Some(other) => Err(format!(
             "{} sets [merge] automerge = {other}; merge-gate stays unarmed",
             path.display()
@@ -529,7 +534,7 @@ fn merge_gate_inner(args: &StepArgs, env: &WaveEnv, cwd: &Path) -> Result<i32> {
         return Ok(1);
     }
     // Merge-gate stays unarmed while EST-558 stands: the reviewed `blackwall.toml` must exist,
-    // parse, and not set `[merge] automerge = true` (F23, D15). The PR that arms merge-gate
+    // parse, and say `[merge] automerge = false` (F23, D15). The PR that arms merge-gate
     // lifts this refusal.
     if let Err(reason) = unarmed(&repo) {
         eprintln!("merge-gate refused: {reason}");
