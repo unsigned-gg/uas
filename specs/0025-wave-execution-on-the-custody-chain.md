@@ -200,8 +200,9 @@ parameter (F9, F16). Each flow holds:
 - a gate step (`heimdal:approval`) for each MainSession step with a direct
   dependent in the wave. Those dependents depend on it. A MainSession step
   with no dependent stays in its own wave's flow.
-- `[limits] max_in_flight`, the plan's `max_concurrency`. No gate sits between
-  waves.
+- `deps` that name only steps in the same flow. `cas wave step` checks deps on
+  earlier waves from their records.
+- `[limits] max_in_flight`, the plan's `max_concurrency`. No gate sits between waves.
 
 Between two runs, the wave's open PRs merge as D15 rules. Before a wave with a
 dependent Builder, the integrator runs `git fetch`, moves the custody checkout
