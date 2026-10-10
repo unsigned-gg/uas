@@ -1,5 +1,6 @@
 //! Landing activity tests. Each test puts fake `git` and `blackwall` scripts first on `PATH`.
 //! The scripts log their argv and return canned output, so no real repository is touched.
+//! Each test's temp dir is removed when its `Scratch` guard drops, also on panic.
 
 use std::ffi::OsString;
 use std::fs;
@@ -11,13 +12,28 @@ use cas_engine::{LandingActivity, LandingConfig, LandingInput, LandingOutcome};
 const BASE: &str = "056d7c7abcdef";
 const RUN: &str = "bw-0123456789abcdef";
 const BRANCH: &str = "blackwall/bw-012345678";
+const VERIFY_CMD: &str = "make check JOBS=2 && make hygiene JOBS=2";
 
-/// A fresh temp dir for one test, holding the fake tools and their canned output.
-fn scratch(test: &str) -> PathBuf {
-    let dir = std::env::temp_dir().join(format!("cas-landing-{}-{test}", std::process::id()));
-    let _ = fs::remove_dir_all(&dir);
-    fs::create_dir_all(&dir).unwrap();
-    dir
+/// A temp dir for one test, removed when the guard drops.
+struct Scratch(PathBuf);
+
+impl Scratch {
+    fn new(test: &str) -> Self {
+        let dir = std::env::temp_dir().join(format!("cas-landing-{}-{test}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        Self(dir)
+    }
+
+    fn path(&self) -> &Path {
+        &self.0
+    }
+}
+
+impl Drop for Scratch {
+    fn drop(&mut self) {
+        let _ = fs::remove_dir_all(&self.0);
+    }
 }
 
 /// Write `#!/bin/sh` script `name`. It appends its argv to `argv.log`, then prints
@@ -52,6 +68,22 @@ fn canned(dir: &Path, key: &str, code: Option<i32>, stdout: &str) {
         fs::write(dir.join(format!("{key}.code")), code.to_string()).unwrap();
     }
     fs::write(dir.join(format!("{key}.out")), stdout).unwrap();
+}
+
+/// The repo's `blackwall.toml`, with the `[verify]` command that the repo sets.
+fn write_blackwall_toml_with_verify(dir: &Path) {
+    let body =
+        format!("[defaults]\nprovider = \"claude\"\n\n[verify]\ncommand = \"{VERIFY_CMD}\"\n");
+    fs::write(dir.join("blackwall.toml"), body).unwrap();
+}
+
+/// A `blackwall.toml` that has no `[verify]` section.
+fn write_blackwall_toml_without_verify(dir: &Path) {
+    fs::write(
+        dir.join("blackwall.toml"),
+        "[defaults]\nprovider = \"claude\"\n",
+    )
+    .unwrap();
 }
 
 /// The config for one test: repo dir in the scratch dir, fake tools first on `PATH`.
@@ -98,10 +130,12 @@ fn run_landing(dir: &Path, evaluator_touched: bool) -> LandingOutcome {
 
 #[test]
 fn landing_stale_base_refuses() {
-    let dir = scratch("landing_stale_base_refuses");
-    canned(&dir, "git-merge-base", Some(1), "");
-    canned(&dir, "git-rev-parse", None, "ffeedd0011\n");
-    let outcome = run_landing(&dir, false);
+    let scratch = Scratch::new("landing_stale_base_refuses");
+    let dir = scratch.path();
+    write_blackwall_toml_with_verify(dir);
+    canned(dir, "git-merge-base", Some(1), "");
+    canned(dir, "git-rev-parse", None, "ffeedd0011\n");
+    let outcome = run_landing(dir, false);
 
     let LandingOutcome::StaleBase {
         receipt,
@@ -114,9 +148,8 @@ fn landing_stale_base_refuses() {
     assert!(receipt.facts().stale_base);
     assert_eq!(receipt.facts().verify_exit, None);
     assert_eq!(receipt.evidence(), EvidenceTier::Reported);
-    let log = argv_log(&dir);
     assert_eq!(
-        log,
+        argv_log(dir),
         [
             format!("git merge-base --is-ancestor {BASE} origin/development"),
             "git rev-parse origin/development".to_owned(),
@@ -127,34 +160,39 @@ fn landing_stale_base_refuses() {
 
 #[test]
 fn landing_nonzero_verify_opens_no_pr() {
-    let dir = scratch("landing_nonzero_verify_opens_no_pr");
-    canned(&dir, "blackwall-reconcile", Some(2), "verify failed\n");
-    let outcome = run_landing(&dir, false);
+    let scratch = Scratch::new("landing_nonzero_verify_opens_no_pr");
+    let dir = scratch.path();
+    write_blackwall_toml_with_verify(dir);
+    // blackwall 1.2.0 maps every error to exit 1 (usage errors to 2).
+    canned(dir, "blackwall-reconcile", Some(1), "verify failed\n");
+    let outcome = run_landing(dir, false);
 
     let LandingOutcome::VerifyFailed(receipt) = outcome else {
         panic!("expected VerifyFailed, got {outcome:?}");
     };
-    assert_eq!(receipt.facts().verify_exit, Some(2));
+    assert_eq!(receipt.facts().verify_exit, Some(1));
     assert_eq!(receipt.evidence(), EvidenceTier::Reported);
     assert_eq!(receipt.facts().branch, None);
     assert_eq!(receipt.facts().pr_number, None);
-    let log = argv_log(&dir);
+    let log = argv_log(dir);
     assert!(
         !log.iter().any(|line| line.starts_with("blackwall pr")),
-        "a failed verify must not open a PR: {log:?}"
+        "a failed reconcile must not open a PR: {log:?}"
     );
 }
 
 #[test]
 fn landing_opens_pr_on_exit_zero() {
-    let dir = scratch("landing_opens_pr_on_exit_zero");
+    let scratch = Scratch::new("landing_opens_pr_on_exit_zero");
+    let dir = scratch.path();
+    write_blackwall_toml_with_verify(dir);
     canned(
-        &dir,
+        dir,
         "blackwall-pr",
         Some(0),
         "opened https://github.com/cerebral-work/cas-substrate/pull/57\n",
     );
-    let outcome = run_landing(&dir, false);
+    let outcome = run_landing(dir, false);
 
     let LandingOutcome::Opened(receipt) = outcome else {
         panic!("expected Opened, got {outcome:?}");
@@ -164,7 +202,7 @@ fn landing_opens_pr_on_exit_zero() {
     assert_eq!(receipt.facts().verify_exit, Some(0));
     assert_eq!(receipt.evidence(), EvidenceTier::Verified);
     assert_eq!(
-        argv_log(&dir),
+        argv_log(dir),
         [
             format!("git merge-base --is-ancestor {BASE} origin/development"),
             format!("blackwall reconcile {RUN} --base {BASE} --branch {BRANCH}"),
@@ -175,14 +213,16 @@ fn landing_opens_pr_on_exit_zero() {
 
 #[test]
 fn landing_evaluator_touched_caps_tier() {
-    let dir = scratch("landing_evaluator_touched_caps_tier");
+    let scratch = Scratch::new("landing_evaluator_touched_caps_tier");
+    let dir = scratch.path();
+    write_blackwall_toml_with_verify(dir);
     canned(
-        &dir,
+        dir,
         "blackwall-pr",
         Some(0),
         "https://github.com/cerebral-work/cas-substrate/pull/58\n",
     );
-    let outcome = run_landing(&dir, true);
+    let outcome = run_landing(dir, true);
 
     let LandingOutcome::Opened(receipt) = outcome else {
         panic!("expected Opened, got {outcome:?}");
@@ -191,4 +231,28 @@ fn landing_evaluator_touched_caps_tier() {
     assert_eq!(receipt.facts().verify_exit, Some(0));
     assert_eq!(receipt.evidence(), EvidenceTier::Reported);
     assert_eq!(receipt.facts().pr_number, Some(58));
+}
+
+#[test]
+fn landing_missing_verify_is_reported() {
+    // blackwall 1.2.0 exits 0 with only a warning when [verify] is absent, so exit 0
+    // alone must not earn `verified`.
+    let scratch = Scratch::new("landing_missing_verify_is_reported");
+    let dir = scratch.path();
+    write_blackwall_toml_without_verify(dir);
+    canned(
+        dir,
+        "blackwall-pr",
+        Some(0),
+        "https://github.com/cerebral-work/cas-substrate/pull/59\n",
+    );
+    let outcome = run_landing(dir, false);
+
+    let LandingOutcome::Opened(receipt) = outcome else {
+        panic!("expected Opened, got {outcome:?}");
+    };
+    assert_eq!(receipt.facts().verify_cmd, None);
+    assert_eq!(receipt.facts().verify_exit, Some(0));
+    assert_eq!(receipt.facts().pr_number, Some(59));
+    assert_eq!(receipt.evidence(), EvidenceTier::Reported);
 }
