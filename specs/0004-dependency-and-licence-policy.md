@@ -177,7 +177,7 @@ metadata, read 2026-10-09.
 | `libc` | 0.2.169 | MIT OR Apache-2.0 | none | 2 | pinned, NOT in the workspace: `rustix` 1.1.5 (already approved) provides `setpgid` and `setpriority_pgrp` without `unsafe`, so cas-ebpf uses it instead (lane Claude, 2026-10-09) |
 | `gix` | 0.88.0 | MIT OR Apache-2.0 | cas-pool | 3 | default-features off, minimal features; MSRV 1.88; fallback 0.87.1 |
 | `agent-client-protocol` | 2.2.0 | Apache-2.0 | cas-acp | 3 | MSRV 1.88; 3.x is under 14 days old. In use since spec 0016 (2026-10-10); transitive pull in D1 |
-| `tokio` | 1.53.1 | MIT | cas-router, cas-deck, cas-storage; cas-engine behind feature `cortex-grpc` (spec 0026; CAS lane amendment, Christian corrects it in place); cas-pool as a dev-dependency, for its tests and the spec 0019 Option B benchmark (same amendment) | 4, 5, 6 | default-features off; `rt-multi-thread`, `macros`, `net`, `time`, `sync`. The cas-pool runtime stays open (spec 0001 gap 1). In use since spec 0013 (2026-10-09) in cas-router, plus `io-util` (a feature of the same crate, needed by `AsyncReadExt` and `AsyncWriteExt`; CAS lane amendment, Christian corrects it in place) |
+| `tokio` | 1.53.1 | MIT | cas-router, cas-deck, cas-ebpf; cas-engine behind feature `cortex-grpc` (spec 0026) and as a dev-dependency; cas-pool as a dev-dependency, for its tests and the spec 0019 Option B benchmark (CAS lane amendment, read from `crates/*/Cargo.toml` on 2026-10-10; Christian corrects it in place) | 4, 5, 6 | default-features off; `rt-multi-thread`, `macros`, `net`, `time`, `sync`. The cas-pool runtime stays open (spec 0001 gap 1). In use since spec 0013 (2026-10-09) in cas-router, plus `io-util` (a feature of the same crate, needed by `AsyncReadExt` and `AsyncWriteExt`; CAS lane amendment, Christian corrects it in place) |
 | `sha2` | 0.11.0 | MIT OR Apache-2.0 | cas-ebpf, cas-router | 2, 4 | none |
 | `reqwest` | 0.13.5 | MIT OR Apache-2.0 | cas-router, cas-deck | 4, 5 | default-features off; `rustls` (aws-lc-rs provider, needs cmake), `http2`, `json`, `stream` |
 | `futures-util` | 0.3.34 | MIT OR Apache-2.0 | cas-router, cas-deck | 4, 5 | none |
@@ -226,12 +226,12 @@ Status: pinned by the lane (cas-engineer w10:pM), 2026-10-10. This is not the ap
 
 ### heph, not buildable (spec 0019 D2, record only)
 
-Status: recorded by the lane, 2026-10-10, as the facts behind spec 0019 D2: not buildable and not pinned for use. Christian ruled Option C out of the benchmark, with no `deny.toml` git allowance [reported, relayed by the integrator, mesh 039fef48]. Licences and versions read with `cargo info` from the crates.io index [verified, 2026-10-10]; `cargo deny check` on a throwaway project with both: "advisories ok, bans ok, licenses ok, sources ok", 50 packages [verified, 2026-10-10T18:41Z]. The dossier (`research@6835e21:repos/heph.md`, a draft) names io_uring; the 0.4.x releases use `mio` 0.8 (epoll) [verified, the probe's lockfile].
+Status: recorded by the lane, 2026-10-10, as the facts behind spec 0019 D2: not buildable and not pinned for use. No workspace declares them, so `pin-check` skips them. Christian ruled Option C out of the benchmark, with no `deny.toml` git allowance [reported, relayed by the integrator, mesh 039fef48]. Licences and versions read with `cargo info` from the crates.io index [verified, 2026-10-10]; `cargo deny check` on a throwaway project with both: "advisories ok, bans ok, licenses ok, sources ok", 50 packages [verified, 2026-10-10T18:41Z]. The dossier (`research@6835e21:repos/heph.md`, a draft) names io_uring; the 0.4.x releases use `mio` 0.8 (epoll) [verified, the probe's lockfile].
 
 | Crate | Version | Licence | Used by | Conditions |
 |---|---|---|---|---|
-| `heph` | 0.4.0 | MIT | none (record only) | nightly only (`#![feature]`); does not build on nightly 2026-10-05 (E0557, `doc_auto_cfg` and `doc_cfg_hide` removed) [verified, `cargo +nightly check -j 2`] |
-| `heph-rt` | 0.4.1 | MIT | none (record only) | nightly only; its features include the removed `drain_filter` [verified, read `src/lib.rs`] |
+| `heph` | 0.4.0 | MIT | none (record only) | nightly only (`#![feature]`); does not build on `nightly-2026-10-06` (rustc 1.101.0-nightly ea137335b, dated 2026-10-05): E0557, `doc_auto_cfg` and `doc_cfg_hide` removed [verified, `cargo +nightly check -j 2`] |
+| `heph-rt` | 0.4.1 | MIT | none (record only) | nightly only; its `#![feature]` list (`src/lib.rs:128`) holds `doc_auto_cfg`, `doc_cfg_hide` and `drain_filter`, all removed [verified, read]; so it would fail with E0557 too [heuristic: the build stopped at `heph` first] |
 
 ### CI tools
 

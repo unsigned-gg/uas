@@ -167,12 +167,16 @@ The research names nine crates. This repo has ten because of `cas-cli`.
 
 These are not decided. Each needs a spec or an operator ruling before code.
 
-1. **Pool runtime.** Spec 0019 records the options and the facts. Christian ruled
-   Option A on the benchmark addendum on 2026-10-10, then re-opened D2 the same day:
-   the gang benchmarks Option B (tokio) against the Option A numbers (Option C is
-   ruled out: not buildable from crates.io)
-   before he rules again [reported, relayed by the integrator, mesh e42efbc2 and ca37e233]. Spec 0015 D5
-   (OS threads) stays the interim choice. `cas-domain` stays runtime-neutral.
+1. **Pool runtime.** The pool design shows thread-per-core actors (heph). The
+   heph evaluation keeps Tokio for cortex. See
+   `cerebral-work/research@4068134:repos/heph.md` line 92. Spec 0019 records the
+   options and the facts. Christian ruled Option A on the benchmark addendum on
+   2026-10-10, then re-opened D2 the same day: the gang benchmarks Option B (tokio)
+   against the Option A numbers; Option C is ruled out as not buildable from
+   crates.io [reported, relayed by the integrator, mesh e42efbc2, ca37e233 and
+   039fef48]. Spec 0015 D5 (OS threads) stays the interim choice. The gap closes
+   when Christian rules D2 on the A and B numbers. `cas-domain` stays
+   runtime-neutral either way.
 2. **Kernel `-j 2`.** Closed by spec 0020 (2026-10-10). The research claim that
    eBPF enforces two parallel jobs is dropped: `nice 19` is a priority, not a
    cap. The cap is the cgroup v2 CPU quota per slot (`cpu.max`, two CPUs by
