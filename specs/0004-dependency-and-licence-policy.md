@@ -145,6 +145,9 @@ the first use.
 | `landlock` 0.4.7 | MIT OR Apache-2.0 | `uas-sandbox`: filesystem rulesets | approved 2026-10-09, pinned, in use (spec 0010) | `rust-native-agent-substrate.md` section 3.3 |
 | madstack (`pgray/madstack`: Axum, Maud, htmx) | MIT | `uas-deck`: operator dashboard | approved 2026-10-09 (the operator, epic list below) as its crate pins: axum 0.8.9, maud 0.27.0, tower-http 0.7.1, tokio-stream 0.1.19; htmx is not a crate; axum and maud in the root Cargo.toml since P4 (2026-10-10), tower-http and tokio-stream not yet | `repos/madstack.md` |
 | rig-core 0.44 | MIT | model calls through the LiteLLM gateway, on need | pinned at 0.44.0 by the decision above, not in the workspace | `0xPlaygrounds/rig` |
+| `clap` 4.6.7 | MIT OR Apache-2.0 (`Cargo.toml` in the local registry, read 2026-10-10) | `uas-cli`, `uas-ebpf`: command-line parsing | approved 2026-10-10 for `derive` and `env`; `env` is approved by this amendment; in the workspace since before spec 0042, locked at 4.6.7 | spec 0042 D1, D2; plan 0042 P1; integrating lane w25:p1, 2026-10-10 |
+| `tracing-subscriber` 0.3.23 | MIT (`Cargo.toml` in the local registry, read 2026-10-10) | `uas-cli`, `uas-ebpf`: log output | approved 2026-10-10 for `env-filter` and `json`; `json` is approved by this amendment; locked at 0.3.23 | spec 0042 D1, D2; plan 0042 P1; integrating lane w25:p1, 2026-10-10 |
+| `tracing-serde` 0.2.0 | MIT (`Cargo.toml` in the local registry, read 2026-10-10) | pulled by the `json` feature of `tracing-subscriber`; no crate declares it | planned pin, approved by this amendment, not yet in `Cargo.lock` | spec 0042 D1, D2; plan 0042 P1; integrating lane w25:p1, 2026-10-10 |
 
 The research does not state the aya licence. The `aya-rs/aya` workspace
 `Cargo.toml` declares `MIT OR Apache-2.0` (read 2026-10-08). Re-read it at the
@@ -192,6 +195,9 @@ metadata, read 2026-10-09.
 | `governor` | 0.10.4 | MIT | identity | 7 | Phase 7 waits for the Director of Engineering |
 | `a2a-lf` | 0.3.1 | Apache-2.0 | uas-engine (A2A envelopes) | 7 | protocol conformance not verified; Phase 7 waits for the Director of Engineering |
 | `criterion` | 0.8.2 | Apache-2.0 OR MIT | benches (dev only) | 3, 8 | default-features off; `cargo_bench_support` |
+| `clap` | 4.6.7 | MIT OR Apache-2.0 | uas-cli, uas-ebpf | 2 | `derive`, `env`; `env` approved by this amendment (spec 0042 D1, D2; plan 0042 P1; integrating lane w25:p1, 2026-10-10) |
+| `tracing-subscriber` | 0.3.23 | MIT | uas-cli, uas-ebpf | 2 | `env-filter`, `json`; `json` approved by this amendment (spec 0042 D1, D2; plan 0042 P1; integrating lane w25:p1, 2026-10-10) |
+| `tracing-serde` | 0.2.0 | MIT | none (transitive) | 2 | planned pin: pulled by the `json` feature of `tracing-subscriber`; not yet in `Cargo.lock`; approved by this amendment (spec 0042 D2; plan 0042 P1; integrating lane w25:p1, 2026-10-10) |
 
 Not listed, with the reason:
 - `syntect` (deck highlighting): pulls `bincode`, unmaintained (RUSTSEC-2025-0141).

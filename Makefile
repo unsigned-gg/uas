@@ -102,6 +102,7 @@ release-notes: ## Roll CHANGELOG and bump version (VERSION=x.y.z)
 	[[ "$(VERSION)" =~ ^[0-9]+\.[0-9]+\.[0-9]+$$ ]] || { echo "usage: make release-notes VERSION=x.y.z" >&2; exit 2; }
 	[ -f CHANGELOG.md ] || { echo "CHANGELOG.md not found" >&2; exit 1; }
 	grep -q '^## \[Unreleased\]' CHANGELOG.md || { echo "CHANGELOG.md has no [Unreleased] heading" >&2; exit 1; }
+	rev=$$(git describe --always --dirty --abbrev=7); case "$$rev" in *-dirty) echo "release-notes: refusing a dirty tree ($$rev)" >&2; exit 2;; esac
 	sed -i '0,/^version = ".*"/s//version = "$(VERSION)"/' Cargo.toml
 	cargo update -w --offline 2>/dev/null || cargo update -w
 	awk -v v="$(VERSION)" -v d="$$(date -u +%F)" '
