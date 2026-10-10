@@ -13,7 +13,9 @@ opus, foreman on sonnet, builders on sonnet (the operator, 2026-10-10, estate-wi
 | `cas-builder` | sonnet | one package in a worktree | a brief names stable-Rust files and a done-when |
 | `cas-ebpf-builder` | sonnet | `crates/cas-ebpf`, the object and its hash | the package touches the kernel program or the loader |
 | `cas-critic` | opus | nothing | before any PR is marked ready, and on every builder SHA |
-| `cas-foreman` | sonnet | nothing | only when a pane gang is applied through saga (`cas-cockpit`) |
+| `cas-foreman` | sonnet | nothing | only when a pane gang is applied through saga (`cas-estate`) |
+| `cas-architect` | the team slot (max tier) | the design-debt list | in the `cas-estate` gang: a plan, spec or brief needs a design review |
+| `cas-prober` | haiku | nothing | in the `cas-estate` gang: the foreman names a CI, PR, repo or inbox probe |
 
 ## Two tiers
 
@@ -21,8 +23,8 @@ opus, foreman on sonnet, builders on sonnet (the operator, 2026-10-10, estate-wi
    tool: builders in sibling worktrees, then `cas-critic`, then the lane pushes with
    `git -C <worktree>`, opens the PR and lands on green. Surfaces are built once with
    `surface-builder` into `<surfaces>/cas/` and every agent reads them there.
-2. **Pane gang (on request).** `saga yggdrasil team apply cas-cockpit --cwd <repo>` splits a
-   herdr tab into the cockpit grid; the lane starts each pane with
+2. **Pane gang (on request).** `saga yggdrasil team apply cas-estate --cwd <repo>` splits a
+   herdr tab into the `estate-cockpit` grid; the lane starts each pane with
    `herdr agent start <name> --kind claude --pane <id> -- --model <alias>` and briefs it. The
    team is defined in `.saga/teams.toml`; its personas are the files here. The lane stays the
    integrator; the foreman never lands. Measured by the saga lane (2026-10-09): `--model` wins
