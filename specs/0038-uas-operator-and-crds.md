@@ -23,6 +23,7 @@ Facts, measured 2026-10-10 on ceres:
 - **F3 [reported]:** Specs 0010, 0011, 0013, and 0032 define Landlock rulesets, private network namespace isolation, and IPC proxy socket paths (`.ipc/llm.sock`, `.ipc/reverie.sock`).
 - **F4 [verified, 2026-10-10]:** `cas-domain` contains zero I/O imports. Command: `make smoke JOBS=2` grep check prints `smoke: ok`. Layering defined in Spec 0001 dictates `deck > acp > engine > pool > sandbox, ebpf > router > domain`.
 - **F5 [reported]:** Platform operator deployment and workload syncing to the Cygnus Kubernetes cluster are operator-gated actions requiring explicit human sign-off [reported: `~/.agents/sops/blast-radius-and-estate-ops.md`].
+- **F6 [reported]:** Unpublished estate crates `unsigned-k8s-core` and `unsigned-k8s-api` will be path dependencies into `~/projects/unsigned/paas` first, not published crates [reported: lane w25:p1, 2026-10-10].
 
 ## Design
 
@@ -36,12 +37,12 @@ The operator reconciles two primary Custom Resource Definitions (CRDs):
 
 | # | Decision | Rationale | Source |
 |---|---|---|---|
-| D1 | `uas-operator` lives in dedicated binary crate `crates/cas-operator` (renamed `crates/uas-operator` under Spec 0037). It sits below `cas-deck` and `cas-acp`, beside `cas-engine` (invoking lease paths), and above `cas-pool` and `cas-sandbox`. `cas-domain` remains zero I/O and free of `kube` dependencies. | Crate layering purity and separation of CLI from continuous reconciliation; Spec 0001; Spec 0037; CAS spec lane w1X:p1, 2026-10-10 |
+| D1 | `uas-operator` lives in dedicated binary crate `crates/cas-operator` (renamed `crates/uas-operator` under Spec 0037). It sits below `cas-deck` and `cas-acp`, beside `cas-engine` (invoking lease paths), and above `cas-pool` and `cas-sandbox`. `cas-domain` remains zero I/O and free of `kube` dependencies. | Crate layering purity and separation of CLI from continuous reconciliation; Spec 0001; Spec 0037 | proposed: CAS spec lane w1X:p1, 2026-10-10; awaits Christian confirmation (w1X:p22 notes location not decided yet; vespertin operator at ~/projects/unsigned/vespertin/operator) |
 | D2 | `WorkerSlot` reconciles to `cas-pool` slot leases and Spec 0036 D2 host locks (`slot-<i>.lock` under the Spec 0036 slot directory: `/tmp/cas-slots` default, `CAS_SLOT_DIR` override). Finalizer `uas.unsigned.gg/slot-cleanup` ensures cgroups, worktrees, and host lock descriptors are reclaimed before CR deletion. | Grounded lifecycle mapping to kernel-arbitrated host slots; Spec 0036 D2; CAS spec lane w1X:p1, 2026-10-10 |
 | D3 | `AgentSandbox` reconciles to `cas-sandbox` Landlock profiles, network namespace isolation, and IPC socket directory mounts (`.ipc`). Finalizer `uas.unsigned.gg/sandbox-cleanup` tears down IPC mounts and network namespaces. | Grounded sandboxing abstraction; CAS spec lane w1X:p1, 2026-10-10 |
 | D4 | Host lock authority on split-brain: If cluster scheduling demands exceed available host slot locks, the operator refuses oversubscription, sets status condition `CapacityExhausted`, and retries with backoff. Physical `-j 2` constraints are never violated. | Host throttling invariant; Spec 0002; Spec 0036; CAS spec lane w1X:p1, 2026-10-10 |
 | D5 | Inviolable operator boundaries: `uas-operator` never lands code to Git branches, never manages raw credentials directly, and never bypasses the Spec 0022 custody chain. | Blast radius containment; Spec 0022; CAS spec lane w1X:p1, 2026-10-10 |
-| D6 | Transitional CRD placement: CRDs are defined in internal module `crates/cas-operator/src/crd.rs` until `unsigned-k8s-api` is published. Dependency on `unsigned-k8s-api` requires a Spec 0004 pin approval before adoption. | Decoupled migration cadence; CAS spec lane w1X:p1, 2026-10-10 |
+| D6 | Transitional CRD placement: CRDs are defined in internal module `crates/cas-operator/src/crd.rs` until `unsigned-k8s-api` is adopted. Dependency on `unsigned-k8s-api` requires a Spec 0004 pin approval before adoption. | Decoupled migration cadence; F6 path dependency staging; CAS spec lane w1X:p1, 2026-10-10 |
 | D7 | Operator deployment to the Cygnus cluster is an operator-gated action (Red Tier). An agent lane never deploys or syncs to Cygnus autonomously; deploying is Christian's act. | Estate safety SOP; ~/.agents/sops/blast-radius-and-estate-ops.md; CAS spec lane w1X:p1, 2026-10-10 |
 
 ### Requirements (EARS)
