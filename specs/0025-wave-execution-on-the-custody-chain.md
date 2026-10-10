@@ -289,7 +289,7 @@ CAS_WAVE_LIVE=1 CAS_WAVE_REPO=$L CAS_WAVE_PLAN=$L/.saga/plans/cas-wave-smoke.tom
   and the merge, past the 600 s window (F18).
 - P9c settles two unknowns. The custody-run skill says `blackwall show` prints
   the base; F4 says it does not. Does `init` keep earlier runs? D4 depends on it.
-- Amends spec 0022 D1 and D9 (its D11 logs it). P9a builds 0023's `EVALUATOR_PATHS`.
+- Amends spec 0022 D1 and D9 (its D12 logs it). P9a builds 0023's `EVALUATOR_PATHS`.
 - Out of scope: the `?` at `wave.rs:421` and `compensator.rs:339` in
   `crates/cas-engine/src` [verified at b149d73] stops compensation at the first
   `Err`, against spec 0009 (F19). Ticket CER-2783 is the fix package, not P9a.
