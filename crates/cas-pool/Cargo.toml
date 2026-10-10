@@ -11,6 +11,7 @@ repository.workspace = true
 
 [dependencies]
 cas-domain = { path = "../cas-domain" }
+gix = { workspace = true }
 rustix = { workspace = true }
 serde = { workspace = true }
 thiserror = { workspace = true }

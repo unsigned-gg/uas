@@ -9,6 +9,7 @@
 pub mod error;
 pub mod freezer;
 pub mod slot;
+pub mod worktree;
 
 pub use error::{FreezerError, PoolError};
 pub use freezer::{
@@ -16,3 +17,4 @@ pub use freezer::{
     SignalFreezer,
 };
 pub use slot::{ManagedSlot, PoolConfig, SlotPool, SweepReport};
+pub use worktree::WarmWorktree;
