@@ -16,6 +16,13 @@ serde = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 
+[dev-dependencies]
+criterion = { version = "0.8.2", default-features = false, features = ["cargo_bench_support"] }
+
+[[bench]]
+name = "slot_lifecycle"
+harness = false
+
 [lints.rust]
 # Spec 0001 decision 2026-10-09: this crate makes raw syscalls. unsafe is denied,
 # not forbidden, so one block may opt in with #[allow(unsafe_code)] and a
@@ -26,3 +33,4 @@ missing_docs = "warn"
 [lints.clippy]
 all = { level = "warn", priority = -1 }
 undocumented_unsafe_blocks = "deny"
+

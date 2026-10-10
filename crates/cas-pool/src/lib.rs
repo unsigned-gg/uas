@@ -12,7 +12,7 @@ pub mod slot;
 
 pub use error::{FreezerError, PoolError};
 pub use freezer::{
-    current_process_cgroup_path, CgroupFreezer, Freezer, FreezerState, ResourceLimits,
+    current_process_cgroup_path, CgroupFreezer, CpuCap, Freezer, FreezerState, ResourceLimits,
     SignalFreezer,
 };
 pub use slot::{ManagedSlot, PoolConfig, SlotPool, SweepReport};
