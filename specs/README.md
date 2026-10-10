@@ -49,6 +49,7 @@ Methodology: LeanSpec. The reference copy is in `../vendor/leanspec/`.
 | [0043](0043-seccomp-syscall-filter-for-slot-workers.md) | seccomp syscall filter for slot workers | planned | high |
 | [0044](0044-reverie-client-degradation.md) | Reverie client degradation | planned | high |
 | [0045](0045-security-disclosure-and-advisory-policy.md) | Security disclosure and advisory policy | planned | high |
+| [0047](0047-slot-build-cache-retention.md) | Slot build cache retention | planned | high |
 
 
 ## How to add a spec
