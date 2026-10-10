@@ -80,8 +80,8 @@ ebpf-build: ## Build the kernel eBPF artifact into crates/cas-ebpf/ebpf/cas-ebpf
 	cp crates/cas-ebpf/ebpf/target/bpfel-unknown-none/release/cas-ebpf-ebpf crates/cas-ebpf/ebpf/cas-ebpf.o
 	sha256sum crates/cas-ebpf/ebpf/cas-ebpf.o | cut -d' ' -f1 > crates/cas-ebpf/ebpf/cas-ebpf.o.sha256
 
-# Operator-run on ceres (spec 0014 D8). Build unprivileged, then run only the test binary under sudo.
-ebpf-test: ## Run the live eBPF probe tests (operator-run, needs sudo)
+# Live eBPF probes (spec 0014 D8). Build unprivileged, then run only the test binary. SUDO defaults to sudo on a workstation; CI passes SUDO= (uid 0 in the ci-kernel pod).
+ebpf-test: ## Run the live eBPF probe tests (SUDO on a workstation, SUDO= in CI)
 	BIN=$$(cargo test -p cas-ebpf --test live_probes --no-run -j $(JOBS) --message-format=json 2>/dev/null | jq -r 'select(.reason=="compiler-artifact" and .target.name=="live_probes") | .executable' | grep -v null | tail -n1); \
 	test -x "$$BIN" || { echo "ebpf-test: live_probes binary not found"; exit 1; }; \
 	$(SUDO) "$$BIN" --nocapture --test-threads=1

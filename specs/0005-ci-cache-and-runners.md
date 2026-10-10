@@ -121,7 +121,7 @@ Refined from decision 8, Christian, interviews 2026-10-08.
 
 ### Decisions
 
-- **D1 (lane w25:p1, 2026-10-10):** The `ebpf-live` job runs on the `ci-kernel` lane. It installs the pinned nightly into a job-local `RUSTUP_HOME`. It rebuilds `cas-ebpf.o` and fails on any difference from the committed object.
+- **D1 (lane w25:p1, 2026-10-10):** The `ebpf-live` job runs on the `ci-kernel` lane. It installs the pinned nightly into a job-local `RUSTUP_HOME`. It rebuilds `cas-ebpf.o` and fails on any difference from the committed object. Christian can override.
 - **D2 (lane w25:p1, 2026-10-10):** `ebpf-live` is not a required check until one green run on `development`. Then the integrator adds it to the protection and to the spec 0003 table. Christian can override.
 
 ## Plan
@@ -143,6 +143,7 @@ Check the workflows for the faults this spec bans.
 ```bash
 ! grep -rn '|| cargo test' .github && ! grep -rnE 'uses: [^ ]+@(main|master)' .github
 make -n ebpf-test | grep -q sudo && ! make -n ebpf-test SUDO= | grep -q sudo && actionlint
+make ebpf-build JOBS=2 && git diff --exit-code -- crates/cas-ebpf/ebpf/
 ```
 
 Passing means exit 0 and no output. Then read a CI run. The `rust` job must
