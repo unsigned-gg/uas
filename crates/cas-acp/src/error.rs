@@ -1,5 +1,6 @@
 //! Error type for the ACP server, and its JSON-RPC error codes.
 
+use agent_client_protocol::schema::v1::Error as RpcError;
 use cas_pool::PoolError;
 
 /// An error raised while the ACP server handles one frame.
@@ -8,7 +9,7 @@ pub enum AcpError {
     /// The frame is not valid JSON.
     #[error("protocol parse error: {0}")]
     Parse(String),
-    /// The frame is JSON but not a JSON-RPC request.
+    /// The frame is JSON but not a JSON-RPC request or notification.
     #[error("invalid request: {0}")]
     InvalidRequest(String),
     /// The method is not one `cas-acp` serves.
@@ -27,7 +28,10 @@ pub enum AcpError {
 
 impl AcpError {
     /// The JSON-RPC error code for this error (spec 0016, Error Protocol).
-    pub fn code(&self) -> i64 {
+    ///
+    /// Lease errors use -32002. The schema crate names that code `ResourceNotFound`.
+    /// The spec keeps the number on purpose: a lease is the resource here.
+    pub fn code(&self) -> i32 {
         match self {
             Self::Parse(_) => -32700,
             Self::InvalidRequest(_) => -32600,
@@ -41,5 +45,10 @@ impl AcpError {
             ) => -32002,
             Self::Pool(_) | Self::Engine(_) => -32603,
         }
+    }
+
+    /// The wire error object for this error.
+    pub fn to_rpc(&self) -> RpcError {
+        RpcError::new(self.code(), self.to_string())
     }
 }

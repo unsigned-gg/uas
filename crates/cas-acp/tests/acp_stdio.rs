@@ -204,3 +204,89 @@ fn suspend_failure_still_releases() {
         "released session is closed"
     );
 }
+
+fn ids_and_codes(frames: &[Value]) -> Vec<(Value, i64)> {
+    frames
+        .iter()
+        .map(|f| (f["id"].clone(), f["error"]["code"].as_i64().unwrap_or(0)))
+        .collect()
+}
+
+#[test]
+fn session_new_without_id_is_rejected_before_any_side_effect() {
+    let pool = MockPool::default();
+    let mut server = AcpServer::new(pool.clone(), config());
+    let frames = serve(
+        &mut server,
+        "{\"jsonrpc\":\"2.0\",\"method\":\"session/new\",\"params\":{\"cwd\":\"/work\",\"mcpServers\":[]}}\n",
+    );
+    assert_eq!(ids_and_codes(&frames), vec![(Value::Null, -32600)]);
+    assert!(
+        pool.calls().is_empty(),
+        "no slot may be acquired: {:?}",
+        pool.calls()
+    );
+    // The slot was never taken, so a request with an id still succeeds.
+    let frames = serve(&mut server, &format!("{SESSION_NEW}\n"));
+    assert!(
+        frames[0]["result"]["sessionId"].is_string(),
+        "frames: {frames:?}"
+    );
+}
+
+#[test]
+fn missing_or_wrong_jsonrpc_version_is_32600() {
+    let mut server = AcpServer::new(MockPool::default(), config());
+    let missing = serve(
+        &mut server,
+        "{\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":1}}\n",
+    );
+    assert_eq!(ids_and_codes(&missing), vec![(Value::Null, -32600)]);
+    let wrong = serve(&mut server, "{\"jsonrpc\":\"1.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":1}}\n");
+    assert_eq!(ids_and_codes(&wrong), vec![(Value::Null, -32600)]);
+}
+
+#[test]
+fn null_id_request_gets_32600_with_null_id() {
+    let mut server = AcpServer::new(MockPool::default(), config());
+    let frames = serve(
+        &mut server,
+        "{\"jsonrpc\":\"2.0\",\"id\":null,\"method\":\"initialize\",\"params\":{\"protocolVersion\":1}}\n",
+    );
+    assert_eq!(ids_and_codes(&frames), vec![(Value::Null, -32600)]);
+}
+
+#[test]
+fn cancel_sent_with_an_id_is_32600_with_that_id() {
+    let pool = MockPool::default();
+    let mut server = AcpServer::new(pool.clone(), config());
+    let opened = serve(&mut server, &format!("{SESSION_NEW}\n"));
+    let session_id = opened[0]["result"]["sessionId"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let cancel = format!(
+        r#"{{"jsonrpc":"2.0","id":9,"method":"session/cancel","params":{{"sessionId":"{session_id}"}}}}"#
+    );
+    let frames = serve(&mut server, &format!("{cancel}\n"));
+    assert_eq!(ids_and_codes(&frames), vec![(Value::from(9), -32600)]);
+    assert_eq!(
+        pool.calls(),
+        vec!["acquire:slot-1".to_string()],
+        "a rejected cancel must not touch the slot"
+    );
+}
+
+#[test]
+fn oversize_frame_is_32600_and_the_next_frame_is_served() {
+    let mut server = AcpServer::new(MockPool::default(), config());
+    let pad = "a".repeat(1024 * 1024 + 1);
+    let long = format!(
+        "{{\"jsonrpc\":\"2.0\",\"id\":7,\"method\":\"initialize\",\"params\":{{\"protocolVersion\":1,\"pad\":\"{pad}\"}}}}"
+    );
+    let frames = serve(&mut server, &format!("{long}\n{INITIALIZE}\n"));
+    assert_eq!(frames.len(), 2, "frames: {frames:?}");
+    assert_eq!(ids_and_codes(&frames[..1]), vec![(Value::Null, -32600)]);
+    assert_eq!(frames[1]["id"], 1);
+    assert_eq!(frames[1]["result"]["protocolVersion"], 1);
+}
