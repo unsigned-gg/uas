@@ -95,6 +95,18 @@ fn helper_command() -> Command {
     command
 }
 
+/// The nice value of this test process. Helpers inherit it, so it is the value
+/// the control must see before any clamp. A test that already runs at
+/// `WORKER_NICE` cannot show a clamp, so it fails instead of passing.
+fn base_nice() -> i32 {
+    let base = nice_of(std::process::id()).expect("own nice");
+    assert!(
+        base < WORKER_NICE,
+        "cannot prove the clamp: the test runs at nice {base}"
+    );
+    base
+}
+
 /// Nice value of every task of `pid`, keyed by tid, once at least
 /// `HELPER_THREADS + 1` tasks exist.
 fn thread_nices(pid: u32) -> std::collections::BTreeMap<u32, i32> {
@@ -132,6 +144,7 @@ fn thread_nices(pid: u32) -> std::collections::BTreeMap<u32, i32> {
 
 #[test]
 fn enter_clamped_group_clamps_every_thread_of_the_child() {
+    base_nice();
     let mut command = helper_command();
     // SAFETY: as in the first test: two syscalls on the child itself, no allocation.
     #[allow(unsafe_code)]
@@ -151,6 +164,7 @@ fn enter_clamped_group_clamps_every_thread_of_the_child() {
 
 #[test]
 fn clamp_process_clamps_only_the_main_thread_and_clamp_process_group_clamps_all() {
+    let base = base_nice();
     let mut command = helper_command();
     // SAFETY: one syscall on the child itself (its own process group), no allocation.
     // The helper must lead its own group, or the group clamp below would hit this test.
@@ -162,7 +176,7 @@ fn clamp_process_clamps_only_the_main_thread_and_clamp_process_group_clamps_all(
     let pid = child.id();
     let before = thread_nices(pid);
     assert!(
-        before.values().all(|nice| *nice == 0),
+        before.values().all(|nice| *nice == base),
         "control: {before:?}"
     );
 
@@ -179,7 +193,7 @@ fn clamp_process_clamps_only_the_main_thread_and_clamp_process_group_clamps_all(
         .map(|(_, nice)| *nice)
         .collect();
     assert!(
-        others.iter().all(|nice| *nice == 0),
+        others.iter().all(|nice| *nice == base),
         "PRIO_PROCESS must leave the other threads alone: {after_process:?}"
     );
 
