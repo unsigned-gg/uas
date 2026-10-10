@@ -35,52 +35,91 @@ enum Call {
     Term(String, String),
 }
 
-/// A fake port: it logs each call with the clock reading, and serves scripted events.
+/// How long a fake call takes to answer.
+#[derive(Clone, Copy)]
+enum Answer {
+    Ms(u64),
+    Hang,
+}
+
+type Answerer = Rc<RefCell<Box<dyn Fn(&str, &str) -> Answer>>>;
+
+/// A fake port: it logs each call with the clock reading, and serves scripted events. A call
+/// advances the fake clock by `min(its answer time, within_ms)` and fails when cut (D12).
 #[derive(Clone)]
 struct Port {
     clock: Clk,
     calls: Rc<RefCell<Vec<(u64, Call)>>>,
-    events: Rc<RefCell<VecDeque<RecvEvent>>>,
+    events: Rc<RefCell<VecDeque<(u64, RecvEvent)>>>,
     extend_failures: Rc<Cell<u32>>,
+    answer: Answerer,
+    withins: Rc<RefCell<Vec<(String, u64)>>>,
+    landed: Rc<RefCell<Vec<(String, u64)>>>,
 }
 
 impl Port {
     fn log(&self, call: Call) {
         self.calls.borrow_mut().push((self.clock.now_ms(), call));
     }
+
+    fn serve(&self, rpc: &str, token: &str, within: u64) -> Result<(), PortError> {
+        self.withins.borrow_mut().push((rpc.into(), within));
+        let (spent, ok) = match (self.answer.borrow())(rpc, token) {
+            Answer::Ms(ms) => (ms.min(within), ms <= within),
+            Answer::Hang => (within, false),
+        };
+        self.clock.sleep_ms(spent);
+        if !ok {
+            return Err(PortError(format!("{rpc} cut at {within} ms")));
+        }
+        if rpc == "extend" {
+            self.landed
+                .borrow_mut()
+                .push((token.into(), self.clock.now_ms()));
+        }
+        Ok(())
+    }
 }
 
 impl PoolWork for Port {
-    fn recv(&mut self, free_slots: u32) -> Result<(), PortError> {
+    fn recv(&mut self, free_slots: u32, within_ms: u64) -> Result<(), PortError> {
         self.log(Call::Recv(free_slots));
-        Ok(())
+        self.serve("recv", "", within_ms)
     }
     fn next_event(&mut self, wait_ms: u64) -> Result<RecvEvent, PortError> {
-        if let Some(event) = self.events.borrow_mut().pop_front() {
-            return Ok(event);
+        let now = self.clock.now_ms();
+        let front = self.events.borrow().front().map(|(at, _)| *at);
+        match front {
+            Some(at) if at <= now => Ok(self.events.borrow_mut().pop_front().unwrap().1),
+            Some(at) => {
+                self.clock.sleep_ms(wait_ms.min(at - now));
+                Ok(RecvEvent::Idle)
+            }
+            None => {
+                self.clock.sleep_ms(wait_ms);
+                Ok(RecvEvent::Idle)
+            }
         }
-        self.clock.sleep_ms(wait_ms);
-        Ok(RecvEvent::Idle)
     }
-    fn ack(&mut self, tokens: &[String]) -> Result<(), PortError> {
+    fn ack(&mut self, tokens: &[String], within_ms: u64) -> Result<(), PortError> {
         self.log(Call::Ack(tokens.to_vec()));
-        Ok(())
+        self.serve("ack", &tokens[0], within_ms)
     }
-    fn extend(&mut self, token: &str) -> Result<(), PortError> {
+    fn extend(&mut self, token: &str, within_ms: u64) -> Result<(), PortError> {
         self.log(Call::Extend(token.into()));
         if self.extend_failures.get() > 0 {
             self.extend_failures.set(self.extend_failures.get() - 1);
             return Err(PortError("extend refused".into()));
         }
-        Ok(())
+        self.serve("extend", token, within_ms)
     }
-    fn nack(&mut self, token: &str, delay_ms: u64) -> Result<(), PortError> {
+    fn nack(&mut self, token: &str, delay_ms: u64, within_ms: u64) -> Result<(), PortError> {
         self.log(Call::Nack(token.into(), delay_ms));
-        Ok(())
+        self.serve("nack", token, within_ms)
     }
-    fn term(&mut self, token: &str, reason: &str) -> Result<(), PortError> {
+    fn term(&mut self, token: &str, reason: &str, within_ms: u64) -> Result<(), PortError> {
         self.log(Call::Term(token.into(), reason.into()));
-        Ok(())
+        self.serve("term", token, within_ms)
     }
 }
 
@@ -90,6 +129,8 @@ struct Runner {
     status: Rc<RefCell<HashMap<String, TaskStatus>>>,
     cancelled: Rc<RefCell<Vec<String>>>,
     started: Rc<Cell<u32>>,
+    clock: Clk,
+    finish_at: Rc<RefCell<HashMap<String, u64>>>,
 }
 
 impl TaskRunner for Runner {
@@ -98,6 +139,14 @@ impl TaskRunner for Runner {
         self.start_error.borrow().clone().map_or(Ok(()), Err)
     }
     fn poll(&mut self, token: &str) -> TaskStatus {
+        let done = self
+            .finish_at
+            .borrow()
+            .get(token)
+            .is_some_and(|at| *at <= self.clock.now_ms());
+        if done {
+            return TaskStatus::Succeeded;
+        }
         self.status
             .borrow()
             .get(token)
@@ -128,14 +177,25 @@ fn delivery(token: &str, lease_ms: u64, attempt: u32) -> RecvEvent {
 }
 
 fn rig(slots: usize, events: Vec<RecvEvent>) -> Rig {
+    rig_at(slots, events.into_iter().map(|e| (0, e)).collect())
+}
+
+/// A rig whose events arrive at the given clock readings.
+fn rig_at(slots: usize, events: Vec<(u64, RecvEvent)>) -> Rig {
     let clock = Clk::default();
     let port = Port {
         clock: clock.clone(),
         calls: Rc::default(),
         events: Rc::new(RefCell::new(events.into())),
         extend_failures: Rc::default(),
+        answer: Rc::new(RefCell::new(Box::new(|_, _| Answer::Ms(0)))),
+        withins: Rc::default(),
+        landed: Rc::default(),
     };
-    let runner = Runner::default();
+    let runner = Runner {
+        clock: clock.clone(),
+        ..Runner::default()
+    };
     let warm = (0..slots)
         .map(|i| {
             Slot::new(SlotId::new(format!("slot-{i}")).unwrap())
@@ -147,6 +207,7 @@ fn rig(slots: usize, events: Vec<RecvEvent>) -> Rig {
         peer_id: "peer-1".into(),
         task_budget: Budget::new(1000, 3600).unwrap(),
         poll_ms: 100,
+        call_cap_ms: 2000,
     };
     let adapter = PoolAdapter::new(cfg, port.clone(), runner.clone(), clock.clone(), warm);
     Rig {
@@ -461,6 +522,144 @@ fn cortex_pool_stream_end_reconnects_with_backoff() {
     assert_eq!(
         rig.times(|c| matches!(c, Call::Extend(_))),
         [1000, 2000, 3000]
+    );
+}
+
+/// Set the answer time of each fake call: `f(rpc, token)`.
+fn answer(rig: &Rig, f: impl Fn(&str, &str) -> Answer + 'static) {
+    *rig.port.answer.borrow_mut() = Box::new(f);
+}
+
+fn hung_extends(rig: &Rig) {
+    answer(rig, |rpc, _| {
+        if rpc == "extend" {
+            Answer::Hang
+        } else {
+            Answer::Ms(0)
+        }
+    });
+}
+
+#[test]
+fn cortex_pool_extend_bounded_by_shortest_tick() {
+    let mut rig = rig(2, vec![delivery("a", 30000, 1), delivery("b", 3000, 1)]);
+    hung_extends(&rig);
+    rig.run_to(3500);
+    // The quarter is 750 ms, from the shorter lease. Each hung call is cut at 750 ms, and the
+    // 3000 ms unit keeps its 1000 ms tick: two cuts release it by 2750 ms.
+    assert_eq!(
+        rig.times(|c| matches!(c, Call::Extend(t) if t == "b")),
+        [1000, 2000]
+    );
+    let withins: Vec<u64> = (rig.port.withins.borrow().iter())
+        .filter(|(rpc, _)| rpc == "extend")
+        .map(|(_, w)| *w)
+        .collect();
+    assert_eq!(withins, [750, 750]);
+    assert_eq!(rig.adapter.releases(), [(2750, 1)]);
+    assert_eq!(
+        rig.states()[0],
+        SlotState::Leased,
+        "the 30 s unit is not due yet"
+    );
+}
+
+#[test]
+fn cortex_pool_extend_round_budget_two_hung_units() {
+    let mut rig = rig(2, vec![delivery("a", 3000, 1), delivery("b", 3000, 1)]);
+    hung_extends(&rig);
+    rig.run_to(4500);
+    let mut released = rig.adapter.releases().to_vec();
+    released.sort_by_key(|r| r.1);
+    assert_eq!(released, [(2750, 0), (2750, 1)]);
+}
+
+#[test]
+fn cortex_pool_extend_round_rotates() {
+    let mut rig = rig(2, vec![delivery("a", 3000, 1), delivery("b", 3000, 1)]);
+    answer(&rig, |rpc, tok| {
+        if rpc == "extend" && tok == "a" {
+            Answer::Hang
+        } else {
+            Answer::Ms(0)
+        }
+    });
+    rig.run_to(3500);
+    // R1 cuts A and skips B; R2 calls B first, so B never fails twice in a row.
+    assert_eq!(rig.adapter.releases(), [(2750, 0)]);
+    assert_eq!(rig.states()[1], SlotState::Leased);
+    assert!(rig.port.landed.borrow().iter().any(|(t, _)| t == "b"));
+}
+
+#[test]
+fn cortex_pool_extend_slow_broker() {
+    let events = vec![
+        delivery("a", 3000, 1),
+        delivery("b", 3000, 1),
+        delivery("c", 3000, 1),
+    ];
+    let mut rig = rig(3, events);
+    answer(&rig, |rpc, _| {
+        if rpc == "extend" {
+            Answer::Ms(700)
+        } else {
+            Answer::Ms(0)
+        }
+    });
+    rig.run_to(5000);
+    // B is cut twice and stops at 2750 ms; A and C alternate.
+    assert_eq!(rig.adapter.releases(), [(2750, 1)]);
+    let landed = rig.port.landed.borrow().clone();
+    let at = |t: &str| -> Vec<u64> { landed.iter().filter(|l| l.0 == t).map(|l| l.1).collect() };
+    assert_eq!(at("a"), [1700, 3700]);
+    assert_eq!(at("c"), [2700, 4700]);
+    // No Extend lands after its unit's Cortex lease: each landing renews it by lease_ms.
+    for token in ["a", "c"] {
+        let mut until = 3000;
+        for t in at(token) {
+            assert!(t <= until, "{token} landed at {t}, lease ended at {until}");
+            until = t + 3000;
+        }
+    }
+}
+
+#[test]
+fn cortex_pool_extend_deadline_from_due_time() {
+    let mut rig = rig_at(
+        2,
+        vec![(0, delivery("a", 3000, 1)), (900, delivery("b", 3000, 1))],
+    );
+    hung_extends(&rig);
+    rig.run_to(4000);
+    // A: due 1000, deadline 1750 ... released at 2750. B: due 1900, released at 3650.
+    assert_eq!(rig.adapter.releases(), [(2750, 0), (3650, 1)]);
+}
+
+#[test]
+fn cortex_pool_extend_deadline_bounds_other_rpcs() {
+    let mut rig = rig(2, vec![delivery("a", 3000, 1), delivery("x", 3000, 1)]);
+    rig.runner.finish_at.borrow_mut().insert("x".into(), 1750);
+    answer(&rig, |rpc, _| match rpc {
+        "extend" | "ack" => Answer::Hang,
+        _ => Answer::Ms(0),
+    });
+    rig.run_to(4000);
+    // A's Extend is cut at 1750. X's Ack then hangs, but it is bounded by A's next deadline
+    // (2750), not by the 2000 ms cap: A's second failure lands at 2750, not 3750.
+    let a_release = rig.adapter.releases().iter().find(|r| r.1 == 0).copied();
+    assert_eq!(a_release, Some((2750, 0)), "{:?}", rig.adapter.releases());
+    let within = (rig
+        .port
+        .withins
+        .borrow()
+        .iter()
+        .find(|(rpc, _)| rpc == "ack"))
+    .map(|w| w.1);
+    let start = rig.times(|c| matches!(c, Call::Ack(_)))[0];
+    assert_eq!(
+        within.map(|w| start + w),
+        Some(2750),
+        "the bound ends at A's deadline"
     );
 }
 
