@@ -1,0 +1,25 @@
+# Wave smoke plan (spec 0025 P9b). `cas wave flow` reads it and writes the wave flows
+# under .saga/flows/. Edit this file, then regenerate; never edit the generated flows.
+[flow]
+name = "cas-wave-smoke"
+description = "Smoke plan for the wave executor: one Builder, its Critic, and an independent spec probe."
+
+[[step]]
+id = "wave-smoke-build"
+title = "Write the wave smoke note"
+kind = "impl"
+agent = "builder"
+
+[[step]]
+id = "wave-smoke-critic"
+title = "Review the wave smoke note"
+kind = "verify"
+agent = "critic"
+deps = ["wave-smoke-build"]
+
+[[step]]
+id = "wave-smoke-spec"
+title = "Check the specs at the wave base"
+kind = "verify"
+agent = "probe"
+verify_cmd = ["make", "spec-check"]

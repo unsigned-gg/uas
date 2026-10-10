@@ -2,6 +2,8 @@
 /.tools/
 .dagr/
 .saga/*
+!.saga/plans/
+!.saga/plans/*.toml
 !.saga/flows/
 !.saga/flows/*.toml
 # Agent teams and topologies are versioned; runs, db and worktrees are not.

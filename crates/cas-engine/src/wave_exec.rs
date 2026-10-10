@@ -177,6 +177,8 @@ pub enum HaltReason {
     WaveHalted,
     /// `blackwall pr` failed after a Critic passed.
     PrFailed,
+    /// The executor itself failed before an outcome: a missing tool, or an I/O or record error.
+    ExecutorError,
 }
 
 impl HaltReason {
@@ -193,6 +195,7 @@ impl HaltReason {
             Self::ProbeFailed => "ProbeFailed",
             Self::WaveHalted => "WaveHalted",
             Self::PrFailed => "PrFailed",
+            Self::ExecutorError => "ExecutorError",
         }
     }
 }

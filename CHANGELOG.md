@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Workspace `rust-version` raised to 1.89: the pinned `agent-client-protocol` 2.2.0 (via uuid 1.28) needs it, and aya already needed 1.87 (spec 0004, lane decision 2026-10-10).
 
 ### Added
+- `cas wave flow` writes one saga flow per wave, and `cas wave step` runs one wave step (spec 0025 P9b).
 - cas-domain: the `NotAudited` landing receipt state and the spec 0023 D4/D6 evaluator path lists; cas-engine: the landing activity split into `reconcile` and `open_pr`, and the `WaveStep` workflow event with its replay arm (spec 0025 P9a, slice 1).
 - `cas-acp` releases a session's slot when its lease expires, checked on each frame and in `tick()`, and when the input ends or a transport call fails (spec 0016 D6, CER-2683). An ended session answers nothing to a later `session/cancel`.
 - `cas-engine` wave executor (spec 0025 P9a): runs one wave step on the custody chain (Builder via blackwall, Critic via `cas-critic` with the verdict gate, Probe, MainSession gate), checks admission and readiness before any subprocess, halts with a `Halted` record and compensates passed Builders newest first, and records a `WaveStep` event per step. The CLI and saga flow are not wired yet.

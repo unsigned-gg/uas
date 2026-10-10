@@ -1,6 +1,7 @@
 //! `cas` command line entry point.
 
 mod memory;
+mod wave_flow;
 
 use anyhow::{Context, Result};
 use cas_domain::{
@@ -48,6 +49,45 @@ enum Command {
     Harness {
         #[command(subcommand)]
         command: HarnessCommand,
+    },
+    /// Plan saga flows per wave and run wave steps on the custody chain (spec 0025).
+    Wave {
+        #[command(subcommand)]
+        command: WaveCommand,
+    },
+}
+
+#[derive(Debug, Subcommand)]
+enum WaveCommand {
+    /// Write one saga flow per wave from a plan.
+    Flow {
+        /// The plan: a saga flow file with `[[step]]` entries.
+        #[arg(long)]
+        from: String,
+        /// The directory that receives `cas-cpm-wave-w<i>.toml`.
+        #[arg(long)]
+        out_dir: std::path::PathBuf,
+        /// The most steps in flight. 0 means the default of 3.
+        #[arg(long, default_value_t = 0)]
+        max_concurrency: usize,
+    },
+    /// Run one step of a wave. Saga calls this as the `verify_cmd` of a generated step.
+    Step {
+        /// The plan, as given to `wave flow --from`.
+        #[arg(long)]
+        flow: String,
+        /// The step id.
+        #[arg(long)]
+        step: String,
+        /// The custody checkout. Defaults to `CAS_WAVE_REPO`, then the working directory.
+        #[arg(long)]
+        repo: Option<std::path::PathBuf>,
+        /// The state directory. Defaults to `CAS_WAVE_STATE_DIR`, then under `XDG_STATE_HOME`.
+        #[arg(long)]
+        state_dir: Option<std::path::PathBuf>,
+        /// The most steps in flight, as given to `wave flow`. 0 means the default of 3.
+        #[arg(long, default_value_t = 0)]
+        max_concurrency: usize,
     },
 }
 
@@ -1032,6 +1072,31 @@ fn main() -> Result<()> {
             let report = demo(&slot)?;
             println!("{}", serde_json::to_string_pretty(&report)?);
         }
+        Command::Wave { command } => match command {
+            WaveCommand::Flow {
+                from,
+                out_dir,
+                max_concurrency,
+            } => wave_flow::run_flow(&from, &out_dir, max_concurrency)?,
+            WaveCommand::Step {
+                flow,
+                step,
+                repo,
+                state_dir,
+                max_concurrency,
+            } => {
+                let args = wave_flow::StepArgs {
+                    flow,
+                    step,
+                    repo,
+                    state_dir,
+                    max_concurrency,
+                };
+                let cwd = std::env::current_dir()?;
+                let code = wave_flow::run_step(&args, &wave_flow::WaveEnv::from_process(), &cwd);
+                std::process::exit(code);
+            }
+        },
         Command::Harness { command } => match command {
             HarnessCommand::Run {
                 slot,
