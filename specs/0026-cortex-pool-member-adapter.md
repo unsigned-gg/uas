@@ -1,7 +1,7 @@
 ---
 status: planned
 created: 2026-10-10
-tags: [cortex, pool, adapter, grpc, cas-engine, lease]
+tags: [cortex, pool, adapter, grpc, uas-engine, lease]
 priority: high
 depends_on: [0001-cas-architecture-and-crate-layout, 0004-dependency-and-licence-policy, 0007-lease-rules, 0008-soma-cortex-saga-reverie-integration, 0019-pool-runtime-decision]
 ---
@@ -10,17 +10,17 @@ depends_on: [0001-cas-architecture-and-crate-layout, 0004-dependency-and-licence
 
 ## Overview
 
-CAS joins a Cortex agent pool as a member. The adapter takes pool work over the
-gRPC service `cortex.mesh.v1.PoolWork`. It runs each unit in a CAS slot under a
+UAS joins a Cortex agent pool as a member. The adapter takes pool work over the
+gRPC service `cortex.mesh.v1.PoolWork`. It runs each unit in a UAS slot under a
 lease, and it reports the outcome to Cortex.
 
-Why now: the operator ruled that CAS owns the pool-member adapter (D1) [reported,
+Why now: the operator ruled that UAS owns the pool-member adapter (D1) [reported,
 relayed by the integrator, mesh 74f407df, 2026-10-10]. The cortex lead first
 relayed the request (mesh 14ee8a7a).
 
 In scope: the port traits, the lease bridge, the outcome classifier and the gRPC
-transport, in `cas-engine`, all behind the cargo feature `cortex-grpc`, off by
-default (D1, D2). Fakes test the ports and the bridge. `cas-domain` gets no
+transport, in `uas-engine`, all behind the cargo feature `cortex-grpc`, off by
+default (D1, D2). Fakes test the ports and the bridge. `uas-domain` gets no
 network I/O, no clock and no runtime.
 
 A real harness run in a slot needs its own spec, 0027, first (D8). Member
@@ -39,15 +39,15 @@ Facts, 2026-10-10:
   "members time Extend from lease_ms/3". `delivery_attempt` is 1 on the first
   delivery. At `max_deliver` the backend dead-letters. `max_deliver` is a backend
   setting, not a field.
-- **F3 [verified, read `crates/cas-domain/src/lease.rs` l.247-317]:** `Lease::renew(token,
+- **F3 [verified, read `crates/uas-domain/src/lease.rs` l.247-317]:** `Lease::renew(token,
   now, extend_by)` adds `extend_by` to the old `expires_at`. It refuses a wrong
   token, an expired lease and `extend_by = 0` (spec 0007 R2, R3). The domain has no
   clock: callers pass `now`. There is no `LeaseLedger` type.
-- **F4 [verified, read `crates/cas-domain/src/slot.rs` l.103-230]:** the legal moves
+- **F4 [verified, read `crates/uas-domain/src/slot.rs` l.103-230]:** the legal moves
   are `Cold -> Warm -> Leased -> Suspended -> Leased -> Warm`. `release` moves
   `Leased -> Warm`. `Draining` is final.
-- **F5 [verified, read `crates/cas-engine/Cargo.toml` at 0d5d91f]:** `cas-engine`
-  depends on `cas-domain`, `serde`, `serde_json`, `thiserror`, `toml` and `tracing`.
+- **F5 [verified, read `crates/uas-engine/Cargo.toml` at 0d5d91f]:** `uas-engine`
+  depends on `uas-domain`, `serde`, `serde_json`, `thiserror`, `toml` and `tracing`.
   It has no `tokio`.
 - **F6 [verified, cortex@c7fdb85 `Cargo.lock` and `crates/cortex-api/build.rs`]:**
   cortex uses `tonic` 0.14.6, `tonic-prost` 0.14.6, `prost` 0.14.4 and `prost-types` 0.14.4 at run time. At
@@ -66,14 +66,14 @@ Facts, 2026-10-10:
 - **F10 [reported, `cerebral-work/revenant@a8549ed:crates/mesh-pool/src/lib.rs`]:**
   revenant mesh-pool is a reference dispatcher. Its timing is not quoted here.
 - **F11 [verified, read `specs/0019-pool-runtime-decision.md`]:** 0019 D2, the
-  `cas-pool` runtime, waits on a benchmark and the operator's ruling. 0019 D1 names
+  `uas-pool` runtime, waits on a benchmark and the operator's ruling. 0019 D1 names
   `tokio` for crates that serve a socket, pending the operator.
 
 ## Design
 
 ### Requirements (EARS)
 
-- **Ubiquitous:** The adapter shall live in `cas-engine`. `cas-domain` shall gain no
+- **Ubiquitous:** The adapter shall live in `uas-engine`. `uas-domain` shall gain no
   network I/O, clock or runtime.
 - **Ubiquitous:** The adapter shall send no pool name. Cortex takes the pool from
   membership (F1).
@@ -82,7 +82,7 @@ Facts, 2026-10-10:
 - **Event-driven:** WHEN the adapter has free slots, it shall call `Recv` with
   `free_slots` equal to their number.
 - **Event-driven:** WHEN `Recv` yields a `PoolDelivery`, the adapter shall check that
-  the slot is free (R1). Then it issues a CAS lease of `ttl + 1` seconds (lease
+  the slot is free (R1). Then it issues a UAS lease of `ttl + 1` seconds (lease
   bridge), with the host's task `Budget` (D10), and moves the slot `Warm -> Leased`.
 - **Unwanted behavior:** IF a `PoolDelivery` finds no `Warm` slot, THEN the adapter
   shall call `Nack` with the D5 delay, lease no slot and start no task (D11).
@@ -92,7 +92,7 @@ Facts, 2026-10-10:
   until a restart: no reconnect and no second `Recv`. It shall surface the error to
   its caller, and shall not call `Term`, start `Extend` or lease a slot (D9).
 - **State-driven:** WHILE a delivery runs, the adapter shall call `Extend` every
-  `lease_ms / 3` and renew the CAS lease as the lease bridge says.
+  `lease_ms / 3` and renew the UAS lease as the lease bridge says.
 - **Event-driven:** WHEN a task succeeds, the adapter shall call `Ack` and release
   the slot (`Leased -> Warm`).
 - **Event-driven:** WHEN a task fails with a recoverable error, the adapter shall
@@ -105,7 +105,7 @@ Facts, 2026-10-10:
   earliest pending `Extend` deadline (D12), where pending means the next deadline of every running unit, due or not (test `extend_deadline_bounds_other_rpcs`).
 - **Ubiquitous:** In each loop step the adapter shall run the due `Extend` pass before any `Ack`, `Nack`, `Term` or `Recv` open (D13).
 - **Event-driven:** WHEN the adapter shuts down, it shall stop `Recv`, cancel every running task first, then Nack each unit with `delay_ms = 0`, bounded by the smaller of the cap and the time left on that unit's Cortex lease (the Cortex lease ends `lease_ms` after the unit's last landed `Extend`, or after its delivery), skip the `Nack` of a unit whose lease has ended, release the slots and drain them (D6).
-- **Unwanted behavior:** IF `Extend` fails twice in a row, or a CAS renew fails,
+- **Unwanted behavior:** IF `Extend` fails twice in a row, or a UAS renew fails,
   THEN the adapter shall stop the task and release the slot. It sends no `Ack`, so
   Cortex redelivers after `lease_ms`.
 - **Unwanted behavior:** IF the `Recv` stream ends before it delivered `free_slots`
@@ -118,7 +118,7 @@ Facts, 2026-10-10:
   `Nack`.
 - **Event-driven:** WHEN a slot frees while a filled stream is still open, the adapter
   shall drop that stream and call `Recv` with the free count, with no backoff (D11).
-- **Optional feature:** WHERE the feature `cortex-grpc` is off, `cas-engine` shall
+- **Optional feature:** WHERE the feature `cortex-grpc` is off, `uas-engine` shall
   build with no `tonic`, `prost`, `prost-types` or `tokio`. The build-dependencies
   `tonic-prost-build` and `protox` are optional and enabled by that feature, and
   `build.rs` does nothing unless `CARGO_FEATURE_CORTEX_GRPC` is set (P1).
@@ -150,8 +150,8 @@ matching `LeaseToken` renews. R3, a renewal extends by at least 1 s. R4, a
 draining slot keeps its worktree. The bridge keeps both leases in step:
 
 1. `now` is the adapter's monotonic seconds since its first issue. The clock lives
-   in the adapter, never in `cas-domain` (F3).
-2. `ttl = max(1, ceil(lease_ms / 1000))`. The CAS lease is issued for `ttl + 1`.
+   in the adapter, never in `uas-domain` (F3).
+2. `ttl = max(1, ceil(lease_ms / 1000))`. The UAS lease is issued for `ttl + 1`.
 3. Every `lease_ms / 3`, the adapter calls `Extend`. Then it sets
    `target = now + ttl + 1`.
 4. IF `expires_at < target`, THEN it renews with `extend_by = target - expires_at`,
@@ -159,7 +159,7 @@ draining slot keeps its worktree. The bridge keeps both leases in step:
 
 `now` counts whole seconds, and a lease is expired when `now >= expires_at`
 (`lease.rs` l.275-276) [verified, read]. The extra second keeps `expires_at` above
-`now` at each tick, so a renew never meets an expired lease. The CAS lease ends at
+`now` at each tick, so a renew never meets an expired lease. The UAS lease ends at
 most `ttl + 1` seconds after `now`.
 
 ### Outcomes
@@ -178,24 +178,24 @@ most `ttl + 1` seconds after `now`.
 
 | # | Decision | Who, when |
 |---|---|---|
-| D1 | CAS owns the pool-member adapter. The spec lands. The `tonic` 0.14 and `prost` 0.14 pins go into spec 0004. The first build package is the transport and the lease handling, behind a feature flag, off by default. | **Ruled:** the operator, in session, lane w25:p1 interview, 2026-10-10 [reported, relayed by the integrator, mesh 74f407df]. He named `tonic` and `prost`; the other 0004 rows are lane pins (D3). |
-| D2 | All adapter code compiles only under the feature `cortex-grpc`, off by default (D1). Inside it, the port traits (`PoolWork`, `TaskRunner`), the lease bridge and the classifier use no tonic type, so fakes test them. The tonic client implements `PoolWork`. No layer break: `cas-engine` sits above `cas-domain` (spec 0001). | Architect w10:pP proposal (mesh 7ec5bb4d); cas-engineer, 2026-10-10; the feature scope follows D1 (the operator may override) |
-| D3 | Pins: the versions cortex@c7fdb85 uses (F6), so both ends share one codegen. Newer `protox` 0.10.0 exists and is not taken. `tokio` is not new here: its 0004 row says 1.53.1, but the root `Cargo.toml` requirement is the caret `1.53.1`, so `Cargo.lock` has resolved 1.53.2 since 6ec6011 [verified, at 2c6a557]. That drift is a separate item, not fixed here. Spec 0004 records them under "Cortex pool-member transport", with the licences read and the deny check (F8). | cas-engineer, 2026-10-10 (the operator may override) Pin tonic and prost with `=`: the tokio caret pin already drifted (CER-2798). |
-| D4 | The lease bridge issues for `ttl + 1` and renews up to `now + ttl + 1`, never by a fixed step. The extra second covers the whole-second clock (`now >= expires_at` is expired). Renew adds to the old expiry (F3). A fixed `ttl` step every `lease_ms / 3` grows the CAS lease about three times faster than time. A crashed adapter would then hold the slot after Cortex redelivers. | cas-engineer, 2026-10-10 (the operator may override) |
-| D5 | The backend dead-letters at `max_deliver` (F2), so the adapter keeps no retry count. `Nack` uses `delay_ms = min(1000 * 2^(a - 1), 60000)` in saturating arithmetic, with `a = max(1, delivery_attempt)`. | cas-engineer, 2026-10-10 (the operator may override) |
-| D6 | On shutdown the adapter stops `Recv` and cancels every running task first, so no unit runs while another's `Nack` hangs. Then it Nacks each unit with `delay_ms = 0`, bounded by the smaller of the cap and the time left on that unit's Cortex lease (the Cortex lease ends `lease_ms` after the unit's last landed `Extend`, or after its delivery); a unit whose lease has ended gets no `Nack`, since Cortex redelivers it anyway. Then it releases the slots and drains them. `drain` happens only at shutdown, because `Draining` is final (F4). | cas-engineer, 2026-10-10; cancel-first and the bound, CER-2802 from the P1 Part B critic (the operator may override) |
+| D1 | UAS owns the pool-member adapter. The spec lands. The `tonic` 0.14 and `prost` 0.14 pins go into spec 0004. The first build package is the transport and the lease handling, behind a feature flag, off by default. | **Ruled:** the operator, in session, lane w25:p1 interview, 2026-10-10 [reported, relayed by the integrator, mesh 74f407df]. He named `tonic` and `prost`; the other 0004 rows are lane pins (D3). |
+| D2 | All adapter code compiles only under the feature `cortex-grpc`, off by default (D1). Inside it, the port traits (`PoolWork`, `TaskRunner`), the lease bridge and the classifier use no tonic type, so fakes test them. The tonic client implements `PoolWork`. No layer break: `uas-engine` sits above `uas-domain` (spec 0001). | Architect w10:pP proposal (mesh 7ec5bb4d); uas-engineer, 2026-10-10; the feature scope follows D1 (the operator may override) |
+| D3 | Pins: the versions cortex@c7fdb85 uses (F6), so both ends share one codegen. Newer `protox` 0.10.0 exists and is not taken. `tokio` is not new here: its 0004 row says 1.53.1, but the root `Cargo.toml` requirement is the caret `1.53.1`, so `Cargo.lock` has resolved 1.53.2 since 6ec6011 [verified, at 2c6a557]. That drift is a separate item, not fixed here. Spec 0004 records them under "Cortex pool-member transport", with the licences read and the deny check (F8). | uas-engineer, 2026-10-10 (the operator may override) Pin tonic and prost with `=`: the tokio caret pin already drifted (CER-2798). |
+| D4 | The lease bridge issues for `ttl + 1` and renews up to `now + ttl + 1`, never by a fixed step. The extra second covers the whole-second clock (`now >= expires_at` is expired). Renew adds to the old expiry (F3). A fixed `ttl` step every `lease_ms / 3` grows the UAS lease about three times faster than time. A crashed adapter would then hold the slot after Cortex redelivers. | uas-engineer, 2026-10-10 (the operator may override) |
+| D5 | The backend dead-letters at `max_deliver` (F2), so the adapter keeps no retry count. `Nack` uses `delay_ms = min(1000 * 2^(a - 1), 60000)` in saturating arithmetic, with `a = max(1, delivery_attempt)`. | uas-engineer, 2026-10-10 (the operator may override) |
+| D6 | On shutdown the adapter stops `Recv` and cancels every running task first, so no unit runs while another's `Nack` hangs. Then it Nacks each unit with `delay_ms = 0`, bounded by the smaller of the cap and the time left on that unit's Cortex lease (the Cortex lease ends `lease_ms` after the unit's last landed `Extend`, or after its delivery); a unit whose lease has ended gets no `Nack`, since Cortex redelivers it anyway. Then it releases the slots and drains them. `drain` happens only at shutdown, because `Draining` is final (F4). | uas-engineer, 2026-10-10; cancel-first and the bound, CER-2802 from the P1 Part B critic (the operator may override) |
 | D7 | Member join tokens and their auth stay in cortex spec 0005 (CER-1988). This spec decides nothing there. | **the Director of Engineering's area** (identity services veto). Not decided here. |
-| D8 | A real `TaskRunner` (a harness run in a slot) needs the `cas-pool` runtime. That runtime is ruled: spec 0019 D2, Option A, OS threads as built (the operator, in session, lane w25:p1 interview, 2026-10-10 [reported, relayed by the integrator, mesh e42efbc2]). The harness runner is a new concept with open design, so it needs its own spec, 0027, before any brief; until then the port has a fake only. | Runtime: ruled by the operator (spec 0019 D2). Spec 0027 first: lane reading, cas-engineer, 2026-10-10 (the operator may override) |
-| D9 | The minimum `lease_ms` is 300, so the `Extend` tick is at least 100 ms. A smaller value, 0 included (the proto3 default), is a wire or backend fault, not a work fault. The adapter Nacks the unit with the D5 delay and stops `Recv` with an error that names `lease_ms` and its value. The stop is final until a restart: a reconnect would Nack again until `max_deliver`, and the backend would dead-letter the backlog. It never Terms it: on a dropped proto3 field, `Term` would dead-letter the whole backlog. | Integrator ruling w25:p1, 2026-10-10, mesh 4653a43a (lane decision, the operator may override); the 300 floor: cas-engineer, critic round 1 |
-| D10 | The lease `Budget` is the host's task cap, set in the adapter config. The adapter never derives it from `ttl`, and renewals move `expires_at` only. `max_wall_secs` is the task's wall-clock cap. Spec 0023 plans to freeze a slot whose budget runs out, so a budget of `ttl + 1` would freeze any task longer than one lease window. Nothing reads `max_wall_secs` today [verified, `git grep max_wall_secs` at 3009f8d]. | cas-engineer, 2026-10-10, P1 Part A critic (the operator may override) |
-| D11 | Two paths the first build added, kept: (a) a delivery with no `Warm` slot gets `Nack` with the D5 delay, because the server sent more than `free_slots` (F1) and that is not a work fault; (b) the `Recv` reconnect backoff has D5's shape, 1 s doubling to 60 s, and resets after a delivery; (c) a `Recv` stream that ends after it delivered `free_slots` units is the normal end, not a fault, so it costs no backoff, and the adapter reads a filled stream until it ends or a slot frees, so a surplus unit gets the (a) `Nack`; when a slot frees first, it drops that stream and calls `Recv` with the free count, with no backoff, so a server that keeps a filled stream open cannot stall new work. | cas-engineer, 2026-10-10, P1 Part A departures 3 and 9; (c) P1 Part A critic item 2 (the operator may override) |
-| D12 | All calls on the adapter thread run one after another, so their time adds up. A round is one pass. A pass started at s takes every running unit due before s plus the quarter (the shortest `lease_ms / 4` among running units, fixed at s): the lookahead. So a unit due a moment after the others shares their pass and its cut-first order applies; units not taken are neither called nor counted. Each taken `Extend` gets a deadline: its due time plus the quarter. A call is bounded by the time left; a unit whose deadline passed before its turn counts as failed with no call. Order: last `Extend` skipped, then last cut, then the rest, ties by slot order. `Ack`, `Nack`, `Term` and the `Recv` open are bounded by the smaller of their cap and the time left to the earliest pending `Extend` deadline; a cut one follows D6 (logged, slot released), and a finished unit whose `Ack` never lands may be redelivered, as at-least-once allows. Traces (`lease_ms` 3000, quarter 750): two or three hung units are all released at 2750 ms; four hung, two at 3000 and two at 30000, release at 2750 and 27500; one hung unit A beside a healthy B: R1 cuts A and skips B, R2 calls B first, so B keeps its slot and A is released at 2750; A at 0 and B at 900, both hung, release A at 2750 and B at 3650 (a budget that starts at A's turn gives 3400); a hung `Ack` after A's first cut leaves A's release at 2750, not 3750. Slow broker, three units answering in 700 ms: R1 A answers at 1700, B is cut at 1750, C is skipped; R2 C answers at 2700, B is cut at 2750 and stops, A is skipped; later A and C alternate and no `Extend` lands late. At the D9 floor (quarter 75 ms, 29 ms calls) the cut unit goes first next pass, so no unit fails twice in a row. Staggered at the floor (X1 and X2 due at 100, Y at 101, 34 ms answers): a pass that took only the units due at its start never shared one with Y, so Y was cut every tick and stopped at 276 [reported, critic, reproduced on 627378b]; with the lookahead, 100 cuts Y, 200 calls Y first (it lands at 234) and cuts X2, 300 calls X2 first, and no unit stops. A unit stops by 11/12 of its lease, before Cortex redelivers. A healthy unit can still stop (B above; or behind two hung units): that is safe, since an early stop never runs a unit twice. A fixed 2 s bound broke D4. At the D9 floor the quarter is 75 ms: sane at the measured 29 ms average and 34 ms max to the broker [reported, critic, mesh 6d2b4eff], tight under broker load. The channel keeps 5 s connect and 2 s request timeouts as caps. The bounded `extend` lands with the tonic client, on top of the first part. Rejected: stating the limit and leaning on at-least-once. | cas-engineer, 2026-10-10, P1 Part B critic item B1 and three rounds; elapsed-time budget, per-unit order and the bound on other calls ruled by the integrator w25:p1, mesh 5c083d44 and 4d4d2235 ; the lookahead from the critic, ruled by the integrator, mesh b0dec560, CER-2803 (the operator may override) |
-| D13 | Each loop step runs the due `Extend` pass before `Ack`, `Nack`, `Term` and the `Recv` open. With the D12 lookahead a unit due within a quarter of the pass start is in the pass, so at the D9 floor (X1 and X2 due at 100, Y at 101, 34 ms answers) Y is extended or cut in the pass and an `Ack` after it gets about 99 ms, not the 8 ms it got when the pass took only the units due at its start. A pass can still run past its start plus the quarter, since its last units may run to their own deadlines; a unit that falls due then can shorten an `Ack`, a cut `Ack` follows D6, and at-least-once covers the redelivery. The extra pass of the earlier text is dropped: the lookahead covers its case. | cas-engineer, 2026-10-10, CER-2801 from the P1 Part B critic; the extra pass replaced by the D12 lookahead, CER-2803 (the operator may override) |
+| D8 | A real `TaskRunner` (a harness run in a slot) needs the `uas-pool` runtime. That runtime is ruled: spec 0019 D2, Option A, OS threads as built (the operator, in session, lane w25:p1 interview, 2026-10-10 [reported, relayed by the integrator, mesh e42efbc2]). The harness runner is a new concept with open design, so it needs its own spec, 0027, before any brief; until then the port has a fake only. | Runtime: ruled by the operator (spec 0019 D2). Spec 0027 first: lane reading, uas-engineer, 2026-10-10 (the operator may override) |
+| D9 | The minimum `lease_ms` is 300, so the `Extend` tick is at least 100 ms. A smaller value, 0 included (the proto3 default), is a wire or backend fault, not a work fault. The adapter Nacks the unit with the D5 delay and stops `Recv` with an error that names `lease_ms` and its value. The stop is final until a restart: a reconnect would Nack again until `max_deliver`, and the backend would dead-letter the backlog. It never Terms it: on a dropped proto3 field, `Term` would dead-letter the whole backlog. | Integrator ruling w25:p1, 2026-10-10, mesh 4653a43a (lane decision, the operator may override); the 300 floor: uas-engineer, critic round 1 |
+| D10 | The lease `Budget` is the host's task cap, set in the adapter config. The adapter never derives it from `ttl`, and renewals move `expires_at` only. `max_wall_secs` is the task's wall-clock cap. Spec 0023 plans to freeze a slot whose budget runs out, so a budget of `ttl + 1` would freeze any task longer than one lease window. Nothing reads `max_wall_secs` today [verified, `git grep max_wall_secs` at 3009f8d]. | uas-engineer, 2026-10-10, P1 Part A critic (the operator may override) |
+| D11 | Two paths the first build added, kept: (a) a delivery with no `Warm` slot gets `Nack` with the D5 delay, because the server sent more than `free_slots` (F1) and that is not a work fault; (b) the `Recv` reconnect backoff has D5's shape, 1 s doubling to 60 s, and resets after a delivery; (c) a `Recv` stream that ends after it delivered `free_slots` units is the normal end, not a fault, so it costs no backoff, and the adapter reads a filled stream until it ends or a slot frees, so a surplus unit gets the (a) `Nack`; when a slot frees first, it drops that stream and calls `Recv` with the free count, with no backoff, so a server that keeps a filled stream open cannot stall new work. | uas-engineer, 2026-10-10, P1 Part A departures 3 and 9; (c) P1 Part A critic item 2 (the operator may override) |
+| D12 | All calls on the adapter thread run one after another, so their time adds up. A round is one pass. A pass started at s takes every running unit due before s plus the quarter (the shortest `lease_ms / 4` among running units, fixed at s): the lookahead. So a unit due a moment after the others shares their pass and its cut-first order applies; units not taken are neither called nor counted. Each taken `Extend` gets a deadline: its due time plus the quarter. A call is bounded by the time left; a unit whose deadline passed before its turn counts as failed with no call. Order: last `Extend` skipped, then last cut, then the rest, ties by slot order. `Ack`, `Nack`, `Term` and the `Recv` open are bounded by the smaller of their cap and the time left to the earliest pending `Extend` deadline; a cut one follows D6 (logged, slot released), and a finished unit whose `Ack` never lands may be redelivered, as at-least-once allows. Traces (`lease_ms` 3000, quarter 750): two or three hung units are all released at 2750 ms; four hung, two at 3000 and two at 30000, release at 2750 and 27500; one hung unit A beside a healthy B: R1 cuts A and skips B, R2 calls B first, so B keeps its slot and A is released at 2750; A at 0 and B at 900, both hung, release A at 2750 and B at 3650 (a budget that starts at A's turn gives 3400); a hung `Ack` after A's first cut leaves A's release at 2750, not 3750. Slow broker, three units answering in 700 ms: R1 A answers at 1700, B is cut at 1750, C is skipped; R2 C answers at 2700, B is cut at 2750 and stops, A is skipped; later A and C alternate and no `Extend` lands late. At the D9 floor (quarter 75 ms, 29 ms calls) the cut unit goes first next pass, so no unit fails twice in a row. Staggered at the floor (X1 and X2 due at 100, Y at 101, 34 ms answers): a pass that took only the units due at its start never shared one with Y, so Y was cut every tick and stopped at 276 [reported, critic, reproduced on 627378b]; with the lookahead, 100 cuts Y, 200 calls Y first (it lands at 234) and cuts X2, 300 calls X2 first, and no unit stops. A unit stops by 11/12 of its lease, before Cortex redelivers. A healthy unit can still stop (B above; or behind two hung units): that is safe, since an early stop never runs a unit twice. A fixed 2 s bound broke D4. At the D9 floor the quarter is 75 ms: sane at the measured 29 ms average and 34 ms max to the broker [reported, critic, mesh 6d2b4eff], tight under broker load. The channel keeps 5 s connect and 2 s request timeouts as caps. The bounded `extend` lands with the tonic client, on top of the first part. Rejected: stating the limit and leaning on at-least-once. | uas-engineer, 2026-10-10, P1 Part B critic item B1 and three rounds; elapsed-time budget, per-unit order and the bound on other calls ruled by the integrator w25:p1, mesh 5c083d44 and 4d4d2235 ; the lookahead from the critic, ruled by the integrator, mesh b0dec560, CER-2803 (the operator may override) |
+| D13 | Each loop step runs the due `Extend` pass before `Ack`, `Nack`, `Term` and the `Recv` open. With the D12 lookahead a unit due within a quarter of the pass start is in the pass, so at the D9 floor (X1 and X2 due at 100, Y at 101, 34 ms answers) Y is extended or cut in the pass and an `Ack` after it gets about 99 ms, not the 8 ms it got when the pass took only the units due at its start. A pass can still run past its start plus the quarter, since its last units may run to their own deadlines; a unit that falls due then can shorten an `Ack`, a cut `Ack` follows D6, and at-least-once covers the redelivery. The extra pass of the earlier text is dropped: the lookahead covers its case. | uas-engineer, 2026-10-10, CER-2801 from the P1 Part B critic; the extra pass replaced by the D12 lookahead, CER-2803 (the operator may override) |
 
 ## Plan
 
 - [x] the operator ruled D1, 2026-10-10 [reported, mesh 74f407df].
-- [ ] P1, `cas-engine`, feature `cortex-grpc`, off by default: the transport and
+- [ ] P1, `uas-engine`, feature `cortex-grpc`, off by default: the transport and
   the lease handling (D1). The `PoolWork` and `TaskRunner` port traits, the lease
   bridge (D4) and the classifier (D5, D6, D9), tested red first with a fake port
   and a fake clock. A `build.rs` that compiles the vendored protos with `protox` and `tonic-prost-build`, with the include root
@@ -206,17 +206,17 @@ most `ttl + 1` seconds after `now`.
   Past 800 changed lines, split: the ports, the bridge and the classifier first,
   then the tonic client, both behind the feature. The bounded `extend` (D12) lands
   with the tonic client, on top of the first part.
-- [ ] P2: spec 0027 (the harness runner: a real `TaskRunner` in a `cas-pool` slot), then its build (D8).
+- [ ] P2: spec 0027 (the harness runner: a real `TaskRunner` in a `uas-pool` slot), then its build (D8).
 - [ ] Join tokens: no work here (D7).
 
 ## Test
 
 ```bash
 make spec-check
-T=$(mktemp); cargo tree -p cas-engine -e normal,build --prefix none > "$T"
+T=$(mktemp); cargo tree -p uas-engine -e normal,build --prefix none > "$T"
 ! grep -E '^(tonic|prost)' "$T"
-cargo tree -p cas-engine -e normal,build --prefix none --features cortex-grpc | grep -E '^tonic '
-cargo nextest run -p cas-engine --build-jobs 2 --features cortex-grpc cortex_pool
+cargo tree -p uas-engine -e normal,build --prefix none --features cortex-grpc | grep -E '^tonic '
+cargo nextest run -p uas-engine --build-jobs 2 --features cortex-grpc cortex_pool
 cargo deny check
 ```
 
@@ -286,7 +286,7 @@ licenses ok, sources ok".
 
 - Rejected: a fixed `extend_by` per tick (D4).
 - Rejected: the JSON v0 routes (F9).
-- Rejected: the transport on by default, or in `cas-domain`. Either one puts a
+- Rejected: the transport on by default, or in `uas-domain`. Either one puts a
   network stack into builds that do not need it.
 - `protox` 0.9.1 ships a resolver for the Google well-known types
   (`src/file/google.rs`) [verified, file read]. That it resolves `empty.proto`,

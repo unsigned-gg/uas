@@ -35,11 +35,11 @@ Facts, measured on ceres 2026-10-10 unless stated:
   (w25:p3) reported the same result the same day.
 - **F4 [verified]:** `cpu.max` on `user-1000.slice` and on `app.slice` is
   `max 100000`: no quota above the slot today. `nproc` is 16.
-- **F5 [verified]:** `cas-pool` already writes the quota. `crates/cas-pool/src/freezer.rs`
+- **F5 [verified]:** `uas-pool` already writes the quota. `crates/uas-pool/src/freezer.rs`
   `CgroupFreezer::configure_limits` (development aee639c, PR #36) writes `cpu.max`
   as `<quota_us> <period_us>` from `ResourceLimits { cpu_quota_us, cpu_period_us,
   memory_high_bytes, memory_max_bytes }`, with `period` defaulting to 100000 and
-  quota `max` when unset. `crates/cas-pool/tests/freezer.rs`
+  quota `max` when unset. `crates/uas-pool/tests/freezer.rs`
   `cgroup_freezer_creates_child_directory_and_writes_limits` asserts the written
   line.
 - **F6 [verified]:** the same function skips each file silently when it does not
@@ -56,9 +56,9 @@ Facts, measured on ceres 2026-10-10 unless stated:
 - **Ubiquitous:** The substrate shall state the host throttling invariant as two
   parts: the `-j 2` convention for every cargo and make call, and a CPU quota on
   every worker slot cgroup. Neither part is enforced by eBPF.
-- **Event-driven:** WHEN `cas-pool` launches a worker slot, it shall write
+- **Event-driven:** WHEN `uas-pool` launches a worker slot, it shall write
   `cpu.max` on the slot cgroup before the first `exec` in that slot.
-- **Event-driven:** WHEN the slot cgroup has no `cpu` controller, `cas-pool` shall
+- **Event-driven:** WHEN the slot cgroup has no `cpu` controller, `uas-pool` shall
   record `cpu_cap: uncapped` in the slot's receipt and log it at warn level; it
   shall not fail the launch.
 - **State-driven:** WHILE a slot is capped, every process in its process tree
@@ -74,7 +74,7 @@ Facts, measured on ceres 2026-10-10 unless stated:
 | Part | Mechanism | Enforced by | Scope |
 |---|---|---|---|
 | Convention | `JOBS ?= 2`, `cargo ... -j $(JOBS)`, `make -j 2` in every brief | Makefiles, AGENTS.md rule 2, builder briefs | per command; advisory |
-| Quota | `cpu.max = <2 * period> <period>`, default `200000 100000` (two CPUs' worth of time per 100 ms period) on `/sys/fs/cgroup/.../cas/slot-<id>` | the kernel's CFS bandwidth controller | the whole slot process tree; enforced |
+| Quota | `cpu.max = <2 * period> <period>`, default `200000 100000` (two CPUs' worth of time per 100 ms period) on `/sys/fs/cgroup/.../uas/slot-<id>` | the kernel's CFS bandwidth controller | the whole slot process tree; enforced |
 | Priority | `nice 19` via `PRIO_PGRP` (spec 0014) | the scheduler | who yields under contention; not a cap |
 
 Two CPUs of quota is the arithmetic twin of `-j 2`: two jobs that each use one CPU
@@ -87,11 +87,11 @@ process from blocking on I/O or from allocating memory (`memory.high` and
 
 | # | Decision | Who, when |
 |---|---|---|
-| D1 | The claim "eBPF enforces `-j 2`" is dropped. Spec 0001 gap 2 closes with this spec. | CAS lane w25:p1, 2026-10-10 |
-| D2 | The job cap is the cgroup v2 CPU quota per slot, written by `CgroupFreezer::configure_limits`, plus the `-j 2` convention. | CAS lane w25:p1, 2026-10-10 |
+| D1 | The claim "eBPF enforces `-j 2`" is dropped. Spec 0001 gap 2 closes with this spec. | UAS lane w25:p1, 2026-10-10 |
+| D2 | The job cap is the cgroup v2 CPU quota per slot, written by `CgroupFreezer::configure_limits`, plus the `-j 2` convention. | UAS lane w25:p1, 2026-10-10 |
 | D3 | Default quota per slot: `200000 100000` (two CPUs). Alternatives considered: one CPU (`100000 100000`) for a crowded host; `max` for a dedicated one. | the operator, interview in lane w25:p1, 2026-10-10: two CPUs |
-| D4 | A missing `cpu` controller is recorded, not fatal: `cpu_cap: uncapped` in the receipt, a warn log. This replaces the silent skip in F6. | CAS lane w25:p1, 2026-10-10 |
-| D5 | The quota applies to the slot, not to builds alone. The kernel cannot tell a build from an editor; the slot is the unit of isolation. | CAS lane w25:p1, 2026-10-10 |
+| D4 | A missing `cpu` controller is recorded, not fatal: `cpu_cap: uncapped` in the receipt, a warn log. This replaces the silent skip in F6. | UAS lane w25:p1, 2026-10-10 |
+| D5 | The quota applies to the slot, not to builds alone. The kernel cannot tell a build from an editor; the slot is the unit of isolation. | UAS lane w25:p1, 2026-10-10 |
 
 ### Receipt field
 
@@ -102,9 +102,9 @@ Saga reads it as evidence that the host throttling invariant held for the run.
 ## Plan
 
 - [x] the operator rules D3 (two CPUs, 2026-10-10).
-- [x] `cas-pool`: default `ResourceLimits` to `cpu_quota_us: 200_000, cpu_period_us: 100_000` at slot launch (today
+- [x] `uas-pool`: default `ResourceLimits` to `cpu_quota_us: 200_000, cpu_period_us: 100_000` at slot launch (today
   the caller passes limits; the default is `None`, which writes nothing).
-- [x] `cas-pool`: replace the silent skip (F6) with the `uncapped` receipt field and
+- [x] `uas-pool`: replace the silent skip (F6) with the `uncapped` receipt field and
   a warn log; test goes red first on a cgroup without the `cpu` controller
   (a tempdir stands in for the cgroup, as `tests/freezer.rs` does today).
 - [x] Spec 0001: close gap 2 and Plan item 4 with a citation to this spec.
@@ -114,15 +114,15 @@ Saga reads it as evidence that the host throttling invariant held for the run.
 
 ```bash
 make spec-check
-cargo nextest run -p cas-pool --build-jobs 2 cgroup_freezer_creates_child_directory_and_writes_limits
+cargo nextest run -p uas-pool --build-jobs 2 cgroup_freezer_creates_child_directory_and_writes_limits
 ```
 
 Live, unprivileged, on ceres (proves F3; leaves nothing behind):
 
 ```bash
 C=/sys/fs/cgroup/user.slice/user-$(id -u).slice/user@$(id -u).service/app.slice
-mkdir $C/cas-cap-probe && echo "200000 100000" > $C/cas-cap-probe/cpu.max \
-  && cat $C/cas-cap-probe/cpu.max && rmdir $C/cas-cap-probe
+mkdir $C/uas-cap-probe && echo "200000 100000" > $C/uas-cap-probe/cpu.max \
+  && cat $C/uas-cap-probe/cpu.max && rmdir $C/uas-cap-probe
 ```
 
 Expected: `200000 100000` printed, exit 0. A host that prints a permission error
