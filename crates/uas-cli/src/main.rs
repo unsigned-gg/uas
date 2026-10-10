@@ -102,10 +102,10 @@ enum WaveCommand {
             num_args = 0..=1,
             require_equals = true,
             default_missing_value = "1",
-            default_value = "0",
+            value_name = "0|1",
             value_parser = open_prs_value,
         )]
-        open_prs: bool,
+        open_prs: Option<bool>,
     },
     /// Resolve a Builder's PR and run `blackwall merge-gate` on it. Saga calls this as the
     /// `verify_cmd` of a generated merge step.
