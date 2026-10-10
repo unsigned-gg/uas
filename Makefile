@@ -50,7 +50,7 @@ typos: ## Spell check
 machete: ## Find unused dependencies
 	cargo machete
 
-spec-check: ## Validate specs/ (lean-spec rules)
+spec-check: ## Validate specs/ (EARS rules)
 	cargo xtask spec-check
 
 toolchain-check: ## Verify rustc matches rust-toolchain.toml

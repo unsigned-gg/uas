@@ -1,0 +1,6 @@
+# EARS specification marker - cas-substrate
+methodology: EARS (Easy Approach to Requirements Syntax)
+specification_schema: headless-v1
+reference_standards: cerebral-work/research standards/ears/
+spec_directory: specs/
+# Specs written before this marker are grandfathered. New specs use the EARS headless schema.

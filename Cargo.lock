@@ -187,6 +187,13 @@ dependencies = [
 [[package]]
 name = "cas-pool"
 version = "0.1.0"
+dependencies = [
+ "cas-domain",
+ "rustix",
+ "serde",
+ "thiserror",
+ "tracing",
+]
 
 [[package]]
 name = "cas-router"
