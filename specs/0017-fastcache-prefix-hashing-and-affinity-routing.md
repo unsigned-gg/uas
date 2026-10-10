@@ -50,7 +50,7 @@ Facts, measured and recorded 2026-10-09:
 | D2 | SHA-256 prefix hash: Hash the invariant prefix with `sha2` 0.11.0. Use the first 16 bytes as the affinity routing key. | CAS lane, 2026-10-09 |
 | D3 | Rendezvous routing: Use Highest Random Weight (HRW) rendezvous hashing across active replica nodes. Achieve deterministic sticky routing without centralized state. | CAS lane, 2026-10-09 |
 | D4 | Dual-stream token multiplexer: Intercept streaming SSE chunks. Parse and strip `<think>` blocks. Route thought traces to telemetry and clean completions to client. | CAS lane, 2026-10-09 |
-| D5 | Active health probe: Probe replica `/healthz` or `/health` every 5 seconds. Mark replica unavailable after 2 consecutive failures. Fail over in-flight requests. | CAS lane, 2026-10-09 |
+| D5 | Active health probe: Probe replica `/healthz` or `/health` every 5 seconds. Mark replica unavailable after 2 consecutive failures. Fail over in-flight requests. Fallback: when every replica is unhealthy, `choose` picks over all registered replicas in ascending id order at index `u64::from_be_bytes(prefix_hash[0..8]) % n` and returns `ReplicaChoice::Fallback`, so callers can log it. An empty table is `NoHealthyReplicas`. | CAS lane, 2026-10-09. Fallback added 2026-10-10, lane w25:p1, Christian may override. |
 | D6 | Zero-allocation buffer: Use circular byte window for streaming token parsing. Detect boundary tags without heap allocations. | CAS lane, 2026-10-09 |
 
 ### Architecture and Flow
@@ -125,14 +125,14 @@ flowchart TD
 ### Invariants
 
 1. **Deterministic Hashing:** Identical system prompts and tool sets always yield identical `PrefixHash` values.
-2. **Transparent Fallback:** If all affinity replicas are unhealthy, the router falls back to round-robin among any responsive upstream node.
+2. **Transparent Fallback:** If all affinity replicas are unhealthy, the router falls back to round-robin over every registered replica (D5).
 3. **Stream Purity:** Client streams never receive unclosed or raw `<think>` tags when dual-streaming is active.
 4. **Host Throttling:** Network polling and multiplexing run on asynchronous Tokio tasks without blocking OS threads.
 
 ### Errors
 
 - `RouterError::InvalidPayload`: Malformed JSON or missing completion fields.
-- `RouterError::NoHealthyReplicas`: All upstream inference nodes failed health probes.
+- `RouterError::NoHealthyReplicas`: The table holds no replica. An all-unhealthy table falls back (D5).
 - `RouterError::UpstreamTimeout`: Target replica did not respond within configured timeout.
 - `RouterError::StreamTerminated`: Upstream disconnected mid-completion.
 
@@ -162,4 +162,3 @@ cargo test -p cas-router -j 2
   Consistent routing ensures agent sessions reuse KV cache blocks across turns.
 - **LiteLLM Compatibility:** Request and response framing complies with OpenAI
   v1 Chat Completions specification.
-- **Invariant 2 deferral (2026-10-10):** the round-robin fallback for an all-unhealthy replica set is deferred to the D5 package. Today `AffinityTable::choose` returns `NoHealthyReplicas` in that case.
