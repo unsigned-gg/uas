@@ -2,6 +2,7 @@
 
 use cas_domain::{LeaseId, SlotId};
 
+use crate::compensator::receipts_or_failure;
 use crate::{
     Activity, ActivityResult, CompensationReceipt, Compensator, EngineError, EventStore,
     InMemoryEventStore, NoopCompensator, SessionId, SessionState, WorkflowEvent,
@@ -269,6 +270,11 @@ impl<S: EventStore> WorkflowSession<S> {
     }
 
     /// Fail an activity and trigger saga compensation rollback.
+    ///
+    /// The compensator runs once. Every receipt it returns is kept, and the log ends with
+    /// `SessionFinished` in `Failed`. Returns `Ok(())` when the compensator returns `Ok`, even
+    /// if one of its receipts reports failure. Returns `CompensationIncomplete` only when the
+    /// compensator itself returns `Err`; the session still ends in `Failed` with that receipt kept.
     pub fn fail_activity(
         &mut self,
         activity: &Activity,
@@ -306,17 +312,11 @@ impl<S: EventStore> WorkflowSession<S> {
             timestamp,
         })?;
 
-        // Execute compensation logic
-        let receipts = match self.compensator.compensate(activity, &reason) {
-            Ok(receipts) => receipts,
-            Err(e) => {
-                return Err(EngineError::CompensationFailed {
-                    activity_id: activity.id.clone(),
-                    reason: e.to_string(),
-                });
-            }
-        };
-        self.compensation_receipts.extend(receipts);
+        // Run the compensator. Keep every receipt, even when the compensator returned Err.
+        let result = self.compensator.compensate(activity, &reason);
+        let direct_err = result.is_err();
+        let receipts = receipts_or_failure(self.compensator.name(), activity, result);
+        self.compensation_receipts.extend(receipts.clone());
 
         self.state = SessionState::Failed;
         let fin_seq = self.store.len() as u64;
@@ -324,7 +324,13 @@ impl<S: EventStore> WorkflowSession<S> {
             sequence: fin_seq,
             final_state: SessionState::Failed,
             timestamp,
-        })
+        })?;
+
+        if direct_err {
+            let failed = receipts.iter().filter(|r| !r.success).count();
+            return Err(EngineError::CompensationIncomplete { failed, receipts });
+        }
+        Ok(())
     }
 
     /// Conclude the session with success.
@@ -355,7 +361,8 @@ impl<S: EventStore> WorkflowSession<S> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ActivityKind;
+    use crate::compensator::FailOnCompensator;
+    use crate::{ActivityKind, CompositeCompensator};
     use cas_domain::{Attestation, EvidenceTier, PrincipalRef};
 
     #[test]
@@ -411,6 +418,76 @@ mod tests {
         sess.fail_activity(&act, "make check exit 1".into(), 110)
             .unwrap();
 
+        assert_eq!(sess.state(), SessionState::Failed);
+        assert_eq!(sess.events().len(), 5);
+    }
+
+    /// Start a session with `compensator`, then start activity `act-x`.
+    fn session_running_act_x(
+        compensator: Box<dyn Compensator>,
+    ) -> (WorkflowSession<InMemoryEventStore>, Activity) {
+        let mut sess = WorkflowSession::with_store_and_compensator(
+            SessionId::new("sess-comp-err").unwrap(),
+            InMemoryEventStore::new(),
+            compensator,
+        );
+        sess.start(
+            SlotId::new("slot-1").unwrap(),
+            LeaseId::new("lease-1").unwrap(),
+            100,
+        )
+        .unwrap();
+        let act = Activity::new("act-x", "Run", ActivityKind::Verify);
+        sess.start_activity(act.clone(), 105).unwrap();
+        (sess, act)
+    }
+
+    #[test]
+    fn fail_activity_records_receipt_when_compensator_errs() {
+        let (mut sess, act) = session_running_act_x(Box::new(FailOnCompensator::new("act-x")));
+
+        let err = sess.fail_activity(&act, "boom".into(), 110).unwrap_err();
+        let EngineError::CompensationIncomplete { failed, receipts } = err else {
+            panic!("expected CompensationIncomplete, got {err:?}");
+        };
+        assert_eq!(failed, 1);
+        assert_eq!(receipts.len(), 1);
+        assert!(!receipts[0].success);
+        assert_eq!(receipts[0].handler_name, "fail_on");
+        assert_eq!(sess.compensation_receipts(), receipts.as_slice());
+        assert_eq!(sess.state(), SessionState::Failed);
+        assert_eq!(sess.events().len(), 5);
+        assert!(matches!(
+            sess.events().last(),
+            Some(WorkflowEvent::SessionFinished {
+                final_state: SessionState::Failed,
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn replay_after_compensator_error_yields_failed() {
+        let (mut sess, act) = session_running_act_x(Box::new(FailOnCompensator::new("act-x")));
+        let _ = sess.fail_activity(&act, "boom".into(), 110);
+
+        let replayed = WorkflowSession::replay_from_events(
+            SessionId::new("sess-comp-err").unwrap(),
+            sess.events(),
+        )
+        .unwrap();
+        assert_eq!(replayed.state(), SessionState::Failed);
+        assert_eq!(replayed.events().len(), 5);
+    }
+
+    #[test]
+    fn fail_activity_composite_child_failure_stays_ok() {
+        let comp = CompositeCompensator::new().with(FailOnCompensator::new("act-x"));
+        let (mut sess, act) = session_running_act_x(Box::new(comp));
+
+        sess.fail_activity(&act, "boom".into(), 110).unwrap();
+        assert_eq!(sess.compensation_receipts().len(), 1);
+        assert!(!sess.compensation_receipts()[0].success);
         assert_eq!(sess.state(), SessionState::Failed);
         assert_eq!(sess.events().len(), 5);
     }
