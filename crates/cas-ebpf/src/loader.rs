@@ -19,9 +19,9 @@ use aya::{
 };
 
 use crate::{
-    error::EbpfError, handle::ProbeHandle, probe, wire::ExecEvent, AUDIT_EVENTS_MAP, BPF_OBJECT,
-    DROPPED_EVENTS_MAP, DROPPED_RING_SLOT, DROPPED_TRACK_SLOT, NS_TO_GLOBAL_MAP, PIDNS_CONFIG_MAP,
-    TRACEPOINTS, TRACKED_PIDS_MAP, TRACK_REQUESTS_MAP,
+    error::EbpfError, handle::ProbeHandle, probe, tracefs, wire::ExecEvent, AUDIT_EVENTS_MAP,
+    BPF_OBJECT, DROPPED_EVENTS_MAP, DROPPED_RING_SLOT, DROPPED_TRACK_SLOT, NS_TO_GLOBAL_MAP,
+    PIDNS_CONFIG_MAP, TP_OFFSETS_MAP, TRACEPOINTS, TRACKED_PIDS_MAP, TRACK_REQUESTS_MAP,
 };
 
 /// The pid namespace file the kernel helper matches against.
@@ -38,6 +38,7 @@ pub struct Probes {
     ns_to_global: HashMap<MapData, u32, u32>,
     events: RingBuf<MapData>,
     dropped: PerCpuArray<MapData, u64>,
+    tp_offsets: Array<MapData, u32>,
     pidns: [u64; 2],
 }
 
@@ -61,6 +62,20 @@ impl Probes {
         }
 
         let mut ebpf = Ebpf::load(BPF_OBJECT)?;
+
+        // Read the layouts and fill the slots before any attach, so a bad
+        // format file leaves nothing attached (spec 0014 D13).
+        let offsets = tracefs::read().map_err(|failure| EbpfError::TracepointFormat {
+            tracepoint: failure.tracepoint,
+            source: failure.source,
+        })?;
+        let mut tp_offsets: Array<MapData, u32> = Array::try_from(take(&mut ebpf, TP_OFFSETS_MAP)?)
+            .map_err(|source| map_err(TP_OFFSETS_MAP, source))?;
+        for (slot, value) in (0u32..).zip(offsets.slots()) {
+            tp_offsets
+                .set(slot, value, 0)
+                .map_err(|source| map_err(TP_OFFSETS_MAP, source))?;
+        }
 
         for (name, category, tracepoint, label) in TRACEPOINTS {
             let program: &mut TracePoint = ebpf
@@ -105,8 +120,38 @@ impl Probes {
             ns_to_global,
             events,
             dropped,
+            tp_offsets,
             pidns,
         })
+    }
+
+    /// The five field offsets in the kernel map, in slot order (spec 0014 D13).
+    /// Read back from the kernel, not from the parsed copy.
+    ///
+    /// # Errors
+    ///
+    /// [`EbpfError::Map`] when a slot cannot be read.
+    pub fn tp_offsets(&self) -> Result<[u32; 5], EbpfError> {
+        let mut out = [0u32; 5];
+        for (slot, value) in (0u32..).zip(out.iter_mut()) {
+            *value = self
+                .tp_offsets
+                .get(&slot, 0)
+                .map_err(|e| map_err(TP_OFFSETS_MAP, e))?;
+        }
+        Ok(out)
+    }
+
+    /// The global task ids in `TRACKED_PIDS`. Used to check the keys against `pid_max`.
+    ///
+    /// # Errors
+    ///
+    /// [`EbpfError::Map`] when the map cannot be iterated.
+    pub fn tracked_globals(&self) -> Result<Vec<u32>, EbpfError> {
+        self.tracked
+            .keys()
+            .collect::<Result<Vec<u32>, MapError>>()
+            .map_err(|e| map_err(TRACKED_PIDS_MAP, e))
     }
 
     /// The `[dev, ino]` of this process's pid namespace, as written to the kernel.

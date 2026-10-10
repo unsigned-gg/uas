@@ -38,6 +38,15 @@ pub enum EbpfError {
         #[source]
         source: aya::programs::ProgramError,
     },
+    /// A tracepoint `format` file is unreadable or breaks a D13 rule. Nothing attached.
+    #[error("tracepoint format {tracepoint}: {source}")]
+    TracepointFormat {
+        /// The tracepoint, as `category/name`.
+        tracepoint: &'static str,
+        /// What was wrong with the file.
+        #[source]
+        source: crate::tracefs::FormatError,
+    },
     /// The object has no map with this name.
     #[error("BPF map {name} is missing from the object")]
     MapMissing {
