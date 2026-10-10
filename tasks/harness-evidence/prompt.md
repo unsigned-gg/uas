@@ -1,10 +1,10 @@
 # Task: a harness dry run must never claim verified evidence ({{ticket}})
 
-You work in the cas-substrate Rust workspace. Change only `crates/cas-cli/src/main.rs` and `CHANGELOG.md`.
+You work in the uas Rust workspace. Change only `crates/uas-cli/src/main.rs` and `CHANGELOG.md`.
 
 ## The defect
 
-`cas harness run` takes `--evidence`, with clap `default_value = "verified"`. With `--dry-run` it executes nothing, but `harness_run` still builds an `Attestation` with that tier. A simulated activity therefore records `EvidenceTier::Verified`. The estate rule: `verified` means a mechanical receipt, for example a command that ran and exited 0. A dry run has no receipt.
+`uas harness run` takes `--evidence`, with clap `default_value = "verified"`. With `--dry-run` it executes nothing, but `harness_run` still builds an `Attestation` with that tier. A simulated activity therefore records `EvidenceTier::Verified`. The estate rule: `verified` means a mechanical receipt, for example a command that ran and exited 0. A dry run has no receipt.
 
 ## The change
 

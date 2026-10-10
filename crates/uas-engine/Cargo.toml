@@ -1,0 +1,53 @@
+[package]
+name = "uas-engine"
+description = "Durable workflow engine: Autumn-Harvest workflow definitions, activities and saga compensators."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[dependencies]
+uas-domain = { path = "../uas-domain" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+toml = { workspace = true }
+tracing = { workspace = true }
+# The Cortex pool-member transport (spec 0026), all behind the feature `cortex-grpc`.
+tokio = { workspace = true, optional = true }
+tonic = { workspace = true, optional = true }
+tonic-prost = { workspace = true, optional = true }
+prost = { workspace = true, optional = true }
+prost-types = { workspace = true, optional = true }
+
+[build-dependencies]
+tonic-prost-build = { workspace = true, optional = true }
+protox = { workspace = true, optional = true }
+
+[dev-dependencies]
+# The in-process fake PoolWork server of the gRPC tests, and its runtime.
+tonic = { workspace = true, features = ["server"] }
+tokio = { workspace = true }
+
+[features]
+# The Cortex pool-member adapter (spec 0026). Off by default.
+cortex-grpc = [
+    "dep:tokio",
+    "dep:tonic",
+    "dep:tonic-prost",
+    "dep:prost",
+    "dep:prost-types",
+    "dep:tonic-prost-build",
+    "dep:protox",
+]
+
+# The generated gRPC code (build.rs, feature cortex-grpc) names these two crates; no source file
+# does, so machete cannot see the use.
+[package.metadata.cargo-machete]
+ignored = ["prost-types", "tonic-prost"]
+
+[lints]
+workspace = true

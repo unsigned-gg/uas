@@ -1,4 +1,4 @@
-# The first custody run on cas-substrate (CER-2671). The defect was found by a
+# The first custody run on uas (CER-2671). The defect was found by a
 # read-only survey on 2026-10-08.
 provider = "claude"
 model = "sonnet"

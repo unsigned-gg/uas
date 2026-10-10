@@ -1,0 +1,105 @@
+# Flow: uas-builder
+#
+# Builder agent lifecycle for UAS Substrate development per spec 0006:
+# verify Blackwall custody, validate LeanSpecs, acquire slot lease,
+# execute builder implementation, verify gates with -j 2 throttling,
+# execute smoke check, and obtain Heimdal operator approval.
+
+[flow]
+name = "uas-builder"
+description = "Execute builder agent loop: Blackwall custody check, LeanSpec validation, slot allocation, implementation, gates (-j 2), smoke, and operator gate"
+
+[params.task]
+required = false
+default = "Bootstrap uas-engine workflow session and activity primitives"
+description = "Task description or specification to implement"
+
+# -- Step 1: Custody verification ---------------------------------------------
+[[step]]
+id = "custody-check"
+title = "Verify Blackwall sandbox and custody health"
+kind = "verify"
+agent = "auto"
+verify_cmd = ["blackwall", "doctor"]
+prompt = """
+Verify that Blackwall workspace is initialized and Landlock jail is active.
+Do not proceed if the sandbox is unhealthy.
+"""
+
+# -- Step 2: LeanSpec verification --------------------------------------------
+[[step]]
+id = "spec-check"
+title = "Verify LeanSpec consistency and specifications"
+kind = "verify"
+agent = "auto"
+deps = ["custody-check"]
+verify_cmd = ["make", "spec-check"]
+prompt = """
+Run `make spec-check`.
+Verify that all LeanSpec documents conform to rules without warnings or broken links.
+"""
+
+# -- Step 3: Slot allocation and harness verification -------------------------
+[[step]]
+id = "slot-lease"
+title = "Allocate substrate execution slot and verify harness lifecycle"
+kind = "verify"
+agent = "auto"
+deps = ["spec-check"]
+verify_cmd = ["cargo", "run", "-p", "uas-cli", "--", "harness", "run", "--slot", "slot-builder", "--task", "spec-check", "--dry-run"]
+prompt = """
+Run `cargo run -p uas-cli -- harness run --slot slot-builder --task spec-check --dry-run`.
+Confirm the session executes cleanly, emitting an event log and a Verified attestation.
+"""
+
+# -- Step 4: Builder implementation -------------------------------------------
+[[step]]
+id = "builder-impl"
+title = "Implement builder task within slot boundary"
+kind = "impl"
+agent = "auto"
+deps = ["slot-lease"]
+prompt = """
+Implement the requested builder task within the shared workspace:
+{{params.task}}
+Ensure zero physical worktrees are created on host ceres.
+Keep all changes confined to virtual workspace or working tree.
+"""
+
+# -- Step 5: Verification gates -----------------------------------------------
+[[step]]
+id = "verification-gates"
+title = "Execute workspace verification gates"
+kind = "test"
+agent = "auto"
+deps = ["builder-impl"]
+verify_cmd = ["make", "check"]
+prompt = """
+Run `make check` (fmt-check, clippy with warnings denied, test -j 2, doc-test, cargo deny).
+All checks must pass without warnings.
+"""
+
+# -- Step 6: Smoke and hygiene check ------------------------------------------
+[[step]]
+id = "smoke-and-hygiene"
+title = "Execute smoke check and repo hygiene"
+kind = "test"
+agent = "auto"
+deps = ["verification-gates"]
+verify_cmd = ["make", "smoke"]
+prompt = """
+Run `make smoke`.
+Verify CLI runs and uas-domain contains zero I/O imports.
+"""
+
+# -- Step 7: Operator approval gate -------------------------------------------
+[[step]]
+id = "operator-gate"
+title = "Operator approval gate before settlement"
+kind = "gate"
+gate = "heimdal:approval"
+deps = ["smoke-and-hygiene"]
+prompt = """
+Review builder receipts, attestations, and test outcomes.
+Sign off via Heimdal gate to authorize commit reconciliation and PR creation.
+"""
