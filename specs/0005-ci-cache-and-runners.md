@@ -24,6 +24,7 @@ Measured 2026-10-08:
 - A PR opened by `GITHUB_TOKEN` does not trigger CI.
 - Runner pods are ephemeral and have no volumes. A cache must live off the pod.
 - sccache on R2 exists only in reverie. Its stats are never checked there.
+- The `ci-kernel` runner is live (OPS-1660). It admits pods with uid 0 and bounding set {BPF, PERFMON}, read-only tracefs. [reported, mesh c73dfbe3, 2026-10-10]
 
 ## Design
 
@@ -33,7 +34,11 @@ Measured 2026-10-08:
 - **Ubiquitous:** The build pipeline shall configure `Swatinem/rust-cache` with write access restricted to `development` and `main`.
 - **Event-driven:** WHEN commits land on `main`, the CI system shall execute SBOM generation and `release-plz` publishing.
 - **State-driven:** WHILE running inside CI runner pods, the system shall execute jobs without mutating the read-only rustup directory.
-- **Unwanted behavior:** IF a runner attempts toolchain installation or network toolchain download, THEN the job shall fail immediately.
+- **Unwanted behavior:** IF a job on the `ci-rust` lane attempts toolchain installation or network toolchain download, THEN the job shall fail immediately.
+- **Ubiquitous:** The `ebpf-live` job shall run on the `ci-kernel` lane and run `make ebpf-test SUDO=` as uid 0.
+- **Event-driven:** WHEN CI runs, the `ebpf-live` job shall rebuild `cas-ebpf.o` with the pinned nightly and bpf-linker and fail when it differs from the committed object.
+- **State-driven:** WHILE on the `ci-kernel` lane, the job shall install the pinned nightly only into a job-local `RUSTUP_HOME`.
+- **Unwanted behavior:** IF a live case prints a `skipped:` line other than the nested unshare case, THEN the `ebpf-live` job shall fail.
 
 ### Runner lanes
 
@@ -41,12 +46,13 @@ Measured 2026-10-08:
 |---|---|---|
 | `ci-rust` | `runs-on: {group: ent-default, labels: [ci-rust]}` | Rust jobs. 10 CPU. Rust 1.94.1, rustfmt, clippy, cargo-deny, typos. |
 | `self-hosted` | `self-hosted` | Jobs without Rust. Example: `secrets`. |
+| `ci-kernel` | `runs-on: [self-hosted, ci-kernel]` | The live eBPF gate, job `ebpf-live`. Uid 0 in the pod, bounding set {BPF, PERFMON}, tracefs read-only. Same image as `ci-rust`: Rust 1.94.1 only, no nightly, no bpf-linker. One runner at a time, scales from zero. |
 
 ### Workflows and jobs
 
 | Workflow | Jobs or role |
 |---|---|
-| `ci.yml` | `secrets`, `rust`, `cargo-deny`, `hygiene`, `moon-affected` |
+| `ci.yml` | `secrets`, `rust`, `cargo-deny`, `hygiene`, `moon-affected`, `ebpf-live` |
 | `_rust.yml` | Reusable. The `rust` job calls it. |
 | `template-check.yml` | `template-check`. `make new-repo` deletes this file. |
 | `codeql.yml` | Dormant. See below. |
@@ -113,6 +119,11 @@ Refined from decision 8, Christian, interviews 2026-10-08.
 5. `CHANGELOG.md` follows Keep a Changelog 1.1.0. Each user-visible PR adds one
    line under `## [Unreleased]`. Nobody edits a released section.
 
+### Decisions
+
+- **D1 (lane w25:p1, 2026-10-10):** The `ebpf-live` job runs on the `ci-kernel` lane. It installs the pinned nightly into a job-local `RUSTUP_HOME`. It rebuilds `cas-ebpf.o` and fails on any difference from the committed object.
+- **D2 (lane w25:p1, 2026-10-10):** `ebpf-live` is not a required check until one green run on `development`. Then the integrator adds it to the protection and to the spec 0003 table. Christian can override.
+
 ## Plan
 
 - [x] Write `ci.yml` and `_rust.yml`. (`template-check.yml` is template-only. `make new-repo` deletes it.)
@@ -121,6 +132,9 @@ Refined from decision 8, Christian, interviews 2026-10-08.
 - [x] Add the sccache step and its hard stats check, skipped by `if:`.
 - [x] Run once on a PR. Confirm the four required check names (spec 0003).
 - [ ] Ask the paas lane for the R2 bucket, secrets and image changes.
+- [ ] Run `ebpf-live` green on a PR, with `9 passed` and only the nested skip line.
+- [ ] Add `ebpf-live` to the required checks and to the spec 0003 table (D2).
+- [ ] Retire the operator-run `make ebpf-test` gate for the 8 cases that load. The nested case waits for the OPS-1660 seccomp half.
 
 ## Test
 
@@ -128,6 +142,7 @@ Check the workflows for the faults this spec bans.
 
 ```bash
 ! grep -rn '|| cargo test' .github && ! grep -rnE 'uses: [^ ]+@(main|master)' .github
+make -n ebpf-test | grep -q sudo && ! make -n ebpf-test SUDO= | grep -q sudo && actionlint
 ```
 
 Passing means exit 0 and no output. Then read a CI run. The `rust` job must
