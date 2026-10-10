@@ -98,6 +98,9 @@ fn shim_argv(source: &str, step: &str, requested: usize) -> Vec<String> {
 
 /// Build one flow per wave of `plan`. The output is deterministic: it depends only on the plan
 /// and the arguments. `requested` is the `--max-concurrency` that the command received.
+///
+/// A wave with no step left writes no flow, for example a wave whose only step is a gate that
+/// moved to its dependent's wave. Each file keeps the plan's wave index in its name.
 pub fn generate(plan: &WavePlan, source: &str, requested: usize) -> Vec<WaveFile> {
     let all: Vec<(usize, &WaveStep)> = plan
         .waves
@@ -132,7 +135,7 @@ pub fn generate(plan: &WavePlan, source: &str, requested: usize) -> Vec<WaveFile
     plan.waves
         .iter()
         .enumerate()
-        .map(|(i, wave)| {
+        .filter_map(|(i, wave)| {
             let gates: Vec<&WaveStep> = all
                 .iter()
                 .map(|(_, s)| *s)
@@ -191,7 +194,10 @@ pub fn generate(plan: &WavePlan, source: &str, requested: usize) -> Vec<WaveFile
                 gate: None,
             }));
 
-            WaveFile {
+            if out.is_empty() {
+                return None;
+            }
+            Some(WaveFile {
                 name: format!("{WAVE_PREFIX}{i}.toml"),
                 flow: GeneratedFlow {
                     flow: FlowMetadata {
@@ -203,7 +209,7 @@ pub fn generate(plan: &WavePlan, source: &str, requested: usize) -> Vec<WaveFile
                     },
                     step: out,
                 },
-            }
+            })
         })
         .collect()
 }

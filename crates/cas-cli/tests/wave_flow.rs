@@ -281,18 +281,36 @@ fn wave_flow_no_gate_between_waves() {
     }
 }
 
+/// A wave whose only step is a gate that moved to its dependent's wave writes no file. The other
+/// waves keep their plan indices, so the names skip wave 1 and do not renumber wave 2.
+#[test]
+fn wave_flow_skips_a_wave_whose_only_step_moved() {
+    let files = generate(&plan("empty-wave", WITH_GATE), None);
+    let names: Vec<&str> = files.iter().map(|(n, _)| n.as_str()).collect();
+    assert_eq!(
+        names,
+        ["cas-cpm-wave-w0.toml", "cas-cpm-wave-w2.toml"],
+        "no file for the emptied wave 1, and wave 2 keeps its name"
+    );
+    for (name, text) in &files {
+        assert!(!steps(text).is_empty(), "{name} holds no steps");
+        assert!(!text.contains("step = []"), "{name} holds an empty step list");
+    }
+}
+
 #[test]
 fn wave_flow_main_session_gate_in_dependent_wave() {
     let files = generate(&plan("gate-dep", WITH_GATE), None);
-    assert_eq!(files.len(), 3, "one file per wave, gate or not");
+    let names: Vec<&str> = files.iter().map(|(n, _)| n.as_str()).collect();
+    assert_eq!(
+        names,
+        ["cas-cpm-wave-w0.toml", "cas-cpm-wave-w2.toml"],
+        "wave 1 holds only the gate, which moved to wave 2, so it writes no file"
+    );
     let by_name = |n: &str| files.iter().find(|(f, _)| f == n).unwrap().1.clone();
     assert!(
         !by_name("cas-cpm-wave-w0.toml").contains("approve"),
         "the gate is not in its own wave when it has a dependent elsewhere"
-    );
-    assert!(
-        !by_name("cas-cpm-wave-w1.toml").contains("approve"),
-        "the gate is not in a wave that holds no dependent"
     );
     let w2 = steps(&by_name("cas-cpm-wave-w2.toml"));
     let gate = w2
