@@ -442,6 +442,32 @@ impl SlotPool {
         Ok(report)
     }
 
+    /// Spawns a worker in a leased slot, clamped and tracked (spec 0015 D6).
+    ///
+    /// A slot that is not `Leased` is refused before anything starts.
+    pub fn spawn_worker(
+        &self,
+        id: &SlotId,
+        cmd: std::process::Command,
+        cfg: &crate::launch::LaunchConfig,
+    ) -> Result<crate::launch::Worker, PoolError> {
+        let cpu_cap = {
+            let guard = self.slots.lock().unwrap_or_else(|p| p.into_inner());
+            let managed = guard
+                .get(id)
+                .ok_or_else(|| PoolError::SlotNotFound(id.clone()))?;
+            if managed.slot.state() != SlotState::Leased {
+                return Err(PoolError::InvalidSlotState(
+                    id.clone(),
+                    managed.slot.state(),
+                    "spawn",
+                ));
+            }
+            managed.cpu_cap().to_string()
+        };
+        crate::launch::spawn_worker(cmd, cfg, cpu_cap)
+    }
+
     /// Returns the CPU cap status recorded for a slot.
     pub fn slot_cpu_cap(&self, id: &SlotId) -> Result<CpuCap, PoolError> {
         let guard = self.slots.lock().unwrap_or_else(|p| p.into_inner());
