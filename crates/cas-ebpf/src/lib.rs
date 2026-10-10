@@ -32,8 +32,14 @@ pub use wire::{ExecEvent, ExecRecord, EXEC_EVENT_SIZE};
 /// against `ebpf/cas-ebpf.o.sha256` before this crate compiled.
 pub const BPF_OBJECT: &[u8] = include_bytes!("../ebpf/cas-ebpf.o");
 
-/// Name of the BPF hash map of tracked pids (key pid, value ppid).
+/// Name of the one-entry array holding the daemon's pid namespace as `[dev, ino]`.
+pub const PIDNS_CONFIG_MAP: &str = "PIDNS_CONFIG";
+/// Name of the BPF hash map of track requests (key namespace tgid, value namespace ppid).
+pub const TRACK_REQUESTS_MAP: &str = "TRACK_REQUESTS";
+/// Name of the BPF hash map of tracked tasks (key global task id, value parent's namespace tgid).
 pub const TRACKED_PIDS_MAP: &str = "TRACKED_PIDS";
+/// Name of the BPF hash map from namespace pid to global pid for tracked tasks.
+pub const NS_TO_GLOBAL_MAP: &str = "NS_TO_GLOBAL";
 /// Name of the BPF ring buffer that carries [`ExecEvent`] records.
 pub const AUDIT_EVENTS_MAP: &str = "AUDIT_EVENTS";
 /// Name of the per-cpu counter array. Slot [`DROPPED_RING_SLOT`] counts records
