@@ -106,7 +106,7 @@ impl Env {
         for id in ["build-a", "build-b"] {
             env.task(id, Some("haiku"));
         }
-        for name in ["git", "blackwall", "claude", "make"] {
+        for name in ["git", "blackwall", "claude", "make", "gh"] {
             env.tool(name, Vec::new());
         }
         env
@@ -131,12 +131,32 @@ impl Env {
 
     /// Rewrite one fake tool. `custom` rules go first, then the defaults.
     fn tool(&self, name: &str, custom: Vec<Rule>) {
+        self.tool_pre(name, "", custom);
+    }
+
+    /// Rewrite one fake tool with a shell line `extra` that runs on every call. The lock probe
+    /// runs too: `reconcile`, `claude` and `make` log `LOCK NOT HELD` when the host lock is not
+    /// held, because `flock -n` succeeds only on a free lock.
+    fn tool_pre(&self, name: &str, extra: &str, custom: Vec<Rule>) {
         let mut rules = custom;
         rules.extend(defaults(name));
+        let probe = format!(
+            "if flock -n '{lock}' true; then echo 'LOCK NOT HELD' >> '{log}'; fi",
+            lock = self.lock.display(),
+            log = self.log.display()
+        );
+        let guard = match name {
+            "claude" | "make" => format!("{probe}\n"),
+            "blackwall" => format!("case \"$1\" in reconcile) {probe} ;; esac\n"),
+            _ => String::new(),
+        };
         let mut body = format!(
             "#!/bin/sh\necho \"{name} $*\" >> \"{}\"\n",
             self.log.display()
         );
+        body += &guard;
+        body += extra;
+        body += "\n";
         if name == "claude" {
             body += &format!("cat > \"{}/claude.stdin\"\n", self.bin.display());
         }
@@ -172,9 +192,9 @@ impl Env {
     }
 
     fn config(&self) -> WaveExecConfig {
+        // The fakes shadow every tool the executor calls. The developer PATH is not reachable.
         let mut path = OsString::from(&self.bin);
-        path.push(":");
-        path.push(std::env::var_os("PATH").unwrap_or_default());
+        path.push(":/usr/bin:/bin");
         WaveExecConfig {
             path_env: Some(path),
             ..WaveExecConfig::new(&self.repo, &self.state, &self.wt, &self.lock)
@@ -639,9 +659,12 @@ fn wave_critic_no_defects_opens_pr() {
         .iter()
         .find(|l| l.starts_with("claude "))
         .expect("claude ran");
-    assert!(claude.contains("--strict-mcp-config"), "{claude}");
-    assert!(claude.contains("--agent cas-critic"), "{claude}");
-    assert!(!claude.contains("--model"), "{claude}");
+    assert_eq!(
+        claude,
+        "claude -p --strict-mcp-config --agent cas-critic --allowed-tools Read Grep Glob Bash(git diff *) Bash(git log *) Bash(git show *) Bash(make *) Bash(cargo *)"
+    );
+    // No gh call of any kind: the executor never merges (spec 0025 D15).
+    assert!(!argv.iter().any(|l| l.starts_with("gh ")), "{argv:?}");
     assert!(
         has_line(
             &argv,
@@ -772,6 +795,7 @@ fn wave_halted_record_blocks_every_step() {
         builder("build-a"),
         critic("review-a", "build-a"),
         builder("build-b"),
+        critic("review-b", "build-b"),
     ];
     let exec = executor(&env, &steps);
     assert_eq!(
@@ -779,7 +803,7 @@ fn wave_halted_record_blocks_every_step() {
         StepOutcome::Halted(HaltReason::VerifyFailed)
     );
     let before = env.argv().len();
-    for id in ["build-a", "review-a", "build-b"] {
+    for id in ["build-a", "review-a", "build-b", "review-b"] {
         assert_eq!(
             exec.run_step(id, 2).unwrap().outcome,
             StepOutcome::Halted(HaltReason::WaveHalted),
@@ -940,6 +964,242 @@ fn wave_events_carry_custody_facts() {
     assert_eq!(
         report.receipts[0].facts().branch.as_deref(),
         Some("blackwall/bwrun0000001")
+    );
+}
+
+#[test]
+fn wave_admit_refuses_run_step_before_any_subprocess() {
+    let env = Env::new("wave_admit_refuses_run_step_before_any_subprocess");
+    let steps = [builder("build-a")];
+    let err = executor(&env, &steps).run_step("build-a", 1).unwrap_err();
+    assert!(
+        matches!(err, WaveError::Admit(AdmitError::BuilderCriticCount { .. })),
+        "{err}"
+    );
+    assert!(env.argv().is_empty(), "{:?}", env.argv());
+}
+
+#[test]
+fn wave_halted_record_after_settle_halts_builder() {
+    let env = Env::new("wave_halted_record_after_settle_halts_builder");
+    let state = env.state.display().to_string();
+    let record = r#"{"step":"other-step","role":"Builder","outcome":{"result":"halted","reason":"VerifyFailed"},"at":1,"seq":0}"#;
+    env.tool_pre(
+        "blackwall",
+        &format!(
+            "case \"$1\" in settle) mkdir -p '{state}'; printf '%s' '{record}' > '{state}/other-step.json' ;; esac"
+        ),
+        Vec::new(),
+    );
+    let steps = [builder("build-a"), critic("review-a", "build-a")];
+    let got = executor(&env, &steps).run_step("build-a", 1).unwrap();
+    assert_eq!(got.outcome, StepOutcome::Halted(HaltReason::WaveHalted));
+    let argv = env.argv();
+    assert!(
+        has_line(&argv, "blackwall settle bwrun0000001 select"),
+        "{argv:?}"
+    );
+    assert!(
+        !argv.iter().any(|l| l.starts_with("blackwall reconcile")),
+        "{argv:?}"
+    );
+}
+
+#[test]
+fn wave_halted_record_during_readiness_halts_critic() {
+    let env = Env::new("wave_halted_record_during_readiness_halts_critic");
+    let steps = [builder("build-a"), critic("review-a", "build-a")];
+    let exec = executor(&env, &steps);
+    assert_eq!(
+        exec.run_step("build-a", 1).unwrap().outcome,
+        StepOutcome::Passed
+    );
+    // The first git call after the flag is the Critic's readiness read. It writes a Halted record
+    // after the top-of-step check, so only the check under the lock can catch it.
+    let flag = env.root.join("halt-now");
+    fs::write(&flag, "").unwrap();
+    let state = env.state.display().to_string();
+    let record = r#"{"step":"other-step","role":"Builder","outcome":{"result":"halted","reason":"VerifyFailed"},"at":1,"seq":0}"#;
+    env.tool_pre(
+        "git",
+        &format!(
+            "if [ -f '{flag}' ]; then rm -f '{flag}'; mkdir -p '{state}'; printf '%s' '{record}' > '{state}/other-step.json'; fi",
+            flag = flag.display()
+        ),
+        Vec::new(),
+    );
+    let got = exec.run_step("review-a", 1).unwrap();
+    assert_eq!(got.outcome, StepOutcome::Halted(HaltReason::WaveHalted));
+    assert!(
+        !env.argv().iter().any(|l| l.starts_with("claude")),
+        "{:?}",
+        env.argv()
+    );
+}
+
+#[test]
+fn wave_halted_record_before_pr_halts_critic() {
+    let env = Env::new("wave_halted_record_before_pr_halts_critic");
+    let state = env.state.display().to_string();
+    let record = r#"{"step":"other-step","role":"Builder","outcome":{"result":"halted","reason":"VerifyFailed"},"at":1,"seq":0}"#;
+    env.tool_pre(
+        "git",
+        &format!(
+            "case \"$*\" in \"worktree add\"*) mkdir -p '{state}'; printf '%s' '{record}' > '{state}/other-step.json' ;; esac"
+        ),
+        Vec::new(),
+    );
+    let steps = [builder("build-a"), critic("review-a", "build-a")];
+    let exec = with_open_prs(&env, &steps);
+    assert_eq!(
+        exec.run_step("build-a", 1).unwrap().outcome,
+        StepOutcome::Passed
+    );
+    let got = exec.run_step("review-a", 1).unwrap();
+    assert_eq!(got.outcome, StepOutcome::Halted(HaltReason::WaveHalted));
+    let argv = env.argv();
+    // The Critic ran; the PR did not open.
+    assert!(argv.iter().any(|l| l.starts_with("claude -p")), "{argv:?}");
+    assert!(
+        !argv.iter().any(|l| l.starts_with("blackwall pr")),
+        "{argv:?}"
+    );
+}
+
+#[test]
+fn wave_critic_reads_rules_at_the_builder_base() {
+    let env = Env::new("wave_critic_reads_rules_at_the_builder_base");
+    let steps = [builder("build-a"), critic("review-a", "build-a")];
+    let exec = executor(&env, &steps);
+    assert_eq!(
+        exec.run_step("build-a", 1).unwrap().outcome,
+        StepOutcome::Passed
+    );
+    // The wave base moves on: init-head and HEAD both name a new commit.
+    fs::write(env.repo.join(".blackwall/init-head"), "1111111111111\n").unwrap();
+    env.tool("git", vec![r("rev-parse HEAD", b"1111111111111\n", "", 0)]);
+    assert_eq!(
+        exec.run_step("review-a", 1).unwrap().outcome,
+        StepOutcome::Passed
+    );
+    let argv = env.argv();
+    assert!(
+        has_line(
+            &argv,
+            &format!("git checkout --no-overlay {BASE} -- .claude")
+        ),
+        "{argv:?}"
+    );
+    assert!(
+        !argv
+            .iter()
+            .any(|l| l.starts_with("git checkout") && l.contains("1111111111111")),
+        "{argv:?}"
+    );
+}
+
+#[test]
+fn wave_compensate_newest_pass_first() {
+    // build-b passes first, build-a second. Step ids alone would order build-b first.
+    let env = Env::new("wave_compensate_newest_pass_first");
+    env.tool("make", vec![r("*", b"", "", 1)]);
+    let steps = [
+        builder("build-b"),
+        critic("review-b", "build-b"),
+        step(
+            "build-a",
+            Some("builder"),
+            ActivityKind::Impl,
+            &["review-b"],
+            &[],
+        ),
+        critic("review-a", "build-a"),
+        // The probe waits for both Critics, so it runs after both Builders passed.
+        step(
+            "probe-x",
+            Some("probe"),
+            ActivityKind::Verify,
+            &["review-a"],
+            &["make", "check"],
+        ),
+    ];
+    let report = executor(&env, &steps).run_local(1).unwrap();
+    assert_eq!(report.halted, Some(HaltReason::ProbeFailed));
+    let ids: Vec<&str> = report
+        .compensation
+        .iter()
+        .map(|c| c.activity_id.as_str())
+        .collect();
+    assert_eq!(ids, ["build-a", "build-b"]);
+}
+
+#[test]
+fn wave_critic_stores_pr_number_in_receipt() {
+    let env = Env::new("wave_critic_stores_pr_number_in_receipt");
+    let steps = [builder("build-a"), critic("review-a", "build-a")];
+    let report = with_open_prs(&env, &steps).run_local(1).unwrap();
+    assert_eq!(report.receipts.len(), 1);
+    assert_eq!(report.receipts[0].facts().pr_number, Some(57));
+}
+
+#[test]
+fn wave_probe_runs_at_the_base_argv_exact() {
+    let env = Env::new("wave_probe_runs_at_the_base_argv_exact");
+    let steps = [probe("probe-x")];
+    assert_eq!(
+        executor(&env, &steps)
+            .run_step("probe-x", 1)
+            .unwrap()
+            .outcome,
+        StepOutcome::Passed
+    );
+    let argv = env.argv();
+    assert!(
+        has_line(
+            &argv,
+            &format!(
+                "git worktree add --detach {}/probe-x {BASE}",
+                env.wt.display()
+            )
+        ),
+        "{argv:?}"
+    );
+    assert!(has_line(&argv, "make check"), "{argv:?}");
+}
+
+#[test]
+fn wave_reconcile_claude_and_make_hold_the_lock() {
+    let env = Env::new("wave_reconcile_claude_and_make_hold_the_lock");
+    let steps = [
+        builder("build-a"),
+        critic("review-a", "build-a"),
+        probe("probe-x"),
+    ];
+    let report = executor(&env, &steps).run_local(1).unwrap();
+    assert_eq!(report.halted, None);
+    assert!(
+        !env.argv().iter().any(|l| l == "LOCK NOT HELD"),
+        "{:?}",
+        env.argv()
+    );
+}
+
+#[test]
+fn wave_lock_probe_detects_an_unheld_lock() {
+    // Control for the lock probe: a reconcile with no executor lock must log the failure.
+    let env = Env::new("wave_lock_probe_detects_an_unheld_lock");
+    fs::create_dir_all(env.lock.parent().unwrap()).unwrap();
+    fs::write(&env.lock, "").unwrap();
+    let status = std::process::Command::new(env.bin.join("blackwall"))
+        .args(["reconcile", "bwrun0000001"])
+        .env("PATH", "/usr/bin:/bin")
+        .status()
+        .unwrap();
+    assert!(status.success());
+    assert!(
+        env.argv().iter().any(|l| l == "LOCK NOT HELD"),
+        "{:?}",
+        env.argv()
     );
 }
 
