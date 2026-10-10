@@ -174,7 +174,7 @@ metadata, read 2026-10-09.
 | `libc` | 0.2.169 | MIT OR Apache-2.0 | none | 2 | pinned, NOT in the workspace: `rustix` 1.1.5 (already approved) provides `setpgid` and `setpriority_pgrp` without `unsafe`, so cas-ebpf uses it instead (lane Claude, 2026-10-09) |
 | `gix` | 0.88.0 | MIT OR Apache-2.0 | cas-pool | 3 | default-features off, minimal features; MSRV 1.88; fallback 0.87.1 |
 | `agent-client-protocol` | 2.2.0 | Apache-2.0 | cas-acp | 3 | MSRV 1.88; 3.x is under 14 days old. In use since spec 0016 (2026-10-10); transitive pull in D1 |
-| `tokio` | 1.53.1 | MIT | cas-router, cas-deck, cas-storage | 4, 5, 6 | default-features off; `rt-multi-thread`, `macros`, `net`, `time`, `sync`. The cas-pool runtime stays open (spec 0001 gap 1). In use since spec 0013 (2026-10-09) in cas-router, plus `io-util` (a feature of the same crate, needed by `AsyncReadExt` and `AsyncWriteExt`; CAS lane amendment, the operator corrects it in place) |
+| `tokio` | 1.53.1 | MIT | cas-router, cas-deck, cas-storage; cas-engine behind feature `cortex-grpc` (spec 0026; CAS lane amendment, the operator corrects it in place) | 4, 5, 6 | default-features off; `rt-multi-thread`, `macros`, `net`, `time`, `sync`. The cas-pool runtime stays open (spec 0001 gap 1). In use since spec 0013 (2026-10-09) in cas-router, plus `io-util` (a feature of the same crate, needed by `AsyncReadExt` and `AsyncWriteExt`; CAS lane amendment, the operator corrects it in place) |
 | `sha2` | 0.11.0 | MIT OR Apache-2.0 | cas-ebpf, cas-router | 2, 4 | none |
 | `reqwest` | 0.13.5 | MIT OR Apache-2.0 | cas-router, cas-deck | 4, 5 | default-features off; `rustls` (aws-lc-rs provider, needs cmake), `http2`, `json`, `stream` |
 | `futures-util` | 0.3.34 | MIT OR Apache-2.0 | cas-router, cas-deck | 4, 5 | none |
@@ -205,6 +205,27 @@ project, 522 packages, 2026-10-09):
 - The set needs a Rust floor of 1.88 (aya, gix, ACP, transitive icu crates);
   aws-sdk-s3 needs 1.94.1, which equals the pinned toolchain. Amended
   2026-10-10: this repo's lockfile needs 1.89 (`uuid` 1.28.0, F3, D2).
+
+### Cortex pool-member transport (spec 0026)
+
+Status: pinned by the lane (cas-engineer w10:pM), 2026-10-10. This is not the
+approved epic list above. No crate enters a `Cargo.toml` until spec 0026 P2 starts,
+and P2 waits on the operator's integration sign-off (0026 D1). The versions are the ones
+cortex@c7fdb85 uses (0026 F6). Licences read from each crate's `Cargo.toml` in the
+local cargo registry, 2026-10-10. MSRV of the tonic crates is 1.88, under D2's 1.89.
+
+| Crate | Version | Licence | Used by | Conditions |
+|---|---|---|---|---|
+| `tonic` | 0.14.6 | MIT | cas-engine, feature `cortex-grpc` | default-features off; `channel`, `codegen`; `server` in dev-dependencies only |
+| `tonic-prost` | 0.14.6 | MIT | cas-engine, feature `cortex-grpc` | runtime glue for the generated code |
+| `prost` | 0.14.4 | Apache-2.0 | cas-engine, feature `cortex-grpc` | none |
+| `tonic-prost-build` | 0.14.6 | MIT | cas-engine `build.rs` | default-features off; build-dependency only |
+| `protox` | 0.9.1 | MIT OR Apache-2.0 | cas-engine `build.rs` | build-dependency only; no system `protoc`; 0.10.0 not taken (0026 D3) |
+
+Check [verified, 2026-10-10T16:16Z]: a throwaway project with these pins and `tokio`
+1.53.1 (features as its row) ran `cargo deny check` with this repo's `deny.toml`:
+"advisories ok, bans ok, licenses ok, sources ok", 105 packages, 106 with `server`.
+Warnings: duplicate `hashbrown`, `logos` (3 crates) and `syn`, all through `protox`.
 
 ### CI tools
 
