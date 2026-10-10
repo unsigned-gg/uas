@@ -103,7 +103,7 @@ Facts, measured 2026-10-10 on ceres unless stated:
 
 ### Benchmark Addendum (2026-10-10, host ceres, JOBS=2)
 
-Measured with Criterion on `crates/cas-pool/benches/slot_lifecycle.rs` (Option A: OS threads + `std::sync`):
+Measured with Criterion on `crates/cas-pool/benches/slot_lifecycle.rs` (Option A: OS threads + `std::sync`) [reported, cas-pool lane, PR #42, merge a1165e6; no run log kept; the commit is dated 2026-10-09, the heading 2026-10-10]:
 
 | Operation | Target / Spec | Measured Time | Iterations / Samples |
 |---|---|---|---|
