@@ -34,7 +34,11 @@ No spec owns delegated identity, which is narrower than saying identity is
 absent: spec 0004 lines 190 to 192 already pin `ed25519-dalek`, `jsonschema` and
 `governor` with the purpose "identity" at phase 7, each marked as waiting for
 the Director of Engineering [verified: read `specs/0004-dependency-and-licence-policy.md` lines 190 to
-192]. What is missing is the delegation rule, not the crate list. The estate synthesis names enterprise agent identity and
+192]. What is missing is the delegation rule, not the crate list. The absence
+claim carries its own control: `git grep -ilE 'keycloak|spire|oidc|svid'
+6794d9b -- specs/` exits 1 with no match, while the same pattern matches this
+file once it exists, so the pattern works and the absence was real [verified:
+both runs]. The estate synthesis names enterprise agent identity and
 on-behalf-of delegation as an architectural invariant that no spec owns
 [verified: `grep -rilE 'keycloak|spire|oidc|svid' specs/` returned nothing on
 `origin/development` at `6794d9b`, 2026-10-10].
@@ -79,15 +83,16 @@ states what happens when it is off, and it is the only exception.
 - **[REQ-0029-02]** (Ubiquitous): The delegation assertion shall name the initiating human subject, the executing agent subject, the lease id and an expiry instant.
 - **[REQ-0029-03]** (Ubiquitous): The CAS engine shall compute the effective permission of a run as the intersection of the initiating human's permission and the agent policy.
 - **[REQ-0029-04]** (Ubiquitous): The CAS domain shall express the assertion, the subjects and the intersection rule without network, filesystem, process or runtime access.
-- **[REQ-0029-05]** (Ubiquitous): The audit record of a run shall name both the initiating human subject and the executing agent subject.
+- **[REQ-0029-05]** (Ubiquitous): The audit record of an admitted run shall name both the initiating human subject and the executing agent subject.
+- **[REQ-0029-05a]** (Unwanted): IF a request is refused because its assertion is absent or unreadable, THEN the record shall hold the refusal, the slot and the lease id, and shall mark the human subject unknown rather than omit the record.
 - **[REQ-0029-06]** (Ubiquitous): The audit record shall be append-only.
 - **[REQ-0029-07]** (Event-driven): WHEN the engine grants a lease, the engine shall bind the slot to a credential whose expiry is at or before the lease expiry, and shall set the assertion's expiry at or before the lease expiry.
 - **[REQ-0029-08]** (Event-driven): WHEN a credential reaches its expiry during a run, the engine shall stop admitting outbound requests from that slot until the credential is replaced.
 - **[REQ-0029-09]** (Event-driven): WHEN the engine replaces a credential, the engine shall keep the assertion's human subject unchanged for the life of the run.
-- **[REQ-0029-10]** (State-driven): WHILE a slot holds no valid delegation assertion, the sandbox shall deny that slot outbound network egress through the network namespace of spec 0011. This is defence in depth behind REQ-0029-12: the socket of spec 0013 is the slot's only sanctioned path, and this requirement covers any path that is not.
+- **[REQ-0029-10]** (State-driven): WHILE a slot holds no valid delegation assertion, the proxy shall refuse every request from that slot, and the slot shall be given no other egress path. The refusal is the proxy's, not the jail's: spec 0013 records that no Landlock ABI mediates `connect` on a pathname socket and that `CLONE_NEWNET` scopes abstract sockets only, so the proxy's allowlist is the boundary. Spec 0011 owns whatever the namespace can enforce.
 - **[REQ-0029-11]** (State-driven): WHILE the delegation feature is off, the engine shall run as specified in spec 0013 and shall not require an assertion.
 - **[REQ-0029-12]** (Unwanted): IF a request arrives at the proxy with no assertion, an expired assertion, or a subject that does not match the lease holder, THEN the proxy shall answer `403` and record the attempt in the audit record.
-- **[REQ-0029-13]** (Unwanted): IF a credential with no expiry, or an expiry beyond the lease, is offered for a slot, THEN the engine shall refuse to start that slot.
+- **[REQ-0029-13]** (Unwanted): IF a credential with no expiry, or an expiry beyond the lease, is offered as a slot's delegated credential, THEN the engine shall refuse to start that slot. This does not reach the estate gateway key the proxy holds under spec 0013 D5, which is not a slot credential and which this spec replaces only when the D4 amendment is implemented.
 - **[REQ-0029-14]** (Unwanted): IF the audit record cannot be written at admission, THEN the engine shall refuse to admit the unit of work.
 - **[REQ-0029-20]** (Unwanted): IF the audit record cannot be written during a run, THEN the engine shall stop admitting outbound requests from that slot and shall mark the run incomplete, rather than continue unrecorded.
 - **[REQ-0029-15]** (Unwanted): IF the credential material appears in the worker's open file descriptors, its environment, or any path the worker's Landlock ruleset allows it to read, THEN the slot shall fail its start check.
@@ -110,14 +115,20 @@ states what happens when it is off, and it is the only exception.
 ## Test
 
 ```bash
-cargo test -p cas-domain -j 2 delegation && \
+cargo test -p cas-domain -j 2 --features delegation delegation && \
   cargo test -p cas-engine -j 2 --features delegation --test delegation && \
   cargo test -p cas-router -j 2 --features delegation --test delegation_proxy && \
-  cargo test -p cas-sandbox -j 2 --test egress_without_assertion && \
   cargo test -p cas-engine -j 2 --test delegation_feature_off
 ```
 
+Every leg that exercises a delegation rule passes `--features delegation`. A leg
+without it compiles the types out and exits 0 having run nothing, which is the
+decorative control spec 0002 rejects. The feature-off leg is the one deliberate
+exception, and it asserts that a run needs no assertion.
+
 The proxy cases run in `cas-router`, because spec 0013 D1 puts the proxy there.
+There is no `cas-sandbox` leg: spec 0013 records that the jail cannot mediate
+`connect` on the proxy's socket, so REQ-0029-10 is tested at the proxy.
 
 A pass requires each of these cases to exist and to go red when its own check is
 deleted:
@@ -130,7 +141,8 @@ deleted:
 | a renewed lease gets its credential before the old expiry | cas-engine | REQ-0029-18 |
 | admission is refused when the audit record cannot be written | cas-engine | REQ-0029-14 |
 | the intersection is empty when the human's permission is empty | cas-domain | REQ-0029-03 |
-| egress is denied with no assertion | cas-sandbox | REQ-0029-10 |
+| every request is refused with no assertion | cas-router | REQ-0029-10 |
+| a refusal is recorded with the human subject unknown | cas-router | REQ-0029-05a |
 | with the feature off, a run needs no assertion | cas-engine | REQ-0029-11 |
 
 Requirements 01, 02, 04, 05, 06, 09, 15, 16, 17 and 19 are covered by the
@@ -140,9 +152,10 @@ removed proves nothing.
 
 ## Notes
 
-- Evidence tiers are spec 0002. In this file, `verified` marks only what a named
-  command or the operator's own session produced; the synthesis points are
-  `reported`, because they are another lane's write-up.
+- Evidence tiers are spec 0002, and this file does not redefine them. Spec 0002
+  gives `verified` as "a command ran and the output proves the claim", so an
+  operator ruling is `reported`, however direct it was. The synthesis points are
+  `reported` as another lane's write-up.
 - This spec is `planned` and commits no code. Ratification is the Director of Engineering's, under his
   identity veto. the operator set the timing of any ask to him.
 - The proxy already strips what a worker sends and injects its own header

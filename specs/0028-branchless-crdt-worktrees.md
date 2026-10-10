@@ -8,6 +8,8 @@ depends_on: [0001-cas-architecture-and-crate-layout, 0002-verification-gates-and
 
 # 0028-branchless-crdt-worktrees
 
+> **Status**: planned - **Priority**: high - **Created**: 2026-10-10
+
 ## Overview
 
 Physical Git worktree allocation causes disk exhaustion, memory starvation, and Git index lock collisions on workstation ceres.
@@ -25,6 +27,7 @@ Facts, 2026-10-10:
 - **F3 [verified, throwaway crate with isolated automerge 0.12.0, `cargo metadata` and `cargo deny check advisories`]:** `automerge` 0.12.0 declares `rust_version = "1.90.0"` and passes `cargo deny check advisories` with zero advisory errors.
 - **F4 [verified, read `rust-toolchain.toml` l.3]:** The pinned toolchain is `rustc 1.94.1`.
 - **F5 [asserted]:** Physical worktree allocation causes disk exhaustion, memory starvation, and git lock contention on ceres under mandatory `-j 2` throttling.
+- **F6 [verified, read `Cargo.toml` l.10]:** Workspace `Cargo.toml` sets `rust-version = "1.89"`; adopting `automerge` 0.12.0 raises the workspace floor to `1.90.0`, which is an explicit decision recorded here.
 
 ## Design
 
@@ -103,6 +106,7 @@ Invariants:
 - [ ] 4. Implement atomic buffer deallocation on slot release or Saga compensation with zero disk residue.
 - [ ] 5. Implement optional `automerge` document CRDT adapter behind cargo feature `crdt-collab`.
 - [ ] 6. Add unit and integration test suite verifying monotonic delta sequencing, negative control sequence failure, and memory ceiling compliance.
+- [ ] 7. Record workspace MSRV raise from 1.89 to 1.90 in `specs/0004-dependency-and-licence-policy.md` and workspace `Cargo.toml`.
 
 ## Test
 

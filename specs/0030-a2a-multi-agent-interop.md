@@ -1,9 +1,9 @@
 ---
 status: planned
-created: '2026-10-10'
+created: 2026-10-10
 tags: [architecture, agents, interoperability]
 priority: high
-depends_on: [0001-cas-architecture-and-crate-layout, 0008-soma-cortex-saga-reverie-integration, 0009-saga-compensation-runner-and-durability, 0016-zed-agent-communication-protocol, 0026-cortex-pool-member-adapter]
+depends_on: [0001-cas-architecture-and-crate-layout, 0008-soma-cortex-saga-reverie-integration, 0009-saga-compensation-runner-and-durability, 0016-zed-agent-communication-protocol, 0021-cas-storage-scope-and-phase, 0026-cortex-pool-member-adapter]
 ---
 
 # 0030-a2a-multi-agent-interop
@@ -16,7 +16,7 @@ Multi-agent workflows combine autonomous reasoning loops with deterministic cont
 
 ## Design
 
-The architecture defines orchestrator nodes to compose hybrid agents, separating I/O-free state transitions in `cas-domain` from networking components in `cas-acp` and `cas-engine`. The A2A protocol gateway establishes cross-framework connectivity. Note: The identity and auth parts of this spec sit in the Director of Engineering's identity veto area.
+The architecture defines orchestrator nodes to compose hybrid agents, separating I/O-free state transitions in `cas-domain` from networking components in the `cas-acp` Zed Agent Communication Protocol server and `cas-engine`. The A2A protocol gateway establishes cross-framework connectivity. Note: The identity and auth parts of this spec sit in the Director of Engineering's identity veto area.
 
 ### Decisions
 
@@ -29,7 +29,7 @@ The architecture defines orchestrator nodes to compose hybrid agents, separating
 ### Requirements (EARS)
 
 - **[REQ-0030-01]** (Ubiquitous): The `cas-domain` shall define pure state machine types for `LlmAgent`, `Sequential`, `Parallel`, and `Loop` orchestrator nodes.
-- **[REQ-0030-02]** (Event-driven): WHEN an agent yields a large binary payload, the `cas-acp` shall store it by content reference in an out-of-band artifact service.
+- **[REQ-0030-02]** (Event-driven): WHEN an agent yields a large binary payload, the `cas-engine` shall store it by content reference in an out-of-band artifact service per Spec 0021.
 - **[REQ-0030-03]** (State-driven): WHILE agents communicate across frameworks, the `cas-acp` shall mediate the connection via an A2A protocol gateway.
 - **[REQ-0030-04]** (Unwanted): IF a delegated peer agent disappears mid-task, THEN the `cas-engine` shall trigger a deterministic compensation sequence as defined by Spec 0009.
 - **[REQ-0030-05]** (Optional): WHERE an agent delegates capabilities, the `cas-domain` shall represent them as an `AgentTool` to prevent context bloat.
@@ -50,7 +50,7 @@ The architecture defines orchestrator nodes to compose hybrid agents, separating
 cargo test -p cas-domain -j 2 --test a2a_orchestrator_nodes
 ```
 
-This test suite covers REQ-0030-01, REQ-0030-05, and REQ-0030-08. Coverage for `cas-acp` and `cas-engine` networking and artifact handling (REQ-0030-02 through 04, 06, 07) is deferred to their respective implementation specs. A passing suite verifies that `LlmAgent`, `Sequential`, `Parallel`, and `Loop` types execute state transitions deterministically without external I/O. As a negative control, if the maximum delegation depth validation rule is removed, the AST composition test for nesting depth > 5 must go red.
+This test suite explicitly exercises `cas-domain` AST construction and validation, covering REQ-0030-01, REQ-0030-05, and REQ-0030-08. Coverage for `cas-acp` and `cas-engine` networking and artifact handling (REQ-0030-02 through 04, 06, 07) is deferred to their respective implementation specs. A passing suite verifies that `LlmAgent`, `Sequential`, `Parallel`, and `Loop` types execute state transitions deterministically without external I/O. As a negative control, if the maximum delegation depth validation rule in `cas-domain` is removed, the AST composition test for nesting depth > 5 must go red.
 
 ## Notes
 
