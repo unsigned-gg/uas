@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Workspace `rust-version` raised to 1.89: the pinned `agent-client-protocol` 2.2.0 (via uuid 1.28) needs it, and aya already needed 1.87 (spec 0004, lane decision 2026-10-10).
 
 ### Added
+- The wave executor merges a Critic-passed PR on green behind `merge_on_green` (off by default; needs `open_prs`): signed commits, exact head, required checks, `gh pr merge --merge --match-head-commit`, and `merge_commit` on the receipt, record and event. `ChecksTimeout` compensates nothing (spec 0025 D15).
 - `cas wave flow` writes one saga flow per wave, and `cas wave step` runs one wave step (spec 0025 P9b).
 - cas-domain: the `NotAudited` landing receipt state and the spec 0023 D4/D6 evaluator path lists; cas-engine: the landing activity split into `reconcile` and `open_pr`, and the `WaveStep` workflow event with its replay arm (spec 0025 P9a, slice 1).
 - `cas-acp` releases a session's slot when its lease expires, checked on each frame and in `tick()`, and when the input ends or a transport call fails (spec 0016 D6, CER-2683). An ended session answers nothing to a later `session/cancel`.
