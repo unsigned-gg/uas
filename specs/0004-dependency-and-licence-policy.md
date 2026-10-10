@@ -102,17 +102,16 @@ Each directory includes a README or VENDORED note recording upstream commits, da
 
 The CAS research names the projects below. Date of this list: 2026-10-08.
 Source for each: `cerebral-work/research@4068134`. Every research evaluation
-is a draft. None of these is approved. None is pinned. No crate depends on
-any of them yet. The rule above applies: pin and record a version here before
+is a draft. The Status column holds each row's state. The epic list below approves each row it pins. The rule above applies: pin and record a version here before
 the first use.
 
 | Project | Licence (per research) | Role in CAS | Status | Source |
 |---|---|---|---|---|
-| gitoxide (`gix`) | MIT OR Apache-2.0 | `cas-pool`: in-process worktrees and checkpoints | evaluated, unpinned, NOT approved | `repos/gitoxide.md` line 15 (licence), lines 100-111 (role) |
+| gitoxide (`gix`) | MIT OR Apache-2.0 | `cas-pool`: in-process worktrees and checkpoints | approved 2026-10-09 (the operator, epic list below), pinned at 0.88.0, not yet in a Cargo.toml | `repos/gitoxide.md` line 15 (licence), lines 100-111 (role) |
 | autumn-harvest | MIT OR Apache-2.0 | `cas-engine`: durable workflows | evaluated, unpinned, NOT approved | `repos/autumn-harvest.md` line 15 |
-| aya | MIT OR Apache-2.0 (not in the research; `aya-rs/aya` workspace `Cargo.toml`, read 2026-10-08) | `cas-ebpf`: eBPF programs and loader | evaluated, unpinned, NOT approved | `repos/neutral-engineering.md` section 2.1 |
+| aya | MIT OR Apache-2.0 (not in the research; `aya-rs/aya` workspace `Cargo.toml`, read 2026-10-08) | `cas-ebpf`: eBPF programs and loader | approved 2026-10-09 (the operator, epic list below; spec 0014 D2), pinned at 0.14.0, in the workspace `Cargo.toml`, used by `crates/cas-ebpf/Cargo.toml` | `repos/neutral-engineering.md` section 2.1 |
 | `landlock` 0.4.7 | MIT OR Apache-2.0 | `cas-sandbox`: filesystem rulesets | approved 2026-10-09, pinned, in use (spec 0010) | `rust-native-agent-substrate.md` section 3.3 |
-| madstack (`pgray/madstack`: Axum, Maud, htmx) | MIT | `cas-deck`: operator dashboard | evaluated, unpinned, NOT approved | `repos/madstack.md` |
+| madstack (`pgray/madstack`: Axum, Maud, htmx) | MIT | `cas-deck`: operator dashboard | approved 2026-10-09 (the operator, epic list below) as its crate pins: axum 0.8.9, maud 0.27.0, tower-http 0.7.1, tokio-stream 0.1.19; htmx is not a crate; not yet in a Cargo.toml | `repos/madstack.md` |
 | rig-core 0.44 | MIT | model calls through the LiteLLM gateway, on need | pinned at 0.44.0 by the decision above, not in the workspace | `0xPlaygrounds/rig` |
 
 The research does not state the aya licence. The `aya-rs/aya` workspace
