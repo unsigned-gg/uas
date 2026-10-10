@@ -685,20 +685,29 @@ impl WaveExecutor {
                 CriticVerdict::NoDefects => {}
             }
             if self.config.open_prs && brec.facts.pr.is_none() {
-                if self.any_halted()? {
-                    return self.halt(ws, wave, HaltReason::WaveHalted, last, None, false, now);
-                }
-                match self.landing().open_pr(&receipt) {
-                    Ok(opened) => {
-                        brec.facts.pr = opened.facts().pr_number;
-                        brec.receipt = Some(opened);
-                        {
-                            let _lock = self.lock()?;
+                // The halt check, `blackwall pr` and the record save share one lock hold. A
+                // Halted record queued on the lock lands first or waits for the save. The guard
+                // drops before `halt`, which takes the lock again.
+                let opened = {
+                    let _lock = self.lock()?;
+                    if self.any_halted()? {
+                        None
+                    } else {
+                        let result = self.landing().open_pr(&receipt);
+                        if let Ok(opened) = &result {
+                            brec.facts.pr = opened.facts().pr_number;
+                            brec.receipt = Some(opened.clone());
                             self.save(&brec)?;
                         }
-                        last = brec.facts.clone();
+                        Some(result)
                     }
-                    Err(_) => {
+                };
+                match opened {
+                    None => {
+                        return self.halt(ws, wave, HaltReason::WaveHalted, last, None, false, now)
+                    }
+                    Some(Ok(_)) => last = brec.facts.clone(),
+                    Some(Err(_)) => {
                         return self.halt(ws, wave, HaltReason::PrFailed, last, None, true, now)
                     }
                 }

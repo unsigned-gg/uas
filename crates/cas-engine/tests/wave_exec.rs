@@ -663,8 +663,9 @@ fn wave_critic_no_defects_opens_pr() {
         claude,
         "claude -p --strict-mcp-config --agent cas-critic --allowed-tools Read Grep Glob Bash(git diff *) Bash(git log *) Bash(git show *) Bash(make *) Bash(cargo *)"
     );
-    // No gh call of any kind: the executor never merges (spec 0025 D15).
+    // No gh call and no git push: the executor never merges or pushes (spec 0025 D15).
     assert!(!argv.iter().any(|l| l.starts_with("gh ")), "{argv:?}");
+    assert!(!argv.iter().any(|l| l.starts_with("git push")), "{argv:?}");
     assert!(
         has_line(
             &argv,
@@ -1220,10 +1221,10 @@ fn wait_for(env: &Env, prefix: &str) {
 }
 
 #[test]
-fn wave_open_pr_failure_halts_and_keeps_branch() {
-    let env = Env::new("wave_open_pr_failure_halts_and_keeps_branch");
+fn wave_open_pr_failure_halts_and_keeps_pushed_branch() {
+    let env = Env::new("wave_open_pr_failure_halts_and_keeps_pushed_branch");
     env.tool("blackwall", vec![r("pr *", b"", "pr failed\n", 1)]);
-    // `blackwall pr` pushed the branch before it failed: compensation must keep it.
+    // `blackwall pr` pushed the branch before it failed: compensation checks and keeps it.
     env.tool("git", vec![r("ls-remote *", b"abc\trefs/heads/x\n", "", 0)]);
     let steps = [builder("build-a"), critic("review-a", "build-a")];
     let exec = with_open_prs(&env, &steps);
@@ -1233,15 +1234,39 @@ fn wave_open_pr_failure_halts_and_keeps_branch() {
     );
     let got = exec.run_step("review-a", 1).unwrap();
     assert_eq!(got.outcome, StepOutcome::Halted(HaltReason::PrFailed));
+    assert_eq!(got.compensation.len(), 1, "{:?}", got.compensation);
+    assert!(got.compensation[0].success, "{:?}", got.compensation);
     let argv = env.argv();
+    assert!(
+        has_line(
+            &argv,
+            "git ls-remote --exit-code --heads origin blackwall/bwrun0000001"
+        ),
+        "{argv:?}"
+    );
     assert!(
         !argv.iter().any(|l| l.starts_with("git branch -D")),
         "{argv:?}"
     );
+}
+
+#[test]
+fn wave_open_pr_failure_deletes_unpushed_branch() {
+    let env = Env::new("wave_open_pr_failure_deletes_unpushed_branch");
+    env.tool("blackwall", vec![r("pr *", b"", "pr failed\n", 1)]);
+    let steps = [builder("build-a"), critic("review-a", "build-a")];
+    let exec = with_open_prs(&env, &steps);
+    assert_eq!(
+        exec.run_step("build-a", 1).unwrap().outcome,
+        StepOutcome::Passed
+    );
+    let got = exec.run_step("review-a", 1).unwrap();
+    assert_eq!(got.outcome, StepOutcome::Halted(HaltReason::PrFailed));
+    assert_eq!(got.compensation.len(), 1, "{:?}", got.compensation);
     assert!(
-        !argv.iter().any(|l| l.starts_with("blackwall settle")
-            && (l.ends_with("discard") || l.ends_with("release"))),
-        "{argv:?}"
+        has_line(&env.argv(), "git branch -D blackwall/bwrun0000001"),
+        "{:?}",
+        env.argv()
     );
 }
 
@@ -1370,10 +1395,10 @@ fn wave_compensation_order_breaks_seq_ties_on_time() {
     let env = Env::new("wave_compensation_order_breaks_seq_ties_on_time");
     env.tool("make", vec![r("*", b"", "", 1)]);
     fs::create_dir_all(&env.state).unwrap();
-    // Records with no seq field both read as seq 0: the later `at` is newer.
+    // Records with no seq field both read as seq 0: the later `at` (build-a) is newer.
     for (id, run, at) in [
-        ("build-a", "bwrun0000001", 1),
-        ("build-b", "bwrun0000002", 9),
+        ("build-a", "bwrun0000001", 9),
+        ("build-b", "bwrun0000002", 1),
     ] {
         fs::write(
             env.state.join(format!("{id}.json")),
@@ -1390,7 +1415,151 @@ fn wave_compensation_order_breaks_seq_ties_on_time() {
         .iter()
         .map(|c| c.activity_id.as_str())
         .collect();
-    assert_eq!(ids, ["build-b", "build-a"]);
+    assert_eq!(ids, ["build-a", "build-b"]);
+}
+
+/// Wait until the log holds `count` lines that start with `prefix`.
+fn wait_for_count(env: &Env, prefix: &str, count: usize) {
+    for _ in 0..400 {
+        if env.argv().iter().filter(|l| l.starts_with(prefix)).count() >= count {
+            return;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(25));
+    }
+    panic!("{count} x {prefix} never ran: {:?}", env.argv());
+}
+
+/// A shell line that blocks a fake tool call until the file `gate` exists.
+fn gate_line(gate: &std::path::Path) -> String {
+    format!(
+        "n=0; while [ ! -e '{}' ] && [ $n -lt 500 ]; do sleep 0.01; n=$((n+1)); done",
+        gate.display()
+    )
+}
+
+fn seqs_in(env: &Env) -> Vec<u64> {
+    let mut seqs: Vec<u64> = fs::read_dir(&env.state)
+        .unwrap()
+        .map(|e| {
+            let v: serde_json::Value =
+                serde_json::from_str(&fs::read_to_string(e.unwrap().path()).unwrap()).unwrap();
+            v["seq"].as_u64().unwrap()
+        })
+        .collect();
+    seqs.sort_unstable();
+    seqs
+}
+
+fn many_builders(env: &Env, n: usize) -> (Vec<String>, Vec<SagaStep>) {
+    let ids: Vec<String> = (0..n).map(|i| format!("build-{i}")).collect();
+    let mut steps = Vec::new();
+    for id in &ids {
+        env.task(id, Some("haiku"));
+        steps.push(builder(id));
+        steps.push(critic(&format!("review-{id}"), id));
+    }
+    (ids, steps)
+}
+
+#[test]
+fn wave_concurrent_halts_get_distinct_seq() {
+    let env = Env::new("wave_concurrent_halts_get_distinct_seq");
+    let gate = env.root.join("gate");
+    // Every Builder fails at `start` at the same moment, so the halts race for a sequence number.
+    env.tool_pre(
+        "blackwall",
+        &format!("case \"$1\" in start) {} ;; esac", gate_line(&gate)),
+        vec![r("start *", b"", "no ok line\n", 1)],
+    );
+    let (ids, steps) = many_builders(&env, 8);
+    let hs: Vec<_> = ids
+        .into_iter()
+        .map(|id| {
+            let exec = executor(&env, &steps);
+            std::thread::spawn(move || exec.run_step(&id, 1).unwrap())
+        })
+        .collect();
+    wait_for_count(&env, "blackwall start", 8);
+    fs::write(&gate, "").unwrap();
+    for h in hs {
+        let _ = h.join().unwrap();
+    }
+    let seqs = seqs_in(&env);
+    let mut unique = seqs.clone();
+    unique.dedup();
+    assert_eq!(unique.len(), seqs.len(), "seq tie: {seqs:?}");
+}
+
+#[test]
+fn wave_concurrent_passes_get_distinct_seq() {
+    let env = Env::new("wave_concurrent_passes_get_distinct_seq");
+    let gate = env.root.join("gate");
+    // Every Builder reaches its pass at the same moment: the diff call waits for the gate.
+    env.tool_pre(
+        "git",
+        &format!("case \"$1\" in diff) {} ;; esac", gate_line(&gate)),
+        Vec::new(),
+    );
+    env.tool("blackwall", vec![r("start *", b"", START_A, 0)]);
+    let (ids, steps) = many_builders(&env, 8);
+    let hs: Vec<_> = ids
+        .into_iter()
+        .map(|id| {
+            let exec = executor(&env, &steps);
+            std::thread::spawn(move || exec.run_step(&id, 1).unwrap())
+        })
+        .collect();
+    wait_for_count(&env, "git diff", 8);
+    fs::write(&gate, "").unwrap();
+    for h in hs {
+        assert_eq!(h.join().unwrap().outcome, StepOutcome::Passed);
+    }
+    assert_eq!(seqs_in(&env), (0..8).collect::<Vec<u64>>());
+}
+
+/// A Halted record queued on the lock while the Critic session holds it must land before
+/// `blackwall pr` runs. Thirty runs in parallel, because the window is narrow.
+#[test]
+fn wave_halt_queued_during_critic_session_stops_open_pr() {
+    use std::io::Write as _;
+    let hs: Vec<_> = (0..30)
+        .map(|i| {
+            std::thread::spawn(move || {
+                let env = Env::new(&format!("wave_race_{i}"));
+                env.tool_pre("claude", "sleep 0.3", Vec::new());
+                let steps = [builder("build-a"), critic("review-a", "build-a")];
+                let exec = with_open_prs(&env, &steps);
+                assert_eq!(
+                    exec.run_step("build-a", 1).unwrap().outcome,
+                    StepOutcome::Passed
+                );
+                let (lock, state, log) = (env.lock.clone(), env.state.clone(), env.log.clone());
+                let h = std::thread::spawn(move || exec.run_step("review-a", 1).unwrap());
+                wait_for(&env, "claude -p");
+                let f = fs::File::create(&lock).unwrap();
+                f.lock().unwrap();
+                fs::write(state.join("other-step.json"), HALT_RECORD).unwrap();
+                fs::OpenOptions::new()
+                    .append(true)
+                    .open(&log)
+                    .unwrap()
+                    .write_all(b"HALT WRITTEN\n")
+                    .unwrap();
+                drop(f);
+                h.join().unwrap();
+                let argv = env.argv();
+                let at = argv.iter().position(|l| l == "HALT WRITTEN").unwrap();
+                argv.iter().skip(at).any(|l| l.starts_with("blackwall pr"))
+            })
+        })
+        .collect();
+    let mut bad = 0;
+    for h in hs {
+        if h.join().unwrap() {
+            bad += 1;
+        }
+    }
+    assert_eq!(bad, 0, "a PR opened after a Halted record was written");
 }
 
 /// The live run of spec 0025 P9c. It runs only with `CAS_WAVE_LIVE=1` and panics when an input
