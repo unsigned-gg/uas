@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Landing receipt and activity (spec 0022 D1-D3; spec 0023 D3 partial, the evaluator cap only): `cas-domain::LandingReceipt` gives `verified` only when `blackwall.toml` sets a verify command, reconcile exits zero and no evaluator file changed; `cas-engine::LandingActivity` checks the base, runs `blackwall reconcile` and `blackwall pr`, refuses a stale base, and opens no PR after a failed reconcile or when `blackwall.toml` has no verify command.
 - Spec 0014 amendment: document PID namespace resolution, Fact T13, Decision D11, two-phase promotion rules, the six-map architecture table, and ExecEvent ns_pid layout (CER-2719, CER-2720).
 - cas-ebpf resolves pid namespaces (CER-2719, CER-2720): the daemon records its `/proc/self/ns/pid` in a `PIDNS_CONFIG` map and the probes translate `current` with `bpf_get_ns_current_pid_tgid`; a `track` request is promoted at the process's next fork or exec; `ExecEvent` slot 164 is now `ns_pid`. Found by the first sudo `make ebpf-test` on ceres (4 of 8 failed under systemd's pid namespace); the second run passed 8 of 8 (2026-10-10).
 - Repo subagents under `.claude/agents/` (cas-builder and cas-ebpf-builder on haiku, cas-critic and cas-engineer on opus, cas-foreman on sonnet) with a README, and a saga team `cas-cockpit` in `.saga/teams.toml` whose personas are those files. Models follow the operator's rule of 2026-10-10; the global builder and pr-reviewer assume `origin/main` and are replaced here.
