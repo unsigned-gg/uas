@@ -2,8 +2,9 @@
 //!
 //! A receipt records the custody facts of one landing and the evidence tier
 //! those facts support. The tier rule lives here: `verified` only when the
-//! verify command exited zero and no evaluator file changed (spec 0022 D2,
-//! spec 0023 D3). The subprocess adapter lives in `cas-engine`.
+//! verify command exited zero and no evaluator file changed, unless a human
+//! raise lifts the evaluator cap (spec 0022 D2 and D10, spec 0023 D3). The
+//! subprocess adapter lives in `cas-engine`.
 
 use serde::{Deserialize, Serialize};
 
@@ -331,6 +332,28 @@ mod tests {
         assert!(json.contains("\"evidence\":\"reported\""), "{json}");
         let forged = json.replace("\"evidence\":\"reported\"", "\"evidence\":\"verified\"");
         assert!(serde_json::from_str::<LandingReceipt>(&forged).is_err());
+    }
+
+    #[test]
+    fn landing_receipt_rejects_forged_raise_on_the_wire() {
+        // Control: a valid raise over the evaluator cap serializes and parses.
+        let valid = LandingReceipt::with_evidence(
+            facts(Some(0), true),
+            EvidenceTier::Verified,
+            Some(raise("ctodie@cerebral.work")),
+        )
+        .unwrap();
+        let json = serde_json::to_string(&valid).unwrap();
+        assert!(json.contains("\"human_raise\""), "{json}");
+        assert!(serde_json::from_str::<LandingReceipt>(&json).is_ok());
+        // Forgery: the same document with the verify exit flipped to 1. A raise
+        // lifts only the evaluator cap, so `try_from` must refuse `verified`.
+        assert!(json.contains("\"verify_exit\":0"), "{json}");
+        let forged = json.replace("\"verify_exit\":0", "\"verify_exit\":1");
+        assert!(
+            serde_json::from_str::<LandingReceipt>(&forged).is_err(),
+            "forged raise parsed: {forged}"
+        );
     }
 
     #[test]
