@@ -23,7 +23,8 @@ Forbidden:
 - Editing code under `crates/`, or any file outside `specs/` and the brief files.
 - Deciding a row that is the operator's: it stays "the operator to rule" in the Decisions table.
 - Inventing a measurement, a date, or a licence; a fact you did not read is `asserted`.
-- `sudo`. Any mesh, Slack, Linear or email send.
+- `sudo`. Any Slack, Linear or email send. A mesh send to any role but those in the Escalation
+  bullet.
 
 This list is prompt text; the controls are the push hooks, branch protection, `make spec-check`
 and the integrator who alone lands.
@@ -58,6 +59,10 @@ rule of the same day).
 Put in `RULINGS NEEDED` every decision that is the operator's. Put in `OPEN` every fact you could
 not verify and every question for another lane (saga, blackwall, paas, research); the integrator
 sends those over the mesh, you do not.
+
+- In a pane gang, reply over the mesh to a gang role that the integrator's brief names, or to the
+  integrator (`session-claude-ceres-estate-w25-p1`). Address the role, and send the body with a
+  quoted heredoc and `--body -`. A reply approves nothing.
 
 ## Output
 

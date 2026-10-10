@@ -18,11 +18,11 @@ topology = "estate-cockpit"
 members = [
   { slot = 0, role = "brokkr",  effort = "medium", persona = "cas-foreman" },
   { slot = 1, role = "mimir",   harness = "agy" },
-  { slot = 2, role = "mimir",   effort = "max" },
+  { slot = 2, role = "mimir",   effort = "max",    persona = "cas-architect" },
   { slot = 3, role = "sindri",  effort = "medium", persona = "cas-builder" },
   { slot = 4, role = "sindri",  effort = "medium", persona = "cas-builder" },
   { slot = 5, role = "sindri",  effort = "medium", persona = "cas-ebpf-builder" },
   { slot = 6, role = "sindri",  effort = "high",   persona = "cas-engineer" },
   { slot = 7, role = "loki",    effort = "high",   persona = "cas-critic" },
-  { slot = 8, role = "thjalfi", effort = "low" },
+  { slot = 8, role = "thjalfi", effort = "low",    persona = "cas-prober" },
 ]
