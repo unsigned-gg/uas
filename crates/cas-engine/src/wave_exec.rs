@@ -968,14 +968,20 @@ impl WaveExecutor {
 
     /// Read the merge commit of an upstream Builder's PR (spec 0025 D15). Forty lowercase hex
     /// characters go to its record and receipt; anything else records nothing. The read runs
-    /// outside the lock, and the load, set and save run under it.
+    /// outside the lock, and the load, set and save run under it. The read is bounded by
+    /// `timeout -k 5 30`: exit 124 or 137 records nothing, and exit 125, 126 or 127 from
+    /// `timeout` is an error, because `gh` did not run (spec 0025 D15 Pre-read, F22).
     fn preread_merge_commit(&self, up: &str, pr: u64) -> Result<(), WaveError> {
         let repo = self.config.repo_dir.clone();
         let pr = pr.to_string();
         let out = self.run(
             &repo,
-            "gh",
+            "timeout",
             &[
+                "-k",
+                "5",
+                "30",
+                "gh",
                 "pr",
                 "view",
                 &pr,
@@ -986,6 +992,14 @@ impl WaveExecutor {
             ],
             None,
         )?;
+        if let Some(code @ (125..=127)) = out.status.code() {
+            return Err(WaveError::Process {
+                program: "gh".into(),
+                source: io::Error::other(format!(
+                    "pr view {pr}: timeout exited {code} (125 failed, 126 not executable, 127 not found)"
+                )),
+            });
+        }
         let text = String::from_utf8_lossy(&out.stdout).trim().to_owned();
         let hex = text.len() == 40 && text.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f'));
         if out.status.code() != Some(0) || !hex {
