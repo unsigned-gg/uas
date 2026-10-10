@@ -28,6 +28,8 @@ const WAVE_PREFIX: &str = "cas-cpm-wave-w";
 const SHIM_PROMPT: &str = "Do nothing. The verify_cmd runs this step. Report its exit.";
 /// The approval gate of a MainSession step, unless the plan names another gate.
 const DEFAULT_GATE: &str = "heimdal:approval";
+/// The saga agent of every shim step. Saga fails a step with no agent as "unassigned agent".
+const SHIM_AGENT: &str = "auto";
 /// The prompt of a gate step. Saga requires a prompt on every step, so a gate has one too.
 const GATE_PROMPT: &str = "Operator gate: a person approves or denies this step in saga. Read the results of the steps before it first.";
 
@@ -38,7 +40,8 @@ pub struct Limits {
     pub max_in_flight: usize,
 }
 
-/// One step of a generated flow. It never has an `agent` field: saga classifies it (spec F15).
+/// One step of a generated flow. A shim step names `agent = "auto"`. A gate names no agent,
+/// as `.saga/flows/gates.toml` does.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct GenStep {
     /// The step id, the same as the plan's.
@@ -47,6 +50,9 @@ pub struct GenStep {
     pub title: String,
     /// `impl` for a Builder, `review` for a Critic, `test` for a Probe, `gate` for a MainSession.
     pub kind: &'static str,
+    /// The saga agent: `auto` on a shim step, absent on a gate.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub agent: Option<&'static str>,
     /// The dependencies that lie in the same file.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub deps: Vec<String>,
@@ -98,6 +104,9 @@ fn shim_argv(source: &str, step: &str, requested: usize) -> Vec<String> {
 
 /// Build one flow per wave of `plan`. The output is deterministic: it depends only on the plan
 /// and the arguments. `requested` is the `--max-concurrency` that the command received.
+///
+/// A wave with no step left writes no flow, for example a wave whose only step is a gate that
+/// moved to its dependent's wave. Each file keeps the plan's wave index in its name.
 pub fn generate(plan: &WavePlan, source: &str, requested: usize) -> Vec<WaveFile> {
     let all: Vec<(usize, &WaveStep)> = plan
         .waves
@@ -132,7 +141,7 @@ pub fn generate(plan: &WavePlan, source: &str, requested: usize) -> Vec<WaveFile
     plan.waves
         .iter()
         .enumerate()
-        .map(|(i, wave)| {
+        .filter_map(|(i, wave)| {
             let gates: Vec<&WaveStep> = all
                 .iter()
                 .map(|(_, s)| *s)
@@ -166,6 +175,7 @@ pub fn generate(plan: &WavePlan, source: &str, requested: usize) -> Vec<WaveFile
                     id: g.step.id.clone(),
                     title: g.step.title.clone(),
                     kind: "gate",
+                    agent: None,
                     deps: keep(&g.step.deps),
                     verify_cmd: Vec::new(),
                     prompt: Some(GATE_PROMPT.to_owned()),
@@ -185,13 +195,17 @@ pub fn generate(plan: &WavePlan, source: &str, requested: usize) -> Vec<WaveFile
                     AgentRole::Critic => "review",
                     AgentRole::Probe | AgentRole::MainSession => "test",
                 },
+                agent: Some(SHIM_AGENT),
                 deps: keep(&s.step.deps),
                 verify_cmd: shim_argv(source, &s.step.id, requested),
                 prompt: Some(SHIM_PROMPT.to_owned()),
                 gate: None,
             }));
 
-            WaveFile {
+            if out.is_empty() {
+                return None;
+            }
+            Some(WaveFile {
                 name: format!("{WAVE_PREFIX}{i}.toml"),
                 flow: GeneratedFlow {
                     flow: FlowMetadata {
@@ -203,13 +217,30 @@ pub fn generate(plan: &WavePlan, source: &str, requested: usize) -> Vec<WaveFile
                     },
                     step: out,
                 },
-            }
+            })
         })
         .collect()
 }
 
+/// Quote `text` for a POSIX shell. A string of plain characters stays bare. Any other string is
+/// wrapped in single quotes, and each single quote inside it becomes `'\\''`.
+pub fn shell_quote(text: &str) -> String {
+    let plain = !text.is_empty()
+        && text
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || "_./:=+,@%-".contains(c));
+    if plain {
+        text.to_owned()
+    } else {
+        format!("'{}'", text.replace('\'', "'\\''"))
+    }
+}
+
 /// Render one file: a header that names the command, then the TOML of the flow.
-pub fn render(file: &WaveFile, source: &str, requested: usize) -> Result<String> {
+///
+/// The header's command line parses with the CLI, so it names `source` and `out_dir` as given,
+/// shell-quoted where a path holds other characters.
+pub fn render(file: &WaveFile, source: &str, requested: usize, out_dir: &Path) -> Result<String> {
     let body = toml::to_string(&file.flow).context("serialize wave flow")?;
     let extra = if requested == 0 {
         String::new()
@@ -217,8 +248,10 @@ pub fn render(file: &WaveFile, source: &str, requested: usize) -> Result<String>
         format!(" --max-concurrency {requested}")
     };
     Ok(format!(
-        "# Generated by: cas wave flow --from {source}{extra}\n\
-         # Do not edit by hand. Change the plan and run that command again.\n\n{body}"
+        "# Generated by: cas wave flow --from {}{extra} --out-dir {}\n\
+         # Do not edit by hand. Change the plan and run that command again.\n\n{body}",
+        shell_quote(source),
+        shell_quote(&out_dir.display().to_string())
     ))
 }
 
@@ -238,7 +271,7 @@ pub fn run_flow(from: &str, out_dir: &Path, max_concurrency: usize) -> Result<()
     let files = generate(&plan, from, max_concurrency);
     let rendered: Vec<(String, String)> = files
         .iter()
-        .map(|f| render(f, from, max_concurrency).map(|text| (f.name.clone(), text)))
+        .map(|f| render(f, from, max_concurrency, out_dir).map(|text| (f.name.clone(), text)))
         .collect::<Result<_>>()?;
 
     fs::create_dir_all(out_dir).with_context(|| format!("create {}", out_dir.display()))?;
