@@ -42,7 +42,7 @@ This spec defines the worker slot manager in `cas-pool` (Phase 3, CER-2682):
 |---|---|---|
 | D1 | Slot concurrency limit: `cas-pool` enforces a strict capacity limit (`max_slots`, default 2 on host ceres). Requests exceeding capacity are rejected or placed in a bounded queue. | CAS lane, 2026-10-09 |
 | D2 | Worktree isolation via `gix`: Worktrees share the base repository object store. `gix` creates ephemeral checkouts in `/workspace/slots/<slot-id>`. It resets dirty files on reclaim without invoking `git` CLI sub-processes. | CAS lane, 2026-10-09 |
-| D3 | Process suspension via cgroup v2: `cas-pool` creates `/sys/fs/cgroup/cas/slot-<id>`. It writes `1` to `cgroup.freeze` to suspend workers, and `0` to thaw them. | CAS lane, 2026-10-09 |
+| D3 | Process suspension and resource quota via cgroup v2: `cas-pool` creates `/sys/fs/cgroup/cas/slot-<id>`. It writes `1` to `cgroup.freeze` to suspend workers, and `0` to thaw them. It configures CPU quotas via `cpu.max` (defaulting to 2 CPUs: 200,000us / 100,000us per Spec 0020 D3). | Spec 0020 & CAS lane, 2026-10-09 |
 | D4 | Graceful freezer fallback: If cgroup v2 is not writable, `cas-pool` falls back to POSIX `SIGSTOP` and `SIGCONT` signals sent to the worker process group. | CAS lane, 2026-10-09 |
 | D5 | Runtime choice: `cas-pool` uses standard OS threads with `std::sync` primitives for slot management. Thread blocking operations handle synchronous `gix` disk operations and cgroup file I/O. | CAS lane, 2026-10-09 |
 | D6 | eBPF clamping and audit integration: Slot worker spawn sets `enter_clamped_group` in `pre_exec` (sets process group and `nice 19`). Post-spawn registers PID via `DaemonClient::track(child_pid, own_pid)` over UDS. Execution streams `ExecEvent` records into `AuditReceipt` with `run_hash`. Daemon unavailability yields `unattested` audit receipt without failing worker execution. | Spec 0014 & CAS lane, 2026-10-09 |
@@ -71,7 +71,7 @@ stateDiagram-v2
    - Post-spawn: connects to `cas-ebpfd` via `/run/cas/ebpf.sock` and calls `track(child_pid, own_pid)`.
    - Background thread consumes `EventStream` to build execution transcript digest (`run_hash`).
 4. **`Suspended`**: Process execution halted via `cgroup.freeze` (or `SIGSTOP`). Memory and file descriptors remain intact.
-5. **`Reclaiming`**: Worker reaped. `AuditReceipt` (with `run_hash` and `dropped_events`) sealed and returned to caller. In-process `gix` restores index and removes untracked files.
+5. **`Reclaiming`**: Worker reaped. `AuditReceipt` (with `run_hash`, `dropped_events`, and `cpu_cap` per Spec 0020) sealed and returned to caller. In-process `gix` restores index and removes untracked files.
 
 ### Cgroup v2 Freezer Interface
 

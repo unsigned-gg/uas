@@ -6,7 +6,7 @@ use std::process::{Command, Stdio};
 
 use cas_domain::SlotId;
 use cas_pool::freezer::{
-    current_process_cgroup_path, CgroupFreezer, Freezer, FreezerState, ResourceLimits,
+    current_process_cgroup_path, CgroupFreezer, CpuCap, Freezer, FreezerState, ResourceLimits,
     SignalFreezer,
 };
 
@@ -86,7 +86,7 @@ fn safety_validation_rejects_own_process_cgroup() {
 }
 
 // ---------------------------------------------------------------------------
-// Directory Provisioning and Resource Limits
+// Directory Provisioning and Resource Limits (Spec 0020, CER-2722)
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -119,7 +119,12 @@ fn cgroup_freezer_creates_child_directory_and_writes_limits() {
         memory_max_bytes: Some(256 * 1024 * 1024),
     };
 
-    freezer.configure_limits(&limits).expect("configure limits");
+    let cap = freezer.configure_limits(&limits).expect("configure limits");
+    assert_eq!(cap, CpuCap::Capped("25000 100000".to_string()));
+    assert_eq!(
+        freezer.cpu_cap(),
+        CpuCap::Capped("25000 100000".to_string())
+    );
 
     assert_eq!(
         fs::read_to_string(&cpu_file).expect("read cpu.max"),
@@ -137,6 +142,62 @@ fn cgroup_freezer_creates_child_directory_and_writes_limits() {
     // Destroy cleans up the slot cgroup
     freezer.destroy().expect("destroy");
     assert!(!slot_path.exists());
+}
+
+#[test]
+fn cgroup_freezer_records_uncapped_and_warns_when_cpu_controller_absent() {
+    let temp = TempDirGuard::new("cgroup-absent");
+    let base = temp.path().join("cas-base");
+    fs::create_dir_all(&base).expect("create base");
+
+    let slot_id = SlotId::new("slot-no-cpu").expect("valid slot id");
+    // Slot directory is created without cpu.max
+    let freezer = CgroupFreezer::new(&base, slot_id).expect("create cgroup freezer");
+
+    // Default configuration on creation records Uncapped because cpu.max was absent
+    assert_eq!(freezer.cpu_cap(), CpuCap::Uncapped);
+
+    let limits = ResourceLimits {
+        cpu_quota_us: Some(200_000),
+        cpu_period_us: Some(100_000),
+        memory_high_bytes: None,
+        memory_max_bytes: None,
+    };
+
+    let cap = freezer
+        .configure_limits(&limits)
+        .expect("configure limits must not fail");
+    assert_eq!(cap, CpuCap::Uncapped);
+    assert_eq!(freezer.cpu_cap(), CpuCap::Uncapped);
+
+    freezer.destroy().expect("destroy");
+}
+
+#[test]
+fn cgroup_freezer_defaults_to_two_cpus_quota() {
+    let temp = TempDirGuard::new("cgroup-default-quota");
+    let base = temp.path().join("cas-base");
+    let slot_dir = base.join("slot-slot-two-cpu");
+    fs::create_dir_all(&slot_dir).expect("create slot dir");
+
+    // Pre-create cpu.max before CgroupFreezer::new
+    let cpu_file = slot_dir.join("cpu.max");
+    fs::write(&cpu_file, b"max 100000\n").expect("write initial cpu.max");
+
+    let slot_id = SlotId::new("slot-two-cpu").expect("valid slot id");
+    let freezer = CgroupFreezer::new(&base, slot_id).expect("create freezer");
+
+    // Default initialization should have written 2 CPUs quota: 200_000 100_000
+    assert_eq!(
+        fs::read_to_string(&cpu_file).expect("read cpu.max"),
+        "200000 100000\n"
+    );
+    assert_eq!(
+        freezer.cpu_cap(),
+        CpuCap::Capped("200000 100000".to_string())
+    );
+
+    freezer.destroy().expect("destroy");
 }
 
 #[test]
