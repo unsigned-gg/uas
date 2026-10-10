@@ -25,20 +25,20 @@ the pool records when the kernel enforces one.
 
 Measured 2026-10-10 on ceres (WSL2 kernel 6.6.87.2) at development `bd31291`.
 
-- **F1 [verified]:** `ResourceLimits` has `cpu_quota_us`, `cpu_period_us`, `memory_high_bytes` and `memory_max_bytes`, and no pids field. Its `Default` sets the CPU pair and leaves both memory fields `None` (`crates/cas-pool/src/freezer.rs` lines 79-99). Command: `grep -nE 'pids_max|pids\.max' crates/cas-pool/src/freezer.rs` prints nothing.
+- **F1 [verified]:** `ResourceLimits` has `cpu_quota_us`, `cpu_period_us`, `memory_high_bytes` and `memory_max_bytes`, and no pids field. Its `Default` sets the CPU pair and leaves both memory fields `None` (`crates/uas-pool/src/freezer.rs` lines 79-99). Command: `grep -nE 'pids_max|pids\.max' crates/uas-pool/src/freezer.rs` prints nothing.
 - **F2 [verified]:** `configure_limits` writes `memory.high` and `memory.max` when the fields are set (`freezer.rs` lines 279 to 296). So the knob exists and is unused.
 - **F3 [verified]:** The delegated subtree for uid 1000 on ceres exposes `memory.max`, `pids.max`, `memory.events` and `cgroup.kill`. Command: `C=/sys/fs/cgroup$(cut -d: -f3 /proc/self/cgroup); ls $C | grep -E '^(cgroup\.kill|memory\.events|memory\.max|pids\.max)$'` prints all four. Spec 0020 F3 verified the same delegation for `cpu memory pids`.
 - **F4 [verified]:** ceres has 54 GiB of RAM and 302 GiB free of 1007 GiB on `/`. Commands: `free -g`, `df -h /home`.
-- **F5 [verified]:** A clean checkout of this repo is 3.4 MiB without `.git` and `target`; one debug build of `cas-cli` alone makes `target` 246 MiB. Commands: `du -sh --exclude=.git --exclude=target .`, `du -sh target`. Disk per slot is build output, not source.
+- **F5 [verified]:** A clean checkout of this repo is 3.4 MiB without `.git` and `target`; one debug build of `uas-cli` alone makes `target` 246 MiB. Commands: `du -sh --exclude=.git --exclude=target .`, `du -sh target`. Disk per slot is build output, not source.
 - **F6 [reported]:** Spec 0020 F7: `pids.max` is the wrong knob for a job cap because a build with many legitimate processes would fail. It is the right knob for a runaway fork.
-- **F7 [verified]:** `reset_clean` removes every entry of the worktree directory except `.git`, ignored files included, then checks the tree out again (`crates/cas-pool/src/worktree.rs` lines 190-208); spec 0015 line 74 names that step. So `target/` goes at `Reclaiming` when it sits inside the worktree.
+- **F7 [verified]:** `reset_clean` removes every entry of the worktree directory except `.git`, ignored files included, then checks the tree out again (`crates/uas-pool/src/worktree.rs` lines 190-208); spec 0015 line 74 names that step. So `target/` goes at `Reclaiming` when it sits inside the worktree.
 - **F8 [reported]:** Spec 0036 D1: at most two host slots on ceres.
 - **F9 [verified]:** ceres has 20 GiB of swap. Command: `free -g`, the `Swap:` line.
 
 ## Design
 
-The limits are cgroup v2 attributes of the slot cgroup `/sys/fs/cgroup/cas/slot-<id>` (spec
-0015 D3), written by `cas-pool` before the first `exec` in the slot, like `cpu.max` (spec 0020
+The limits are cgroup v2 attributes of the slot cgroup `/sys/fs/cgroup/uas/slot-<id>` (spec
+0015 D3), written by `uas-pool` before the first `exec` in the slot, like `cpu.max` (spec 0020
 D3). The kernel enforces them; the pool observes `memory.events` and reports.
 
 ### Decisions
@@ -51,28 +51,28 @@ D3). The kernel enforces them; the pool observes `memory.events` and reports.
 | D4 | The limits are written before the first `exec` in the slot, in the same call as `cpu.max`. A missing controller file logs at `warn` and leaves that one limit unset, as `cpu.max` does today (`freezer.rs` lines 272-273). | One write path, one failure mode. | integrating lane w25:p1, 2026-10-10 |
 | D5 | At `Reclaiming` the pool reads `memory.events` and `pids.events` of the slot cgroup and records `oom_kill` and `pids_max_hits` on the `AuditReceipt`. A non-zero `oom_kill` makes the worker outcome `Killed(Oom)`, distinct from `Exited(code)`. A non-zero `pids.events max` changes no outcome: the kernel kills nothing at `pids.max`, it fails `fork` with `EAGAIN`, so the worker's own exit code stands and the counter says why. | A verifier reading `exit 137` cannot tell an OOM from an operator kill; the receipt must say which (spec 0002). `pids.max` is a refusal, not a kill (cgroup v2 documentation; research lane, mesh 9d7c6d4b). | integrating lane w25:p1, 2026-10-10 |
 | D6 | Limits are per slot, not per worker process: a slot's whole process tree shares one `memory.max` and one `pids.max`. | The cgroup is the slot; spec 0015 D3. | integrating lane w25:p1, 2026-10-10 |
-| D7 | Operators override every default with `PoolConfig` fields and the environment twins `CAS_SLOT_MEMORY_MAX`, `CAS_SLOT_PIDS_MAX` and `CAS_MIN_FREE_BYTES` (bytes, decimal). Precedence follows spec 0042. | One way to tune, named in one place. | integrating lane w25:p1, 2026-10-10 |
+| D7 | Operators override every default with `PoolConfig` fields and the environment twins `UAS_SLOT_MEMORY_MAX`, `UAS_SLOT_PIDS_MAX` and `UAS_MIN_FREE_BYTES` (bytes, decimal). Precedence follows spec 0042. | One way to tune, named in one place. | integrating lane w25:p1, 2026-10-10 |
 | D8 | A slot provisioned through the spec 0038 `WorkerSlot` CRD carries its limits in `spec.limits` (`memory_max_bytes`, `memory_high_bytes`, `pids_max`); `uas-operator` passes them into `PoolConfig`, and they beat the environment twins of D7. A `WorkerSlot` with no `limits` gets the D1 and D2 defaults. | Without them an operator cannot size slots declaratively (plan author, mesh a10df88d). The CRD field is the flag of spec 0042 D1 for a slot. | integrating lane w25:p1, 2026-10-10; the schema row awaits spec 0038's amendment |
 
 ### Requirements (EARS)
 
-- **[REQ-0041-01]** (Event-driven): WHEN `cas-pool` configures a slot cgroup, it shall write `memory.max`, `memory.high`, `memory.swap.max` and `pids.max` before the first `exec` in that slot.
-- **[REQ-0041-02]** (Ubiquitous): The `cas-pool` default `memory_max_bytes` shall be one quarter of `MemTotal`, clamped to the range 2 GiB to 16 GiB, the default `memory_high_bytes` shall be 80 percent of `memory_max_bytes`, and the default `memory.swap.max` shall be 0.
-- **[REQ-0041-03]** (Ubiquitous): The `cas-pool` default `pids_max` shall be 4096.
-- **[REQ-0041-04]** (Unwanted): IF the filesystem holding the worktree root has less than `min_free_bytes` free, THEN `cas-pool` shall refuse `allocate` with `PoolError::DiskLow` and provision nothing.
-- **[REQ-0041-05]** (Unwanted): IF a limit's controller file is absent, THEN `cas-pool` shall log the missing file at `warn`, leave that limit unset, and continue.
-- **[REQ-0041-06]** (Event-driven): WHEN a slot enters `Reclaiming`, `cas-pool` shall read `memory.events` and `pids.events` of the slot cgroup and record `oom_kill` and `pids_max_hits` on the `AuditReceipt`.
+- **[REQ-0041-01]** (Event-driven): WHEN `uas-pool` configures a slot cgroup, it shall write `memory.max`, `memory.high`, `memory.swap.max` and `pids.max` before the first `exec` in that slot.
+- **[REQ-0041-02]** (Ubiquitous): The `uas-pool` default `memory_max_bytes` shall be one quarter of `MemTotal`, clamped to the range 2 GiB to 16 GiB, the default `memory_high_bytes` shall be 80 percent of `memory_max_bytes`, and the default `memory.swap.max` shall be 0.
+- **[REQ-0041-03]** (Ubiquitous): The `uas-pool` default `pids_max` shall be 4096.
+- **[REQ-0041-04]** (Unwanted): IF the filesystem holding the worktree root has less than `min_free_bytes` free, THEN `uas-pool` shall refuse `allocate` with `PoolError::DiskLow` and provision nothing.
+- **[REQ-0041-05]** (Unwanted): IF a limit's controller file is absent, THEN `uas-pool` shall log the missing file at `warn`, leave that limit unset, and continue.
+- **[REQ-0041-06]** (Event-driven): WHEN a slot enters `Reclaiming`, `uas-pool` shall read `memory.events` and `pids.events` of the slot cgroup and record `oom_kill` and `pids_max_hits` on the `AuditReceipt`.
 - **[REQ-0041-07]** (Unwanted): IF `oom_kill` is non-zero, THEN the worker outcome shall be `Killed(Oom)`, distinct from `Exited(code)`; a non-zero `pids_max_hits` shall change no outcome.
-- **[REQ-0041-08]** (Ubiquitous): The `cas-pool` crate shall apply memory and pids limits to the slot cgroup as a whole, never to an individual worker process.
-- **[REQ-0041-09]** (Ubiquitous): The `cas-domain` crate shall define the `Killed(Oom)` outcome and the two receipt counters with no I/O imports.
-- **[REQ-0041-10]** (Event-driven): WHEN a `WorkerSlot` carries `spec.limits`, `uas-operator` shall pass those values into `PoolConfig`, and `cas-pool` shall apply them in place of the defaults and the environment twins.
+- **[REQ-0041-08]** (Ubiquitous): The `uas-pool` crate shall apply memory and pids limits to the slot cgroup as a whole, never to an individual worker process.
+- **[REQ-0041-09]** (Ubiquitous): The `uas-domain` crate shall define the `Killed(Oom)` outcome and the two receipt counters with no I/O imports.
+- **[REQ-0041-10]** (Event-driven): WHEN a `WorkerSlot` carries `spec.limits`, `uas-operator` shall pass those values into `PoolConfig`, and `uas-pool` shall apply them in place of the defaults and the environment twins.
 
 ## Plan
 
-- [ ] `cas-pool`: `pids_max` on `ResourceLimits`; `MemTotal` read and the clamp in `Default`.
-- [ ] `cas-pool`: write `pids.max` in `configure_limits`; read `memory.events` and `pids.events` at reclaim.
-- [ ] `cas-pool`: `statvfs` floor in `allocate`; `PoolError::DiskLow`.
-- [ ] `cas-domain`: `WorkerOutcome::Killed(Oom)` and the two receipt counters.
+- [ ] `uas-pool`: `pids_max` on `ResourceLimits`; `MemTotal` read and the clamp in `Default`.
+- [ ] `uas-pool`: write `pids.max` in `configure_limits`; read `memory.events` and `pids.events` at reclaim.
+- [ ] `uas-pool`: `statvfs` floor in `allocate`; `PoolError::DiskLow`.
+- [ ] `uas-domain`: `WorkerOutcome::Killed(Oom)` and the two receipt counters.
 - [ ] Spec 0038: add `spec.limits` to the `WorkerSlot` schema (D8).
 - [ ] Spec 0015: add the two receipt fields to the `AuditReceipt` row; spec 0020: cite this spec where it says memory is out of scope.
 
@@ -86,12 +86,12 @@ D3). The kernel enforces them; the pool observes `memory.events` and reports.
 | REQ-0041-07 | Under `make ebpf-test`, a worker runs `python3 -c "x=bytearray(2**31)"` in a slot with `memory.max` 256 MiB; the receipt shows `oom_kill 1` and `Killed(Oom)`. Goes red if the outcome is `Exited(137)`. A second worker forks past `pids.max` 64; the receipt shows `pids_max_hits` above 0 and the outcome `Exited(code)`. Goes red if the outcome is a `Killed` variant. |
 
 ```bash
-cargo nextest run -p cas-pool limits -j 2
-cargo nextest run -p cas-domain outcome -j 2
+cargo nextest run -p uas-pool limits -j 2
+cargo nextest run -p uas-domain outcome -j 2
 ```
 
 The live OOM and pids cases run under `make ebpf-test` on a workstation and print a skip
-where `/sys/fs/cgroup/cas` cannot be created.
+where `/sys/fs/cgroup/uas` cannot be created.
 
 ## Notes
 
