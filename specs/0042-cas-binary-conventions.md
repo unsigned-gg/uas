@@ -74,7 +74,7 @@ Measured 2026-10-10 on ceres at development `bd31291`, debug build.
 | REQ-0042-03, 06 | `timeout 1 ./target/debug/uas-ebpfd --socket /tmp/uas-0042.sock >/tmp/uas-0042.out 2>/dev/null; test ! -s /tmp/uas-0042.out`. The daemon may exit early with an error; stdout must still be empty. Expected red today, because `uas-ebpfd` sets no writer (F3). |
 | REQ-0042-07 | `uas nonsense` exits 2; `uas wave step` in a repo with no `.blackwall/init-head` exits 2 (spec 0025 line 139); `uas harness verify --receipt /dev/null` exits 1. Goes red if any code changes. |
 | REQ-0042-08 | `uas --version` and `uas-ebpfd --version` both match `^[a-z-]+ [0-9]+\.[0-9]+\.[0-9]+ \((unknown|[0-9a-f]{7,}(-dirty)?|v[^ ]+)\)$`. Goes red today for `uas-ebpfd` (F2). |
-| REQ-0042-09 | In a throwaway worktree, modify a tracked file and run `make release-notes VERSION=9.9.9`: a non-zero exit (the recipe exits 1, which make reports as 2) with `release-notes: refusing a dirty tree`, and `Cargo.toml` unchanged. Goes red against the Makefile before plan 0042 P7, which exits 0 and rewrites `Cargo.toml`. |
+| REQ-0042-09 | In a throwaway worktree, modify a tracked file and run `make release-notes VERSION=9.9.9`: exit 2 (spec 0042 D4: nothing was done because a precondition was wrong) with `release-notes: refusing a dirty tree`, and `Cargo.toml` unchanged. Goes red against the Makefile before plan 0042 P7, which exits 0 and rewrites `Cargo.toml`. |
 | REQ-0042-10 | `grep -rnE 'opentelemetry\|otlp\|prometheus' crates/*/src` prints nothing. Goes red when an exporter crate is added without a spec. |
 
 ```bash
