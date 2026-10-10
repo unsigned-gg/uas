@@ -169,12 +169,15 @@ These are not decided. Each needs a spec or an operator ruling before code.
 
 1. **Pool runtime.** The pool design shows thread-per-core actors (heph). The
    heph evaluation keeps Tokio for cortex. See
-   `cerebral-work/research@4068134:repos/heph.md` line 92. Nobody has chosen the
-   runtime for `cas-pool`. `cas-domain` stays runtime-neutral either way.
-2. **Kernel `-j 2`.** The research says eBPF enforces two parallel jobs
-   (`SYNTHESIS-ESTATE-AND-SUBSTRATE.md` section 4.2). The mechanism it
-   describes sets `nice 19` on build processes. Nice is a scheduling priority.
-   It does not cap the number of jobs. No mechanism for a job cap is designed.
+   `cerebral-work/research@4068134:repos/heph.md` line 92. Spec 0019 records
+   the options and the facts. Christian ruled on 2026-10-10: benchmark first,
+   then rule; spec 0015 D5 (OS threads) is the interim choice. The gap closes
+   when the criterion benchmark in spec 0019's Plan has numbers and he rules.
+   `cas-domain` stays runtime-neutral either way.
+2. **Kernel `-j 2`.** Closed by spec 0020 (2026-10-10). The research claim that
+   eBPF enforces two parallel jobs is dropped: `nice 19` is a priority, not a
+   cap. The cap is the cgroup v2 CPU quota per slot (`cpu.max`, two CPUs by
+   Christian's ruling) that `cas-pool` writes, plus the `-j 2` convention.
 3. **`cas-storage` has no phase.** Resolved by spec 0021 (2026-10-10): `cas-storage`
    is assigned to Phase 6 (Distributed Storage & Operator Client) alongside
    the AIStore Kubernetes operator deployment.
@@ -204,8 +207,8 @@ These are not decided. Each needs a spec or an operator ruling before code.
 
 - [x] Scaffold from the estate template. Ten crates compile.
 - [x] Build `cas-domain` (slot, lease, envelope, attestation, error). PR #3.
-- [ ] Write the spec that chooses the pool runtime.
-- [ ] Write the spec that designs a job cap for builds, or drops the claim.
+- [x] Write the spec that chooses the pool runtime: spec 0019 (ruling pending the benchmark).
+- [x] Write the spec that designs a job cap for builds, or drops the claim: spec 0020.
 - [x] Give `cas-storage` a phase or merge it into another crate (spec 0021).
 - [x] Decide the eBPF licence position and record it in spec 0004 (2026-10-09).
 - [ ] Add each crate dependency only when its first real code lands.
