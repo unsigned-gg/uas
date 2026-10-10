@@ -3,6 +3,11 @@
 //! For a prefix hash and a replica id, the weight is the first 8 bytes, big-endian, of
 //! `SHA-256(replica_id bytes ++ prefix hash bytes)`. The highest weight wins. On equal
 //! weight the smaller replica id wins. Only healthy replicas are candidates.
+//!
+//! When every replica is unhealthy, `choose` falls back to a deterministic round-robin
+//! over all replicas (spec 0017 D5). The fallback picks the replica at index
+//! `u64::from_be_bytes(prefix_hash[0..8]) % n` in ascending id order, and returns
+//! [`ReplicaChoice::Fallback`] so the caller can log it.
 
 use std::cmp::Ordering;
 use std::collections::BTreeMap;
@@ -15,8 +20,8 @@ use crate::prefix::PrefixHash;
 /// Errors from replica registration and choice.
 #[derive(Debug, Error, PartialEq, Eq)]
 pub enum RouterError {
-    /// No replica in the table is healthy.
-    #[error("no healthy replicas")]
+    /// The table holds no replica. An all-unhealthy table falls back (D5).
+    #[error("no replicas registered")]
     NoHealthyReplicas,
     /// A replica id was empty.
     #[error("invalid replica id: must not be empty")]
@@ -58,6 +63,29 @@ fn weight(id: &ReplicaId, hash: &PrefixHash) -> u64 {
 /// Ranking order: higher weight first; on equal weight, the smaller replica id first.
 fn by_weight_then_id(a: &(u64, &ReplicaId), b: &(u64, &ReplicaId)) -> Ordering {
     b.0.cmp(&a.0).then_with(|| a.1.cmp(b.1))
+}
+
+/// The outcome of `AffinityTable::choose`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ReplicaChoice {
+    /// A healthy replica won the rendezvous ranking for the prefix hash.
+    Affinity(ReplicaId),
+    /// Every replica is unhealthy. The replica was picked by the D5 round-robin.
+    Fallback(ReplicaId),
+}
+
+impl ReplicaChoice {
+    /// The chosen replica, whichever rule picked it.
+    pub fn replica(&self) -> &ReplicaId {
+        match self {
+            ReplicaChoice::Affinity(id) | ReplicaChoice::Fallback(id) => id,
+        }
+    }
+
+    /// True when every replica was unhealthy and the D5 fallback picked this one.
+    pub fn is_fallback(&self) -> bool {
+        matches!(self, ReplicaChoice::Fallback(_))
+    }
 }
 
 /// The set of replicas and their health flags.
@@ -102,10 +130,26 @@ impl AffinityTable {
     }
 
     /// The healthy replica with the highest weight for this prefix hash.
-    pub fn choose(&self, hash: &PrefixHash) -> Result<ReplicaId, RouterError> {
-        self.ranked(hash)
-            .into_iter()
-            .next()
+    ///
+    /// When no replica is healthy, returns [`ReplicaChoice::Fallback`] with the replica at
+    /// index `u64::from_be_bytes(hash[0..8]) % n` in ascending id order (spec 0017 D5).
+    /// Returns `NoHealthyReplicas` only when the table holds no replica.
+    pub fn choose(&self, hash: &PrefixHash) -> Result<ReplicaChoice, RouterError> {
+        if let Some(id) = self.ranked(hash).into_iter().next() {
+            return Ok(ReplicaChoice::Affinity(id));
+        }
+        let n = self.replicas.len();
+        if n == 0 {
+            return Err(RouterError::NoHealthyReplicas);
+        }
+        let mut first = [0u8; 8];
+        first.copy_from_slice(&hash.0[..8]);
+        let index = (u64::from_be_bytes(first) % n as u64) as usize;
+        self.replicas
+            .keys()
+            .nth(index)
+            .cloned()
+            .map(ReplicaChoice::Fallback)
             .ok_or(RouterError::NoHealthyReplicas)
     }
 }
@@ -154,6 +198,7 @@ mod tests {
         }
         for k in keys(200) {
             let first = ascending.choose(&k).expect("healthy table");
+            assert!(!first.is_fallback(), "a healthy table never falls back");
             assert_eq!(first, ascending.choose(&k).expect("healthy table"));
             assert_eq!(first, descending.choose(&k).expect("healthy table"));
         }
@@ -166,12 +211,12 @@ mod tests {
         let ranked = t.ranked(&k);
         assert_eq!(ranked.len(), 4);
         t.set_healthy(&ranked[0], false);
-        assert_eq!(t.choose(&k), Ok(ranked[1].clone()));
+        assert_eq!(t.choose(&k), Ok(ReplicaChoice::Affinity(ranked[1].clone())));
         assert!(!t.ranked(&k).contains(&ranked[0]));
     }
 
     #[test]
-    fn choose_errors_when_no_healthy_replica() {
+    fn choose_errors_only_on_an_empty_table() {
         let k = keys(1)[0];
         assert_eq!(
             AffinityTable::new().choose(&k),
@@ -181,19 +226,89 @@ mod tests {
         for i in 0..2 {
             t.set_healthy(&rid(i), false);
         }
-        assert_eq!(t.choose(&k), Err(RouterError::NoHealthyReplicas));
+        assert!(matches!(t.choose(&k), Ok(ReplicaChoice::Fallback(_))));
+    }
+
+    #[test]
+    fn fallback_known_answer() {
+        let k = PrefixInput {
+            system: vec!["You are a builder.".to_string()],
+            tools: vec![],
+        }
+        .hash();
+        let mut four = table(4);
+        let mut three = table(3);
+        for i in 0..4 {
+            four.set_healthy(&rid(i), false);
+        }
+        for i in 0..3 {
+            three.set_healthy(&rid(i), false);
+        }
+        // 0x51e05212264af2b9 % 4 == 1 and % 3 == 2 (python3, 2026-10-10).
+        assert_eq!(four.choose(&k), Ok(ReplicaChoice::Fallback(rid(1))));
+        assert_eq!(three.choose(&k), Ok(ReplicaChoice::Fallback(rid(2))));
+        // n = 7 pins the byte order: big-endian gives 2, little-endian would give 5
+        // (python3, 2026-10-10). The n = 3 and n = 4 cases agree under both.
+        let mut seven = table(7);
+        for i in 0..7 {
+            seven.set_healthy(&rid(i), false);
+        }
+        assert_eq!(seven.choose(&k), Ok(ReplicaChoice::Fallback(rid(2))));
+    }
+
+    #[test]
+    fn fallback_is_deterministic_and_spreads() {
+        let mut ascending = AffinityTable::new();
+        let mut descending = AffinityTable::new();
+        for i in 0..4 {
+            ascending.insert(rid(i));
+            ascending.set_healthy(&rid(i), false);
+        }
+        for i in (0..4).rev() {
+            descending.insert(rid(i));
+            descending.set_healthy(&rid(i), false);
+        }
+        let mut seen = [0usize; 4];
+        for k in keys(1000) {
+            let first = ascending.choose(&k).expect("non-empty table");
+            assert!(first.is_fallback());
+            assert_eq!(first, descending.choose(&k).expect("non-empty table"));
+            let idx = (0..4)
+                .find(|i| rid(*i) == *first.replica())
+                .expect("a known replica");
+            seen[idx] += 1;
+        }
+        assert!(
+            seen.iter().all(|n| *n > 0),
+            "control: every replica receives a key, got {seen:?}"
+        );
+    }
+
+    #[test]
+    fn fallback_ends_when_one_replica_recovers() {
+        let mut t = table(4);
+        for i in 0..4 {
+            t.set_healthy(&rid(i), false);
+        }
+        t.set_healthy(&rid(2), true);
+        for k in keys(200) {
+            assert_eq!(t.choose(&k), Ok(ReplicaChoice::Affinity(rid(2))));
+        }
     }
 
     #[test]
     fn removing_a_replica_moves_only_its_keys() {
         let mut t = table(4);
         let ks = keys(1000);
-        let before: Vec<ReplicaId> = ks.iter().map(|k| t.choose(k).expect("healthy")).collect();
+        let before: Vec<ReplicaId> = ks
+            .iter()
+            .map(|k| t.choose(k).expect("healthy").replica().clone())
+            .collect();
         let gone = rid(2);
         t.remove(&gone);
         let mut moved = 0;
         for (k, b) in ks.iter().zip(before) {
-            let after = t.choose(k).expect("healthy");
+            let after = t.choose(k).expect("healthy").replica().clone();
             if b == gone {
                 moved += 1;
                 assert_ne!(after, gone);
@@ -211,12 +326,15 @@ mod tests {
     fn adding_a_replica_moves_keys_only_to_it() {
         let mut t = table(3);
         let ks = keys(1000);
-        let before: Vec<ReplicaId> = ks.iter().map(|k| t.choose(k).expect("healthy")).collect();
+        let before: Vec<ReplicaId> = ks
+            .iter()
+            .map(|k| t.choose(k).expect("healthy").replica().clone())
+            .collect();
         let added = rid(3);
         t.insert(added.clone());
         let mut moved = 0;
         for (k, b) in ks.iter().zip(before) {
-            let after = t.choose(k).expect("healthy");
+            let after = t.choose(k).expect("healthy").replica().clone();
             if after != b {
                 moved += 1;
                 assert_eq!(after, added);
