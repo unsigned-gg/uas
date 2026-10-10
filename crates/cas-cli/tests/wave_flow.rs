@@ -1407,3 +1407,13 @@ fn wave_merge_gate_refuses_unparsable_toml() {
     fs::remove_file(g.repo.join("blackwall.toml")).unwrap();
     assert_gate_refused(&g, &run_gate(&g), "blackwall.toml");
 }
+
+#[test]
+fn wave_merge_gate_refuses_absent_automerge() {
+    let g = gate_case("gate-absent-key", "G\\n", 0);
+    // The file parses but never says `automerge = false`: fail closed.
+    for text in ["", "[merge]\n", "[verify]\ncommand = \"make check\"\n"] {
+        write(&g.repo.join("blackwall.toml"), text);
+        assert_gate_refused(&g, &run_gate(&g), "automerge");
+    }
+}
