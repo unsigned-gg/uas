@@ -192,8 +192,8 @@ most `ttl + 1` seconds after `now`.
 
 ```bash
 make spec-check
-cargo tree -p cas-engine -e normal,build --prefix none > $(mktemp)
-! grep -E '^(tonic|prost)' $(mktemp)
+T=$(mktemp); cargo tree -p cas-engine -e normal,build --prefix none > "$T"
+! grep -E '^(tonic|prost)' "$T"
 cargo tree -p cas-engine -e normal,build --prefix none --features cortex-grpc | grep -E '^tonic '
 cargo nextest run -p cas-engine --build-jobs 2 --features cortex-grpc cortex_pool
 cargo deny check
