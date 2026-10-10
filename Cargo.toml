@@ -66,7 +66,7 @@ prost-types = "=0.14.4"
 # Generates the tonic client and server stubs in build.rs.
 tonic-prost-build = { version = "=0.14.6", default-features = false }
 # Compiles the vendored protos in build.rs with no system protoc.
-protox = "=0.9.1"
+protox = "=0.10.0"
 # Compile-time HTML templates for the deck (spec 0018 D1). The `axum` feature gives Markup a response type.
 maud = { version = "0.27.0", features = ["axum"] }
 
