@@ -11,6 +11,7 @@ max_in_flight = 3
 id = "wave-smoke-build"
 title = "Write the wave smoke note"
 kind = "impl"
+agent = "auto"
 verify_cmd = ["cas", "wave", "step", "--flow", ".saga/plans/cas-wave-smoke.toml", "--step", "wave-smoke-build"]
 prompt = "Do nothing. The verify_cmd runs this step. Report its exit."
 
@@ -18,5 +19,6 @@ prompt = "Do nothing. The verify_cmd runs this step. Report its exit."
 id = "wave-smoke-spec"
 title = "Check the specs at the wave base"
 kind = "test"
+agent = "auto"
 verify_cmd = ["cas", "wave", "step", "--flow", ".saga/plans/cas-wave-smoke.toml", "--step", "wave-smoke-spec"]
 prompt = "Do nothing. The verify_cmd runs this step. Report its exit."
