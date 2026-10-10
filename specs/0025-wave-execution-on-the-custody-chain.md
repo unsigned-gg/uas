@@ -73,7 +73,7 @@ Facts, 2026-10-10. Source facts from `unsigned-gg/blackwall@3d98dc1` are
   `Bash(make *)`, `Bash(git fetch *)` and `Bash(git rebase *)`. A `claude -p` critic cannot
   answer a prompt, so it needs `--allowed-tools` [asserted until P9c].
 - **F15 to F17 [reported, saga lane w1P:p2E, mesh 50f2d67a, code reading, no flow run]:**
-  F15: an omitted `agent` means auto-classify. Every step of a kind other than gate runs the
+  F15: an omitted `agent` means auto-classify. **Retracted 2026-10-10 by the live run (P9c, our error in reading): saga d0d6b9e fails a step with no `agent` as "unassigned agent" in milliseconds (bifrost executor.rs:667); the explicit value `agent = "auto"` auto-classifies [verified, run 20261010-140148].** Every step of a kind other than gate runs the
   agent, then `verify_cmd`. So each non-gate step spends an agent run. F16: steps pass no
   values; `inputs` only order the DAG. One run shares one worktree. F17: a failed step
   cancels only the queued steps that depend on it. Running and independent siblings finish.
@@ -199,8 +199,8 @@ parameter (F9, F16). Each flow holds:
 
 - one step per `WaveStep` of the wave: impl (Builder), review (Critic) or test
   (Probe). Its `verify_cmd` is the literal argv (plus `--max-concurrency N` WHERE the plan was generated with N != 0, so the flow regenerates as written) `["cas", "wave", "step",
-  "--flow", "<source>", "--step", "<id>"]`. It has no `agent`, so saga
-  auto-classifies (F15). The prompt tells that agent to do nothing else (D2).
+  "--flow", "<source>", "--step", "<id>"]`. It carries `agent = "auto"`, the
+  value saga auto-classifies (F15, as retracted). The prompt tells that agent to do nothing else (D2).
 - a gate step (`heimdal:approval`) for each MainSession step with a direct
   dependent in the wave. Those dependents depend on it. A MainSession step
   with no dependent stays in its own wave's flow.
