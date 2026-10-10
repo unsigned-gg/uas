@@ -85,6 +85,9 @@ enum WaveCommand {
         /// The state directory. Defaults to `CAS_WAVE_STATE_DIR`, then under `XDG_STATE_HOME`.
         #[arg(long)]
         state_dir: Option<std::path::PathBuf>,
+        /// The most steps in flight, as given to `wave flow`. 0 means the default of 3.
+        #[arg(long, default_value_t = 0)]
+        max_concurrency: usize,
     },
 }
 
@@ -1080,12 +1083,14 @@ fn main() -> Result<()> {
                 step,
                 repo,
                 state_dir,
+                max_concurrency,
             } => {
                 let args = wave_flow::StepArgs {
                     flow,
                     step,
                     repo,
                     state_dir,
+                    max_concurrency,
                 };
                 let cwd = std::env::current_dir()?;
                 let code = wave_flow::run_step(&args, &wave_flow::WaveEnv::from_process(), &cwd);
