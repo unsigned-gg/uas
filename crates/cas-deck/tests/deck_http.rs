@@ -3,7 +3,9 @@
 use std::net::SocketAddr;
 use std::sync::Arc;
 
-use cas_deck::{bind, serve, DeckError, DeckState, SettleSource};
+use cas_deck::{
+    bind, serve, CortexSettleSource, DeckError, DeckState, PendingCards, PendingFetch, SettleSource,
+};
 use cas_domain::{Attestation, EvidenceTier, LeaseId, PrincipalRef, SlotId};
 use cas_engine::{
     Activity, ActivityKind, ActivityResult, EventStore, InMemoryEventStore, SessionId, SettleCard,
@@ -138,9 +140,49 @@ fn queue_with_two_cards() -> Arc<SettleQueue> {
 struct FailingSettle;
 
 impl SettleSource for FailingSettle {
-    fn pending_cards(&self) -> Result<Vec<SettleCard>, DeckError> {
+    fn pending_cards(&self) -> Result<PendingCards, DeckError> {
         Err(DeckError::CortexUnavailable("connection refused".into()))
     }
+}
+
+/// Serves the committed Cortex fixture. No socket is opened.
+struct FixtureFetch;
+
+impl PendingFetch for FixtureFetch {
+    fn fetch_pending(&self) -> Result<String, DeckError> {
+        Ok(include_str!("fixtures/settle-pending.json").to_string())
+    }
+}
+
+/// Serves the committed empty-queue fixture.
+struct EmptyFetch;
+
+impl PendingFetch for EmptyFetch {
+    fn fetch_pending(&self) -> Result<String, DeckError> {
+        Ok(include_str!("fixtures/settle-pending-empty.json").to_string())
+    }
+}
+
+/// Fails the way a refused connection fails.
+struct RefusedFetch;
+
+impl PendingFetch for RefusedFetch {
+    fn fetch_pending(&self) -> Result<String, DeckError> {
+        Err(DeckError::CortexUnavailable("connection refused".into()))
+    }
+}
+
+/// Answers with a body that is not the contract.
+struct MalformedFetch;
+
+impl PendingFetch for MalformedFetch {
+    fn fetch_pending(&self) -> Result<String, DeckError> {
+        Ok("{not json".to_string())
+    }
+}
+
+fn cortex_state(fetch: impl PendingFetch + 'static) -> DeckState {
+    DeckState::new(sessions(), Arc::new(CortexSettleSource::new(fetch)))
 }
 
 #[tokio::test]
@@ -173,11 +215,53 @@ async fn get_settle_disconnected_when_source_fails() {
         !response.body.contains("connection refused"),
         "error text must not leak"
     );
+    assert!(!response.body.contains("class=\"card"), "{}", response.body);
+}
+
+#[tokio::test]
+async fn get_settle_renders_cortex_fixture() {
+    let response = get(cortex_state(FixtureFetch), "/settle").await;
+    assert_eq!(response.status, 200);
+    let body = &response.body;
+    assert!(body.contains(r#"id="settle/e1""#), "{body}");
+    assert!(body.contains("Reply to the vendor invoice"), "{body}");
+    assert!(body.contains("guard-deny"), "{body}");
+    assert!(body.contains("step 2 of 5"), "{body}");
+    assert!(!body.contains("cortex.invalid"), "{body}");
+    assert!(!body.contains("http:"), "{body}");
+    assert!(!body.contains("disconnected"), "{body}");
+}
+
+#[tokio::test]
+async fn get_settle_disconnected_on_fetch_error() {
+    let response = get(cortex_state(RefusedFetch), "/settle").await;
+    assert_eq!(response.status, 200);
+    assert!(response.body.contains("disconnected"), "{}", response.body);
     assert!(
-        !response.body.contains("class=\"card\""),
+        !response.body.contains("connection refused"),
+        "error text must not leak"
+    );
+    assert!(!response.body.contains("class=\"card"), "{}", response.body);
+}
+
+#[tokio::test]
+async fn get_settle_disconnected_on_parse_error() {
+    let response = get(cortex_state(MalformedFetch), "/settle").await;
+    assert_eq!(response.status, 200);
+    assert!(response.body.contains("disconnected"), "{}", response.body);
+    assert!(!response.body.contains("class=\"card"), "{}", response.body);
+}
+
+#[tokio::test]
+async fn get_settle_empty_queue_is_not_disconnected() {
+    let response = get(cortex_state(EmptyFetch), "/settle").await;
+    assert_eq!(response.status, 200);
+    assert!(
+        response.body.contains("Nothing waits for a decision."),
         "{}",
         response.body
     );
+    assert!(!response.body.contains("disconnected"), "{}", response.body);
 }
 
 #[tokio::test]

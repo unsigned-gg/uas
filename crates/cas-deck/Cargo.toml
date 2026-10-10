@@ -14,6 +14,8 @@ axum = { workspace = true }
 cas-domain = { path = "../cas-domain" }
 cas-engine = { path = "../cas-engine" }
 maud = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 

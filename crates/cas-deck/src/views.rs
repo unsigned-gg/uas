@@ -1,12 +1,12 @@
 //! Maud templates. Agent text is escaped. Only the static style is raw.
 
 use cas_domain::EvidenceTier;
-use cas_engine::{SessionState, SettleCard};
+use cas_engine::SessionState;
 use maud::{html, Markup, PreEscaped, DOCTYPE};
 
-use crate::SessionRow;
+use crate::{DeckCard, Guard, PendingCards, SessionRow};
 
-/// Evidence and layout styles. Static text only, no URLs.
+/// Evidence, layout and card styles. Static text only, no URLs.
 const STYLE: &str = "body { font-family: sans-serif; margin: 2rem; color: #1a1a1a; } \
 table { border-collapse: collapse; } \
 td, th { border: 1px solid #ccc; padding: 0.3rem 0.6rem; text-align: left; } \
@@ -16,6 +16,9 @@ td, th { border: 1px solid #ccc; padding: 0.3rem 0.6rem; text-align: left; } \
 .badge-heuristic { background: #f9a825; color: #1a1a1a; } \
 .badge-asserted { background: #757575; } \
 .card { border: 1px solid #999; margin: 0.5rem 0; padding: 0.5rem; } \
+.card-attention { border: 2px solid #f9a825; } \
+.guard-allow { color: #2e7d32; } \
+.guard-deny { color: #b71c1c; font-weight: bold; } \
 .notice { border: 2px solid #b71c1c; color: #b71c1c; padding: 0.5rem; }";
 
 /// Full page: the session table, then the settle queue.
@@ -79,22 +82,80 @@ pub fn session_table(rows: &[SessionRow]) -> Markup {
 }
 
 /// Settle cards for the pending queue. Card text is escaped, and no card has an action yet.
-pub fn settle_cards(cards: &[SettleCard]) -> Markup {
+/// A count notice shows when the source reports a total other than the cards shown.
+pub fn settle_cards(queue: &PendingCards) -> Markup {
     html! {
-        @if cards.is_empty() {
-            p { "Nothing waits for a decision." }
-        }
-        @for card in cards {
-            article class="card" {
-                h3 { (card.title) }
-                p { "Session " (card.session_id) ", step " (card.step_id) }
-                p { (card.rationale) }
-                @if let Some(diff) = &card.diff_summary {
-                    p { "Diff: " (diff) }
-                }
-                p { "Created at " (card.created_at) }
+        @if queue.total != queue.cards.len() {
+            p class="notice" {
+                "Cortex reports " (queue.total) " pending. The deck shows " (queue.cards.len()) "."
             }
         }
+        @if queue.cards.is_empty() {
+            p { "Nothing waits for a decision." }
+        }
+        @for card in &queue.cards {
+            (settle_card(card))
+        }
+    }
+}
+
+fn settle_card(card: &DeckCard) -> Markup {
+    let classes = card_classes(card);
+    html! {
+        article class=(classes) id=(format!("settle/{}", card.id)) {
+            h3 { (card.title) }
+            p { "Source " (card.source) }
+            @if let Some(context) = &card.context {
+                p { (context) }
+            }
+            @if let Some(plan) = card.plan {
+                p { "step " (plan.step_index) " of " (plan.step_count) }
+            }
+            @if let Some(guard) = &card.guard {
+                p {
+                    span class=(guard_class(guard)) {
+                        "Guard " (if guard.allow { "allow" } else { "deny" })
+                    }
+                    " " (guard.rule_id) ": " (guard.reason)
+                }
+            }
+            @if let Some(detail) = &card.detail {
+                p { (detail) }
+            }
+            @if let Some(run_hash) = &card.run_hash {
+                p { "Run " (run_hash) }
+            }
+            @if let Some(diff) = &card.diff_stat {
+                p { "Diff: " (diff) }
+            }
+            @if let Some(custody) = &card.custody {
+                p { "Custody " (custody) }
+            }
+            @if let Some(age) = card.age_secs {
+                p { "Age " (age) " s" }
+            }
+            p { "Created at " (card.created_at) }
+        }
+    }
+}
+
+/// Card classes: `card`, the guard class, and `card-attention` when the card waits long.
+fn card_classes(card: &DeckCard) -> String {
+    let mut classes = vec!["card"];
+    if let Some(guard) = &card.guard {
+        classes.push(guard_class(guard));
+    }
+    if card.needs_attention {
+        classes.push("card-attention");
+    }
+    classes.join(" ")
+}
+
+fn guard_class(guard: &Guard) -> &'static str {
+    if guard.allow {
+        "guard-allow"
+    } else {
+        "guard-deny"
     }
 }
 
@@ -126,7 +187,7 @@ fn state_label(state: SessionState) -> &'static str {
 mod tests {
     use super::*;
     use cas_domain::SlotId;
-    use cas_engine::SessionId;
+    use cas_engine::{SessionId, SettleCard};
 
     fn row(evidence: Option<EvidenceTier>) -> SessionRow {
         SessionRow {
@@ -137,6 +198,15 @@ mod tests {
             last_evidence: evidence,
             updated_at: 1,
         }
+    }
+
+    fn fixture() -> PendingCards {
+        crate::parse_pending(include_str!("../tests/fixtures/settle-pending.json")).unwrap()
+    }
+
+    fn queue_of(cards: Vec<DeckCard>) -> PendingCards {
+        let total = cards.len();
+        PendingCards { cards, total }
     }
 
     #[test]
@@ -164,16 +234,71 @@ mod tests {
             "why",
             1,
         );
-        let markup = settle_cards(&[card]).into_string();
+        let markup = settle_cards(&queue_of(vec![DeckCard::from(card)])).into_string();
         assert!(markup.contains("&lt;script&gt;"), "{markup}");
         assert!(!markup.contains("<script>"), "{markup}");
     }
 
     #[test]
+    fn cortex_text_is_escaped() {
+        let markup = settle_cards(&fixture()).into_string();
+        assert!(
+            markup.contains("&lt;script&gt;x&lt;/script&gt;"),
+            "{markup}"
+        );
+        assert!(!markup.contains("<script>"), "{markup}");
+    }
+
+    #[test]
+    fn cortex_card_renders_contract_fields() {
+        let markup = settle_cards(&fixture()).into_string();
+        let expected = [
+            r#"id="settle/e1""#,
+            "guard-deny",
+            "external-send-review",
+            "External send needs operator review",
+            "card-attention",
+            "step 2 of 5",
+            "b3f1c2a9",
+            "2 files changed, 14 insertions(+), 3 deletions(-)",
+            "fleet:builder-1",
+        ];
+        for needle in expected {
+            assert!(markup.contains(needle), "missing {needle}: {markup}");
+        }
+    }
+
+    #[test]
+    fn settle_url_never_rendered() {
+        let markup = settle_cards(&fixture()).into_string();
+        assert!(!markup.contains("cortex.invalid"), "{markup}");
+        assert!(!markup.contains("/v1/settle/"), "{markup}");
+    }
+
+    #[test]
+    fn count_notice_when_total_differs() {
+        let card = DeckCard::from(SettleCard::new("card-n", "sess", "step", "Title", "why", 1));
+        let short = PendingCards {
+            cards: vec![card.clone()],
+            total: 3,
+        };
+        let markup = settle_cards(&short).into_string();
+        assert!(
+            markup.contains("Cortex reports 3 pending. The deck shows 1."),
+            "{markup}"
+        );
+        let even = queue_of(vec![card]);
+        let markup = settle_cards(&even).into_string();
+        assert!(!markup.contains("Cortex reports"), "{markup}");
+    }
+
+    #[test]
     fn page_has_no_external_url() {
-        let card = SettleCard::new("card-y", "sess", "step", "Push fix", "why", 1);
-        let markup =
-            page(&[row(Some(EvidenceTier::Verified))], settle_cards(&[card])).into_string();
+        let markup = page(
+            &[row(Some(EvidenceTier::Verified))],
+            settle_cards(&fixture()),
+        )
+        .into_string();
         assert!(!markup.contains("http:"), "{markup}");
         assert!(!markup.contains("https:"), "{markup}");
         assert!(!markup.contains("//"), "{markup}");

@@ -4,7 +4,7 @@ Operator dashboard: Axum routes and Maud templates. It shows the session table a
 
 | | |
 |---|---|
-| Status | Slice 1 (spec 0018 D1 partial, D5, Invariant 1, read side of the settle failure path). No actions, no events, no binary yet. |
+| Status | Slice 2 (spec 0018 D7, D9, D10 and the Component 3 render side, A1). Read only: the Cortex body is parsed from a fixture, and no HTTP fetch, poller, action or binary exists yet. |
 | Roadmap phase | Phase 5 |
 | Research | `cerebral-work/research@4068134:agentic-systems/designs/rust-native-agent-substrate.md section 3.6` |
 | Spec | `specs/0018-mad-stack-operator-deck-and-settle-queue.md` |
