@@ -57,6 +57,8 @@
 mod activity;
 mod compensator;
 mod cortex;
+#[cfg(feature = "cortex-grpc")]
+pub mod cortex_pool;
 mod cpm;
 mod error;
 mod event;
