@@ -213,23 +213,23 @@ fn drain<H: ProbeHandle>(shared: &Shared<H>, last_dropped: &mut u64) {
     for event in events {
         // A setuid binary runs with an effective uid that differs from the real
         // one. Never renice such a process, even if a tracked worker exec'd it.
-        match pid_uids(event.pid) {
-            Ok((real, effective)) if real == effective => {
-                match clamp::reclamp_if_needed(event.pid) {
-                    Ok(true) => {
-                        tracing::info!(pid = event.pid, "re-clamped a tracked pid after exec");
-                    }
-                    Ok(false) => {}
-                    Err(e) => tracing::debug!(pid = event.pid, error = %e, "re-clamp skipped"),
+        // /proc and setpriority take pids of this process's namespace.
+        let pid = event.ns_pid;
+        match pid_uids(pid) {
+            Ok((real, effective)) if real == effective => match clamp::reclamp_if_needed(pid) {
+                Ok(true) => {
+                    tracing::info!(pid, "re-clamped a tracked pid after exec");
                 }
-            }
+                Ok(false) => {}
+                Err(e) => tracing::debug!(pid, error = %e, "re-clamp skipped"),
+            },
             Ok((real, effective)) => tracing::warn!(
-                pid = event.pid,
+                pid,
                 real,
                 effective,
                 "re-clamp skipped: effective uid differs from real uid"
             ),
-            Err(e) => tracing::debug!(pid = event.pid, error = %e, "re-clamp skipped"),
+            Err(e) => tracing::debug!(pid, error = %e, "re-clamp skipped"),
         }
         // No receivers is normal: nobody is streaming.
         let _ = shared.events.send(StreamLine::Event(event.record()));
