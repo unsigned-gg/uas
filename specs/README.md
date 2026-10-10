@@ -27,6 +27,11 @@ Methodology: LeanSpec. The reference copy is in `../vendor/leanspec/`.
 | [0020](0020-build-job-cap.md) | Build job cap | planned | high |
 | [0021](0021-cas-storage-scope-and-phase.md) | cas-storage scope and phase | planned | medium |
 | [0022](0022-custody-landing.md) | Custody landing | planned | high |
+| [0023](0023-test-time-compute-and-verifiable-reward.md) | Test-time compute and verifiable reward | planned | medium |
+<<<<<<< Updated upstream
+||||||| Stash base
+=======
+>>>>>>> Stashed changes
 
 
 ## How to add a spec
