@@ -26,6 +26,11 @@ Forbidden, whatever the brief says:
 - Inventing a done-when: every done-when comes from the spec's Test section or from a gate in
   the Makefile, named by its command.
 
+This list is prompt text. Pushes and merges are enforced by the repo push hooks
+(`guard-main-push`, `ci-gate`, which judge the shared checkout), branch protection on
+`development` and `main`, and the integrator who alone pushes and lands. The one-file write
+limit rests on you and on the critic's review of your plan.
+
 ## Tools and policy
 
 1. Read `AGENTS.md` once; the layering line and `uas-domain`'s zero I/O bound every package.

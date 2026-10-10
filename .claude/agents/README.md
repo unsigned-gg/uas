@@ -44,7 +44,8 @@ lane keeps decisions, integration and every gated action. The pipeline, per spec
 2. The lane reads the plan, resolves anything BLOCKED (a ruling, a spec 0004 pin), and
    dispatches wave 1 through the Agent tool: `uas-builder`, `uas-ebpf-builder` or
    `uas-k8s-builder`, each in its own worktree cut from fresh `origin/development`, each with
-   the package brief verbatim. Three at once per lane, never more (the account's token ceiling).
+   the package brief verbatim. Up to the lane's cap at once: three by the global rule, raised to five by Christian on
+   2026-10-10 for this lane (the account's token ceiling is the reason for a cap at all).
 3. Each builder returns a SHA and the verdict block. `uas-critic` reads every SHA against its
    brief and the spec; a defect goes back to the same builder with the critic's line.
 4. The lane merges the wave's branches into one feature branch, pushes with `git -C`, opens the
