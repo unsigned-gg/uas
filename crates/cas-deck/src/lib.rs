@@ -1,17 +1,22 @@
-//! Operator dashboard for the Cerebral Agent Substrate (spec 0018, slice 1).
+//! Operator dashboard for the Cerebral Agent Substrate (spec 0018, slices 1 and 2).
 //!
 //! `cas-deck` serves a read-only page: the session table and the settle queue.
-//! Routes use Axum and the HTML uses Maud. This slice has no actions, no event
-//! stream and no Cortex bridge yet.
+//! Routes use Axum and the HTML uses Maud. Settle cards come from the in-process
+//! queue or from a Cortex body that a `PendingFetch` supplies. This slice has no
+//! actions, no event stream and no HTTP fetch yet.
 
 #![forbid(unsafe_code)]
 
+mod card;
+mod cortex;
 mod error;
 mod read_model;
 mod server;
 mod source;
 mod views;
 
+pub use card::{DeckCard, Guard, PendingCards, PlanStep};
+pub use cortex::{parse_pending, CortexSettleSource, PendingFetch};
 pub use error::DeckError;
 pub use read_model::SessionRow;
 pub use server::{bind, router, serve};
