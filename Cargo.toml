@@ -41,7 +41,7 @@ toml = "0.8"
 landlock = "0.4.7"
 # Async runtime for the gateway proxy in cas-router (spec 0013, CER-2718). Approved features
 # plus io-util, which AsyncReadExt and AsyncWriteExt need; recorded in spec 0004.
-tokio = { version = "1.53.1", default-features = false, features = ["rt-multi-thread", "macros", "net", "time", "sync", "io-util"] }
+tokio = { version = "=1.53.1", default-features = false, features = ["rt-multi-thread", "macros", "net", "time", "sync", "io-util"] }
 # unshare, procfs writes and the lo ioctl for the worker network namespace (spec 0011, CER-2717).
 rustix = { version = "1.1.5", default-features = false, features = ["std", "thread", "process", "fs"] }
 # Userspace eBPF loader, tracepoint attach and ring buffer reader in cas-ebpf (spec 0014, CER-2719, CER-2720).

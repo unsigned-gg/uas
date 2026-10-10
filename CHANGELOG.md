@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Workspace `rust-version` raised to 1.89: the pinned `agent-client-protocol` 2.2.0 (via uuid 1.28) needs it, and aya already needed 1.87 (spec 0004, lane decision 2026-10-10).
 
 ### Added
+- `cargo xtask pin-check` and `make pin-check`, in `make hygiene`: the spec 0004 pin tables must match `Cargo.lock` and `crates/cas-ebpf/ebpf/Cargo.lock` for every crate a manifest declares directly (spec 0004 D3). `tokio` is pinned `=1.53.1` and re-locked from 1.53.2.
 - Wave merge on green runs through saga and blackwall (spec 0025 D15): `[flow] merge_on_green` makes `cas wave flow` emit a merge step per Builder, `cas wave merge-gate` checks signatures and execs `blackwall merge-gate`, and a Builder reads the PR merge commit of its upstream Builders before it starts. cas runs no `gh pr merge`.
 - `cas wave flow` writes one saga flow per wave, and `cas wave step` runs one wave step (spec 0025 P9b).
 - cas-domain: the `NotAudited` landing receipt state and the spec 0023 D4/D6 evaluator path lists; cas-engine: the landing activity split into `reconcile` and `open_pr`, and the `WaveStep` workflow event with its replay arm (spec 0025 P9a, slice 1).
