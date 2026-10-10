@@ -8,10 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Spec 0036, slot arbitration across processes, with 10 EARS requirements: host-wide worker capacity held as flock-locked slot files, so two CAS processes on one host cannot each admit `max_slots` workers; dead holders release through kernel lock release, not a reaper. Status planned.
 - Specs 0032 to 0035, with 35 EARS requirements: reverie access from a jailed slot, which resolves a contradiction between specs 0008 and 0011; a cargo feature policy and CI matrix, because no gate builds with a feature on; tool pinning beyond cargo, which records two live violations of rule 12; and the cas-acp transport scope, which proposes stdio only against a TCP claim the crate README made and no spec defined. All four are status planned.
 - Specs 0028 to 0031, with 47 EARS requirements, for four architectural invariants that no spec owned: branchless CRDT worktrees, agent identity and on-behalf-of delegation, A2A multi-agent interop, and the MCP security baseline. All four are status planned. Spec 0029's identity rules need the Director of Engineering's ratification under his identity veto.
 
 ### Changed
+- Three specs lose stale text that newer specs or rulings had overtaken: 0001's cas-storage placement deferral now cites spec 0021, 0008's reverie client goes through the spec 0032 socket proxy from a slot, and 0022 no longer says spec 0025 D15 lets the wave executor merge.
 - AGENTS.md drops the per-crate layout table and the derivable command rows, names the hook, Makefile or repo setting that enforces each rule, and points at spec 0001 for crate roles and phases.
 - Repo skills are reachable from Claude Code: `.claude/skills/` holds one symlink per skill in `.agents/skills/`.
 
