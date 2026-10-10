@@ -27,7 +27,7 @@ Measured 2026-10-08:
 - The `ci-kernel` runner is live (OPS-1660). It admits pods with uid 0 and bounding set {BPF, PERFMON}, read-only tracefs. [reported, mesh c73dfbe3, 2026-10-10]
 - The `ci-kernel` node, read from the `ebpf-live` job logs of runs 38027008230,
   38027192645 and 38028859773 [verified 2026-10-10,
-  `gh api repos/cerebral-work/cas-substrate/actions/jobs/<id>/logs` for jobs
+  `gh api repos/unsigned-gg/uas/actions/jobs/<id>/logs` for jobs
   114139866137, 114141577624 and 114145388796]:
   - Kernel `6.18.51-talos`. CapPrm, CapEff and CapBnd are `000000c000000000`:
     BPF and PERFMON only. BTF is at `/sys/kernel/btf/vmlinux` (8148564 bytes).
@@ -62,7 +62,7 @@ Measured 2026-10-08:
 - **State-driven:** WHILE running inside CI runner pods, the system shall execute jobs without mutating the read-only rustup directory.
 - **Unwanted behavior:** IF a job on the `ci-rust` lane attempts toolchain installation or network toolchain download, THEN the job shall fail immediately.
 - **Ubiquitous:** The `ebpf-live` job shall run on the `ci-kernel` lane and run `make ebpf-test SUDO=` as uid 0.
-- **Event-driven:** WHEN CI runs, the `ebpf-live` job shall rebuild `cas-ebpf.o` with the pinned nightly and bpf-linker and fail when it differs from the committed object.
+- **Event-driven:** WHEN CI runs, the `ebpf-live` job shall rebuild `uas-ebpf.o` with the pinned nightly and bpf-linker and fail when it differs from the committed object.
 - **State-driven:** WHILE on the `ci-kernel` lane, the job shall install the pinned nightly only into a job-local `RUSTUP_HOME`.
 - **Unwanted behavior:** IF a live case prints a `skipped:` line other than the nested unshare case, THEN the `ebpf-live` job shall fail.
 
@@ -140,14 +140,14 @@ Refined from decision 8, the operator, interviews 2026-10-08.
    requests of the released commit.
 4. `release-plz.toml` sets in `[workspace]`: `git_only = true`, `publish =
    false`, `changelog_update = false`, `git_release_enable = false`,
-   `git_tag_enable = false`, `semver_check = false`. The package `cas-cli`
+   `git_tag_enable = false`, `semver_check = false`. The package `uas-cli`
    turns on the tag and the release. Its tag name is `v{{ version }}`.
 5. `CHANGELOG.md` follows Keep a Changelog 1.1.0. Each user-visible PR adds one
    line under `## [Unreleased]`. Nobody edits a released section.
 
 ### Decisions
 
-- **D1 (lane w25:p1, 2026-10-10):** The `ebpf-live` job runs on the `ci-kernel` lane. It installs the pinned nightly into a job-local `RUSTUP_HOME`. It rebuilds `cas-ebpf.o` and fails on any difference from the committed object. the operator can override.
+- **D1 (lane w25:p1, 2026-10-10):** The `ebpf-live` job runs on the `ci-kernel` lane. It installs the pinned nightly into a job-local `RUSTUP_HOME`. It rebuilds `uas-ebpf.o` and fails on any difference from the committed object. the operator can override.
 - **D2 (lane w25:p1, 2026-10-10):** `ebpf-live` is not a required check until one green run on `development`. Then the integrator adds it to the protection and to the spec 0003 table. the operator can override.
 
 ## Plan
@@ -169,7 +169,7 @@ Check the workflows for the faults this spec bans.
 ```bash
 ! grep -rn '|| cargo test' .github && ! grep -rnE 'uses: [^ ]+@(main|master)' .github
 make -n ebpf-test | grep -q sudo && ! make -n ebpf-test SUDO= | grep -q sudo && actionlint
-make ebpf-build JOBS=2 && git diff --exit-code -- crates/cas-ebpf/ebpf/
+make ebpf-build JOBS=2 && git diff --exit-code -- crates/uas-ebpf/ebpf/
 ```
 
 Passing means exit 0 and no output. Then read a CI run. The `rust` job must

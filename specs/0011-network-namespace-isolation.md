@@ -50,12 +50,12 @@ Facts, measured 2026-10-09:
 
 | # | Decision | Who, when |
 |---|---|---|
-| D1 | The namespace is entered in the child, in a `pre_exec` hook installed by `netns::isolate(command)`. It is installed before `launcher::jail`, so std runs it first and Landlock is applied last. | CAS lane, 2026-10-09 |
-| D2 | Two paths. First `unshare(CLONE_NEWNET)` plus the `lo` ioctl. If either is refused, `unshare(CLONE_NEWUSER \| CLONE_NEWNET)` with an identity map of the effective uid and gid, so the worker keeps its ids. | CAS lane, 2026-10-09 |
-| D3 | `lo` is brought up with `SIOCGIFFLAGS` and `SIOCSIFFLAGS` on a UDP socket. No netlink crate and no `ip` subprocess. | CAS lane, 2026-10-09 |
-| D4 | Nothing in the child allocates. Paths are `CStr` literals, the map lines are formatted into stack buffers, and every error is a raw errno. A failed namespace is reported as `ENONET`, which `exec` never produces; the parent sees `SandboxError::NetnsRefused`. | CAS lane, 2026-10-09 |
-| D5 | Default deny comes from the namespace itself: no interface but `lo`, no route. No packet filter is installed. | CAS lane, 2026-10-09 |
-| D6 | `rustix` enters the workspace with `default-features = false` and `std`, `thread`, `process`, `fs`. The approved row allows `mount` too; it is not enabled until a crate needs it. | CAS lane, 2026-10-09 |
+| D1 | The namespace is entered in the child, in a `pre_exec` hook installed by `netns::isolate(command)`. It is installed before `launcher::jail`, so std runs it first and Landlock is applied last. | UAS lane, 2026-10-09 |
+| D2 | Two paths. First `unshare(CLONE_NEWNET)` plus the `lo` ioctl. If either is refused, `unshare(CLONE_NEWUSER \| CLONE_NEWNET)` with an identity map of the effective uid and gid, so the worker keeps its ids. | UAS lane, 2026-10-09 |
+| D3 | `lo` is brought up with `SIOCGIFFLAGS` and `SIOCSIFFLAGS` on a UDP socket. No netlink crate and no `ip` subprocess. | UAS lane, 2026-10-09 |
+| D4 | Nothing in the child allocates. Paths are `CStr` literals, the map lines are formatted into stack buffers, and every error is a raw errno. A failed namespace is reported as `ENONET`, which `exec` never produces; the parent sees `SandboxError::NetnsRefused`. | UAS lane, 2026-10-09 |
+| D5 | Default deny comes from the namespace itself: no interface but `lo`, no route. No packet filter is installed. | UAS lane, 2026-10-09 |
+| D6 | `rustix` enters the workspace with `default-features = false` and `std`, `thread`, `process`, `fs`. The approved row allows `mount` too; it is not enabled until a crate needs it. | UAS lane, 2026-10-09 |
 
 the operator corrects any of these in place.
 
@@ -104,7 +104,7 @@ The escape suite (CER-2684, CER-2721).
 ## Test
 
 ```bash
-cargo test -p cas-sandbox -j 2 --test netns
+cargo test -p uas-sandbox -j 2 --test netns
 ```
 
 Passing means exit 0. The worker is the test binary, re-executed through
@@ -115,7 +115,7 @@ from the worker's stdout. The jailed worker must see only `lo` in
 jailed case first probes the host with `netns::isolate` alone. A host that
 cannot create a namespace prints `skipped` plus its diagnostics and the
 case passes; the PR body then says which host ran it. Decision, the operator,
-2026-10-09, by interview in the CAS lane: probe and skip, and file a ticket
+2026-10-09, by interview in the UAS lane: probe and skip, and file a ticket
 for the `ci-rust` runner so CI proves the namespace later. Add
 `-- --nocapture` to see the probe lines. Also run `make check`,
 `make hygiene` and `make smoke`.
