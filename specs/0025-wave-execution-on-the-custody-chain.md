@@ -34,14 +34,14 @@ Facts, 2026-10-10. Source facts from `unsigned-gg/blackwall@3d98dc1` are
   stderr `run <model> (ok|err): hash <12 chars> (new|dedup)`, then
   `changeset: <12 chars> (<n> entries)` and `world commit: <12 chars>`. `run.rs` has no
   `println!`, so nothing goes to stdout. Each line starts with a check mark (U+2713), so a
-  parse matches substrings.
+  parse matches substrings. [verified, P9c run 0dbb7f02bf2d, stderr as recorded] `start` printed `-> running haiku...`, `(ok): hash 0dbb7f02bf2d (new)`, `op trace: 3 delta(s)`, `changeset: 4abbf3bebe21 (1 entries)`, `world commit: 22749f85c3ad` and `otel: exported 4 span(s)`, exit 0, and the soma lane names `start --json` the stable surface [reported, soma lane, CER-2787]. The record shows no `run <model>` text and no check mark, and stdout was not teed, so those parts stay `reported`.
 - **F4 [reported, `reconcile.rs:151`, `pr.rs:149`, `settle.rs:60`, `report.rs:437`]:**
   `settle`, `reconcile`, `pr` and `changeset` resolve a hash prefix. `show` does not
   (`report.rs:420-425`). Its `RunRecord` JSON (`blackwall-store/src/record.rs:210`) has no
   base and no changeset hash.
-- **F5 [reported, `run.rs:309-321`]:** `init` writes the git HEAD to `.blackwall/init-head`.
+- **F5 [reported, `run.rs:309-321`]:** `init` writes the git HEAD to `.blackwall/init-head` [verified, P9c step 3: `init-head` and `git rev-parse HEAD` both 642c3f292d45].
   A `start` whose HEAD differs only warns. [reported, `blackwall reconcile --help` text]
-  `reconcile` refuses a stale root unless given `--force`. No run has shown it.
+  `reconcile` refuses a stale root unless given `--force`. No run has shown either.
 - **F6 [verified, `blackwall <cmd> --help` in an empty dir]:** `start` takes `--task`,
   `--provider`, `--model` and `--parent`, and no persona. `show`, `list` and `changeset`
   have no JSON flag. `serve` only inspects the store.
@@ -52,7 +52,7 @@ Facts, 2026-10-10. Source facts from `unsigned-gg/blackwall@3d98dc1` are
 - **F8 [verified, `saga run --help`, `saga gate approve --help`, `saga flows`]:**
   `saga run <flow> --param k=v --dry-run`; `saga gate approve <run> <task>`. Here
   `saga flows` listed 21 flows: 3 from `.saga/flows/`, 18 from outside the repo. A dry-run
-  of `estate-custody-rollout` printed `inputs` equal to `deps` and no `verify_cmd`.
+  of `estate-custody-rollout` printed `inputs` equal to `deps` and no `verify_cmd`. [verified, run 20261010-140148-cas-cpm-wave-w0] `saga run` exits 0 when every task fails, so only `run.json` holds the result.
 - **F9 [reported, lane-package flow header, architect w10:pC]:** the shipped step kinds are
   impl, test, review, gate and note. Saga copies `verify_cmd` and `cwd` raw, so `{{params}}`
   is not substituted there. [reported, `vendor/saga/contracts/flow.rs`, saga@1e4be86] a step
@@ -65,15 +65,15 @@ Facts, 2026-10-10. Source facts from `unsigned-gg/blackwall@3d98dc1` are
 - **F12 [verified, read `blackwall.toml` and `tasks/*/task.toml`]:** both set model
   `sonnet`. the operator's rule of 2026-10-10 sets builders to haiku [reported,
   `.claude/agents/README.md`]. [reported, `run.rs:489-503`] a `task.toml` `model` overwrites
-  the CLI `--model` with no condition. Whether `blackwall.toml` beats it is unknown; P9c
-  reads the `running` line.
+  the CLI `--model` with no condition. Whether `blackwall.toml` beats it is unknown. [verified, P9c run 0dbb7f02bf2d and `blackwall list`]
+  the `running` line says `haiku`, and `blackwall list` shows `haiku` for all five P9c runs.
 - **F13 [reported, DeltaDB design surface 3.1, draft, w19:p1]:** the cluster loop is
   cortex-worker, reflexd, escapement, blackwall-serve. `fork_from_delta` is not built.
 - **F14 [verified, read `.claude/settings.json`]:** the project allows `Bash(cargo *)`,
   `Bash(make *)`, `Bash(git fetch *)` and `Bash(git rebase *)`. A `claude -p` critic cannot
-  answer a prompt, so it needs `--allowed-tools` [asserted until P9c].
-- **F15 to F17 [reported, saga lane w1P:p2E, mesh 50f2d67a, code reading, no flow run]:**
-  F15: an omitted `agent` means auto-classify. **Retracted 2026-10-10 by the live run (P9c, our error in reading): saga d0d6b9e fails a step with no `agent` as "unassigned agent" in milliseconds (bifrost executor.rs:667); with no `agent` the run fails [verified, `saga run cas-cpm-wave-w0`, run 20261010-140148]; `agent = "auto"` parses with owner `auto` [verified, `saga run --dry-run` on the regenerated flows]; that it runs the agent and then `verify_cmd` is [asserted] until the P9c re-run.** Every step of a kind other than gate runs the
+  answer a prompt, so it needs `--allowed-tools` [asserted]. [verified, P9c run 20261010-141552-cas-cpm-wave-w1] the critic step ran and passed. Whether it ran `make check` is not provable: the record keeps the outcome, not the verdict lines (CER-2789).
+- **F15 to F17 [reported, saga lane w1P:p2E, mesh 50f2d67a, code reading; no flow run for F16 and F17]:**
+  F15: an omitted `agent` means auto-classify. **Retracted 2026-10-10 by the live run (P9c, our error in reading): saga d0d6b9e fails a step with no `agent` as "unassigned agent" in milliseconds (bifrost executor.rs:667); with no `agent` the run fails [verified, `saga run cas-cpm-wave-w0`, run 20261010-140148]; `agent = "auto"` parses with owner `auto` [verified, `saga run --dry-run` on the regenerated flows]; with `agent = "auto"` saga runs the agent, then `verify_cmd` [verified, run 20261010-141346-cas-cpm-wave-w0: both steps done, actors `agy` and `claude`], fixed in PR #81.** Every step of a kind other than gate runs the
   agent, then `verify_cmd`. So each non-gate step spends an agent run. F16: steps pass no
   values; `inputs` only order the DAG. One run shares one worktree. F17: a failed step
   cancels only the queued steps that depend on it. Running and independent siblings finish.
@@ -236,9 +236,9 @@ exit 1 and run nothing. Only a person removes one.
 | D9 | A wave Builder has no CAS slot (F2). Its receipt sets `slot_id = wave-<step id>`, `audit = NotAudited` (a new `AuditStatus` variant), `run_hash` empty and `cpu_cap = "uncapped"`. This extends 0022 D4 to runs with no audit at all. Lane default until ruled: record `NotAudited` and proceed as D4 does. The executor never merges (D15), so a person sees it first. | **the operator to rule**; lane default cas-engineer, 2026-10-10 |
 | D10 | Plan admission checks the admission rows before any subprocess runs. One Critic per Builder means one PR opener per Builder. | cas-engineer, 2026-10-10 |
 | D11 | The blackwall task name is the step id: `tasks/<step id>/`. | cas-engineer, 2026-10-10 |
-| D12 | Receipts carry the 12-character run and changeset prefixes that `start` prints (F3). The other subcommands resolve prefixes (F4). Full hashes wait for a source that P9c finds. | cas-engineer, 2026-10-10 |
+| D12 | Receipts carry the 12-character run and changeset prefixes that `start` prints (F3). The other subcommands resolve prefixes (F4); `show` does not (Notes). [verified, P9c runs 0dbb7f02bf2d, 20261010-141346-cas-cpm-wave-w0 and 20261010-141552-cas-cpm-wave-w1] `settle` and `reconcile` took the 12-character run id, the records carry run 47c34f0dd060 and changeset 4abbf3bebe21, reconcile reached head 42560966 on `blackwall/47c34f0dd060`, and no PR opened (D16). Full hashes wait for `start --json` (CER-2787). | cas-engineer, 2026-10-10 |
 | D13 | The critic reviews in a transient detached worktree at the reconciled head. It runs the gates (F10) and leaves HEAD in the custody checkout alone (F5). | cas-engineer, 2026-10-10 |
-| D14 | First live run: the local `blackwall` CLI on ceres, or blackwall-serve in the cluster through cortex-worker, reflexd and escapement (F13). Lane proposal: local, because the 1.2.0 `serve` only inspects (F6). **Ruled: the local CLI on ceres.** P9c runs on it; a blackwall-serve run needs its own brief when `serve` executes. | the operator, 2026-10-10, in session (lane w25:p1 interview); proposal lane w25:p1 |
+| D14 | First live run: the local `blackwall` CLI on ceres, or blackwall-serve in the cluster through cortex-worker, reflexd and escapement (F13). Lane proposal: local, because the 1.2.0 `serve` only inspects (F6). **Ruled: the local CLI on ceres.** P9c ran on it (runs 20261010-141346-cas-cpm-wave-w0 and 20261010-141552-cas-cpm-wave-w1); a blackwall-serve run needs its own brief when `serve` executes. | the operator, 2026-10-10, in session (lane w25:p1 interview); proposal lane w25:p1 |
 | D15 | Merging a wave's PRs between runs: may the lane merge on green, or does a person always merge? Lane proposal: the lane merges each PR on green CI with `gh pr merge --merge --match-head-commit`, outside the executor. Until ruled, a person merges and the executor never does (spec 0022, "What stays with people"). | **the operator to rule**; proposal lane w25:p1, 2026-10-10 |
 | D16 | `open_prs` is off by default, so a wave run stops after the critic verdict and opens no PR. `CAS_WAVE_LIVE_PR=1` sets it for the live smoke. `CAS_WAVE_OPEN_PRS=1` sets it for `cas wave step`, because a literal `verify_cmd` carries no flag. The integrator then lands or closes each PR. | cas-engineer, 2026-10-10 |
 | D17 | Before a critic, the executor runs `git diff --name-only -z --no-renames <base> <head>` and splits the output on NUL. Without `-z`, git C-quotes a non-ASCII path, so no pattern matches it. Without `--no-renames`, it lists only a rename's destination, so a renamed-away `Makefile` is not seen [verified, 2026-10-10, git 2.43 scratch repo]. The halt set: a path under `.claude/`; `.mcp.json`; `**/CLAUDE.md`, `**/CLAUDE.local.md` and `**/AGENTS.md`; and the spec 0023 D4 and D6 lists. A `**/` pattern matches at the root too. The rule files are in the set because `claude -p` loads the root `CLAUDE.md` of its cwd. That file names `AGENTS.md` as the only rule source. It also loads a nested `CLAUDE.md` when the critic reads that directory [reported, critic-0025-3]. So a Builder could rewrite its own rubric. `claude -p` starts a project `.mcp.json` server from its cwd with no approval [reported, critic-0025-4]. The Critic argv sets `--strict-mcp-config`, which ignores all other MCP configurations [verified, 2026-10-10, `claude --help`, 2.1.296]. Spec 0023 D6 lists every `Cargo.toml` and `build.rs`, and `crates/cas-ebpf/ebpf/**`, fail closed. `build. `crates/cas-ebpf/ebpf/**` is in the set because `build.rs` trusts the object and its `.sha256` as a pair; the reason and its evidence are in spec 0023 D6. Rebuilding that object is kernel work, never a wave Builder step. So a Builder that touches one of these paths halts the wave, and the executor compensates its siblings' passed records. A dependency add is not wave Builder work, because rule 12 needs a spec 0004 pin first. A match sets `evaluator_touched` and halts the step. The executor rebuilds the receipt with `LandingReceipt::new`, so the tier is `reported`. The critic never loads a persona, settings, rule file, MCP server or gate from the changeset. The branch stays; a person may open its PR at `reported` (0023 D3). | cas-engineer, 2026-10-10; halt set widened per critic-0025-3 and critic-0025-4 (`.mcp.json`, `--strict-mcp-config`, 0023 D6), lane w25:p1, 2026-10-10; `crates/cas-ebpf/ebpf/**` via 0023 D6, lane decision w25:p1, 2026-10-10; narrows the wave path of the operator's 0023 D3 (the operator can override) |
@@ -256,10 +256,10 @@ exit 1 and run nothing. Only a person removes one.
 - [ ] P9b, `cas-cli`, `cas-builder` haiku. It adds `cas wave flow` and `cas wave step` with the state directory, and the source plan
   `.saga/plans/cas-wave-smoke.toml`. It generates `.saga/flows/cas-cpm-wave-w*.toml`
   and adds `tasks/wave-smoke-build/`. Tests: a round-trip and a drift test.
-- [ ] P9c, integrator on ceres, once D14 is ruled: `blackwall doctor`,
+- [x] P9c, integrator on ceres, once D14 is ruled: `blackwall doctor`,
   `blackwall init .` in a clean checkout at `origin/development`, the live smoke,
   then the saga runs `cas-cpm-wave-w0` and `cas-cpm-wave-w1`. Record every
-  output and exit contract, then amend D12 and F3 to F5.
+  output and exit contract, then amend D12 and F3 to F5. Done 2026-10-10 at 642c3f2: smoke run 7878209325ad, saga runs 20261010-141346-cas-cpm-wave-w0 and 20261010-141552-cas-cpm-wave-w1. Not shown: the F5 stale root, and whether `init` keeps earlier runs.
 - [ ] the operator rules D9 and D15. D14 ruled 2026-10-10 (local CLI).
 
 ## Test
@@ -289,8 +289,8 @@ CAS_WAVE_LIVE=1 CAS_WAVE_REPO=$L CAS_WAVE_PLAN=$L/.saga/plans/cas-wave-smoke.tom
 - Rejected: opening the PR in the Builder step, as `land` does. It would precede the critic.
 - Rejected: one saga run with a gate between waves. That gate would wait on CI
   and the merge, past the 600 s window (F18).
-- P9c settles two unknowns. The custody-run skill says `blackwall show` prints
-  the base; F4 says it does not. Does `init` keep earlier runs? D4 depends on it.
+- P9c settled neither unknown. `blackwall show 7878209325ad` returned `NotFound`, though `list` prints that 12-character id [verified, run 7878209325ad], so whether `show` prints the base (custody-run skill against F4) is still open. `init` ran once, before any run, so whether it keeps earlier runs (D4) is still open.
+- Under `cargo nextest` the smoke's reconcile halted `VerifyFailed`, yet the smoke exited 0 because it passes on any outcome, while the same run reconciled outside nextest [verified, runs 7878209325ad and 0dbb7f02bf2d]; the cause is not proven [heuristic: the inherited nextest environment], and the receipt keeps no reconcile stderr (CER-2789).
 - Amends spec 0022 D1 and D9 (its D12 logs it). P9a builds 0023's `EVALUATOR_PATHS`.
 - Out of scope: the `?` at `wave.rs:421` and `compensator.rs:339` in
   `crates/cas-engine/src` [verified at b149d73] stops compensation at the first
