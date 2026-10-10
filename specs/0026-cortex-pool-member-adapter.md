@@ -86,8 +86,9 @@ Facts, 2026-10-10:
   bridge) and moves the slot `Warm -> Leased`.
 - **Unwanted behavior:** IF a `PoolDelivery` has `lease_ms` below 300 (proto3 sends 0
   when the field is unset), THEN the adapter shall call `Nack` with the D5 delay and
-  stop `Recv` with an error that names `lease_ms` and its value. It shall not call
-  `Term`, start `Extend` or lease a slot (D9).
+  stop `Recv` with an error that names `lease_ms` and its value. The stop is final
+  until a restart: no reconnect and no second `Recv`. It shall surface the error to
+  its caller, and shall not call `Term`, start `Extend` or lease a slot (D9).
 - **State-driven:** WHILE a delivery runs, the adapter shall call `Extend` every
   `lease_ms / 3` and renew the CAS lease as the lease bridge says.
 - **Event-driven:** WHEN a task succeeds, the adapter shall call `Ack` and release
@@ -99,9 +100,9 @@ Facts, 2026-10-10:
 - **Unwanted behavior:** IF `Extend` fails twice in a row, or a CAS renew fails,
   THEN the adapter shall stop the task and release the slot. It sends no `Ack`, so
   Cortex redelivers after `lease_ms`.
-- **Unwanted behavior:** IF the `Recv` stream ends, THEN the adapter shall stop
-  `Recv` and reconnect with exponential backoff. Running tasks continue while
-  `Extend` succeeds.
+- **Unwanted behavior:** IF the `Recv` stream ends, and not by a D9 stop, THEN the
+  adapter shall stop `Recv` and reconnect with exponential backoff. Running tasks
+  continue while `Extend` succeeds.
 - **Optional feature:** WHERE the feature `cortex-grpc` is off, `cas-engine` shall
   build with no `tonic`, `prost`, `prost-types` or `tokio`. The build-dependencies
   `tonic-prost-build` and `protox` are optional and enabled by that feature, and
@@ -163,13 +164,13 @@ most `ttl + 1` seconds after `now`.
 |---|---|---|
 | D1 | CAS owns the pool-member adapter. The spec lands. The `tonic` 0.14 and `prost` 0.14 pins go into spec 0004. The first build package is the transport and the lease handling, behind a feature flag, off by default. | **Ruled:** Christian, in session, lane w25:p1 interview, 2026-10-10 [reported, relayed by the integrator, mesh 74f407df]. He named `tonic` and `prost`; the other 0004 rows are lane pins (D3). |
 | D2 | All adapter code compiles only under the feature `cortex-grpc`, off by default (D1). Inside it, the port traits (`PoolWork`, `TaskRunner`), the lease bridge and the classifier use no tonic type, so fakes test them. The tonic client implements `PoolWork`. No layer break: `cas-engine` sits above `cas-domain` (spec 0001). | Architect w10:pP proposal (mesh 7ec5bb4d); cas-engineer, 2026-10-10; the feature scope follows D1 (Christian may override) |
-| D3 | Pins: the versions cortex@c7fdb85 uses (F6), so both ends share one codegen. Newer `protox` 0.10.0 and `tokio` 1.53.2 exist and are not taken. Spec 0004 records them under "Cortex pool-member transport", with the licences read and the deny check (F8). | cas-engineer, 2026-10-10 (Christian may override) |
+| D3 | Pins: the versions cortex@c7fdb85 uses (F6), so both ends share one codegen. Newer `protox` 0.10.0 exists and is not taken. `tokio` is not new here: its 0004 row says 1.53.1, but the root `Cargo.toml` requirement is the caret `1.53.1`, so `Cargo.lock` has resolved 1.53.2 since 6ec6011 [verified, at 2c6a557]. That drift is a separate item, not fixed here. Spec 0004 records them under "Cortex pool-member transport", with the licences read and the deny check (F8). | cas-engineer, 2026-10-10 (Christian may override) |
 | D4 | The lease bridge issues for `ttl + 1` and renews up to `now + ttl + 1`, never by a fixed step. The extra second covers the whole-second clock (`now >= expires_at` is expired). Renew adds to the old expiry (F3). A fixed `ttl` step every `lease_ms / 3` grows the CAS lease about three times faster than time. A crashed adapter would then hold the slot after Cortex redelivers. | cas-engineer, 2026-10-10 (Christian may override) |
 | D5 | The backend dead-letters at `max_deliver` (F2), so the adapter keeps no retry count. `Nack` uses `delay_ms = min(1000 * 2^(a - 1), 60000)` in saturating arithmetic, with `a = max(1, delivery_attempt)`. | cas-engineer, 2026-10-10 (Christian may override) |
 | D6 | On shutdown the adapter stops `Recv`, Nacks each running unit with `delay_ms = 0`, releases the slots and drains them. `drain` happens only at shutdown, because `Draining` is final (F4). | cas-engineer, 2026-10-10 (Christian may override) |
 | D7 | Member join tokens and their auth stay in cortex spec 0005 (CER-1988). This spec decides nothing there. | **Allen's area** (identity services veto). Not decided here. |
 | D8 | A real `TaskRunner` (a harness run in a slot) needs the `cas-pool` runtime. Spec 0019 D2 reads: "Christian, interview in lane w25:p1, 2026-10-10: benchmark first, then rule." Option A (spec 0015 D5) stays the interim choice, and Christian rules D2 on the numbers of the slot lifecycle benchmark. So the sequence is ruled and the runtime is not. Until then the port has a fake only. | Sequence: Christian (spec 0019 D2). The runtime: **Christian to rule** on the benchmark numbers. |
-| D9 | The minimum `lease_ms` is 300, so the `Extend` tick is at least 100 ms. A smaller value, 0 included (the proto3 default), is a wire or backend fault, not a work fault. The adapter Nacks the unit with the D5 delay and stops `Recv` with an error that names `lease_ms` and its value. It never Terms it: on a dropped proto3 field, `Term` would dead-letter the whole backlog. | Integrator ruling w25:p1, 2026-10-10, mesh 4653a43a (lane decision, Christian may override); the 300 floor: cas-engineer, critic round 1 |
+| D9 | The minimum `lease_ms` is 300, so the `Extend` tick is at least 100 ms. A smaller value, 0 included (the proto3 default), is a wire or backend fault, not a work fault. The adapter Nacks the unit with the D5 delay and stops `Recv` with an error that names `lease_ms` and its value. The stop is final until a restart: a reconnect would Nack again until `max_deliver`, and the backend would dead-letter the backlog. It never Terms it: on a dropped proto3 field, `Term` would dead-letter the whole backlog. | Integrator ruling w25:p1, 2026-10-10, mesh 4653a43a (lane decision, Christian may override); the 300 floor: cas-engineer, critic round 1 |
 
 ## Plan
 
@@ -191,7 +192,9 @@ most `ttl + 1` seconds after `now`.
 
 ```bash
 make spec-check
-! cargo tree -p cas-engine -e normal,build --prefix none | grep -E '^(tonic|prost)'
+cargo tree -p cas-engine -e normal,build --prefix none > /tmp/cas-engine-tree.txt
+! grep -E '^(tonic|prost)' /tmp/cas-engine-tree.txt
+cargo tree -p cas-engine -e normal,build --prefix none --features cortex-grpc | grep -E '^tonic '
 cargo nextest run -p cas-engine --build-jobs 2 --features cortex-grpc cortex_pool
 cargo deny check
 ```
@@ -209,7 +212,8 @@ Red-first tests. P1 uses a fake port and a fake clock:
   mutant must go red.
 - `cortex_pool_nack_below_min_lease_stops_recv`: `lease_ms = 0` and `299` each send
   `Nack` with the D5 delay and no `Term`, start no `Extend` and lease no slot. `Recv`
-  stops with an error that names `lease_ms` and the value (D9).
+  stops with an error that names `lease_ms` and the value, and no second `Recv` or
+  reconnect follows (D9).
 - `cortex_pool_nack_delay_grows`: attempts 0, 1, 2, 8 and `u32::MAX` give 1000,
   1000, 2000, 60000 and 60000 ms (D5).
 - `cortex_pool_term_on_bad_payload`: a payload that does not parse sends `Term`.
@@ -219,7 +223,8 @@ Red-first tests. P1 uses a fake port and a fake clock:
 P1 also adds one test per RPC against an in-process fake server (tonic `server`, dev
 only): `cortex_pool_grpc_recv`, `_ack`, `_extend`, `_nack` and `_term`. Each checks
 the request fields and tags on the wire. A pass means every test above is green,
-and the `cargo tree` line finds no `tonic` or `prost` without the feature. `cargo deny check` prints "advisories ok, bans ok,
+the first `cargo tree` exits 0 and its output holds no `tonic` or `prost`, and the
+`--features cortex-grpc` tree holds `tonic` (a positive control, after P1 lands). `cargo deny check` prints "advisories ok, bans ok,
 licenses ok, sources ok".
 
 ## Notes
