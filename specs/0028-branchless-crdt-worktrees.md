@@ -1,7 +1,7 @@
 ---
 status: planned
 created: 2026-10-10
-tags: [cas, deltadb, crdt, worktree, phase-8, blackwall]
+tags: [uas, deltadb, crdt, worktree, phase-8, blackwall]
 priority: high
 depends_on: [0001-cas-architecture-and-crate-layout, 0002-verification-gates-and-evidence, 0003-branch-model-and-promotion, 0004-dependency-and-licence-policy, 0009-saga-compensation-runner-and-durability, 0010-landlock-ruleset-and-abi-probe, 0015-slot-pool-cgroup-freezer-and-gitoxide, 0022-custody-landing]
 ---
@@ -14,7 +14,7 @@ depends_on: [0001-cas-architecture-and-crate-layout, 0002-verification-gates-and
 
 Physical Git worktree allocation causes disk exhaustion, memory starvation, and Git index lock collisions on workstation ceres.
 Mandatory host throttling with `-j 2` makes disk-backed worktrees a primary bottleneck for multi-agent task execution.
-CAS Phase 8 introduces branchless in-memory Conflict-Free Replicated Worktrees to replace physical worktrees for transient agent tasks.
+UAS Phase 8 introduces branchless in-memory Conflict-Free Replicated Worktrees to replace physical worktrees for transient agent tasks.
 
 Scope covers the in-memory delta stream engine, slot virtual worktree adapters, atomic compensation deallocation, and dependency selection for CRDT collaboration.
 Spec 0028 amends spec 0015 by providing branchless in-memory delta streams for transient tasks while preserving spec 0015 physical worktrees for long-lived checkouts.
@@ -33,10 +33,10 @@ Facts, 2026-10-10:
 
 ### Architecture
 
-CAS Phase 8 implements a two-tier hybrid architecture with clean crate layering (`cas-engine` -> `cas-pool` -> `cas-domain`):
+UAS Phase 8 implements a two-tier hybrid architecture with clean crate layering (`uas-engine` -> `uas-pool` -> `uas-domain`):
 
 1. **Tier 1: Native In-Memory Delta Stream (Default):**
-   - Implemented in `cas-pool::delta_stream` with core types in `cas-domain`.
+   - Implemented in `uas-pool::delta_stream` with core types in `uas-domain`.
    - Records sequential `(run_hash, seq)` operation deltas in memory.
    - Zero external CRDT dependencies (uses existing `serde` and `thiserror`).
    - Enforces an asserted design budget heap ceiling of 50 megabytes per active slot with instant rollback.
@@ -50,15 +50,15 @@ CAS Phase 8 implements a two-tier hybrid architecture with clean crate layering 
 
 ### Requirements (EARS)
 
-- **[REQ-0028-01]** (Optional): WHERE the branchless worktree feature is enabled, the CAS execution engine shall execute transient agent file operations through in-memory delta streams without allocating physical Git worktrees on disk.
-- **[REQ-0028-02]** (Ubiquitous): The CAS dependency manager shall reject any candidate CRDT dependency with active security advisories or unmaintained status reported by `cargo deny`.
-- **[REQ-0028-03]** (Ubiquitous): The CAS virtual workspace manager shall assign a deterministic, monotonically increasing identifier `(run_hash, seq)` to every operation delta.
+- **[REQ-0028-01]** (Optional): WHERE the branchless worktree feature is enabled, the UAS execution engine shall execute transient agent file operations through in-memory delta streams without allocating physical Git worktrees on disk.
+- **[REQ-0028-02]** (Ubiquitous): The UAS dependency manager shall reject any candidate CRDT dependency with active security advisories or unmaintained status reported by `cargo deny`.
+- **[REQ-0028-03]** (Ubiquitous): The UAS virtual workspace manager shall assign a deterministic, monotonically increasing identifier `(run_hash, seq)` to every operation delta.
 - **[REQ-0028-04]** (Event-driven): WHEN an agent invokes a file modification tool, the virtual workspace adapter shall buffer the mutation as an in-memory `DeltaRecord` without disk write I/O.
 - **[REQ-0028-05]** (Event-driven): WHEN a leased slot is released or cancelled by the pool manager (spec 0015) or compensated by Saga (spec 0009), the virtual stream manager shall deallocate all associated in-memory delta buffers without leaving disk residue.
 - **[REQ-0028-06]** (State-driven): WHILE a virtual workspace is active, the delta stream reader shall enforce an asserted design budget heap ceiling of 50 megabytes per active slot.
 - **[REQ-0028-07]** (Unwanted): IF an ingested delta sequence number is not the predecessor sequence number plus one, THEN the delta stream reader shall reject the delta with `SequenceOutOfOrder`.
 - **[REQ-0028-08]** (Unwanted): IF a candidate CRDT crate introduces an unmaintained transitive dependency, THEN the build gate shall fail immediately.
-- **[REQ-0028-09]** (Optional): WHERE concurrent character-level collaborative editing is enabled by cargo feature `crdt-collab`, the CAS engine shall activate the secondary `automerge` document adapter.
+- **[REQ-0028-09]** (Optional): WHERE concurrent character-level collaborative editing is enabled by cargo feature `crdt-collab`, the UAS engine shall activate the secondary `automerge` document adapter.
 - **[REQ-0028-10]** (Complex): WHILE an active delta stream is being materialized for custody landing under spec 0022, WHEN all step verification gates pass, the delta stream reader shall export the committed delta sequence as an in-memory unified patch.
 
 ### State Machines and Invariants
@@ -100,7 +100,7 @@ Invariants:
 
 ## Plan
 
-- [ ] 1. Implement in-memory `DeltaRecord` in `cas-domain` and `DeltaStreamReader` in `cas-pool`.
+- [ ] 1. Implement in-memory `DeltaRecord` in `uas-domain` and `DeltaStreamReader` in `uas-pool`.
 - [ ] 2. Update `specs/0004-dependency-and-licence-policy.md` recording disqualification of `yrs` and conditional adoption of `automerge` under optional feature.
 - [ ] 3. Amend `specs/0015-slot-pool-cgroup-freezer-and-gitoxide.md` slot pool to support in-memory delta streams alongside warm physical worktrees.
 - [ ] 4. Implement atomic buffer deallocation on slot release or Saga compensation with zero disk residue.
@@ -111,7 +111,7 @@ Invariants:
 ## Test
 
 ```bash
-cargo test -p cas-engine --test deltadb_stream -j 2 && cargo test -p cas-pool -j 2 && cargo deny check advisories
+cargo test -p uas-engine --test deltadb_stream -j 2 && cargo test -p uas-pool -j 2 && cargo deny check advisories
 ```
 
 A negative control requires that removing the sequence continuity check causes the `SequenceOutOfOrder` test case to fail. A pass means in-memory delta streams record sequential edits without physical worktree creation, sequence gaps or regressions fail with `SequenceOutOfOrder`, buffer deallocation leaves zero disk residue, and `cargo deny check advisories` exits 0.
