@@ -401,12 +401,12 @@ impl WaveEnv {
 }
 
 impl WaveEnv {
-    /// Apply `--open-prs`: when the flag is given it turns pull requests on, whatever
-    /// `UAS_WAVE_OPEN_PRS` holds (spec 0042 D1: the flag wins). Absent, the variable stands.
+    /// Apply `--open-prs`: a given flag decides, true or false, whatever `UAS_WAVE_OPEN_PRS`
+    /// holds (spec 0042 D1: the flag wins). `None` leaves the variable standing.
     #[must_use]
-    pub fn with_open_prs_flag(mut self, flag: bool) -> Self {
-        if flag {
-            self.open_prs = Some(OsString::from("1"));
+    pub fn with_open_prs_flag(mut self, flag: Option<bool>) -> Self {
+        if let Some(on) = flag {
+            self.open_prs = Some(OsString::from(if on { "1" } else { "0" }));
         }
         self
     }
@@ -853,15 +853,15 @@ mod tests {
             ..WaveEnv::default()
         };
         assert!(
-            !open_prs(&off.clone().with_open_prs_flag(false)),
+            !open_prs(&off.clone().with_open_prs_flag(None)),
             "env 0 stands without the flag"
         );
         assert!(
-            open_prs(&off.with_open_prs_flag(true)),
+            open_prs(&off.with_open_prs_flag(Some(true))),
             "the flag beats env 0"
         );
         assert!(
-            open_prs(&WaveEnv::default().with_open_prs_flag(true)),
+            open_prs(&WaveEnv::default().with_open_prs_flag(Some(true))),
             "the flag beats an unset env"
         );
         let on = WaveEnv {
@@ -869,8 +869,12 @@ mod tests {
             ..WaveEnv::default()
         };
         assert!(
-            open_prs(&on.with_open_prs_flag(false)),
+            open_prs(&on.clone().with_open_prs_flag(None)),
             "env 1 stands without the flag"
+        );
+        assert!(
+            !open_prs(&on.with_open_prs_flag(Some(false))),
+            "an explicit --open-prs=0 beats env 1"
         );
     }
 }
