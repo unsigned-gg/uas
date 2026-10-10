@@ -60,7 +60,7 @@ pub struct WaveExecConfig {
 }
 
 impl WaveExecConfig {
-    /// Defaults: `origin/development` as the base, `development` as the PR base, `haiku` for
+    /// Defaults: `origin/development` as the base, `development` as the PR base, `sonnet` for
     /// Builders, `cas-critic` for Critics, and no pull requests.
     pub fn new(
         repo_dir: impl Into<PathBuf>,
@@ -76,7 +76,7 @@ impl WaveExecConfig {
             lock_path: lock_path.into(),
             scratch_dir: scratch_dir.into(),
             state_dir: state_dir.into(),
-            builder_model: "haiku".into(),
+            builder_model: "sonnet".into(),
             critic_agent: "cas-critic".into(),
             open_prs: false,
             merge_on_green: false,

@@ -17,8 +17,8 @@ const BASE: &str = "056d7c7abcdef";
 const HEAD: &str = "f00dfeed0001";
 const RUN_A: &str = "bwrun0000001";
 const CHG_A: &str = "chg000000001";
-const START_A: &str = "\u{2713} run haiku (ok): hash bwrun0000001 (new)\n\u{2713} changeset: chg000000001 (1 entries)\n";
-const START_B: &str = "\u{2713} run haiku (ok): hash bwrun0000002 (new)\n\u{2713} changeset: chg000000002 (1 entries)\n";
+const START_A: &str = "\u{2713} run sonnet (ok): hash bwrun0000001 (new)\n\u{2713} changeset: chg000000001 (1 entries)\n";
+const START_B: &str = "\u{2713} run sonnet (ok): hash bwrun0000002 (new)\n\u{2713} changeset: chg000000002 (1 entries)\n";
 const PR_OUT: &[u8] = b"opened https://github.com/cerebral-work/cas-substrate/pull/57\n";
 
 /// One canned answer. The first rule whose pattern matches `$*` wins.
@@ -110,7 +110,7 @@ impl Env {
         )
         .unwrap();
         for id in ["build-a", "build-b"] {
-            env.task(id, Some("haiku"));
+            env.task(id, Some("sonnet"));
         }
         for name in ["git", "blackwall", "claude", "make", "gh"] {
             env.tool(name, Vec::new());
@@ -328,15 +328,21 @@ fn wave_admit_refuses_task_model_absent() {
 }
 
 #[test]
+fn wave_config_default_builder_model_is_sonnet() {
+    let config = WaveExecConfig::new("repo", "state", "scratch", "lock");
+    assert_eq!(config.builder_model, "sonnet");
+}
+
+#[test]
 fn wave_admit_refuses_task_model_mismatch() {
     let env = Env::new("wave_admit_refuses_task_model_mismatch");
-    env.task("build-a", Some("sonnet"));
+    env.task("build-a", Some("haiku"));
     let steps = [builder("build-a"), critic("review-a", "build-a")];
     assert_eq!(
         executor(&env, &steps).admit(),
         Err(AdmitError::TaskModelMismatch {
             step: "build-a".into(),
-            found: "sonnet".into()
+            found: "haiku".into()
         })
     );
 }
@@ -740,7 +746,7 @@ fn wave_builder_argv_exact() {
     assert!(
         has_line(
             &argv,
-            "blackwall start --task build-a --provider claude --model haiku"
+            "blackwall start --task build-a --provider claude --model sonnet"
         ),
         "{argv:?}"
     );
@@ -769,7 +775,7 @@ fn wave_builder_fails_without_ok_line() {
         vec![r(
             "start --task build-a *",
             b"",
-            "\u{2713} run haiku (err): hash bwrun0000001 (new)\n",
+            "\u{2713} run sonnet (err): hash bwrun0000001 (new)\n",
             0,
         )],
     );
@@ -1716,7 +1722,7 @@ fn many_builders(env: &Env, n: usize) -> (Vec<String>, Vec<SagaStep>) {
     let ids: Vec<String> = (0..n).map(|i| format!("build-{i}")).collect();
     let mut steps = Vec::new();
     for id in &ids {
-        env.task(id, Some("haiku"));
+        env.task(id, Some("sonnet"));
         steps.push(builder(id));
         steps.push(critic(&format!("review-{id}"), id));
     }
@@ -1833,7 +1839,7 @@ fn wave_report_receipts_follow_the_record_order() {
     let starts: Vec<(String, Vec<u8>)> = (0..6)
         .map(|i| {
             let text = format!(
-                "\u{2713} run haiku (ok): hash bwrun00000{i}0 (new)\n\u{2713} changeset: chg00000000{i} (1 entries)\n"
+                "\u{2713} run sonnet (ok): hash bwrun00000{i}0 (new)\n\u{2713} changeset: chg00000000{i} (1 entries)\n"
             );
             (format!("start --task build-{i} *"), text.into_bytes())
         })

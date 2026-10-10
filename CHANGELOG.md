@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- Wave Builders run on sonnet: the `WaveExecConfig` default model and the `wave-smoke-build` task, per spec 0025 D6.
 - Gang personas follow the 2026-10-10 rulings: builders on sonnet, team `cas-estate`, mesh-only addressing, and a ruling the operator types in a pane counts; new `cas-architect` and `cas-prober` personas, named in the `cas-estate` team; the engineer and critic reply to gang roles and the integrator over the mesh.
 - Landing maps blackwall reconcile exit 3 to `VerifyFailed`; any other non-zero exit code or a signal is a `LandingError` with no receipt. The PR body carries the receipt JSON (spec 0022 D7, D11).
 - `cas-router` `AffinityTable::choose` returns `ReplicaChoice`: when every replica is unhealthy it falls back to a deterministic round-robin and returns `Fallback` (spec 0017 D5). An empty table still returns `NoHealthyReplicas`.
