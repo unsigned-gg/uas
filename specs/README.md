@@ -30,6 +30,7 @@ Methodology: LeanSpec. The reference copy is in `../vendor/leanspec/`.
 | [0023](0023-test-time-compute-and-verifiable-reward.md) | Test-time compute and verifiable reward | planned | medium |
 | [0024](0024-estate-saga-cpm-and-agent-sprint-wave-strategy.md) | Estate saga CPM and agent sprint wave strategy | complete | high |
 | [0025](0025-wave-execution-on-the-custody-chain.md) | Wave execution on the custody chain | planned | high |
+| [0026](0026-cortex-pool-member-adapter.md) | Cortex pool-member adapter | planned | high |
 
 
 ## How to add a spec
