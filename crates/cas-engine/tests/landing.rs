@@ -6,8 +6,8 @@ use std::ffi::OsString;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use cas_domain::{AuditStatus, CostSource, EvidenceTier, SlotId};
-use cas_engine::{LandingActivity, LandingConfig, LandingInput, LandingOutcome};
+use cas_domain::{AuditStatus, CostSource, EvidenceTier, LandingReceipt, SlotId};
+use cas_engine::{LandingActivity, LandingConfig, LandingError, LandingInput, LandingOutcome};
 
 const BASE: &str = "056d7c7abcdef";
 const RUN: &str = "bw-0123456789abcdef";
@@ -42,6 +42,7 @@ fn fake_tool(dir: &Path, name: &str) {
     let body = format!(
         "#!/bin/sh\n\
          echo \"{name} $*\" >> \"{d}/argv.log\"\n\
+         case \" $* \" in *\" --body - \"*) cat > \"{d}/{name}-$1.stdin\";; esac\n\
          f=\"{d}/{name}-$1\"\n\
          if [ -f \"$f.out\" ]; then cat \"$f.out\"; fi\n\
          if [ -f \"$f.code\" ]; then exit \"$(cat \"$f.code\")\"; fi\n\
@@ -120,12 +121,21 @@ fn argv_log(dir: &Path) -> Vec<String> {
         .collect()
 }
 
-fn run_landing(dir: &Path, evaluator_touched: bool) -> LandingOutcome {
+fn try_landing(dir: &Path, input: &LandingInput) -> Result<LandingOutcome, LandingError> {
     fake_tool(dir, "git");
     fake_tool(dir, "blackwall");
-    LandingActivity::new(config(dir))
-        .land(&input(evaluator_touched))
-        .unwrap()
+    LandingActivity::new(config(dir)).land(input)
+}
+
+fn run_landing(dir: &Path, evaluator_touched: bool) -> LandingOutcome {
+    try_landing(dir, &input(evaluator_touched)).unwrap()
+}
+
+/// The JSON inside the fenced block that the PR body carries (spec 0022 D11).
+fn fenced_json(body: &str) -> &str {
+    body.strip_prefix("```json\n")
+        .and_then(|rest| rest.strip_suffix("\n```\n"))
+        .unwrap_or_else(|| panic!("the PR body is not a fenced JSON block: {body:?}"))
 }
 
 #[test]
@@ -188,14 +198,14 @@ fn landing_nonzero_verify_opens_no_pr() {
     let scratch = Scratch::new("landing_nonzero_verify_opens_no_pr");
     let dir = scratch.path();
     write_blackwall_toml_with_verify(dir);
-    // blackwall 1.2.0 maps every error to exit 1 (usage errors to 2).
-    canned(dir, "blackwall-reconcile", Some(1), "verify failed\n");
+    // blackwall at soma ec076f6 exits 3 when the verify gate fails (spec 0022 F14).
+    canned(dir, "blackwall-reconcile", Some(3), "verify failed\n");
     let outcome = run_landing(dir, false);
 
     let LandingOutcome::VerifyFailed(receipt) = outcome else {
         panic!("expected VerifyFailed, got {outcome:?}");
     };
-    assert_eq!(receipt.facts().verify_exit, Some(1));
+    assert_eq!(receipt.facts().verify_exit, Some(3));
     assert_eq!(receipt.evidence(), EvidenceTier::Reported);
     assert_eq!(receipt.facts().branch, None);
     assert_eq!(receipt.facts().pr_number, None);
@@ -232,7 +242,7 @@ fn landing_opens_pr_on_exit_zero() {
         [
             format!("git merge-base --is-ancestor {BASE} origin/development"),
             format!("blackwall reconcile {RUN} --base {BASE} --branch {BRANCH}"),
-            format!("blackwall pr {RUN} --base development"),
+            format!("blackwall pr {RUN} --base development --body -"),
         ]
     );
 }
@@ -326,5 +336,108 @@ fn landing_stale_base_wins_over_missing_verify() {
     assert!(
         !log.iter().any(|line| line.starts_with("blackwall")),
         "a stale base must not reach blackwall: {log:?}"
+    );
+}
+
+#[test]
+fn landing_reconcile_exit_one_is_error() {
+    let scratch = Scratch::new("landing_reconcile_exit_one_is_error");
+    let dir = scratch.path();
+    write_blackwall_toml_with_verify(dir);
+    canned(dir, "blackwall-reconcile", Some(1), "reconcile failed\n");
+    let result = try_landing(dir, &input(false));
+    assert!(
+        matches!(
+            result,
+            Err(LandingError::UnexpectedExit {
+                step: "reconcile",
+                code: Some(1),
+                ..
+            })
+        ),
+        "exit 1 is a LandingError with no receipt (spec 0022 D7): {result:?}"
+    );
+    let log = argv_log(dir);
+    assert!(
+        !log.iter().any(|line| line.starts_with("blackwall pr")),
+        "a reconcile error must not open a PR: {log:?}"
+    );
+}
+
+#[test]
+fn landing_reconcile_exit_two_is_error() {
+    let scratch = Scratch::new("landing_reconcile_exit_two_is_error");
+    let dir = scratch.path();
+    write_blackwall_toml_with_verify(dir);
+    canned(dir, "blackwall-reconcile", Some(2), "usage error\n");
+    let result = try_landing(dir, &input(false));
+    assert!(
+        matches!(
+            result,
+            Err(LandingError::UnexpectedExit {
+                step: "reconcile",
+                code: Some(2),
+                ..
+            })
+        ),
+        "exit 2 is a LandingError with no receipt (spec 0022 D7): {result:?}"
+    );
+    let log = argv_log(dir);
+    assert!(
+        !log.iter().any(|line| line.starts_with("blackwall pr")),
+        "a usage error must not open a PR: {log:?}"
+    );
+}
+
+#[test]
+fn landing_pr_body_carries_receipt_on_stdin() {
+    let scratch = Scratch::new("landing_pr_body_carries_receipt_on_stdin");
+    let dir = scratch.path();
+    write_blackwall_toml_with_verify(dir);
+    canned(
+        dir,
+        "blackwall-pr",
+        Some(0),
+        "https://github.com/cerebral-work/cas-substrate/pull/57\n",
+    );
+    let outcome = run_landing(dir, false);
+    let LandingOutcome::Opened(receipt) = outcome else {
+        panic!("expected Opened, got {outcome:?}");
+    };
+    let body = fs::read_to_string(dir.join("blackwall-pr.stdin")).unwrap();
+    assert!(body.starts_with("```json\n"), "{body:?}");
+    assert!(body.ends_with("\n```\n"), "{body:?}");
+    let parsed: LandingReceipt = serde_json::from_str(fenced_json(&body)).unwrap();
+    assert_eq!(parsed.facts().pr_number, None, "the PR does not exist yet");
+    assert_eq!(parsed.facts().branch.as_deref(), Some(BRANCH));
+    assert_eq!(parsed.facts().verify_exit, Some(0));
+    assert_eq!(parsed.evidence(), EvidenceTier::Verified);
+    assert_eq!(parsed.evidence(), receipt.evidence());
+    assert_eq!(receipt.facts().pr_number, Some(57));
+}
+
+#[test]
+fn landing_pr_body_shows_unattested_dropped_count() {
+    let scratch = Scratch::new("landing_pr_body_shows_unattested_dropped_count");
+    let dir = scratch.path();
+    write_blackwall_toml_with_verify(dir);
+    canned(
+        dir,
+        "blackwall-pr",
+        Some(0),
+        "https://github.com/cerebral-work/cas-substrate/pull/60\n",
+    );
+    let mut unattested = input(false);
+    unattested.audit = AuditStatus::Unattested { dropped_events: 3 };
+    try_landing(dir, &unattested).unwrap();
+    let body = fs::read_to_string(dir.join("blackwall-pr.stdin")).unwrap();
+    assert!(
+        body.contains("\"dropped_events\": 3"),
+        "the raw PR body must show the dropped count: {body}"
+    );
+    let parsed: LandingReceipt = serde_json::from_str(fenced_json(&body)).unwrap();
+    assert_eq!(
+        parsed.facts().audit,
+        AuditStatus::Unattested { dropped_events: 3 }
     );
 }

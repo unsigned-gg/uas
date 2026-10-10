@@ -60,8 +60,10 @@ pub struct LandingFacts {
     /// none. Without one, the tier cannot be `verified`.
     pub verify_cmd: Option<String>,
     /// The exit code of the `blackwall reconcile` process. It is not the verify command's own
-    /// exit. blackwall 1.2.0 exits 1 on every error and 2 on a usage error. `None` when
-    /// reconcile did not run.
+    /// exit. blackwall at soma `ec076f6` exits 3 when the verify gate fails, 1 on another
+    /// error and 2 on a usage error. When reconcile ran, a receipt records only 0 or 3: the
+    /// other codes are a `LandingError` with no receipt (spec 0022 D7). `None` when reconcile
+    /// did not run.
     pub verify_exit: Option<i32>,
     /// The landing branch, `blackwall/<short run>`, when one was created.
     pub branch: Option<String>,
