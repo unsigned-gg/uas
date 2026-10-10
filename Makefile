@@ -152,7 +152,11 @@ new-repo: ## Rename the template (NAME=<kebab> [ORG=cerebral-work])
 		# name everywhere. A bare `cas` inside Rust source is an identifier and
 		# takes the snake form, except inside a string literal or the Cargo
 		# binary env var, where it names the binary and takes the kebab form.
+		# Spec file names do not change (spec 0037 D4), so a reference such as
+		# specs/0001-cas-architecture-and-crate-layout.md is shielded first and
+		# restored last; without this it would dangle after the rename.
 		sed -i \
+			-e "s/\([0-9][0-9][0-9][0-9]\)-cas-/\1-@SPECCAS@-/g" \
 			-e "s#cerebral-work/cas-substrate#$$org/$$name#g" \
 			-e "s/\bcas-substrate\b/$$name/g" \
 			-e "s/\bcas-/$$name-/g" \
@@ -161,9 +165,20 @@ new-repo: ## Rename the template (NAME=<kebab> [ORG=cerebral-work])
 			-e "s/\bskel\b/$$name/g" \
 			"$$f"
 		case "$$f" in
-			*.rs) sed -i -e "s/\"cas\"/\"$$name\"/g" -e "s/CARGO_BIN_EXE_cas\b/CARGO_BIN_EXE_$$name/g" -e "s/\bcas\b/$$snake/g" "$$f" ;;
-			*)    sed -i -e "s/\bcas\b/$$name/g" "$$f" ;;
+			*.rs)
+				# Inside a string literal or a comment the token is text and takes
+				# the kebab name; outside both it is an identifier and takes the
+				# snake name. The loops rewrite every occurrence in a span.
+				sed -i \
+					-e ':s; s/\("[^"]*\)\bcas\b\([^"]*"\)/\1@KEBAB@\2/; ts' \
+					-e ':c; s#\(//.*\)\bcas\b#\1@KEBAB@#; tc' \
+					-e "s/CARGO_BIN_EXE_cas\b/CARGO_BIN_EXE_$$name/g" \
+					-e "s/\bcas\b/$$snake/g" \
+					-e "s/@KEBAB@/$$name/g" \
+					"$$f" ;;
+			*)    sed -i -e "s/CARGO_BIN_EXE_cas\b/CARGO_BIN_EXE_$$name/g" -e "s/\bcas\b/$$name/g" "$$f" ;;
 		esac
+		sed -i -e "s/@SPECCAS@/cas/g" "$$f"
 	done
 	git rm -q -f --ignore-unmatch .github/workflows/template-check.yml
 	cargo update -w --offline 2>/dev/null || cargo update -w

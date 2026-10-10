@@ -28,11 +28,12 @@ session, lane w25:p1, 2026-10-10]. A planned spec lands nothing.
 
 Facts, measured 2026-10-10 on `origin/development` at `ab8112a`:
 
-- **F1 [verified]:** The name is bound in 12 file groups. Tracked files that
-  contain `cas-`, `cas_` or the bare word `cas`, by top directory: `crates` 94,
-  `specs` 35, `.claude` 8, `.saga` 6, `tasks` 3, `docs` 2, and one each in
-  `xtask`, `scripts`, `release-plz.toml`, `README.md`, `Makefile`, `.github`.
-  Command: `git ls-files | grep -vE '^vendor/|^target' | xargs grep -lI -- 'cas-\|cas_\|\bcas\b' | sed 's|/.*||' | sort | uniq -c`.
+- **F1 [verified]:** The name is bound in 18 file groups. Tracked files that
+  contain `cas-`, `cas_` or the bare word `cas`, counted by top-level path:
+  `crates` 94, `specs` 38, `.claude` 8, `.saga` 6, `tasks` 3, `docs` 2, `xtask` 1, `scripts` 1, `release-plz.toml` 1, `README.md` 1, `Makefile` 1, `.github` 1, `engineering` 1, `.ears-spec` 1, `CHANGELOG.md` 1, `Cargo.toml` 1, `AGENTS.md` 1, `.agents` 1. An earlier
+  version of this fact said 12 groups; it used a shell `grep` that stopped at
+  symlinked skill directories and missed seven groups. Command:
+  `git grep -lI -- 'cas-\|cas_\|\bcas\b' -- ':!vendor' ':!Cargo.lock' | sed 's|/.*||' | sort | uniq -c`.
 - **F2 [verified]:** `make new-repo NAME=<kebab> [ORG=...]` exists for exactly
   this rename, and `make template-check`, which proves it, fails on
   `development` today because `new-repo` renames only `crates/cas-domain` and
@@ -90,9 +91,9 @@ Facts, measured 2026-10-10 on `origin/development` at `ab8112a`:
 | D8 | `release-plz` continues to tag from the renamed CLI package as `v{{ version }}`, and the version does not reset. The first release after the cutover is a minor bump whose changelog names the rename. | F9; spec 0003; CAS lane w25:p1, 2026-10-10 |
 | D9 | Linear stays as it is. The 52 `CER-` references in specs remain valid identifiers; the Linear project is renamed if the operator wants, which is his act. | F9; CAS lane w25:p1, 2026-10-10 |
 | D10 | Other lanes' checkouts (F8) are not touched by this lane. After the transfer, GitHub redirects the old remote, so an existing checkout keeps working until its owner updates `origin`. The cutover notice tells each owner to run `git remote set-url origin` and to move the directory under `<home>/projects/unsigned/` when they choose. | post-merge-branch-hygiene SOP, concurrency; CAS lane w25:p1, 2026-10-10 |
+| D11 | The estate brief, the agentic context package, memory files and the `.saga` team files name this repo. Those outside this repository are not this spec's to edit; the cutover notice lists them for their owners. Those inside, `.saga/teams.toml` and `.saga/topologies.toml`, are part of the post-cutover PR. | CAS lane w25:p1, 2026-10-10 |
 | D12 | Facts F1 to F9 are the **transfer impact list** for `uas` that the implementation plan's step 7 waits on, and they are published as `docs/migration/uas-impact-list.md` in the preparation phase, so the `vespertin` lane and the operator read one file rather than this spec [reported: research lane w1X:p22 confirmed the list is "exactly what is needed", 2026-10-10 about 21:5xZ]. | CAS lane w25:p1, 2026-10-10 |
 | D13 | **Publication.** the operator ruled, in his own session in lane w25:p1 at about 21:38Z on 2026-10-10, that the `uas` crate on crates.io, which he published and owns (F6), is the vehicle for publishing substrate work. This amends, for this repository only, spec 0004's standing `publish = false` for estate crates. crates.io has no namespaces: `uas` is one crate name, and any `uas-*` sub-crate is a separate name that is unreserved until published, with a 24-hour lock after any deletion (as `vesperan` and `zerodays` showed today). Which crates publish, under which names, and who presses publish, are spec 0039's to record; publishing itself stays the operator's act. | the operator, 2026-10-10 about 21:38Z, in session [reported: this lane heard it] |
-| D11 | The estate brief, the agentic context package, memory files and the `.saga` team files name this repo. Those outside this repository are not this spec's to edit; the cutover notice lists them for their owners. Those inside, `.saga/teams.toml` and `.saga/topologies.toml`, are part of the post-cutover PR. | CAS lane w25:p1, 2026-10-10 |
 
 ### Requirements (EARS)
 
@@ -100,7 +101,7 @@ Facts, measured 2026-10-10 on `origin/development` at `ab8112a`:
 - **[REQ-0037-02]** (Ubiquitous): The migration shall keep every spec number, spec file name and `REQ-NNNN-NN` identifier unchanged.
 - **[REQ-0037-03]** (Ubiquitous): The repository shall carry across the move its branch protection on `development` and `main`, its merge-commit-only setting, delete-branch-on-merge, its CODEOWNERS file and its labels.
 - **[REQ-0037-04]** (Event-driven): WHEN the preparation phase begins, the repository shall export each setting in REQ-0037-03 to a file committed under `docs/migration/`, so that the post-cutover state can be compared against it.
-- **[REQ-0037-05]** (Event-driven): WHEN `make new-repo NAME=uas ORG=unsigned-gg` runs, it shall rename every directory under `crates/` that carries the `cas-` prefix, rewrite the `cas` token in every tracked text file outside `vendor/`, `Cargo.lock` and the `new-repo` skill itself, and leave the workspace building.
+- **[REQ-0037-05]** (Event-driven): WHEN `make new-repo NAME=uas ORG=unsigned-gg` runs, it shall rename every directory under `crates/` that carries the `cas-` prefix and every tracked file whose own name carries it, rewrite the `cas` token on word boundaries in every tracked text file outside `vendor/`, `Cargo.lock`, `specs/` and the `new-repo` skill itself, leave every reference to a spec file name unchanged, and leave the workspace building.
 - **[REQ-0037-06]** (Event-driven): WHEN the cutover is complete, the repository shall build, and `make check`, `make hygiene` and `make smoke` shall pass on the renamed workspace with `JOBS=2`.
 - **[REQ-0037-07]** (State-driven): WHILE the development hold stands, no lane shall land anything in this repository except the preparation and post-cutover pull requests of this spec.
 - **[REQ-0037-08]** (State-driven): WHILE the organisation secrets behind sccache and the runner group have not been resolved for `unsigned-gg`, the cutover shall not begin.
@@ -132,7 +133,7 @@ Post-cutover, one pull request:
 
 - [ ] Run `make new-repo NAME=uas ORG=unsigned-gg` and commit the result.
 - [ ] Rewrite spec prose from `cas-` to `uas-` crate names, without touching spec numbers, file names or requirement ids.
-- [ ] Update `.saga/teams.toml`, `.saga/topologies.toml`, `README.md` and `AGENTS.md`.
+- [ ] Verify `.saga/teams.toml`, `.saga/topologies.toml`, `README.md` and `AGENTS.md` after `new-repo`, which rewrites them; fix by hand only what it missed.
 - [ ] Compare live settings against `docs/migration/settings-before.*` and record the result.
 - [ ] Send the cutover notice to every lane with a checkout (F8): the new remote, and that updating it is theirs to do.
 - [ ] the operator lifts the hold.
