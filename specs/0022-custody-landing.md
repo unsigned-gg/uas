@@ -178,7 +178,7 @@ pub struct LandingReceipt {
     pub verify_exit: Option<i32>,  // D7: reconcile process exit; None when it did not run
     pub branch: Option<String>,    // blackwall/<short>
     pub pr_number: Option<u64>,
-    pub merge_commit: Option<String>, // spec 0025 D15: absent unless the wave executor merged
+    pub merge_commit: Option<String>, // spec 0025 D15: set only from a `gh pr view` pre-read
     pub evaluator_touched: bool,   // spec 0023 D3
     pub cost_source: CostSource,   // spec 0023 D2: Reported | None
     pub evidence: EvidenceTier,    // D2 rule; above it only with human_raise (D10)
@@ -276,6 +276,7 @@ worktree or a tree with no store (F16), and a non-zero exit fails the gate.
   ticked, P5c planned.
 - Amendment log: 2026-10-10, from spec 0025: D12 (`NotAudited`, the
   `reconcile`/`open_pr` split). Second, from spec 0025 D15: `merge_commit` in the receipt.
+  Third, 2026-10-10, Christian's ruling on spec 0025 D15: no cas code merges; a pre-read sets it.
 - Queue label: this spec was "0027 custody landing" on the lane's candidate list
   (`~/handoffs/2026-10-09/cas-ears-spec-queue.md`); spec numbers are sequential,
   so it is 0022.
