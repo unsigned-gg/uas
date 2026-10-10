@@ -7,7 +7,8 @@
 //!
 //! Pids: `pid` is the global tgid the kernel knows; `ns_pid` and `ppid` are
 //! pids of the daemon's pid namespace (spec 0014 T13). Without a namespace
-//! shift the two are equal.
+//! shift the two are equal. `ns_pid` 0 is "unresolved" (D12), and `pid` is then
+//! the only name the task has.
 //!
 //! Records are parsed field by field, never transmuted, so a short or garbled
 //! ring-buffer item is rejected instead of read as memory.
@@ -38,7 +39,8 @@ pub struct ExecEvent {
     /// Executed path, NUL padded, truncated at 127 bytes plus NUL.
     pub filename: [u8; FILENAME_LEN],
     /// The executing process id in the daemon's pid namespace. Equals `pid`
-    /// when there is no namespace shift.
+    /// when there is no namespace shift. 0 means unresolved: the task is in a
+    /// nested pid namespace the kernel helper cannot name (spec 0014 D12).
     pub ns_pid: u32,
 }
 
@@ -149,7 +151,10 @@ pub struct ExecRecord {
     pub timestamp_ns: u64,
     /// See [`ExecEvent::pid`].
     pub pid: u32,
-    /// See [`ExecEvent::ns_pid`].
+    /// See [`ExecEvent::ns_pid`]. 0 means unresolved: the daemon could not
+    /// name the task in its own pid namespace (spec 0014 D12). A frame from an
+    /// older daemon has no such field and reads as 0.
+    #[serde(default)]
     pub ns_pid: u32,
     /// See [`ExecEvent::ppid`].
     pub ppid: u32,
@@ -222,6 +227,28 @@ mod tests {
         assert_eq!(event.filename[FILENAME_LEN - 1], 0);
         assert_eq!(event.comm_str().len(), COMM_LEN - 1);
         assert_eq!(event.filename_str().len(), FILENAME_LEN - 1);
+    }
+
+    #[test]
+    fn from_bytes_reads_pid_at_8_and_ns_pid_at_164() {
+        // The two ids differ, so reading either field from the wrong offset
+        // fails here. Every `ExecEvent::new` fixture has equal ids.
+        let mut bytes = [0u8; EXEC_EVENT_SIZE];
+        bytes[8..12].copy_from_slice(&4_000_001u32.to_le_bytes());
+        bytes[164..168].copy_from_slice(&77u32.to_le_bytes());
+        let event = ExecEvent::from_bytes(&bytes).expect("full record");
+        assert_eq!(event.pid, 4_000_001);
+        assert_eq!(event.ns_pid, 77);
+        assert_eq!(event.record().pid, 4_000_001);
+        assert_eq!(event.record().ns_pid, 77);
+    }
+
+    #[test]
+    fn a_record_without_ns_pid_reads_as_unresolved() {
+        let json = r#"{"timestamp_ns":1,"pid":8,"ppid":9,"uid":10,"comm":"make","filename":"/usr/bin/make"}"#;
+        let record: ExecRecord = serde_json::from_str(json).expect("deserialize");
+        assert_eq!(record.pid, 8);
+        assert_eq!(record.ns_pid, 0);
     }
 
     #[test]

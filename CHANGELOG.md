@@ -41,6 +41,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - `cas-cli`: `cas harness run` makes `--evidence` optional, defaults dry runs to heuristic evidence, and rejects claiming verified or reported evidence when simulating execution (CER-2671).
 - `cas-domain`: deserializing a `Slot`, `Lease`, `Budget` or `Envelope` now runs the same checks as the constructors. Before, JSON could build a `Leased` slot with no worktree, a lease that ends before it begins, a zero budget, or an envelope with a bad id.
+- `cas-ebpf`: a tracked worker that runs `unshare -Upf --fork` is no longer lost to the audit. When the namespace helper fails, the probes fall back to the global tgid with `ns_pid` 0, so the nested task stays in `TRACKED_PIDS`, its exec is audited, its children are tracked and its exit evicts it. `cas-ebpfd` never re-clamps `ns_pid` 0, refuses `track` and `untrack` of pid 0, and refuses any peer, root included, whose pid namespace differs from its own. Tests now use fixtures with `ns_pid` different from `pid`, and the exit test asserts on `TRACKED_PIDS` by global pid (CER-2773, spec 0014 D12).
 
 ## [0.1.0] - 2026-10-08
 
