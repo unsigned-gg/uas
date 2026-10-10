@@ -46,7 +46,7 @@ Saga Workflow (.saga/flows/cas-builder.toml)
        ▼
 CAS Substrate (cas-domain, cas-engine, cas-cli)
        │
-       ├──► Reverie Client (HTTP 127.0.0.1:7437) — pre-fetch context, write attestations
+       ├──► Reverie Client (via the spec 0032 socket proxy from a slot; 127.0.0.1:7437 outside one) — pre-fetch context, write attestations
        │
        ├──► Cortex Edge (mesh events & /v1/settle/pending) — operator approval cards
        │
@@ -63,7 +63,10 @@ CAS Substrate (cas-domain, cas-engine, cas-cli)
 - Tasks are admitted only when the slot lease budget and sandbox configuration match the classified tier.
 
 #### Reverie Memory Edge
-- HTTP client connecting to `http://127.0.0.1:7437`:
+- HTTP client reaching the daemon through the unix socket proxy of spec 0032,
+  not `127.0.0.1:7437` directly: inside a slot that address is the slot's own
+  empty loopback (spec 0011). The proxy forwards to the host daemon and holds
+  the route allowlist. Outside a slot, the direct address still applies.
   - `query_context(project, query)`: Retrieves semantic context prior to activity execution (`GET /search?q=...` or `/context/smart`).
   - `record_attestation(session_id, attestation)`: Persists execution receipts and verified evidence into memory.
     - For a landing, `Attestation.receipt` holds the serialized `LandingReceipt` of spec 0022; the signer is the landing activity's principal (`specs/0022-custody-landing.md`).
