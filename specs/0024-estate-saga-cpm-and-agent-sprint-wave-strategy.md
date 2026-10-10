@@ -58,16 +58,16 @@ In accordance with estate orchestration rules:
 ## Tasks
 
 - [x] Create spec 0024 and register in `specs/README.md`.
-- [x] Implement CPM scheduler and DAG analysis in `cas-engine::cpm`.
-- [x] Implement Agent Sprint Wave strategy and role assignment in `cas-engine::wave`.
+- [x] Implement CPM scheduler and DAG analysis in `uas-engine::cpm`.
+- [x] Implement Agent Sprint Wave strategy and role assignment in `uas-engine::wave`.
 - [x] Expose CPM and wave planning on `SagaFlowCoordinator`.
-- [x] Integrate wave execution support in `cas-cli`.
+- [x] Integrate wave execution support in `uas-cli`.
 - [x] Add comprehensive tests for CPM, wave scheduling, and rollback.
 
 ## Verification
 
 ```bash
-cargo test -p cas-engine -j 2 --test cpm_wave
+cargo test -p uas-engine -j 2 --test cpm_wave
 ```
 
 ## Notes

@@ -14,9 +14,9 @@ Zed and other editors talk to external agent runtimes with the Agent Client
 Protocol (ACP). The file name keeps the older name "agent communication
 protocol". ACP is JSON-RPC 2.0 over the agent's standard input and output.
 
-This spec defines the ACP server in `cas-acp` (Phase 3, CER-2683):
+This spec defines the ACP server in `uas-acp` (Phase 3, CER-2683):
 - JSON-RPC 2.0 ACP server over stdio.
-- **CER-2726**: Workspace session bridging between IDE requests and `cas-engine` workflows.
+- **CER-2726**: Workspace session bridging between IDE requests and `uas-engine` workflows.
 - **CER-2727**: Slot lease notices and cooperative cancellation.
 
 ### Amendment A1 (2026-10-10): the methods the pinned crate has
@@ -60,63 +60,63 @@ disconnects, or a session whose lease expires, keeps its slot. A2 adds D6.
 Facts, read 2026-10-10 on ceres with `grep -n` and `sed -n`, at
 `origin/development` 23b81d4. `$REG` is as in A1.
 
-- **A2-F1 [verified]:** `crates/cas-acp/src/server.rs:156` is
+- **A2-F1 [verified]:** `crates/uas-acp/src/server.rs:156` is
   `Frame::End => break`. `serve` returns at the end of input and keeps every
   session. Only `session_cancel` (`server.rs:293-313`) calls release.
-- **A2-F2 [verified]:** `SlotPool::sweep` (`crates/cas-pool/src/slot.rs:410-443`)
+- **A2-F2 [verified]:** `SlotPool::sweep` (`crates/uas-pool/src/slot.rs:410-443`)
   lists expired leases and changes nothing. `acquire_lease` refuses a slot that
   holds an unexpired lease, or that is not `Warm` (`slot.rs:181-197`). An
   expired lease that nobody releases blocks its slot.
 - **A2-F3 [verified]:** `release_lease` (`slot.rs:332-362`) checks the token,
   not the expiry. The holder can release an expired lease. It stops no worker.
-- **A2-F4 [verified]:** `Lease::is_expired` (`crates/cas-domain/src/lease.rs:275-277`)
+- **A2-F4 [verified]:** `Lease::is_expired` (`crates/uas-domain/src/lease.rs:275-277`)
   is `now >= expires_at`.
 - **A2-F5 [verified]:** `session/close` is a request, not a notification
   (`CloseSessionRequest`, `$REG/agent-client-protocol-schema-1.9.1/src/v1/agent.rs:1443-1470`;
   its dispatch arm at `:5002` has no `cfg` gate). A client sends it only when
   the agent advertises `sessionCapabilities.close` (`:4090-4097`).
   `InitializeResponse::new` sets `AgentCapabilities::default()` (`:170-177`), so
-  `cas-acp` does not advertise it. A `session/close` gets -32601 today.
-- **A2-F6 [verified]:** `cas_engine::SessionState` has no expired state
-  (`crates/cas-engine/src/session.rs:49-60`). "Expired" is a `cas-acp` end mark.
+  `uas-acp` does not advertise it. A `session/close` gets -32601 today.
+- **A2-F6 [verified]:** `uas_engine::SessionState` has no expired state
+  (`crates/uas-engine/src/session.rs:49-60`). "Expired" is a `uas-acp` end mark.
 
 ## Design
 
 ### Requirements (EARS)
 
-- **Ubiquitous:** The `cas-acp` server shall speak JSON-RPC 2.0 over stdio, one JSON object per line, with the wire types of `agent-client-protocol` 2.2.0 (schema 1.9.1, `schema::v1`).
-- **Event-driven:** WHEN a client sends `initialize`, `cas-acp` shall answer with protocol version 1 (`ProtocolVersion::V1`) and its agent capabilities.
-- **Event-driven:** WHEN a client sends `session/new`, `cas-acp` shall acquire a pooled slot, start a `cas-engine` workflow and return the new session id.
-- **Event-driven:** WHEN a client sends `session/prompt`, `cas-acp` shall run the turn in that session's slot and answer with a stop reason.
-- **State-driven:** WHILE a prompt turn runs, `cas-acp` shall translate engine activity events into `session/update` notifications.
-- **Unwanted behavior:** IF a client sends a `session/cancel` notification, THEN `cas-acp` shall freeze the slot, release it, send no response frame for the notification, and answer any open `session/prompt` with stop reason `cancelled`.
+- **Ubiquitous:** The `uas-acp` server shall speak JSON-RPC 2.0 over stdio, one JSON object per line, with the wire types of `agent-client-protocol` 2.2.0 (schema 1.9.1, `schema::v1`).
+- **Event-driven:** WHEN a client sends `initialize`, `uas-acp` shall answer with protocol version 1 (`ProtocolVersion::V1`) and its agent capabilities.
+- **Event-driven:** WHEN a client sends `session/new`, `uas-acp` shall acquire a pooled slot, start a `uas-engine` workflow and return the new session id.
+- **Event-driven:** WHEN a client sends `session/prompt`, `uas-acp` shall run the turn in that session's slot and answer with a stop reason.
+- **State-driven:** WHILE a prompt turn runs, `uas-acp` shall translate engine activity events into `session/update` notifications.
+- **Unwanted behavior:** IF a client sends a `session/cancel` notification, THEN `uas-acp` shall freeze the slot, release it, send no response frame for the notification, and answer any open `session/prompt` with stop reason `cancelled`.
 - **Unwanted behavior:** IF the pool has no free slot, THEN `session/new` shall fail with error code -32001.
-- **Event-driven (D6a):** WHEN `cas-acp` reads a frame, or its caller calls `tick`, `cas-acp` shall read the clock once and, before it handles the frame, end every session whose lease is expired at that time (A2-F4): suspend the slot, release it, and mark the session `Expired`.
-- **Event-driven (D6b):** WHEN the input ends, or a read or a write on the transport fails, `cas-acp` shall suspend and release the slot of every live session, mark each one `Disconnected`, and then return.
-- **State-driven (D6c):** WHILE a session has no prompt turn in flight, `cas-acp` shall keep its slot leased until the lease expires, a `session/cancel` arrives, or the input ends.
-- **Unwanted behavior:** IF a `session/cancel` names a session that has ended, THEN `cas-acp` shall make no pool call and send no frame.
-- **Unwanted behavior:** IF a suspend or a release fails while a session ends by expiry or by end of input, THEN `cas-acp` shall write the error to stderr, still end the session, and go on to the next one.
-- **Optional feature:** WHERE the crate gains lease methods, or the lane rules on extension methods, `cas-acp` shall send a lease notice before a slot lease expires (Notes, N1).
+- **Event-driven (D6a):** WHEN `uas-acp` reads a frame, or its caller calls `tick`, `uas-acp` shall read the clock once and, before it handles the frame, end every session whose lease is expired at that time (A2-F4): suspend the slot, release it, and mark the session `Expired`.
+- **Event-driven (D6b):** WHEN the input ends, or a read or a write on the transport fails, `uas-acp` shall suspend and release the slot of every live session, mark each one `Disconnected`, and then return.
+- **State-driven (D6c):** WHILE a session has no prompt turn in flight, `uas-acp` shall keep its slot leased until the lease expires, a `session/cancel` arrives, or the input ends.
+- **Unwanted behavior:** IF a `session/cancel` names a session that has ended, THEN `uas-acp` shall make no pool call and send no frame.
+- **Unwanted behavior:** IF a suspend or a release fails while a session ends by expiry or by end of input, THEN `uas-acp` shall write the error to stderr, still end the session, and go on to the next one.
+- **Optional feature:** WHERE the crate gains lease methods, or the lane rules on extension methods, `uas-acp` shall send a lease notice before a slot lease expires (Notes, N1).
 
 ### Decisions
 
 | # | Decision | Who, when |
 |---|---|---|
-| D1 | Transport: `cas-acp` serves JSON-RPC 2.0 over standard I/O (`stdin` / `stdout`), one JSON object per line. This matches the Zed external agent protocol. | CAS lane, 2026-10-09 |
-| D2 | Wire types and method names come only from `agent-client-protocol` 2.2.0 (schema 1.9.1, `schema::v1`, spec 0004 pin). `cas-acp` serves `initialize`, `session/new`, `session/prompt` and the `session/cancel` notification, and sends `session/update`. `initialize` answers `protocolVersion` = `ProtocolVersion::V1` (the integer 1). No custom framing and no custom methods. | Amended A1: CAS lane w25:p1, 2026-10-10, land on green (Christian can override). Was: CAS lane, 2026-10-09 |
-| D3 | Workflow bridging: an ACP "execute" is two calls. `session/new` acquires a slot (spec 0015) and starts the `cas-engine` workflow (spec 0006). `session/prompt` runs one turn in that slot and returns a `stopReason`. | Amended A1: CAS lane w25:p1, 2026-10-10. Was: CAS lane, 2026-10-09 |
-| D4 | Lease notices are deferred. Schema 1.9.1 has no lease or heartbeat method (A1-F4). See Notes, N1. | Amended A1: CAS lane w25:p1, 2026-10-10. Was: `session/leaseUpdate`, CAS lane, 2026-10-09 |
-| D5 | Cooperative cancellation: `session/cancel` is a notification and gets no response frame. It suspends the slot with the cgroup freezer (spec 0015), then releases it. An open `session/prompt` answers `stopReason: cancelled` (A1-F6). Saga compensation (spec 0009) joins when `cas-engine` has a cancel API (CER-2727). | CAS lane, 2026-10-09; amended A1, CAS lane w25:p1, 2026-10-10 |
-| D6 | Slot release on session end (A2). (a) Lease expiry: the server checks every live lease once per frame read, before it handles the frame, and in `tick()`, which the caller drives. The clock is `AcpConfig.clock`. An expired session is suspended, released and marked `Expired`. (b) End of input, or a read or write error: every live session is suspended, released and marked `Disconnected`, best effort, errors to stderr. In (a) and (b) a failed release still ends the session: a retry on every frame repeats the error, and the pool refuses to lease a slot it still holds (A2-F2). (c) The end of a prompt turn is idle, not close. No custom method. `session/close` is a request behind a capability `cas-acp` does not advertise (A2-F5); serving it is out of scope here. D5 is unchanged. | CAS lane w25:p1, 2026-10-10, land on green (Christian can override) |
+| D1 | Transport: `uas-acp` serves JSON-RPC 2.0 over standard I/O (`stdin` / `stdout`), one JSON object per line. This matches the Zed external agent protocol. | UAS lane, 2026-10-09 |
+| D2 | Wire types and method names come only from `agent-client-protocol` 2.2.0 (schema 1.9.1, `schema::v1`, spec 0004 pin). `uas-acp` serves `initialize`, `session/new`, `session/prompt` and the `session/cancel` notification, and sends `session/update`. `initialize` answers `protocolVersion` = `ProtocolVersion::V1` (the integer 1). No custom framing and no custom methods. | Amended A1: UAS lane w25:p1, 2026-10-10, land on green (Christian can override). Was: UAS lane, 2026-10-09 |
+| D3 | Workflow bridging: an ACP "execute" is two calls. `session/new` acquires a slot (spec 0015) and starts the `uas-engine` workflow (spec 0006). `session/prompt` runs one turn in that slot and returns a `stopReason`. | Amended A1: UAS lane w25:p1, 2026-10-10. Was: UAS lane, 2026-10-09 |
+| D4 | Lease notices are deferred. Schema 1.9.1 has no lease or heartbeat method (A1-F4). See Notes, N1. | Amended A1: UAS lane w25:p1, 2026-10-10. Was: `session/leaseUpdate`, UAS lane, 2026-10-09 |
+| D5 | Cooperative cancellation: `session/cancel` is a notification and gets no response frame. It suspends the slot with the cgroup freezer (spec 0015), then releases it. An open `session/prompt` answers `stopReason: cancelled` (A1-F6). Saga compensation (spec 0009) joins when `uas-engine` has a cancel API (CER-2727). | UAS lane, 2026-10-09; amended A1, UAS lane w25:p1, 2026-10-10 |
+| D6 | Slot release on session end (A2). (a) Lease expiry: the server checks every live lease once per frame read, before it handles the frame, and in `tick()`, which the caller drives. The clock is `AcpConfig.clock`. An expired session is suspended, released and marked `Expired`. (b) End of input, or a read or write error: every live session is suspended, released and marked `Disconnected`, best effort, errors to stderr. In (a) and (b) a failed release still ends the session: a retry on every frame repeats the error, and the pool refuses to lease a slot it still holds (A2-F2). (c) The end of a prompt turn is idle, not close. No custom method. `session/close` is a request behind a capability `uas-acp` does not advertise (A2-F5); serving it is out of scope here. D5 is unchanged. | UAS lane w25:p1, 2026-10-10, land on green (Christian can override) |
 
 ### Architecture and Flow
 
 ```mermaid
 sequenceDiagram
     participant Zed as Zed Editor (Client)
-    participant ACP as cas-acp (stdio JSON-RPC)
-    participant Engine as cas-engine
-    participant Pool as cas-pool
+    participant ACP as uas-acp (stdio JSON-RPC)
+    participant Engine as uas-engine
+    participant Pool as uas-pool
 
     Zed->>ACP: initialize(protocolVersion 1, clientCapabilities)
     ACP-->>Zed: InitializeResponse(protocolVersion 1, agentCapabilities)
@@ -153,7 +153,7 @@ sequenceDiagram
 
 All types are in `agent_client_protocol::schema::v1` (A1-F2, A1-F3).
 
-| Method | Direction | Kind | Schema types | `cas-acp` action |
+| Method | Direction | Kind | Schema types | `uas-acp` action |
 |---|---|---|---|---|
 | `initialize` | client to agent | request | `InitializeRequest`, `InitializeResponse` | Answer protocol version 1 and the agent capabilities. |
 | `session/new` | client to agent | request | `NewSessionRequest`, `NewSessionResponse` | Acquire a slot, start the workflow, return the session id. |
@@ -161,7 +161,7 @@ All types are in `agent_client_protocol::schema::v1` (A1-F2, A1-F3).
 | `session/cancel` | client to agent | notification | `CancelNotification` | Suspend, then release the slot. No response frame. |
 | `session/update` | agent to client | notification | `SessionNotification` | Carry engine activity events during a turn. |
 
-Any other method gets -32601. `cas-acp` builds the schema types with their
+Any other method gets -32601. `uas-acp` builds the schema types with their
 `::new(..)` constructors and does not use the crate's connection API.
 
 ### Error Protocol
@@ -178,7 +178,7 @@ pub enum AcpError {
     #[error("invalid parameters: {0}")]
     InvalidParams(String),
     #[error("pool error: {0}")]
-    Pool(#[from] cas_pool::PoolError),
+    Pool(#[from] uas_pool::PoolError),
     #[error("engine workflow error: {0}")]
     Engine(String),
 }
@@ -195,9 +195,9 @@ Standard JSON-RPC 2.0 error codes are returned over the wire:
 
 ## Plan
 
-- [ ] Add `agent-client-protocol = "2.2.0"` to `crates/cas-acp/Cargo.toml`.
-- [ ] Implement `cas_acp::server::AcpServer` reading from `stdin` and writing to `stdout`.
-- [ ] Implement `session/new` and `session/prompt` routing to `cas-engine` workflows (CER-2726).
+- [ ] Add `agent-client-protocol = "2.2.0"` to `crates/uas-acp/Cargo.toml`.
+- [ ] Implement `uas_acp::server::AcpServer` reading from `stdin` and writing to `stdout`.
+- [ ] Implement `session/new` and `session/prompt` routing to `uas-engine` workflows (CER-2726).
 - [ ] Implement `session/cancel`: freeze, then release; compensation waits on CER-2727.
 - [ ] Write integration test `tests/acp_stdio.rs` verifying:
   - `initialize` answers protocol version 1 and echoes the request id.
@@ -212,13 +212,13 @@ Standard JSON-RPC 2.0 error codes are returned over the wire:
 
 ## Test
 
-Run integration and unit tests for `cas-acp`:
+Run integration and unit tests for `uas-acp`:
 
 ```bash
-cargo test -p cas-acp -j 2
+cargo test -p uas-acp -j 2
 ```
 
-Test rows for D6, in `crates/cas-acp/tests/acp_stdio.rs`. The clock reads a
+Test rows for D6, in `crates/uas-acp/tests/acp_stdio.rs`. The clock reads a
 thread-local cell. Leases run from t=1000 for 600 s.
 
 - `lease_expiry_boundary_releases_on_next_frame`: one slot. At t=1599 a second
