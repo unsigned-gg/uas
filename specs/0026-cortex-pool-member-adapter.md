@@ -14,13 +14,13 @@ CAS joins a Cortex agent pool as a member. The adapter takes pool work over the
 gRPC service `cortex.mesh.v1.PoolWork`. It runs each unit in a CAS slot under a
 lease, and it reports the outcome to Cortex.
 
-Why now: the cortex lead relayed that Christian wants Cortex to integrate with
-CAS for agent pools [reported, mesh 14ee8a7a, 2026-10-10]. A relay approves
-nothing. Christian signs the integration before any transport code (D1).
+Why now: Christian ruled that CAS owns the pool-member adapter (D1) [reported,
+relayed by the integrator, mesh 74f407df, 2026-10-10]. The cortex lead first
+relayed the request (mesh 14ee8a7a).
 
-In scope: the port traits, the lease bridge and the outcome classifier in
-`cas-engine`, with fakes in tests. The gRPC transport is one `cas-engine` module
-behind the cargo feature `cortex-grpc`, off by default. `cas-domain` gets no
+In scope: the port traits, the lease bridge, the outcome classifier and the gRPC
+transport, in `cas-engine`, all behind the cargo feature `cortex-grpc`, off by
+default (D1, D2). Fakes test the ports and the bridge. `cas-domain` gets no
 network I/O, no clock and no runtime.
 
 Out of scope: a real harness run in a slot waits on spec 0019 D2 (D8). Member
@@ -56,7 +56,7 @@ Facts, 2026-10-10:
 - **F7 [verified, `ls vendor/cortex/proto`]:** the vendored protos are flat
   (`vendor/cortex/proto/lane.proto`, `peer.proto`). The imports name
   `cortex/mesh/v1/lane.proto` and `cortex/mesh/v1/peer.proto`, so the codegen
-  include root must map that path (P2).
+  include root must map that path (P1).
 - **F8 [verified, throwaway project with the spec 0004 pins, `cargo deny check`,
   2026-10-10T16:26Z]:** 106 packages, tonic `server` in dev, print "advisories ok,
   bans ok, licenses ok, sources ok". Warnings: duplicate `hashbrown`, `logos` (3
@@ -105,7 +105,7 @@ Facts, 2026-10-10:
 - **Optional feature:** WHERE the feature `cortex-grpc` is off, `cas-engine` shall
   build with no `tonic`, `prost`, `prost-types` or `tokio`. The build-dependencies
   `tonic-prost-build` and `protox` are optional and enabled by that feature, and
-  `build.rs` does nothing unless `CARGO_FEATURE_CORTEX_GRPC` is set (P2).
+  `build.rs` does nothing unless `CARGO_FEATURE_CORTEX_GRPC` is set (P1).
 
 ### Wire contract
 
@@ -161,36 +161,37 @@ most `ttl + 1` seconds after `now`.
 
 | # | Decision | Who, when |
 |---|---|---|
-| D1 | Cortex integrates with CAS for agent pools through this adapter. No transport code lands before this is signed. | **Christian to rule.** Relayed only (mesh 14ee8a7a, 2026-10-10). |
-| D2 | The port traits (`PoolWork`, `TaskRunner`), the lease bridge and the classifier go in `cas-engine` with no new dependency. The tonic client is one module behind the feature `cortex-grpc`, off by default. No layer break: `cas-engine` sits above `cas-domain` (spec 0001). | Architect w10:pP proposal (mesh 7ec5bb4d); cas-engineer, 2026-10-10 (Christian may override) |
+| D1 | CAS owns the pool-member adapter. The spec lands. The `tonic` 0.14 and `prost` 0.14 pins go into spec 0004. The first build package is the transport and the lease handling, behind a feature flag, off by default. | **Ruled:** Christian, in session, lane w25:p1 interview, 2026-10-10 [reported, relayed by the integrator, mesh 74f407df]. He named `tonic` and `prost`; the other 0004 rows are lane pins (D3). |
+| D2 | All adapter code compiles only under the feature `cortex-grpc`, off by default (D1). Inside it, the port traits (`PoolWork`, `TaskRunner`), the lease bridge and the classifier use no tonic type, so fakes test them. The tonic client implements `PoolWork`. No layer break: `cas-engine` sits above `cas-domain` (spec 0001). | Architect w10:pP proposal (mesh 7ec5bb4d); cas-engineer, 2026-10-10; the feature scope follows D1 (Christian may override) |
 | D3 | Pins: the versions cortex@c7fdb85 uses (F6), so both ends share one codegen. Newer `protox` 0.10.0 and `tokio` 1.53.2 exist and are not taken. Spec 0004 records them under "Cortex pool-member transport", with the licences read and the deny check (F8). | cas-engineer, 2026-10-10 (Christian may override) |
 | D4 | The lease bridge issues for `ttl + 1` and renews up to `now + ttl + 1`, never by a fixed step. The extra second covers the whole-second clock (`now >= expires_at` is expired). Renew adds to the old expiry (F3). A fixed `ttl` step every `lease_ms / 3` grows the CAS lease about three times faster than time. A crashed adapter would then hold the slot after Cortex redelivers. | cas-engineer, 2026-10-10 (Christian may override) |
 | D5 | The backend dead-letters at `max_deliver` (F2), so the adapter keeps no retry count. `Nack` uses `delay_ms = min(1000 * 2^(a - 1), 60000)` in saturating arithmetic, with `a = max(1, delivery_attempt)`. | cas-engineer, 2026-10-10 (Christian may override) |
 | D6 | On shutdown the adapter stops `Recv`, Nacks each running unit with `delay_ms = 0`, releases the slots and drains them. `drain` happens only at shutdown, because `Draining` is final (F4). | cas-engineer, 2026-10-10 (Christian may override) |
 | D7 | Member join tokens and their auth stay in cortex spec 0005 (CER-1988). This spec decides nothing there. | **Allen's area** (identity services veto). Not decided here. |
-| D8 | A real `TaskRunner` (a harness run in a slot) needs the `cas-pool` runtime. Until then the port has a fake only. | **Christian to rule**, as spec 0019 D2 (F11). |
+| D8 | A real `TaskRunner` (a harness run in a slot) needs the `cas-pool` runtime. Spec 0019 D2 reads: "Christian, interview in lane w25:p1, 2026-10-10: benchmark first, then rule." Option A (spec 0015 D5) stays the interim choice, and Christian rules D2 on the numbers of the slot lifecycle benchmark. So the sequence is ruled and the runtime is not. Until then the port has a fake only. | Sequence: Christian (spec 0019 D2). The runtime: **Christian to rule** on the benchmark numbers. |
 | D9 | The minimum `lease_ms` is 300, so the `Extend` tick is at least 100 ms. A smaller value, 0 included (the proto3 default), is a wire or backend fault, not a work fault. The adapter Nacks the unit with the D5 delay and stops `Recv` with an error that names `lease_ms` and its value. It never Terms it: on a dropped proto3 field, `Term` would dead-letter the whole backlog. | Integrator ruling w25:p1, 2026-10-10, mesh 4653a43a (lane decision, Christian may override); the 300 floor: cas-engineer, critic round 1 |
 
 ## Plan
 
-- [ ] Christian signs the integration (D1). P1 and P2 start only after that.
-- [ ] P1, `cas-engine`, no feature, no new dependency: the `PoolWork` and
-  `TaskRunner` port traits, the lease bridge (D4) and the classifier (D5, D6).
-  Tests use a fake port and a fake clock, red first.
-- [ ] P2, `cas-engine`, feature `cortex-grpc`: a `build.rs` that compiles the
-  vendored protos with `protox` and `tonic-prost-build`, with the include root
+- [x] Christian ruled D1, 2026-10-10 [reported, mesh 74f407df].
+- [ ] P1, `cas-engine`, feature `cortex-grpc`, off by default: the transport and
+  the lease handling (D1). The `PoolWork` and `TaskRunner` port traits, the lease
+  bridge (D4) and the classifier (D5, D6, D9), tested red first with a fake port
+  and a fake clock. A `build.rs` that compiles the vendored protos with `protox` and `tonic-prost-build`, with the include root
   mapped for `cortex/mesh/v1/` (F7). The tonic client implements the port. Only
   the spec 0004 pins. `tonic-prost-build` and `protox` are optional build-dependencies
   that the feature enables, and `build.rs` returns at once unless
   `CARGO_FEATURE_CORTEX_GRPC` is set. Its done-when includes `cargo deny check`.
-- [ ] A real `TaskRunner` after Christian rules spec 0019 D2 (D8).
+  Past 800 changed lines, split: the ports, the bridge and the classifier first,
+  then the tonic client, both behind the feature.
+- [ ] A real `TaskRunner` after Christian rules the 0019 D2 runtime (D8).
 - [ ] Join tokens: no work here (D7).
 
 ## Test
 
 ```bash
 make spec-check
-cargo nextest run -p cas-engine --build-jobs 2 cortex_pool
+! cargo tree -p cas-engine -e normal,build --prefix none | grep -E '^(tonic|prost)'
 cargo nextest run -p cas-engine --build-jobs 2 --features cortex-grpc cortex_pool
 cargo deny check
 ```
@@ -215,10 +216,10 @@ Red-first tests. P1 uses a fake port and a fake clock:
 - `cortex_pool_extend_fails_twice_releases`: no `Ack`, the slot is `Warm`.
 - `cortex_pool_shutdown_nacks_then_drains`: `Nack` with 0, then `Draining`.
 
-P2 adds one test per RPC against an in-process fake server (tonic `server`, dev
+P1 also adds one test per RPC against an in-process fake server (tonic `server`, dev
 only): `cortex_pool_grpc_recv`, `_ack`, `_extend`, `_nack` and `_term`. Each checks
-the request fields and tags on the wire. A pass means every test above is green. The build without
-the feature pulls no `tonic`. `cargo deny check` prints "advisories ok, bans ok,
+the request fields and tags on the wire. A pass means every test above is green,
+and the `cargo tree` line finds no `tonic` or `prost` without the feature. `cargo deny check` prints "advisories ok, bans ok,
 licenses ok, sources ok".
 
 ## Notes

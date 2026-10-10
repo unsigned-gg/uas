@@ -209,8 +209,9 @@ project, 522 packages, 2026-10-09):
 ### Cortex pool-member transport (spec 0026)
 
 Status: pinned by the lane (cas-engineer w10:pM), 2026-10-10. This is not the
-approved epic list above. No crate enters a `Cargo.toml` until spec 0026 P2 starts,
-and P2 waits on Christian's integration sign-off (0026 D1). The versions are the ones
+approved epic list above. No crate enters a `Cargo.toml` until spec 0026 P1 starts.
+Christian ruled 0026 D1 [reported, 2026-10-10]: `tonic` and `prost` 0.14 go here; the other
+rows are lane pins (0026 D3). The versions are the ones
 cortex@c7fdb85 uses (0026 F6). Licences read from each crate's `Cargo.toml` in the
 local cargo registry, 2026-10-10. MSRV of the tonic crates is 1.88, under D2's 1.89.
 
