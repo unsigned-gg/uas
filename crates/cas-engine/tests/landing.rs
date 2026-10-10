@@ -7,7 +7,9 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use cas_domain::{AuditStatus, CostSource, EvidenceTier, LandingReceipt, SlotId};
-use cas_engine::{LandingActivity, LandingConfig, LandingError, LandingInput, LandingOutcome};
+use cas_engine::{
+    LandingActivity, LandingConfig, LandingError, LandingInput, LandingOutcome, ReconcileOutcome,
+};
 
 const BASE: &str = "056d7c7abcdef";
 const RUN: &str = "bw-0123456789abcdef";
@@ -521,4 +523,43 @@ fn landing_pr_exit_three_is_error() {
         ),
         "exit 3 is the verify gate for reconcile only; pr exit 3 is a LandingError (spec 0022 D7): {result:?}"
     );
+}
+
+#[test]
+fn landing_reconcile_then_open_pr_matches_land() {
+    let whole = Scratch::new("landing_reconcile_then_open_pr_matches_land_whole");
+    write_blackwall_toml_with_verify(whole.path());
+    canned(
+        whole.path(),
+        "blackwall-pr",
+        Some(0),
+        "opened https://github.com/cerebral-work/cas-substrate/pull/57\n",
+    );
+    let LandingOutcome::Opened(via_land) = run_landing(whole.path(), false) else {
+        panic!("land did not open a PR");
+    };
+
+    let split = Scratch::new("landing_reconcile_then_open_pr_matches_land_split");
+    write_blackwall_toml_with_verify(split.path());
+    canned(
+        split.path(),
+        "blackwall-pr",
+        Some(0),
+        "opened https://github.com/cerebral-work/cas-substrate/pull/57\n",
+    );
+    fake_tool(split.path(), "git");
+    fake_tool(split.path(), "blackwall");
+    let activity = LandingActivity::new(config(split.path()));
+    let ReconcileOutcome::Reconciled(reconciled) = activity.reconcile(&input(false)).unwrap()
+    else {
+        panic!("reconcile did not return Reconciled");
+    };
+    assert_eq!(reconciled.facts().pr_number, None, "reconcile opens no PR");
+    let opened = activity.open_pr(&reconciled).unwrap();
+
+    assert_eq!(argv_log(split.path()), argv_log(whole.path()));
+    let want = fs::read(whole.path().join("blackwall-pr.stdin")).unwrap();
+    let got = fs::read(split.path().join("blackwall-pr.stdin")).unwrap();
+    assert_eq!(got, want, "the PR body bytes differ");
+    assert_eq!(opened, via_land);
 }
