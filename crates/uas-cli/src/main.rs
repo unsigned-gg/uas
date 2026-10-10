@@ -80,10 +80,10 @@ enum WaveCommand {
         #[arg(long)]
         step: String,
         /// The custody checkout. Defaults to `UAS_WAVE_REPO`, then the working directory.
-        #[arg(long)]
+        #[arg(long, env = "UAS_WAVE_REPO")]
         repo: Option<std::path::PathBuf>,
         /// The state directory. Defaults to `UAS_WAVE_STATE_DIR`, then under `XDG_STATE_HOME`.
-        #[arg(long)]
+        #[arg(long, env = "UAS_WAVE_STATE_DIR")]
         state_dir: Option<std::path::PathBuf>,
         /// The most steps in flight, as given to `wave flow`. 0 means the default of 3.
         #[arg(long, default_value_t = 0)]
@@ -99,10 +99,10 @@ enum WaveCommand {
         #[arg(long)]
         builder: String,
         /// The custody checkout. Required unless `UAS_WAVE_REPO` is set; never the working directory.
-        #[arg(long)]
+        #[arg(long, env = "UAS_WAVE_REPO")]
         repo: Option<std::path::PathBuf>,
         /// The state directory. Defaults to `UAS_WAVE_STATE_DIR`, then under `XDG_STATE_HOME`.
-        #[arg(long)]
+        #[arg(long, env = "UAS_WAVE_STATE_DIR")]
         state_dir: Option<std::path::PathBuf>,
         /// The most steps in flight, as given to `wave flow`. 0 means the default of 3.
         #[arg(long, default_value_t = 0)]
@@ -1080,10 +1080,15 @@ fn harness_verify(receipt_path: &str) -> Result<VerificationReport> {
 }
 
 fn main() -> Result<()> {
-    tracing_subscriber::fmt()
-        .with_env_filter(EnvFilter::from_default_env())
-        .with_writer(std::io::stderr)
-        .init();
+    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("warn"));
+    let builder = tracing_subscriber::fmt()
+        .with_env_filter(filter)
+        .with_writer(std::io::stderr);
+    if std::env::var("UAS_LOG_FORMAT").is_ok_and(|v| v == "json") {
+        builder.json().init();
+    } else {
+        builder.init();
+    }
 
     let cli = Cli::parse();
     match cli.command {
