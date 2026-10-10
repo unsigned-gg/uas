@@ -152,6 +152,7 @@ Facts, 2026-10-10. Source facts from `unsigned-gg/blackwall@3d98dc1` are
 | halt | the verdict's first line is `VERDICT: DEFECTS` | `CriticDefects` |
 | halt | another first line, over 15 lines, or a non-zero exit | `CriticUnparsed` |
 | halt | a Probe exits non-zero | `ProbeFailed` |
+| halt | WHERE `open_prs` (D16), `open_pr` returns Err after a Critic pass. D4 applies to the branch: pushed stays, unpushed is deleted | `PrFailed` |
 | halt | a `Halted` record appears after the step started | `WaveHalted` |
 
 ### Dispatch by role
