@@ -110,6 +110,7 @@ pub struct LandingReceipt {
     pub slot_id: SlotId,
     pub run_hash: String,          // spec 0014 AuditReceipt.run_hash
     pub audit: AuditStatus,        // Attested | Unattested { dropped_events }
+    pub cpu_cap: String,           // spec 0020: "200000 100000", "max" or "uncapped"
     pub blackwall_run: String,     // run hash from `blackwall show`
     pub changeset_hash: String,    // BLAKE3 changeset id
     pub base_sha: String,
@@ -124,7 +125,8 @@ pub struct LandingReceipt {
 ```
 
 It lives in `cas-domain` as pure types (zero I/O), is serialized with serde,
-and gets a roundtrip test. The PR body renders it as a table. The same record
+and gets a roundtrip test. `cpu_cap` is copied from the slot's audit record
+(spec 0020 D4), so the PR body shows whether the host throttling invariant held. The PR body renders it as a table. The same record
 is the `receipt` string of a spec 0008 `Attestation` whose signer is the
 landing activity's principal.
 
