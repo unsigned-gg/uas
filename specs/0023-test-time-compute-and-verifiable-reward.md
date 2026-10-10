@@ -80,7 +80,7 @@ Facts, read 2026-10-10:
   against the lease `Budget` from harness-reported usage only; CAS shall never
   estimate tokens.
 - **Unwanted behavior:** IF a branch's changeset touches an evaluator file
-  (F7 list), THEN the landing receipt shall carry `evaluator_touched: true` and
+  (D4, D6), THEN the landing receipt shall carry `evaluator_touched: true` and
   the branch shall not be `verified` by its own verify run; a human reviews
   the evaluator change before the tier can rise.
 - **Unwanted behavior:** IF a lease budget is exhausted, THEN CAS shall freeze
@@ -106,8 +106,9 @@ Facts, read 2026-10-10:
 
 The agent must not be able to move the goalposts. Three lines, in order of cost:
 
-1. **Detect.** The landing activity (spec 0022) diffs the changeset against the
-   base and sets `evaluator_touched` when any path matches the evaluator list.
+1. **Detect.** The landing activity (spec 0022) diffs the base against the head
+   with the spec 0025 D17 argv, `git diff --name-only -z --no-renames <base> <head>`,
+   split on NUL. It sets `evaluator_touched` when any path matches the evaluator list.
    The list lives in `cas-domain` as a constant with a test, and the repo's
    `blackwall.toml` may extend it.
 2. **Cap.** A touched evaluator caps the branch tier at `reported` regardless of
@@ -136,7 +137,7 @@ the critic and the PR review remain the line for that (spec 0002).
 | D3 | A touched evaluator caps the tier at `reported`; it does not block the PR. Alternatives considered: block landing until a human clears it; no special handling. | the operator, interview in lane w25:p1, 2026-10-10: flag and cap at `reported` |
 | D4 | The evaluator file list for this repo: `Makefile`, `.github/workflows/**`, `blackwall.toml`, `deny.toml`, `rust-toolchain.toml`, `_typos.toml`, `.config/nextest.toml`, `xtask/**`. | CAS lane w25:p1, 2026-10-10 |
 | D5 | Budget exhaustion freezes the slot and reports; it never kills. Saga decides. | CAS lane w25:p1, 2026-10-10 |
-| D6 | Extends D4 with the Cargo, clippy and rustfmt config that the verify command reads: `**/.cargo/config`, `**/.cargo/config.toml`, `**/clippy.toml`, `**/.clippy.toml`, `**/rustfmt.toml`, `**/.rustfmt.toml`. A `**/` pattern matches at the root too. `runner = "true"` in either Cargo file turns a failing `cargo test` into exit 0; the legacy `.cargo/config` still loads, with a warning [verified, 2026-10-10, cargo 1.94.1 scratch crate: exit 0 with each file, 101 without]. An `[alias] nextest` shadows `cargo nextest` [verified, 2026-10-10, cargo 1.94.1: "user-defined alias `nextest` is shadowing an external subcommand"]. Clippy and rustfmt read each name above at the root and in a member crate [verified, 2026-10-10, cargo 1.94.1 scratch workspace: an invalid file fails each run]. Found by critic-0025-3. | CAS lane w25:p1, 2026-10-10 (the operator can override) |
+| D6 | Extends D4 with the config that the verify command reads: `**/Cargo.toml`, `**/build.rs`, `**/.cargo/config`, `**/.cargo/config.toml`, `**/clippy.toml`, `**/.clippy.toml`, `**/rustfmt.toml`, `**/.rustfmt.toml` and a root `typos.toml`. A `**/` pattern matches at the root too. `runner = "true"` in either `.cargo` file turns a failing `cargo test` into exit 0. The legacy `.cargo/config` still loads, with a warning [verified, 2026-10-10, cargo 1.94.1 scratch crate: exit 0 with each file, 101 without]. An `[alias] nextest` shadows `cargo nextest` [verified, 2026-10-10, cargo 1.94.1: "user-defined alias `nextest` is shadowing an external subcommand"]. Clippy and rustfmt read their names above at the root and in a member crate [verified, 2026-10-10, cargo 1.94.1 scratch workspace: an invalid file fails each run]. Found by critic-0025-3. Each `Cargo.toml` edit below turned a red gate green [reported, critic-0025-4, cargo 1.94.1]. The edits: `[workspace.lints.clippy] all = "allow"`; a member `[lints.rust] unsafe_code = "allow"` over the root `forbid`; `[lib] test = false`. Also `[profile.test] debug-assertions = false`, a member moved to `exclude`, and `build = "gen.rs"`. That last edit runs a build script with another name, so only the `Cargo.toml` entry catches it. `crates/cas-ebpf/build.rs` is the BPF hash gate [verified, read 2026-10-10: it checks `ebpf/cas-ebpf.o` against its recorded SHA-256]. Lane decision, fail closed: any Builder change to a `Cargo.toml` or `build.rs` halts the wave (spec 0025 D17). A dependency add is not wave Builder work, because rule 12 needs a spec 0004 pin first. On the `land` path the same change caps the tier at `reported` (D3) until a person raises it (spec 0022 D10). A table-aware narrowing is a later package. A root `typos.toml` overrides `_typos.toml` [verified, 2026-10-10, typos 1.45.0 scratch dir: exit 0 with it, 2 without]. A root `.typos.toml` and a nested `typos.toml` did not override, so that entry is root only. | CAS lane w25:p1, 2026-10-10; `Cargo.toml`, `build.rs` and `typos.toml` added per critic-0025-4, lane decision w25:p1, 2026-10-10 (the operator can override) |
 
 ## Plan
 
@@ -172,3 +173,8 @@ watching the negative control fail.
   V.3) is spec 0015 D2, not this spec.
 - The public autoresearch numbers (F3 Limits) are not evidence for CAS; nothing
   here cites them as measured.
+- On `origin/development` (66655a6) nothing computes `evaluator_touched` on the
+  `land` path: `crates/cas-engine/src/landing.rs:239` copies it from the caller's
+  `LandingInput` [verified, `git grep`, 2026-10-10]. Ticket CER-2784 (Triage, read
+  2026-10-10) computes it from the base-to-head diff. Spec 0025 P9a keeps `land`
+  unchanged.
