@@ -23,7 +23,7 @@ transport, in `cas-engine`, all behind the cargo feature `cortex-grpc`, off by
 default (D1, D2). Fakes test the ports and the bridge. `cas-domain` gets no
 network I/O, no clock and no runtime.
 
-Out of scope: a real harness run in a slot waits on spec 0019 D2 (D8). Member
+A real harness run in a slot is plan item P2, on `cas-pool` OS threads (D8). Member
 join tokens are cortex spec 0005, in Allen's identity veto area (D7). The adapter
 uses the existing join flow and adds no token logic.
 
@@ -189,7 +189,7 @@ most `ttl + 1` seconds after `now`.
 | D5 | The backend dead-letters at `max_deliver` (F2), so the adapter keeps no retry count. `Nack` uses `delay_ms = min(1000 * 2^(a - 1), 60000)` in saturating arithmetic, with `a = max(1, delivery_attempt)`. | cas-engineer, 2026-10-10 (Christian may override) |
 | D6 | On shutdown the adapter stops `Recv`, Nacks each running unit with `delay_ms = 0`, releases the slots and drains them. `drain` happens only at shutdown, because `Draining` is final (F4). | cas-engineer, 2026-10-10 (Christian may override) |
 | D7 | Member join tokens and their auth stay in cortex spec 0005 (CER-1988). This spec decides nothing there. | **Allen's area** (identity services veto). Not decided here. |
-| D8 | A real `TaskRunner` (a harness run in a slot) needs the `cas-pool` runtime. Spec 0019 D2 reads: "Christian, interview in lane w25:p1, 2026-10-10: benchmark first, then rule." Option A (spec 0015 D5) stays the interim choice, and Christian rules D2 on the numbers of the slot lifecycle benchmark. So the sequence is ruled and the runtime is not. Until then the port has a fake only. | Sequence: Christian (spec 0019 D2). The runtime: **Christian to rule** on the benchmark numbers. |
+| D8 | A real `TaskRunner` (a harness run in a slot) needs the `cas-pool` runtime. Spec 0019 D2 is ruled: Option A, OS threads as built. So the harness-in-slot step may proceed on `cas-pool` OS threads, as plan item P2. | **Ruled** by spec 0019 D2: Christian, in session, lane w25:p1 interview, 2026-10-10 [reported, relayed by the integrator, mesh e42efbc2] |
 | D9 | The minimum `lease_ms` is 300, so the `Extend` tick is at least 100 ms. A smaller value, 0 included (the proto3 default), is a wire or backend fault, not a work fault. The adapter Nacks the unit with the D5 delay and stops `Recv` with an error that names `lease_ms` and its value. The stop is final until a restart: a reconnect would Nack again until `max_deliver`, and the backend would dead-letter the backlog. It never Terms it: on a dropped proto3 field, `Term` would dead-letter the whole backlog. | Integrator ruling w25:p1, 2026-10-10, mesh 4653a43a (lane decision, Christian may override); the 300 floor: cas-engineer, critic round 1 |
 | D10 | The lease `Budget` is the host's task cap, set in the adapter config. The adapter never derives it from `ttl`, and renewals move `expires_at` only. `max_wall_secs` is the task's wall-clock cap. Spec 0023 plans to freeze a slot whose budget runs out, so a budget of `ttl + 1` would freeze any task longer than one lease window. Nothing reads `max_wall_secs` today [verified, `git grep max_wall_secs` at 3009f8d]. | cas-engineer, 2026-10-10, P1 Part A critic (Christian may override) |
 | D11 | Two paths the first build added, kept: (a) a delivery with no `Warm` slot gets `Nack` with the D5 delay, because the server sent more than `free_slots` (F1) and that is not a work fault; (b) the `Recv` reconnect backoff has D5's shape, 1 s doubling to 60 s, and resets after a delivery; (c) a `Recv` stream that ends after it delivered `free_slots` units is the normal end, not a fault, so it costs no backoff, and the adapter reads a filled stream until it ends or a slot frees, so a surplus unit gets the (a) `Nack`; when a slot frees first, it drops that stream and calls `Recv` with the free count, with no backoff, so a server that keeps a filled stream open cannot stall new work. | cas-engineer, 2026-10-10, P1 Part A departures 3 and 9; (c) P1 Part A critic item 2 (Christian may override) |
@@ -209,7 +209,7 @@ most `ttl + 1` seconds after `now`.
   Past 800 changed lines, split: the ports, the bridge and the classifier first,
   then the tonic client, both behind the feature. The bounded `extend` (D12) lands
   with the tonic client, on top of the first part.
-- [ ] A real `TaskRunner` after Christian rules the 0019 D2 runtime (D8).
+- [ ] P2, `cas-engine`, feature `cortex-grpc`: a real `TaskRunner` that runs the harness command in a leased `cas-pool` slot on OS threads (D8), under the D10 task `Budget`; a fake harness in tests; no join-token code (D7).
 - [ ] Join tokens: no work here (D7).
 
 ## Test
