@@ -10,35 +10,20 @@ depends_on: [0001-cas-architecture-and-crate-layout, 0008-soma-cortex-saga-rever
 
 ## Overview
 
-Roadmap item from the operator, 2026-10-10, lane w25:p1: "implement cpm and agent
-waves with deltadb/blackwall and saga". Spec 0024 (landed in b409386) plans
-waves: `WavePlan`, `WaveCoordinator`, the roles Probe, Builder, Critic and
-MainSession, and `cas flow --wave`. It executes nothing on the custody chain.
-This spec makes each wave step run on that chain. A Builder is a jailed
-blackwall run. A Critic is a `cas-critic` run. A Probe is a command. A
-MainSession step is a saga gate. Saga drives one run per wave. `cas-engine`
-owns the plan, the custody calls, the halt and the compensation.
+Roadmap item from the operator, 2026-10-10, lane w25:p1: "implement cpm and agent waves with deltadb/blackwall and saga".
+Spec 0024 (landed in b409386) plans waves: `WavePlan`, `WaveCoordinator`, the roles Probe, Builder, Critic and MainSession, and `cas flow --wave`. It executes nothing on the custody chain.
+This spec makes each wave step run on that chain. A Builder is a jailed blackwall run. A Critic is a `cas-critic` run. A Probe is a command. A MainSession step is a saga gate. Saga drives one run per wave. `cas-engine` owns the plan, the custody calls, the halt and the compensation.
 
-Facts, 2026-10-10. Source facts from `unsigned-gg/blackwall@3d98dc1` are
-`reported`: that checkout is dirty (`run.rs` has 6 local lines).
+Facts, 2026-10-10. Source facts from `unsigned-gg/blackwall@3d98dc1` are `reported`: that checkout is dirty (`run.rs` has 6 local lines).
 
-- **F1 [verified, read `crates/cas-engine/src/wave.rs`]:** `validate_verdict` checks only
-  the 15-line cap; nothing parses a verdict. `classify_step` gives Builder and Critic
-  `ModelTier::Pro`. `cas flow --wave` runs each step's `verify_cmd` in-process
-  (`crates/cas-cli/src/main.rs:568-640`).
-- **F2 [verified, read `crates/cas-engine/src/landing.rs`]:** `land` runs the base check,
-  `reconcile` and `pr` in one call, never with `--draft`. Its input needs a slot id, a
-  `run_hash`, an `AuditStatus` and a `cpu_cap`. A wave run has no CAS slot, so none has an
-  honest value.
-- **F3 [reported, `crates/blackwall-cli/src/run.rs:815-825,884,898`]:** `start` prints on
-  stderr `run <model> (ok|err): hash <12 chars> (new|dedup)`, then
-  `changeset: <12 chars> (<n> entries)` and `world commit: <12 chars>`. `run.rs` has no
-  `println!`, so nothing goes to stdout. Each line starts with a check mark (U+2713), so a
-  parse matches substrings. [verified, P9c run 0dbb7f02bf2d, stderr as recorded] `start` printed `-> running haiku...`, `(ok): hash 0dbb7f02bf2d (new)`, `op trace: 3 delta(s)`, `changeset: 4abbf3bebe21 (1 entries)`, `world commit: 22749f85c3ad` and `otel: exported 4 span(s)`, exit 0, and the soma lane names `start --json` the stable surface [reported, soma lane, CER-2787]. The record shows no `run <model>` text and no check mark, and stdout was not teed, so those parts stay `reported`.
-- **F4 [reported, `reconcile.rs:151`, `pr.rs:149`, `settle.rs:60`, `report.rs:437`]:**
-  `settle`, `reconcile`, `pr` and `changeset` resolve a hash prefix. `show` does not
-  (`report.rs:420-425`). Its `RunRecord` JSON (`blackwall-store/src/record.rs:210`) has no
-  base and no changeset hash.
+- **F1 [verified, read `crates/cas-engine/src/wave.rs`]:** `validate_verdict` checks only the 15-line cap; nothing parses a verdict.
+  `classify_step` gives Builder and Critic `ModelTier::Pro`. `cas flow --wave` runs each step's `verify_cmd` in-process (`crates/cas-cli/src/main.rs:568-640`).
+- **F2 [verified, read `crates/cas-engine/src/landing.rs`]:** `land` runs the base check, `reconcile` and `pr` in one call, never with `--draft`.
+  Its input needs a slot id, a `run_hash`, an `AuditStatus` and a `cpu_cap`. A wave run has no CAS slot, so none has an honest value.
+- **F3 [reported, `crates/blackwall-cli/src/run.rs:815-825,884,898`]:** `start` prints on stderr `run <model> (ok|err): hash <12 chars> (new|dedup)`, then
+  `changeset: <12 chars> (<n> entries)` and `world commit: <12 chars>`. `run.rs` has no `println!`, so nothing goes to stdout. Each line starts with a check mark (U+2713), so a parse matches substrings. [verified, P9c run 0dbb7f02bf2d, stderr as recorded] `start` printed `-> running haiku...`, `(ok): hash 0dbb7f02bf2d (new)`, `op trace: 3 delta(s)`, `changeset: 4abbf3bebe21 (1 entries)`, `world commit: 22749f85c3ad` and `otel: exported 4 span(s)`, exit 0, and the soma lane names `start --json` the stable surface [reported, soma lane, CER-2787]. The record shows no `run <model>` text and no check mark, and stdout was not teed, so those parts stay `reported`.
+- **F4 [reported, `reconcile.rs:151`, `pr.rs:149`, `settle.rs:60`, `report.rs:437`]:** `settle`, `reconcile`, `pr` and `changeset` resolve a hash prefix.
+  `show` does not (`report.rs:420-425`). Its `RunRecord` JSON (`blackwall-store/src/record.rs:210`) has no base and no changeset hash.
 - **F5 [reported, `run.rs:309-321`]:** `init` writes the git HEAD to `.blackwall/init-head` [verified, P9c step 3: `init-head` and `git rev-parse HEAD` both 642c3f292d45].
   A `start` whose HEAD differs only warns. [reported, `blackwall reconcile --help` text]
   `reconcile` refuses a stale root unless given `--force`. No run has shown either.
@@ -91,6 +76,8 @@ Facts, 2026-10-10. Source facts from `unsigned-gg/blackwall@3d98dc1` are
   `Err`, against spec 0009. `BranchPruneCompensator` runs no git. F20 [verified,
   `grep -rn EVALUATOR_PATHS crates/` is empty; `evaluator_touched` matches] the spec 0023
   path list is not built.
+- **F21 [verified, 2026-10-10T14:46Z, `gh` 2.93.0, commands as named]:** `gh pr checks 83 --required --json name,state,bucket` printed the five required checks of `development` (`secrets`, `rust / cargo`, `cargo-deny`, `hygiene`, `ebpf-live`), each `SUCCESS`. `gh pr checks --help`: `bucket` is pass, fail, pending, skipping or cancel; exit 8 means pending. `gh api repos/cerebral-work/cas-substrate/branches/development/protection`: 0 required approvals, no required signatures, `enforce_admins` true; the repo allows merge commits only. `gh pr merge --help` lists `--merge` and `--match-head-commit SHA`.
+  The five checks are jobs of `.github/workflows/ci.yml` [verified, read]. Over 86 green PR runs of that workflow (`gh run list --workflow CI --event pull_request --limit 100`, created to updated time): p50 49 s, p90 149 s, max 247 s. `git log --format=%G?` prints `G` for a commit signed here and `E` for a GitHub merge commit. Every wave receipt is `NotAudited` (`wave_exec.rs:538`) [verified, read].
 
 ## Design
 
@@ -113,7 +100,7 @@ Facts, 2026-10-10. Source facts from `unsigned-gg/blackwall@3d98dc1` are
 - **Event-driven:** WHEN a step halts, the executor shall write a `Halted` record. Then it
   compensates the passed records, newest first.
 - **State-driven:** WHILE the state directory holds a `Halted` record, the executor shall
-  start no step, no reconcile, no critic run and no PR.
+  start no step, no reconcile, no critic run, no PR and no merge.
 - **Unwanted behavior:** IF the plan fails an admission row, THEN the executor shall refuse
   the plan before its first subprocess call.
 - **Unwanted behavior:** IF a step is not ready, THEN `cas wave step` shall exit 2. It
@@ -130,6 +117,9 @@ Facts, 2026-10-10. Source facts from `unsigned-gg/blackwall@3d98dc1` are
   tools. It fails, not skips, when a tool or variable is missing.
 - **Optional feature:** WHERE `open_prs` is set (D16), the executor shall open the PR of each
   Builder whose Critic passed. Its body carries the receipt (spec 0022 D11).
+- **Optional feature:** WHERE `merge_on_green` is set (D15), with an open PR and no merge recorded, the executor shall poll that PR's required checks outside the host lock, in bounded rounds with a sleep between rounds.
+- **Event-driven:** WHEN every required check is `SUCCESS` on the recorded head, the executor shall run `gh pr merge <n> --merge --match-head-commit <head>`, read the merge commit back, and record it on the receipt, the record and the event.
+- **Unwanted behavior:** IF a commit is unsigned, a check is red, the rounds run out, the PR head moves or the merge fails, THEN the step shall halt with the D15 reason and merge nothing; before merging and on an empty read-back it shall read `mergeCommit`, and record it WHEN set.
 
 ### Admission, readiness and halt
 
@@ -141,6 +131,7 @@ Facts, 2026-10-10. Source facts from `unsigned-gg/blackwall@3d98dc1` are
 | admission | a Probe has no `verify_cmd` | refuse |
 | admission | a Probe depends on a Builder | refuse (D18) |
 | admission | `wave-<step id>` is not a valid `SlotId` | refuse |
+| admission | `merge_on_green` is set and `open_prs` is not (D15) | refuse (`MergeWithoutOpenPrs`) |
 | not ready | `<repo>/.blackwall/init-head` is absent | exit 2 |
 | not ready | `git rev-parse HEAD` differs from `init-head` | exit 2 |
 | not ready | a dependency that is not MainSession has no `Passed` record | exit 2 |
@@ -154,7 +145,9 @@ Facts, 2026-10-10. Source facts from `unsigned-gg/blackwall@3d98dc1` are
 | halt | another first line, over 15 lines, or a non-zero exit | `CriticUnparsed` |
 | halt | a Probe exits non-zero | `ProbeFailed` |
 | halt | WHERE `open_prs` (D16), `open_pr` returns Err after a Critic pass. D4 applies to the branch: pushed stays, unpushed is deleted | `PrFailed` |
-| halt | a `Halted` record appears after the step started | `WaveHalted` |
+| halt | a `Halted` record appears after the step started, a merge wait round included | `WaveHalted` |
+| halt | WHERE `merge_on_green` (D15), checked in this order: `git log --format=%G? <base>..<head>` prints no line or a line other than `G`; `headRefOid` differs from the record head; a required check is red; every round is spent with no green | `MergeUnsigned`, `HeadMismatch`, `ChecksRed`, `ChecksTimeout` |
+| halt | WHERE `merge_on_green`: `gh pr merge` exits non-zero, or the read-back prints no merge commit | `MergeFailed` |
 | halt | the executor itself fails before an outcome (a missing tool on PATH, an I/O or record error). The step writes a `Halted` record so siblings and later waves stop (F17), prints the reason on stderr, and `cas wave step` exits 3. It runs no compensation: the fault is in the environment, not the work, and the operator re-runs the step once it is fixed. WHERE the state records themselves cannot be read or written, the step exits 3 with the reason only and no record: the halt writer reads the same directory (lane decisions w25:p1, 2026-10-10; the operator may override) | `ExecutorError` |
 
 ### Dispatch by role
@@ -162,7 +155,7 @@ Facts, 2026-10-10. Source facts from `unsigned-gg/blackwall@3d98dc1` are
 | Role | Persona (D6) | Subprocess argv, in order | Pass when |
 |---|---|---|---|
 | Builder | `cas-builder` | 1. `blackwall start --task <id> --provider claude --model haiku`. 2. `blackwall settle <run> select`. 3. Under the lock, `git merge-base --is-ancestor <base> <dev>`, then `blackwall reconcile <run> --base <base> --branch blackwall/<run>`. 4. `git rev-parse blackwall/<run>`. 5. `git diff --name-only -z --no-renames <base> <head>`, split on NUL (D17). | an `(ok)` line, a changeset line, `Reconciled`, no evaluator path |
-| Critic | `cas-critic` | Per Builder dependency, under the lock: 1. `git worktree add --detach <scratch>/<critic>-<builder> <head>`. 2. `git -C <tree> checkout --no-overlay <base> -- .claude`. 3. In the tree, `claude -p --strict-mcp-config --agent cas-critic --allowed-tools Read Grep Glob 'Bash(git diff *)' 'Bash(git log *)' 'Bash(git show *)' 'Bash(make *)' 'Bash(cargo *)'` (F14). The prompt goes on stdin, with no `--model`. 4. `git worktree remove --force`, on every exit path. 5. On a pass and WHERE `open_prs` (D16), `open_pr`: `blackwall pr <run> --base development --body -`. Stdin is the spec 0022 D11 fenced JSON of the Builder record's reconciled receipt. | F10 first line NO DEFECTS, 15 lines or fewer, exit 0 |
+| Critic | `cas-critic` | Per Builder dependency, under the lock: 1. `git worktree add --detach <scratch>/<critic>-<builder> <head>`. 2. `git -C <tree> checkout --no-overlay <base> -- .claude`. 3. In the tree, `claude -p --strict-mcp-config --agent cas-critic --allowed-tools Read Grep Glob 'Bash(git diff *)' 'Bash(git log *)' 'Bash(git show *)' 'Bash(make *)' 'Bash(cargo *)'` (F14). The prompt goes on stdin, with no `--model`. 4. `git worktree remove --force`, on every exit path. 5. On a pass and WHERE `open_prs` (D16), `open_pr`: `blackwall pr <run> --base development --body -`. Stdin is the spec 0022 D11 fenced JSON of the Builder record's reconciled receipt. 6. WHERE `merge_on_green` and no merge is recorded yet (D15): `git log --format=%G? <base>..<head>`; then per round, outside the lock, `gh pr view <n> --json headRefOid --jq .headRefOid` and `gh pr checks <n> --required --json name,state,bucket`; on green, under the lock, `gh pr merge <n> --merge --match-head-commit <head>`, then `gh pr view <n> --json mergeCommit --jq .mergeCommit.oid`. | F10 first line NO DEFECTS, 15 lines or fewer, exit 0 |
 | Probe | none | Under the lock: 1. `git worktree add --detach <scratch>/<probe> <base>`. 2. The step's `verify_cmd`, in that tree. 3. `git worktree remove --force`. | exit 0 |
 | MainSession | none | none: the saga gate blocks until `saga gate approve` | saga approves |
 
@@ -208,7 +201,7 @@ moved gate gets no file (D2). A literal `verify_cmd` cannot carry a wave paramet
   earlier waves from their records.
 - `[limits] max_in_flight`, the plan's `max_concurrency`. No gate sits between waves.
 
-Between two runs, the wave's open PRs merge as D15 rules. Before a wave with a
+Between two runs, the wave's open PRs merge as D15 rules: the executor merges WHERE `merge_on_green`, else the lane does. Before a wave with a
 dependent Builder, the integrator runs `git fetch`, moves the custody checkout
 HEAD to the new development head and runs `blackwall init .`; no gate waits on CI (F18).
 
@@ -229,20 +222,21 @@ exit 1 and run nothing. Only a person removes one.
 | D2 | Saga drives one run per wave, through the generated `cas-cpm-wave-w<i>.toml`. Saga owns the run journal and the gates. `cas-engine` owns the plan, the custody calls, the halt and the compensation, because saga has neither (F17). Each step is an agent shim whose `verify_cmd` runs `cas wave step`. The shim spends one agent run per step, Probes included (F15). | Caller's default, lane w25:p1, 2026-10-10; one run per wave and the shim cost, cas-engineer, 2026-10-10 (the operator can override) The shim agent runs before `verify_cmd` in a writable worktree, so the relative plan path is agent-writable: CER-2788. |
 | D3 | Process boundary: subprocesses with exact argv, as `LandingActivity` does. Every exit and output contract is `asserted` or `reported` until the P9c live run records it. | Caller's default, lane w25:p1, 2026-10-10 |
 | D4 | Halt and compensate as the requirements and the Compensation section say. Blackwall runs stay for inspection. PRs and pushed branches stay; the halt report lists them. | Caller's default, lane w25:p1, 2026-10-10 |
-| D5 | Evidence: a new `WorkflowEvent::WaveStep` per step, with role, persona, run, changeset, base, branch, head, PR and outcome. The wave result is one `LandingReceipt` per Builder, plus the halt reason and the compensation receipts. | Caller's default, lane w25:p1, 2026-10-10 |
+| D5 | Evidence: a new `WorkflowEvent::WaveStep` per step, with role, persona, run, changeset, base, branch, head, PR, `merge_commit` (D15, absent unless merged) and outcome. The wave result is one `LandingReceipt` per Builder, plus the halt reason and the compensation receipts. | Caller's default, lane w25:p1, 2026-10-10 |
 | D6 | Models by persona. Builder `cas-builder` runs as `--model haiku`, because `start` takes no persona (F6). Its `task.toml` must say `model = "haiku"`, because that file beats the flag (F12). Critic `cas-critic` runs through `--agent` with no `--model`, so its opus line holds (F7). The executor does not dispatch `cas-foreman`. Probe and MainSession use no model. D6 supersedes 0024's `ModelTier::Pro` for dispatch. | the operator's model rule, 2026-10-10; mapping lane w25:p1, 2026-10-10 |
 | D7 | Base per wave: `.blackwall/init-head`, with HEAD equal to it (F5). A Builder waits until every upstream Builder in its deps' closure has merged. Merge commits make each reconciled head an ancestor of the next base. The wait falls between saga runs, so no gate waits on CI (F18). No `--parent` stacking. | cas-engineer, 2026-10-10 (the operator can override) |
 | D8 | One host-wide lock file (`File::lock`, F11) serializes reconcile, critic runs and Probes. So at most one `make check JOBS=2` runs at a time (rule 2, spec 0020). `start` runs may overlap up to `max_concurrency`. | cas-engineer, 2026-10-10 |
-| D9 | A wave Builder has no CAS slot (F2). Its receipt sets `slot_id = wave-<step id>`, `audit = NotAudited` (a new `AuditStatus` variant), `run_hash` empty and `cpu_cap = "uncapped"`. This extends 0022 D4 to runs with no audit at all. **Ruled: `NotAudited` lands, flagged.** The receipt and the PR body say so, and the planner warns. A `NotAudited` PR is outside the executor's merge-on-green (D15): a person lands it (lane reading; the operator may override). | the operator, 2026-10-10, in session (lane w25:p1 interview); lane default cas-engineer |
+| D9 | A wave Builder has no CAS slot (F2). Its receipt sets `slot_id = wave-<step id>`, `audit = NotAudited` (a new `AuditStatus` variant), `run_hash` empty and `cpu_cap = "uncapped"`. This extends 0022 D4 to runs with no audit at all. **Ruled: `NotAudited` lands, flagged.** The receipt and the PR body say so, and the planner warns. A `NotAudited` wave PR may be merged by the executor's merge-on-green with the flag in its body (D19). | the operator, 2026-10-10, in session (lane w25:p1 interview); lane default cas-engineer |
 | D10 | Plan admission checks the admission rows before any subprocess runs. One Critic per Builder means one PR opener per Builder. | cas-engineer, 2026-10-10 |
 | D11 | The blackwall task name is the step id: `tasks/<step id>/`. | cas-engineer, 2026-10-10 |
 | D12 | Receipts carry the 12-character run and changeset prefixes that `start` prints (F3). The other subcommands resolve prefixes (F4); `show` does not (Notes). [verified, P9c runs 0dbb7f02bf2d, 20261010-141346-cas-cpm-wave-w0 and 20261010-141552-cas-cpm-wave-w1] `settle` and `reconcile` took the 12-character run id, the records carry run 47c34f0dd060 and changeset 4abbf3bebe21, reconcile reached head 42560966 on `blackwall/47c34f0dd060`, and no PR opened (D16). Full hashes wait for `start --json` (CER-2787). | cas-engineer, 2026-10-10 |
 | D13 | The critic reviews in a transient detached worktree at the reconciled head. It runs the gates (F10) and leaves HEAD in the custody checkout alone (F5). | cas-engineer, 2026-10-10 |
 | D14 | First live run: the local `blackwall` CLI on ceres, or blackwall-serve in the cluster through cortex-worker, reflexd and escapement (F13). Lane proposal: local, because the 1.2.0 `serve` only inspects (F6). **Ruled: the local CLI on ceres.** P9c ran on it (runs 20261010-141346-cas-cpm-wave-w0 and 20261010-141552-cas-cpm-wave-w1); a blackwall-serve run needs its own brief when `serve` executes. | the operator, 2026-10-10, in session (lane w25:p1 interview); proposal lane w25:p1 |
-| D15 | Merging a wave's PRs between runs: may the lane merge on green, or does a person always merge? Lane proposal: the lane merges each PR on green CI with `gh pr merge --merge --match-head-commit`, outside the executor. **Ruled: the executor may merge on green**, behind a default-off flag, in a later package with its own brief: CI green on the exact head, `--match-head-commit`, merge commit, signed commits, never a `NotAudited` PR (D9). Until that package ships, the lane lands each PR by hand and the executor never merges (what shipped in P9a). | the operator, 2026-10-10, in session (lane w25:p1 interview); proposal lane w25:p1 |
+| D15 | Merging a wave's PRs between runs: may the lane merge on green, or does a person always merge? Lane proposal: the lane merges each PR on green CI with `gh pr merge --merge --match-head-commit`, outside the executor. **Ruled: the executor may merge on green**, behind a default-off flag, in a later package with its own brief: CI green on the exact head, `--match-head-commit`, merge commit, signed commits; a `NotAudited` PR merges with the flag in its body (D19). Until that package (P12a, P12b) ships, the lane lands each PR by hand and the executor never merges (what shipped in P9a). **Mechanism:** `WaveExecConfig.merge_on_green`, false by default; admission refuses it without `open_prs`. P12b sets it only when the source plan's `[flow] merge_on_green = true` and `CAS_WAVE_MERGE=1` are both set. It acts after a Critic pass with an open PR, keyed on "no merge recorded yet", not on "PR just opened", so a retried Critic still merges. Order: (1) `git log --format=%G? <base>..<head>` in the custody checkout must print at least one line, each `G`; (2) rounds: `max(1, ceil(merge_wait / max(1 s, merge_poll)))`, outside the host lock (one wait would block every build), a `thread::sleep(merge_poll)` between rounds and none after the last. Each round checks for a `Halted` record, then compares `headRefOid` with the record head (full SHA, exact), then parses the checks JSON on any exit code. Green: a non-empty array, every `state` `SUCCESS`. Pending: empty output or `[]` (checks not yet reported; never green), or no red entry and at least one `bucket` `pending`. Red: anything else, `SKIPPED`, `NEUTRAL`, `CANCELLED` and output that does not parse included. A `gh pr view` that exits non-zero counts as a pending round. (4) Green: one lock hold for the halt check, `gh pr merge`, the read-back and the record save; the merge commit goes to the receipt (`LandingFacts.merge_commit`, spec 0022), the Builder record and the Critic's `WaveStep` event. Every merge halt compensates (D4: a record with a PR keeps everything). Defaults: `merge_wait` 900 s, about 3.6 times the 247 s max in F21; `merge_poll` 30 s; the plan field is `[flow] merge_wait_secs`. No `--delete-branch` and no `--auto`: post-merge hygiene (fetch, custody HEAD, `blackwall init .`, branch removal) stays with the lane. | the operator, 2026-10-10, in session (lane w25:p1 interview): the ruling; proposal lane w25:p1. Mechanism, order, defaults, halt names and the signature check (protection requires none, F21): lane decisions w25:p1, 2026-10-10; the operator can override |
 | D16 | `open_prs` is off by default, so a wave run stops after the critic verdict and opens no PR. `CAS_WAVE_LIVE_PR=1` sets it for the live smoke. `CAS_WAVE_OPEN_PRS=1` sets it for `cas wave step`, because a literal `verify_cmd` carries no flag. The integrator then lands or closes each PR. | cas-engineer, 2026-10-10 |
 | D17 | Before a critic, the executor runs `git diff --name-only -z --no-renames <base> <head>` and splits the output on NUL. Without `-z`, git C-quotes a non-ASCII path, so no pattern matches it. Without `--no-renames`, it lists only a rename's destination, so a renamed-away `Makefile` is not seen [verified, 2026-10-10, git 2.43 scratch repo]. The halt set: a path under `.claude/`; `.mcp.json`; `**/CLAUDE.md`, `**/CLAUDE.local.md` and `**/AGENTS.md`; and the spec 0023 D4 and D6 lists. A `**/` pattern matches at the root too. The rule files are in the set because `claude -p` loads the root `CLAUDE.md` of its cwd. That file names `AGENTS.md` as the only rule source. It also loads a nested `CLAUDE.md` when the critic reads that directory [reported, critic-0025-3]. So a Builder could rewrite its own rubric. `claude -p` starts a project `.mcp.json` server from its cwd with no approval [reported, critic-0025-4]. The Critic argv sets `--strict-mcp-config`, which ignores all other MCP configurations [verified, 2026-10-10, `claude --help`, 2.1.296]. Spec 0023 D6 lists every `Cargo.toml` and `build.rs`, and `crates/cas-ebpf/ebpf/**`, fail closed. `build. `crates/cas-ebpf/ebpf/**` is in the set because `build.rs` trusts the object and its `.sha256` as a pair; the reason and its evidence are in spec 0023 D6. Rebuilding that object is kernel work, never a wave Builder step. So a Builder that touches one of these paths halts the wave, and the executor compensates its siblings' passed records. A dependency add is not wave Builder work, because rule 12 needs a spec 0004 pin first. A match sets `evaluator_touched` and halts the step. The executor rebuilds the receipt with `LandingReceipt::new`, so the tier is `reported`. The critic never loads a persona, settings, rule file, MCP server or gate from the changeset. The branch stays; a person may open its PR at `reported` (0023 D3). | cas-engineer, 2026-10-10; halt set widened per critic-0025-3 and critic-0025-4 (`.mcp.json`, `--strict-mcp-config`, 0023 D6), lane w25:p1, 2026-10-10; `crates/cas-ebpf/ebpf/**` via 0023 D6, lane decision w25:p1, 2026-10-10; narrows the wave path of the operator's 0023 D3 (the operator can override) |
 | D18 | A Probe runs at the wave base in a transient worktree under the lock. It checks the base, not a Builder's output; the Critic checks that. | cas-engineer, 2026-10-10 |
+| D19 | Every wave receipt is `NotAudited` (F21). **Ruled: the flag merges a `NotAudited` wave PR, flagged in the body.** The PR already carries a Critic pass and green CI; the exclusion of D9 and D15 is withdrawn, so there is no `MergeNotAudited` halt. | the operator, 2026-10-10, in session (lane w25:p1 interview); raised by lane w25:p1 |
 
 ## Plan
 
@@ -260,7 +254,9 @@ exit 1 and run nothing. Only a person removes one.
   `blackwall init .` in a clean checkout at `origin/development`, the live smoke,
   then the saga runs `cas-cpm-wave-w0` and `cas-cpm-wave-w1`. Record every
   output and exit contract, then amend D12 and F3 to F5. Done 2026-10-10 at 642c3f2: smoke run 7878209325ad, saga runs 20261010-141346-cas-cpm-wave-w0 and 20261010-141552-cas-cpm-wave-w1. Not shown: the F5 stale root, and whether `init` keeps earlier runs.
-- [x] the operator ruled D9, D14 and D15 on 2026-10-10. D15 needs a package (merge flag).
+- [x] the operator ruled D9, D14 and D15 on 2026-10-10. D15 needs a package (merge flag). D19 ruled 2026-10-10: a `NotAudited` wave PR merges, flagged.
+- [ ] P12a, `cas-engine` plus the one `cas-domain` field, `cas-builder` haiku: D15's config, admission row, rounds, merge, halts and `merge_commit`; a fake `gh`; red first.
+- [ ] P12b, `cas-cli`, not briefed yet: `[flow] merge_on_green` and `merge_wait_secs` in the source plan, `CAS_WAVE_MERGE=1`, refused without `CAS_WAVE_OPEN_PRS=1`.
 
 ## Test
 
@@ -291,10 +287,10 @@ CAS_WAVE_LIVE=1 CAS_WAVE_REPO=$L CAS_WAVE_PLAN=$L/.saga/plans/cas-wave-smoke.tom
   and the merge, past the 600 s window (F18).
 - P9c settled neither unknown. `blackwall show 7878209325ad` returned `NotFound`, though `list` prints that 12-character id [verified, run 7878209325ad], so whether `show` prints the base (custody-run skill against F4) is still open. `init` ran once, before any run, so whether it keeps earlier runs (D4) is still open.
 - Under `cargo nextest` the smoke's reconcile halted `VerifyFailed`, yet the smoke exited 0 because it passes on any outcome, while the same run reconciled outside nextest [verified, runs 7878209325ad and 0dbb7f02bf2d]; the cause is not proven [heuristic: the inherited nextest environment], and the receipt keeps no reconcile stderr (CER-2789).
-- Amends spec 0022 D1 and D9 (its D12 logs it). P9a builds 0023's `EVALUATOR_PATHS`.
+- Amends spec 0022 D1 and D9 (its D12 logs it), and adds `LandingFacts.merge_commit` for D15 (its amendment log). P9a builds 0023's `EVALUATOR_PATHS`.
 - Out of scope: the `?` at `wave.rs:421` and `compensator.rs:339` in
   `crates/cas-engine/src` [verified at b149d73] stops compensation at the first
   `Err`, against spec 0009 (F19). Ticket CER-2783 is the fix package, not P9a.
 - Open with the saga lane: a command-only step kind (D2 cost), the `verify_cmd`
-  cwd, and when 35ee74a ships. Open with the blackwall owners: overlapping
+  cwd, when 35ee74a ships, and whether saga bounds a `verify_cmd` run time (D15 waits up to 900 s). Unverified [asserted]: what `gh pr checks --json` prints before any check registers (D15 reads empty or `[]` as pending). Open with the blackwall owners: overlapping
   `start` runs on one store, and a full-hash or JSON `start` output.
