@@ -1,26 +1,30 @@
 //! The ACP server: one JSON-RPC 2.0 object per line, over any reader and writer.
 
 use std::collections::BTreeMap;
-use std::io::{BufRead, Write};
+use std::io::{BufRead, Read, Write};
 
 use agent_client_protocol::schema::v1::{
-    CancelNotification, InitializeRequest, InitializeResponse, NewSessionRequest,
-    NewSessionResponse, SessionId as AcpSessionId,
+    CancelNotification, InitializeRequest, InitializeResponse, JsonRpcMessage, NewSessionRequest,
+    NewSessionResponse, Notification, Request, RequestId, Response, SessionId as AcpSessionId,
+    AGENT_METHOD_NAMES,
 };
 use agent_client_protocol::schema::ProtocolVersion;
 use cas_domain::{Budget, Lease, LeaseId, LeaseToken, PrincipalRef, SlotId};
 use cas_engine::{SessionId, SessionState, WorkflowSession};
 use cas_pool::PoolError;
 use serde::de::DeserializeOwned;
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use serde_json::Value;
 
 use crate::error::AcpError;
 use crate::pool_port::PoolPort;
 
-const METHOD_INITIALIZE: &str = "initialize";
-const METHOD_SESSION_NEW: &str = "session/new";
-const METHOD_SESSION_CANCEL: &str = "session/cancel";
+const METHOD_INITIALIZE: &str = AGENT_METHOD_NAMES.initialize;
+const METHOD_SESSION_NEW: &str = AGENT_METHOD_NAMES.session_new;
+const METHOD_SESSION_CANCEL: &str = AGENT_METHOD_NAMES.session_cancel;
+
+/// The longest frame the server reads. A longer line gets -32600 and is skipped.
+pub const MAX_FRAME_BYTES: usize = 1024 * 1024;
 
 /// Settings the server needs to build leases.
 pub struct AcpConfig {
@@ -52,34 +56,16 @@ pub struct AcpServer<P: PoolPort> {
     next_seq: u64,
 }
 
-/// An incoming frame, before its method is dispatched.
-#[derive(Deserialize)]
-struct Envelope {
-    method: String,
-    #[serde(default)]
-    id: Option<Value>,
-    #[serde(default)]
-    params: Option<Value>,
-}
-
-#[derive(Serialize)]
-struct ResultFrame<'a> {
-    jsonrpc: &'static str,
-    id: &'a Value,
-    result: Value,
-}
-
-#[derive(Serialize)]
-struct ErrorFrame<'a> {
-    jsonrpc: &'static str,
-    id: &'a Value,
-    error: ErrorBody,
-}
-
-#[derive(Serialize)]
-struct ErrorBody {
-    code: i64,
-    message: String,
+/// One line read from the input.
+enum Frame {
+    /// A line of text, without its newline.
+    Line(String),
+    /// A line over `MAX_FRAME_BYTES`. The rest of it is skipped.
+    TooLong,
+    /// A line that is not UTF-8.
+    Malformed,
+    /// The input ended.
+    End,
 }
 
 fn internal(err: impl std::fmt::Display) -> AcpError {
@@ -91,25 +77,61 @@ fn parse_params<T: DeserializeOwned>(params: Option<Value>) -> Result<T, AcpErro
         .map_err(|e| AcpError::InvalidParams(e.to_string()))
 }
 
-fn error_frame(id: &Value, err: &AcpError) -> Option<String> {
-    serde_json::to_string(&ErrorFrame {
-        jsonrpc: "2.0",
-        id,
-        error: ErrorBody {
-            code: err.code(),
-            message: err.to_string(),
-        },
-    })
-    .ok()
+fn frame<T: Serialize>(message: JsonRpcMessage<T>) -> Option<String> {
+    serde_json::to_string(&message).ok()
 }
 
-fn result_frame(id: &Value, result: Value) -> Option<String> {
-    serde_json::to_string(&ResultFrame {
-        jsonrpc: "2.0",
+fn result_frame(id: RequestId, result: Value) -> Option<String> {
+    frame(JsonRpcMessage::wrap(Response::<Value>::new(id, Ok(result))))
+}
+
+fn error_frame(id: RequestId, err: &AcpError) -> Option<String> {
+    frame(JsonRpcMessage::wrap(Response::<Value>::new(
         id,
-        result,
+        Err(err.to_rpc()),
+    )))
+}
+
+/// Read one line, capped at `MAX_FRAME_BYTES`.
+fn read_frame<R: BufRead>(reader: &mut R) -> std::io::Result<Frame> {
+    let mut buf = Vec::new();
+    let read = reader
+        .by_ref()
+        .take(MAX_FRAME_BYTES as u64 + 1)
+        .read_until(b'\n', &mut buf)?;
+    if read == 0 {
+        return Ok(Frame::End);
+    }
+    if buf.last() == Some(&b'\n') {
+        buf.pop();
+    } else if buf.len() > MAX_FRAME_BYTES {
+        skip_line(reader)?;
+        return Ok(Frame::TooLong);
+    }
+    Ok(match String::from_utf8(buf) {
+        Ok(text) => Frame::Line(text),
+        Err(_) => Frame::Malformed,
     })
-    .ok()
+}
+
+/// Discard input up to and including the next newline, without buffering it.
+fn skip_line<R: BufRead>(reader: &mut R) -> std::io::Result<()> {
+    loop {
+        let (done, used) = {
+            let available = reader.fill_buf()?;
+            if available.is_empty() {
+                return Ok(());
+            }
+            match available.iter().position(|b| *b == b'\n') {
+                Some(i) => (true, i + 1),
+                None => (false, available.len()),
+            }
+        };
+        reader.consume(used);
+        if done {
+            return Ok(());
+        }
+    }
 }
 
 impl<P: PoolPort> AcpServer<P> {
@@ -124,14 +146,27 @@ impl<P: PoolPort> AcpServer<P> {
     }
 
     /// Read frames from `reader` until it ends. Write one response line per request.
-    pub fn serve<R: BufRead, W: Write>(&mut self, reader: R, mut writer: W) -> std::io::Result<()> {
-        for line in reader.lines() {
-            let line = line?;
-            if line.trim().is_empty() {
-                continue;
-            }
-            if let Some(frame) = self.handle_line(&line) {
-                writeln!(writer, "{frame}")?;
+    pub fn serve<R: BufRead, W: Write>(
+        &mut self,
+        mut reader: R,
+        mut writer: W,
+    ) -> std::io::Result<()> {
+        loop {
+            let reply = match read_frame(&mut reader)? {
+                Frame::End => break,
+                Frame::TooLong => error_frame(
+                    RequestId::Null,
+                    &AcpError::InvalidRequest(format!("frame exceeds {MAX_FRAME_BYTES} bytes")),
+                ),
+                Frame::Malformed => error_frame(
+                    RequestId::Null,
+                    &AcpError::Parse("frame is not UTF-8".into()),
+                ),
+                Frame::Line(text) if text.trim().is_empty() => None,
+                Frame::Line(text) => self.handle_line(&text),
+            };
+            if let Some(line) = reply {
+                writeln!(writer, "{line}")?;
                 writer.flush()?;
             }
         }
@@ -145,34 +180,75 @@ impl<P: PoolPort> AcpServer<P> {
         self.serve(stdin.lock(), stdout.lock())
     }
 
-    /// Handle one line. Returns the response line, or `None` for a notification.
-    fn handle_line(&mut self, line: &str) -> Option<String> {
-        let value: Value = match serde_json::from_str(line) {
+    /// Handle one line. Returns the response line, or `None` when no response is due.
+    fn handle_line(&mut self, text: &str) -> Option<String> {
+        let value: Value = match serde_json::from_str(text) {
             Ok(value) => value,
-            Err(e) => return error_frame(&Value::Null, &AcpError::Parse(e.to_string())),
+            Err(e) => return error_frame(RequestId::Null, &AcpError::Parse(e.to_string())),
         };
-        let envelope: Envelope = match serde_json::from_value(value) {
-            Ok(envelope) => envelope,
+        if value.get("jsonrpc") != Some(&Value::from("2.0")) {
+            return error_frame(
+                RequestId::Null,
+                &AcpError::InvalidRequest("jsonrpc must be \"2.0\"".into()),
+            );
+        }
+        let Some(raw_id) = value.get("id") else {
+            return self.handle_notification(value);
+        };
+        let id: RequestId = match serde_json::from_value(raw_id.clone()) {
+            Ok(RequestId::Null) => {
+                return error_frame(
+                    RequestId::Null,
+                    &AcpError::InvalidRequest("id must not be null".into()),
+                );
+            }
+            Ok(id) => id,
             Err(e) => {
-                return error_frame(&Value::Null, &AcpError::InvalidRequest(e.to_string()));
+                return error_frame(
+                    RequestId::Null,
+                    &AcpError::InvalidRequest(format!("id: {e}")),
+                );
             }
         };
-        let outcome = self.dispatch(&envelope.method, envelope.params);
-        // A frame without an id is a notification: it never gets a response.
-        let id = envelope.id?;
+        let request: Request<Value> = match serde_json::from_value(value) {
+            Ok(request) => request,
+            Err(e) => return error_frame(id, &AcpError::InvalidRequest(e.to_string())),
+        };
+        let outcome = match request.method.as_ref() {
+            METHOD_INITIALIZE => self.initialize(request.params),
+            METHOD_SESSION_NEW => self.session_new(request.params),
+            METHOD_SESSION_CANCEL => Err(AcpError::InvalidRequest(
+                "session/cancel is a notification and must not carry an id".into(),
+            )),
+            other => Err(AcpError::MethodNotFound(other.to_string())),
+        };
         match outcome {
-            Ok(Some(result)) => result_frame(&id, result),
-            Ok(None) => None,
-            Err(err) => error_frame(&id, &err),
+            Ok(result) => result_frame(id, result),
+            Err(err) => error_frame(id, &err),
         }
     }
 
-    fn dispatch(&mut self, method: &str, params: Option<Value>) -> Result<Option<Value>, AcpError> {
-        match method {
-            METHOD_INITIALIZE => self.initialize(params).map(Some),
-            METHOD_SESSION_NEW => self.session_new(params).map(Some),
-            METHOD_SESSION_CANCEL => self.session_cancel(params).map(|()| None),
-            other => Err(AcpError::MethodNotFound(other.to_string())),
+    /// Handle a frame without an id. A notification never gets a response, except
+    /// when it names a request method, which is then an invalid request.
+    fn handle_notification(&mut self, value: Value) -> Option<String> {
+        let notification: Notification<Value> = match serde_json::from_value(value) {
+            Ok(notification) => notification,
+            Err(e) => {
+                return error_frame(RequestId::Null, &AcpError::InvalidRequest(e.to_string()))
+            }
+        };
+        match notification.method.as_ref() {
+            METHOD_SESSION_CANCEL => {
+                if let Err(err) = self.session_cancel(notification.params) {
+                    eprintln!("cas-acp: session/cancel: {err}");
+                }
+                None
+            }
+            method @ (METHOD_INITIALIZE | METHOD_SESSION_NEW) => error_frame(
+                RequestId::Null,
+                &AcpError::InvalidRequest(format!("{method} is a request and needs an id")),
+            ),
+            _ => None,
         }
     }
 
