@@ -198,7 +198,10 @@ landing activity's principal.
 
 - The merge. `automerge` stays false (F2). A lane merges on green with a merge
   commit pinned to the head, or the operator does. The activity ends at the
-  open PR. Spec 0025 D15 lets its wave executor merge behind a default-off flag.
+  open PR. Spec 0025 D15, re-ruled on 2026-10-10, has the wave executor never
+  merge: merging runs through saga and blackwall, and no `cas` code reads PR
+  checks or runs `gh pr merge`. An earlier form of D15 allowed an executor merge
+  behind a default-off flag; that form is retired.
 - The operator gate before landing (spec 0008 settle queue, heimdal in saga)
   stays where it is; this spec does not move it.
 

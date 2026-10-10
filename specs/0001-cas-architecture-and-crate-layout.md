@@ -81,7 +81,10 @@ greps for `std::net`, `std::fs`, `std::process` and `tokio` in its source.
 Two placements are not in the diagram:
 
 - `cas-storage` is not drawn in the research diagram. This spec places it
-  beside `cas-router`, above `cas-domain`. A later spec confirms or moves it.
+  beside `cas-router`, above `cas-domain`. Spec 0021, itself `planned`, records
+  that placement on 2026-10-10: its F7 restates the layering and its first requirement states
+  that `cas-storage` sits in layer 2 beside `cas-router`, depending only on
+  `cas-domain` and dependencies approved in spec 0004.
 - `cas-cli` is the application edge. It may depend on any crate.
 
 The `Will depend on` line in each crate README is the intended edge set. It is
