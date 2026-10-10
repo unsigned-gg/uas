@@ -99,10 +99,25 @@ const DROPPED_RING: u32 = 0;
 /// Slot of the tracking-insert failure counter.
 const DROPPED_TRACK: u32 = 1;
 
-/// Offset of the `__data_loc` filename field in `sched_process_exec`.
-const EXEC_FILENAME_LOC: usize = 8;
-/// Offset of `child_pid` in `sched_process_fork` (measured on kernel 6.6.87.2).
-const FORK_CHILD_PID: usize = 44;
+/// Field offsets the loader reads from tracefs before attach (spec 0014 D13).
+/// Slot 0: exec `pid`. Slot 1: exec `filename`. Slot 2: fork `parent_pid`.
+/// Slot 3: fork `child_pid`. Slot 4: exit `pid`. The probes read slots 1 and 3
+/// only. The loader parses and checks the others for later probes.
+#[map]
+static TP_OFFSETS: Array<u32> = Array::with_max_entries(5, 0);
+
+/// Slot of the exec `filename` offset.
+const TP_EXEC_FILENAME: u32 = 1;
+/// Slot of the fork `child_pid` offset.
+const TP_FORK_CHILD_PID: u32 = 3;
+
+/// The field offset in `slot`, masked to 0..=255. `None` when the slot holds
+/// less than 8, which means the loader did not configure it (spec 0014 D13).
+fn tp_offset(slot: u32) -> Option<usize> {
+    let raw = *TP_OFFSETS.get(slot)?;
+    let offset = (raw & 0xff) as usize;
+    (offset >= 8).then_some(offset)
+}
 
 /// Adds one to a `DROPPED_EVENTS` slot. Per-cpu, so no atomic is needed.
 fn bump(slot: u32) {
@@ -222,13 +237,16 @@ fn try_sched_process_exec(ctx: &TracePointContext) {
         return;
     };
     let mut filename = [0u8; 128];
-    // SAFETY: read_at is a checked kernel read of the __data_loc word.
-    if let Ok(loc) = unsafe { ctx.read_at::<u32>(EXEC_FILENAME_LOC) } {
-        let off = (loc & 0xffff) as usize;
-        // SAFETY: the string lives inside the tracepoint record; the helper bounds the copy.
-        let src = unsafe { ctx.as_ptr().cast::<u8>().add(off) };
-        // SAFETY: a failed read leaves the zeroed buffer unchanged.
-        let _ = unsafe { bpf_probe_read_kernel_str_bytes(src, &mut filename) };
+    // A slot below 8 leaves the filename zeroed (spec 0014 D13).
+    if let Some(loc_at) = tp_offset(TP_EXEC_FILENAME) {
+        // SAFETY: read_at is a checked kernel read of the __data_loc word.
+        if let Ok(loc) = unsafe { ctx.read_at::<u32>(loc_at) } {
+            let off = (loc & 0xffff) as usize;
+            // SAFETY: the string lives inside the tracepoint record; the helper bounds the copy.
+            let src = unsafe { ctx.as_ptr().cast::<u8>().add(off) };
+            // SAFETY: a failed read leaves the zeroed buffer unchanged.
+            let _ = unsafe { bpf_probe_read_kernel_str_bytes(src, &mut filename) };
+        }
     }
     // SAFETY: the helper has no memory preconditions.
     let timestamp_ns = unsafe { bpf_ktime_get_ns() };
@@ -258,8 +276,13 @@ fn try_sched_process_fork(ctx: &TracePointContext) {
     if !promote(&ids) {
         return;
     }
+    // An unconfigured slot cannot name the child, so the child escapes tracking (D13).
+    let Some(child_at) = tp_offset(TP_FORK_CHILD_PID) else {
+        bump(DROPPED_TRACK);
+        return;
+    };
     // SAFETY: read_at copies from the tracepoint record with a checked kernel read.
-    let Ok(child_pid) = (unsafe { ctx.read_at::<i32>(FORK_CHILD_PID) }) else {
+    let Ok(child_pid) = (unsafe { ctx.read_at::<i32>(child_at) }) else {
         return;
     };
     // The child is keyed by its global task id (a thread clone inserts its

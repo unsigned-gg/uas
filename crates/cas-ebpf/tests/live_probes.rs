@@ -96,6 +96,22 @@ fn fork_propagates_tracking() -> TestResult {
     let sh_pid = child.id();
     child.wait()?;
     let events = collect(&mut probes, Duration::from_secs(3));
+    // D13: every tracked key is a real pid, and the kernel map holds the offsets
+    // the parser reads. The keys are checked first, and the list must not be
+    // empty: `me` was promoted at the fork above.
+    let pid_max: u32 = std::fs::read_to_string("/proc/sys/kernel/pid_max")?
+        .trim()
+        .parse()?;
+    let tracked = probes.tracked_globals()?;
+    assert!(
+        !tracked.is_empty(),
+        "no tracked key after a fork under tracking"
+    );
+    assert!(
+        tracked.iter().all(|pid| (1..=pid_max).contains(pid)),
+        "tracked keys outside 1..={pid_max}: {tracked:?}"
+    );
+    assert_eq!(probes.tp_offsets()?, cas_ebpf::tracefs::read()?.slots());
     assert!(
         events.iter().any(|e| e.ns_pid == sh_pid),
         "no exec event for the shell"
