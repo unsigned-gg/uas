@@ -57,6 +57,7 @@
 mod activity;
 mod compensator;
 mod cortex;
+mod cpm;
 mod error;
 mod event;
 mod landing;
@@ -64,6 +65,7 @@ mod reverie;
 mod saga;
 mod session;
 mod soma;
+mod wave;
 mod workflow;
 
 pub use activity::{Activity, ActivityKind, ActivityResult};
@@ -72,6 +74,7 @@ pub use compensator::{
     LeaseReturnCompensator, NoopCompensator, RecordingCompensator, WorktreeCleanupCompensator,
 };
 pub use cortex::{CortexMeshEvent, MeshIntent, SettleCard, SettleQueue, SettleStatus};
+pub use cpm::{CpmSchedule, CpmStepSchedule};
 pub use error::EngineError;
 pub use event::{EventStore, InMemoryEventStore, WorkflowEvent};
 pub use landing::{LandingActivity, LandingConfig, LandingError, LandingInput, LandingOutcome};
@@ -79,4 +82,8 @@ pub use reverie::{InMemoryReverieClient, ReverieClient, ReverieContextQuery, Rev
 pub use saga::{FlowMetadata, SagaFlowCoordinator, SagaFlowDef, SagaStep};
 pub use session::{SessionId, SessionState};
 pub use soma::SomaAdmissionGate;
+pub use wave::{
+    classify_step, validate_verdict, AgentRole, ExecutionWave, ModelTier, WaveCoordinator,
+    WavePlan, WaveStep, WorkspaceMode, DEFAULT_MAX_WAVE_CONCURRENCY, MAX_VERDICT_LINES,
+};
 pub use workflow::WorkflowSession;
