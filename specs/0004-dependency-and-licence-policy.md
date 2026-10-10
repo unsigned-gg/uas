@@ -20,11 +20,33 @@ with `license = "MIT"` beside a proprietary LICENSE, measured 2026-10-08.
 Facts from 2026-10-08:
 
 - `cerebral-work/pgt` is private. It has no licence file. Head is `54d90f5`.
-  It uses edition 2024, so the workspace `rust-version` floor is 1.85.
+  It uses edition 2024, so the workspace `rust-version` floor was 1.85.
+  D2 supersedes that floor (2026-10-10).
 - `autonice` is GPL-2.0. `zerostack` is GPL-3.0. Both are copyleft.
 - `0xPlaygrounds/rig` is MIT, version 0.44.0.
 - Every research evaluation is a draft: the 13 files under `repos/` at
   `cerebral-work/research@4068134` all have `status: "draft"`.
+
+Facts from 2026-10-10, read at `origin/development` `065015a`:
+
+- **F1 [verified]:** `agent-client-protocol` 2.2.0 pulls `futures` 0.3.34,
+  `uuid` 1.28.0, `async-io` 2.6.0, `async-process` 2.5.0 and `blocking` 1.7.0
+  into `cas-acp`. Command: `cargo tree -p cas-acp -e normal --locked --depth 2`.
+  Each of the five is `MIT OR Apache-2.0` (`cargo metadata --locked`).
+- **F2 [verified]:** `cas-acp` uses only `agent_client_protocol::schema::*`,
+  has no `async` code and starts no runtime: `grep -rnE
+  'async|await|block_on|spawn|agent_client_protocol::' crates/cas-acp/src`
+  prints only three `schema` imports. The umbrella crate has 90 unique packages in its
+  normal tree; `agent-client-protocol-schema` 1.9.1 (Apache-2.0) has 45.
+  Command: `cargo tree -p <crate> -e normal --locked --prefix none | sed 's/ (\*)//'
+  | sort -u | wc -l`; it counts the root crate too.
+- **F3 [verified]:** declared MSRVs in the lockfile: `aya` 0.14.0 needs 1.87,
+  `agent-client-protocol` 2.2.0 and `gix` 0.88.0 need 1.88, and `uuid` 1.28.0
+  needs 1.89. Command: `cargo metadata --locked`, field `rust_version`.
+- **F4 [verified]:** `cargo +1.88.0 check -p cas-acp --locked` exits 101:
+  `uuid@1.28.0 requires rustc 1.89.0`. `cargo +1.89.0 check --workspace
+  --all-targets --locked` exits 0. With resolver 2, `rust-version` does not
+  steer resolution, so the lockfile sets the real floor.
 
 ## Design
 
@@ -35,6 +57,13 @@ Facts from 2026-10-08:
 - **Event-driven:** WHEN adding an external dependency, the developer shall document rationale in workspace dependencies and update this specification.
 - **State-driven:** WHILE building eBPF kernel probe objects, the build system shall declare dual MIT/GPL licensing for kernel compatibility.
 - **Unwanted behavior:** IF a dependency introduces copyleft terms or unapproved git sources, THEN `cargo deny check` shall fail the build.
+
+### Decisions
+
+| # | Decision | Who, when |
+|---|---|---|
+| D1 | `cas-acp` keeps the umbrella crate `agent-client-protocol` 2.2.0 for now, with its transitive pull (F1). `cas-acp` stays sync and starts no runtime (F2). The later path is the schema-only crate `agent-client-protocol-schema`: pin it here, then switch, if the pull grows at a version bump or `cas-acp` starts a runtime. | lane w25:p1, 2026-10-10 (Christian may override) |
+| D2 | The workspace `rust-version` is 1.89, the highest MSRV in the lockfile (`uuid` 1.28.0, F3, F4). The wave 2 brief said 1.88 from `aya` (1.87) and ACP (1.88); F4 shows 1.88 fails. Rejected: 1.88 plus `cargo update uuid --precise <older>`, because the next `cargo update` undoes a lockfile downgrade of a transitive crate. The bump adds no crate and no licence. `toolchain-check` passes while `rust-version` is not above the pinned channel 1.94.1. | lane w25:p1, 2026-10-10 (Christian may override) |
 
 ### Licence rules
 
@@ -144,7 +173,7 @@ metadata, read 2026-10-09.
 | `aya-log`, `aya-log-ebpf` | 0.3.0, 0.2.0 | MIT OR Apache-2.0 | cas-ebpf | 2 | only if the BPF program logs |
 | `libc` | 0.2.169 | MIT OR Apache-2.0 | none | 2 | pinned, NOT in the workspace: `rustix` 1.1.5 (already approved) provides `setpgid` and `setpriority_pgrp` without `unsafe`, so cas-ebpf uses it instead (lane Claude, 2026-10-09) |
 | `gix` | 0.88.0 | MIT OR Apache-2.0 | cas-pool | 3 | default-features off, minimal features; MSRV 1.88; fallback 0.87.1 |
-| `agent-client-protocol` | 2.2.0 | Apache-2.0 | cas-acp | 3 | MSRV 1.88; 3.x is under 14 days old |
+| `agent-client-protocol` | 2.2.0 | Apache-2.0 | cas-acp | 3 | MSRV 1.88; 3.x is under 14 days old. In use since spec 0016 (2026-10-10); transitive pull in D1 |
 | `tokio` | 1.53.1 | MIT | cas-router, cas-deck, cas-storage | 4, 5, 6 | default-features off; `rt-multi-thread`, `macros`, `net`, `time`, `sync`. The cas-pool runtime stays open (spec 0001 gap 1). In use since spec 0013 (2026-10-09) in cas-router, plus `io-util` (a feature of the same crate, needed by `AsyncReadExt` and `AsyncWriteExt`; CAS lane amendment, Christian corrects it in place) |
 | `sha2` | 0.11.0 | MIT OR Apache-2.0 | cas-ebpf, cas-router | 2, 4 | none |
 | `reqwest` | 0.13.5 | MIT OR Apache-2.0 | cas-router, cas-deck | 4, 5 | default-features off; `rustls` (aws-lc-rs provider, needs cmake), `http2`, `json`, `stream` |
@@ -174,7 +203,8 @@ project, 522 packages, 2026-10-09):
   `MIT-0` remains.
 - Unmaintained: `bincode` (syntect) and `smallstr` (yrs). Both are excluded above.
 - The set needs a Rust floor of 1.88 (aya, gix, ACP, transitive icu crates);
-  aws-sdk-s3 needs 1.94.1, which equals the pinned toolchain.
+  aws-sdk-s3 needs 1.94.1, which equals the pinned toolchain. Amended
+  2026-10-10: this repo's lockfile needs 1.89 (`uuid` 1.28.0, F3, D2).
 
 ### CI tools
 
@@ -219,6 +249,14 @@ cargo deny check licenses sources
 
 Passing means exit 0 on the clean tree. A GPL-3.0 crate in the tree makes it
 exit non-zero. A git source other than pgt also makes it exit non-zero.
+
+D2 check: both commands exit 0. The control `cargo +1.88.0 check -p cas-acp
+--locked` exits non-zero while `uuid` 1.28.0 is in the lockfile.
+
+```bash
+cargo +1.89.0 check --workspace --all-targets --locked -j 2
+make toolchain-check
+```
 
 ## Notes
 

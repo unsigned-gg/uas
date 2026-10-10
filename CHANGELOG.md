@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Workspace `rust-version` raised to 1.89: the pinned `agent-client-protocol` 2.2.0 (via uuid 1.28) needs it, and aya already needed 1.87 (spec 0004, lane decision 2026-10-10).
+
 ### Added
 - Spec 0024 and Estate Saga CPM with Agent Sprint Wave Strategy (CER-2738): `cas-engine` adds DAG cycle detection, forward/backward Critical Path Method schedule calculation (`CpmSchedule`), slack extraction, and agent sprint wave partitioning (`WavePlan`, `WaveCoordinator`) with estate-bounded concurrency (default 3), role/model/workspace classification, verdict line limit verification, and compensator rollback; `cas-cli` adds `--show-cpm` and `--wave` execution flags.
 - cas-pool: Gitoxide (gix) in-process worktree provisioning and teardown (CER-2724). Provisions ephemeral worktrees directly via gix without external git CLI processes. Eliminates lock collisions on .git/config via shared ODB references. Resets worktrees to clean commit state in sub-second time. Prunes worktree directories and branch references cleanly on teardown.
