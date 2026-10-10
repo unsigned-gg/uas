@@ -920,7 +920,8 @@ mod tests {
         ledger
             .windows
             .extend([window(100, 7, &[300]), window(200, 7, &[300])]);
-        ledger.place(&event_at(300, 0, 7));
+        // ns_pid 7 would place it in both windows by namespace pid; the ppid rule wins.
+        ledger.place(&event_at(300, 100, 7));
         for root in [100, 200] {
             assert_eq!(ledger.windows[&root].transcript.events(), 0, "root {root}");
             assert_eq!(

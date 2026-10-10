@@ -87,7 +87,8 @@ impl Worker {
         self.child.id()
     }
 
-    /// Waits for the worker, seals its receipt and releases the track.
+    /// Waits for the worker, seals its receipt and forgets the window; the
+    /// kernel entry leaves at the worker's exit.
     ///
     /// The receipt is `Attested` only when the worker was tracked, the daemon
     /// sealed it, and no record was dropped. Dropped records come from the

@@ -40,6 +40,9 @@ impl DaemonClient {
     /// Connects like [`DaemonClient::connect`], and gives every request on the
     /// connection a read and write timeout. A daemon that stops answering then
     /// fails the request with an I/O timeout instead of blocking the caller.
+    /// The bound covers requests, not the connect itself: a daemon whose listen
+    /// backlog is full blocks `connect` without a bound (Unix sockets have no
+    /// connect timeout in std).
     pub fn connect_with_timeout(
         path: impl AsRef<Path>,
         timeout: std::time::Duration,

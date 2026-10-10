@@ -289,7 +289,7 @@ make ebpf-test JOBS=2
 
 ## Notes
 
-- **D14 pid ownership (lane w25:p1, 2026-10-10; Christian may override):** a `track` of a pid whose receipt window belongs to another uid is refused with a typed failure. The window is never merged or replaced. Only that uid's `forget`, or its disconnect, frees the pid. `untrack` alone does not free it, because the closed window stays readable until forgotten.
+- **D14 pid ownership (lane w25:p1, 2026-10-10; Christian may override):** a `track` of a pid whose receipt window belongs to another uid is refused with a typed failure. The window is never merged or replaced. The pid is freed by `forget` from the owning uid or from root, or when the owning connection closes. `untrack` alone does not free it, because the closed window stays readable until forgotten.
 - **Aya Licence:** `aya` and `aya-ebpf` are licensed `MIT OR Apache-2.0`.
 - **GPL Helper Compatibility:** Declaring `Dual MIT/GPL` in the ELF license section permits calling GPL-only kernel helpers without licensing contamination of userspace crates.
 - **Clean-Room Boundary:** Zero code is copied from `neutral-engineering/autonice`.
