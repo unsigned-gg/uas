@@ -159,6 +159,31 @@ fn landing_stale_base_refuses() {
 }
 
 #[test]
+fn landing_stale_base_receipt_carries_development_head() {
+    let scratch = Scratch::new("landing_stale_base_receipt_carries_development_head");
+    let dir = scratch.path();
+    write_blackwall_toml_with_verify(dir);
+    canned(dir, "git-merge-base", Some(1), "");
+    canned(dir, "git-rev-parse", None, "ffeedd0011\n");
+    let outcome = run_landing(dir, false);
+
+    let LandingOutcome::StaleBase {
+        receipt,
+        development_head,
+    } = outcome
+    else {
+        panic!("expected StaleBase, got {outcome:?}");
+    };
+    assert_eq!(development_head, "ffeedd0011");
+    assert_eq!(
+        receipt.facts().development_head.as_deref(),
+        Some(development_head.as_str()),
+        "the receipt must record the head the base was checked against (spec 0022 D9)"
+    );
+    assert!(receipt.facts().stale_base);
+}
+
+#[test]
 fn landing_nonzero_verify_opens_no_pr() {
     let scratch = Scratch::new("landing_nonzero_verify_opens_no_pr");
     let dir = scratch.path();
@@ -200,6 +225,7 @@ fn landing_opens_pr_on_exit_zero() {
     assert_eq!(receipt.facts().pr_number, Some(57));
     assert_eq!(receipt.facts().branch.as_deref(), Some(BRANCH));
     assert_eq!(receipt.facts().verify_exit, Some(0));
+    assert_eq!(receipt.facts().development_head, None);
     assert_eq!(receipt.evidence(), EvidenceTier::Verified);
     assert_eq!(
         argv_log(dir),

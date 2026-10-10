@@ -12,7 +12,9 @@ use std::io;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
-use cas_domain::{AuditStatus, CostSource, LandingFacts, LandingReceipt, SlotId};
+use cas_domain::{
+    AuditStatus, CostSource, LandingFacts, LandingReceipt, LandingReceiptError, SlotId,
+};
 use serde::Deserialize;
 
 /// Where the activity runs and which refs it uses.
@@ -108,6 +110,9 @@ pub enum LandingError {
         /// The trimmed standard error of the step.
         stderr: String,
     },
+    /// The receipt rule refused the receipt that the landing built.
+    #[error("landing receipt refused: {0}")]
+    Receipt(#[from] LandingReceiptError),
     /// `blackwall pr` succeeded but printed no `/pull/<n>` link.
     #[error("blackwall pr printed no pull request number")]
     PrNumberUnparsed,
@@ -155,7 +160,11 @@ impl LandingActivity {
             Some(0) => {}
             Some(1) => {
                 let development_head = self.git_head()?;
-                let receipt = self.receipt(input, verify_cmd, None, None, None, true);
+                let parts = ReceiptParts {
+                    development_head: Some(development_head.clone()),
+                    ..ReceiptParts::default()
+                };
+                let receipt = self.receipt(input, verify_cmd, parts)?;
                 return Ok(LandingOutcome::StaleBase {
                     receipt,
                     development_head,
@@ -167,7 +176,7 @@ impl LandingActivity {
         if verify_cmd.is_none() {
             // Fail closed: the custody process opens no PR without a verify gate,
             // and reconcile is skipped too so no `blackwall/` branch is created.
-            let receipt = self.receipt(input, None, None, None, None, false);
+            let receipt = self.receipt(input, None, ReceiptParts::default())?;
             return Ok(LandingOutcome::NoVerifyGate(receipt));
         }
 
@@ -182,7 +191,11 @@ impl LandingActivity {
             None => return Err(unexpected("reconcile", None, &reconcile)),
         };
         if reconcile_exit != 0 {
-            let receipt = self.receipt(input, verify_cmd, Some(reconcile_exit), None, None, false);
+            let parts = ReceiptParts {
+                verify_exit: Some(reconcile_exit),
+                ..ReceiptParts::default()
+            };
+            let receipt = self.receipt(input, verify_cmd, parts)?;
             return Ok(LandingOutcome::VerifyFailed(receipt));
         }
 
@@ -193,14 +206,13 @@ impl LandingActivity {
         }
         let stdout = String::from_utf8_lossy(&pr.stdout);
         let number = parse_pr_number(&stdout).ok_or(LandingError::PrNumberUnparsed)?;
-        let receipt = self.receipt(
-            input,
-            verify_cmd,
-            Some(0),
-            Some(branch),
-            Some(number),
-            false,
-        );
+        let parts = ReceiptParts {
+            verify_exit: Some(0),
+            branch: Some(branch),
+            pr_number: Some(number),
+            ..ReceiptParts::default()
+        };
+        let receipt = self.receipt(input, verify_cmd, parts)?;
         Ok(LandingOutcome::Opened(receipt))
     }
 
@@ -208,12 +220,9 @@ impl LandingActivity {
         &self,
         input: &LandingInput,
         verify_cmd: Option<String>,
-        verify_exit: Option<i32>,
-        branch: Option<String>,
-        pr_number: Option<u64>,
-        stale_base: bool,
-    ) -> LandingReceipt {
-        LandingReceipt::new(LandingFacts {
+        parts: ReceiptParts,
+    ) -> Result<LandingReceipt, LandingError> {
+        let facts = LandingFacts {
             slot_id: input.slot_id.clone(),
             run_hash: input.run_hash.clone(),
             audit: input.audit.clone(),
@@ -221,15 +230,17 @@ impl LandingActivity {
             blackwall_run: input.blackwall_run.clone(),
             changeset_hash: input.changeset_hash.clone(),
             base_sha: input.base_sha.clone(),
-            stale_base,
+            stale_base: parts.development_head.is_some(),
+            development_head: parts.development_head,
             verify_cmd,
-            verify_exit,
-            branch,
-            pr_number,
+            verify_exit: parts.verify_exit,
+            branch: parts.branch,
+            pr_number: parts.pr_number,
             evaluator_touched: input.evaluator_touched,
             cost_source: input.cost_source,
             at: input.at,
-        })
+        };
+        Ok(LandingReceipt::new(facts)?)
     }
 
     fn git_head(&self) -> Result<String, LandingError> {
@@ -250,6 +261,19 @@ impl LandingActivity {
         cmd.output()
             .map_err(|source| LandingError::Spawn { program, source })
     }
+}
+
+/// The outcome fields of a receipt that depend on the step that ran.
+#[derive(Debug, Default)]
+struct ReceiptParts {
+    /// The development head, `Some` only for a stale base (spec 0022 D9).
+    development_head: Option<String>,
+    /// The `blackwall reconcile` exit code, when reconcile ran.
+    verify_exit: Option<i32>,
+    /// The landing branch, when one was created.
+    branch: Option<String>,
+    /// The pull request number, when one was opened.
+    pr_number: Option<u64>,
 }
 
 /// The subset of `blackwall.toml` the activity reads.
