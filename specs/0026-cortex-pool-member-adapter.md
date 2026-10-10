@@ -99,6 +99,16 @@ Facts, 2026-10-10:
   call `Nack` with the D5 delay and release the slot.
 - **Unwanted behavior:** IF a payload does not parse or breaks policy, THEN the
   adapter shall call `Term` with a reason and release the slot.
+- **Ubiquitous:** A round is one pass over the units whose `Extend` is due. Each due
+  `Extend` has a deadline: its due time plus the quarter, the shortest `lease_ms / 4`
+  among running units, fixed at the start of the pass. A call is bounded by the time
+  left to its deadline, and a cut call is a failed `Extend`. A unit whose deadline has
+  passed before its turn counts as failed with no call. The pass orders the due units:
+  first those whose last `Extend` was skipped, then those whose last was cut, then the
+  rest; ties go by slot order (D12).
+- **Ubiquitous:** Every other call on the adapter thread (`Ack`, `Nack`, `Term`, the
+  `Recv` open) shall be bounded by the smaller of its cap and the time left to the
+  earliest pending `Extend` deadline (D12), where pending means the next deadline of every running unit, due or not (test `extend_deadline_bounds_other_rpcs`).
 - **Unwanted behavior:** IF `Extend` fails twice in a row, or a CAS renew fails,
   THEN the adapter shall stop the task and release the slot. It sends no `Ack`, so
   Cortex redelivers after `lease_ms`.
@@ -183,6 +193,7 @@ most `ttl + 1` seconds after `now`.
 | D9 | The minimum `lease_ms` is 300, so the `Extend` tick is at least 100 ms. A smaller value, 0 included (the proto3 default), is a wire or backend fault, not a work fault. The adapter Nacks the unit with the D5 delay and stops `Recv` with an error that names `lease_ms` and its value. The stop is final until a restart: a reconnect would Nack again until `max_deliver`, and the backend would dead-letter the backlog. It never Terms it: on a dropped proto3 field, `Term` would dead-letter the whole backlog. | Integrator ruling w25:p1, 2026-10-10, mesh 4653a43a (lane decision, Christian may override); the 300 floor: cas-engineer, critic round 1 |
 | D10 | The lease `Budget` is the host's task cap, set in the adapter config. The adapter never derives it from `ttl`, and renewals move `expires_at` only. `max_wall_secs` is the task's wall-clock cap. Spec 0023 plans to freeze a slot whose budget runs out, so a budget of `ttl + 1` would freeze any task longer than one lease window. Nothing reads `max_wall_secs` today [verified, `git grep max_wall_secs` at 3009f8d]. | cas-engineer, 2026-10-10, P1 Part A critic (Christian may override) |
 | D11 | Two paths the first build added, kept: (a) a delivery with no `Warm` slot gets `Nack` with the D5 delay, because the server sent more than `free_slots` (F1) and that is not a work fault; (b) the `Recv` reconnect backoff has D5's shape, 1 s doubling to 60 s, and resets after a delivery; (c) a `Recv` stream that ends after it delivered `free_slots` units is the normal end, not a fault, so it costs no backoff, and the adapter reads a filled stream until it ends or a slot frees, so a surplus unit gets the (a) `Nack`; when a slot frees first, it drops that stream and calls `Recv` with the free count, with no backoff, so a server that keeps a filled stream open cannot stall new work. | cas-engineer, 2026-10-10, P1 Part A departures 3 and 9; (c) P1 Part A critic item 2 (Christian may override) |
+| D12 | All calls on the adapter thread run one after another, so their time adds up. A round is one pass over the units whose `Extend` is due; units not due are neither called nor counted. Each due `Extend` gets a deadline: its due time plus the quarter (the shortest `lease_ms / 4` among running units, fixed at the start of the pass). A call is bounded by the time left; a unit whose deadline passed before its turn counts as failed with no call. Order: last `Extend` skipped, then last cut, then the rest, ties by slot order. `Ack`, `Nack`, `Term` and the `Recv` open are bounded by the smaller of their cap and the time left to the earliest pending `Extend` deadline; a cut one follows D6 (logged, slot released), and a finished unit whose `Ack` never lands may be redelivered, as at-least-once allows. Traces (`lease_ms` 3000, quarter 750): two or three hung units are all released at 2750 ms; four hung, two at 3000 and two at 30000, release at 2750 and 27500; one hung unit A beside a healthy B: R1 cuts A and skips B, R2 calls B first, so B keeps its slot and A is released at 2750; A at 0 and B at 900, both hung, release A at 2750 and B at 3650 (a budget that starts at A's turn gives 3400); a hung `Ack` after A's first cut leaves A's release at 2750, not 3750. Slow broker, three units answering in 700 ms: R1 A answers at 1700, B is cut at 1750, C is skipped; R2 C answers at 2700, B is cut at 2750 and stops, A is skipped; later A and C alternate and no `Extend` lands late. At the D9 floor (quarter 75 ms, 29 ms calls) the cut unit goes first next pass, so no unit fails twice in a row. A unit stops by 11/12 of its lease, before Cortex redelivers. A healthy unit can still stop (B above; or behind two hung units): that is safe, since an early stop never runs a unit twice. A fixed 2 s bound broke D4. At the D9 floor the quarter is 75 ms: sane at the measured 29 ms average and 34 ms max to the broker [reported, critic, mesh 6d2b4eff], tight under broker load. The channel keeps 5 s connect and 2 s request timeouts as caps. The bounded `extend` lands with the tonic client, on top of the first part. Rejected: stating the limit and leaning on at-least-once. | cas-engineer, 2026-10-10, P1 Part B critic item B1 and three rounds; elapsed-time budget, per-unit order and the bound on other calls ruled by the integrator w25:p1, mesh 5c083d44 and 4d4d2235 (Christian may override) |
 
 ## Plan
 
@@ -196,7 +207,8 @@ most `ttl + 1` seconds after `now`.
   that the feature enables, and `build.rs` returns at once unless
   `CARGO_FEATURE_CORTEX_GRPC` is set. Its done-when includes `cargo deny check`.
   Past 800 changed lines, split: the ports, the bridge and the classifier first,
-  then the tonic client, both behind the feature.
+  then the tonic client, both behind the feature. The bounded `extend` (D12) lands
+  with the tonic client, on top of the first part.
 - [ ] A real `TaskRunner` after Christian rules the 0019 D2 runtime (D8).
 - [ ] Join tokens: no work here (D7).
 
@@ -230,6 +242,23 @@ Red-first tests. P1 uses a fake port and a fake clock:
   1000, 2000, 60000 and 60000 ms (D5).
 - `cortex_pool_term_on_bad_payload`: a payload that does not parse sends `Term`.
 - `cortex_pool_extend_fails_twice_releases`: no `Ack`, the slot is `Warm`.
+- `cortex_pool_extend_bounded_by_shortest_tick`: units with `lease_ms` 30000 and 3000;
+  a fake `Extend` that hangs is cut at 750 ms, and the 3000 ms unit keeps its 1000 ms
+  tick. Two hung calls release that unit by 2750 ms, before its lease ends (D12).
+- `cortex_pool_extend_round_budget_two_hung_units`: two 3000 ms units, every `Extend`
+  hangs. Both are released by 2750 ms. A per-call-only mutant releases them at 3250
+  and 4000 ms and must go red (D12).
+- `cortex_pool_extend_round_rotates`: unit A hangs, unit B answers. B never reaches
+  two failures in a row and keeps its slot; A is released before its lease ends.
+- `cortex_pool_extend_slow_broker`: three 3000 ms units, every `Extend` answers in
+  700 ms. No `Extend` lands after its unit's lease. A mutant where only a cut spends
+  the budget lands the third at 3100 ms and must go red (D12).
+- `cortex_pool_extend_deadline_from_due_time`: A delivered at 0, B at 900, every
+  `Extend` hangs. A is released by 2750 ms. A mutant that starts A's budget when its
+  turn comes releases A at 3400 ms and must go red (D12).
+- `cortex_pool_extend_deadline_bounds_other_rpcs`: 3000 ms leases, broker hang. A's
+  `Extend` is cut at 1750; an `Ack` for a finished unit X then hangs. A's second
+  failure lands by 2750 ms, not 3750 ms (D12).
 - `cortex_pool_shutdown_nacks_then_drains`: `Nack` with 0, then `Draining`.
 - `cortex_pool_task_error_nacks_and_releases`: a recoverable error sends `Nack` with
   the D5 delay; the slot is `Warm`.
