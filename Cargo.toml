@@ -5,8 +5,9 @@ members = ["crates/*", "xtask"]
 [workspace.package]
 edition = "2021"
 version = "0.1.0"
-# Floor set by pgt (edition 2024). The pinned toolchain is in rust-toolchain.toml.
-rust-version = "1.85"
+# Floor: the highest MSRV in Cargo.lock, uuid 1.28.0 via agent-client-protocol (spec 0004 D2).
+# The pinned toolchain is in rust-toolchain.toml.
+rust-version = "1.89"
 publish = false
 license = "LicenseRef-Proprietary"
 authors = ["the operator <chris@todie.io>"]
