@@ -83,7 +83,9 @@ Facts, 2026-10-10:
   `free_slots` equal to their number.
 - **Event-driven:** WHEN `Recv` yields a `PoolDelivery`, the adapter shall check that
   the slot is free (R1). Then it issues a CAS lease of `ttl + 1` seconds (lease
-  bridge) and moves the slot `Warm -> Leased`.
+  bridge), with the host's task `Budget` (D10), and moves the slot `Warm -> Leased`.
+- **Unwanted behavior:** IF a `PoolDelivery` finds no `Warm` slot, THEN the adapter
+  shall call `Nack` with the D5 delay, lease no slot and start no task (D11).
 - **Unwanted behavior:** IF a `PoolDelivery` has `lease_ms` below 300 (proto3 sends 0
   when the field is unset), THEN the adapter shall call `Nack` with the D5 delay and
   stop `Recv` with an error that names `lease_ms` and its value. The stop is final
@@ -101,8 +103,8 @@ Facts, 2026-10-10:
   THEN the adapter shall stop the task and release the slot. It sends no `Ack`, so
   Cortex redelivers after `lease_ms`.
 - **Unwanted behavior:** IF the `Recv` stream ends, and not by a D9 stop, THEN the
-  adapter shall stop `Recv` and reconnect with exponential backoff. Running tasks
-  continue while `Extend` succeeds.
+  adapter shall stop `Recv` and reconnect after 1 s, doubling to at most 60 s, and
+  reset to 1 s after a delivery (D11). Running tasks continue while `Extend` succeeds.
 - **Optional feature:** WHERE the feature `cortex-grpc` is off, `cas-engine` shall
   build with no `tonic`, `prost`, `prost-types` or `tokio`. The build-dependencies
   `tonic-prost-build` and `protox` are optional and enabled by that feature, and
@@ -155,6 +157,7 @@ most `ttl + 1` seconds after `now`.
 | Recoverable error | `Nack`, delay by D5 | `release` |
 | Payload does not parse, or breaks policy | `Term`, with a reason | `release` |
 | `lease_ms` below 300 (D9) | `Nack` with the D5 delay, then stop `Recv` | none: no slot is leased |
+| No `Warm` slot for the delivery (D11) | `Nack` with the D5 delay | none: no slot is leased |
 | `Extend` fails twice, renew fails, reconnect misses the lease | none: Cortex redelivers after `lease_ms` | `release` |
 | Adapter shutdown | `Nack`, `delay_ms = 0`, for each running unit (D6) | `release`, then `drain` (final) |
 
@@ -171,6 +174,8 @@ most `ttl + 1` seconds after `now`.
 | D7 | Member join tokens and their auth stay in cortex spec 0005 (CER-1988). This spec decides nothing there. | **the Director of Engineering's area** (identity services veto). Not decided here. |
 | D8 | A real `TaskRunner` (a harness run in a slot) needs the `cas-pool` runtime. Spec 0019 D2 reads: "the operator, interview in lane w25:p1, 2026-10-10: benchmark first, then rule." Option A (spec 0015 D5) stays the interim choice, and the operator rules D2 on the numbers of the slot lifecycle benchmark. So the sequence is ruled and the runtime is not. Until then the port has a fake only. | Sequence: the operator (spec 0019 D2). The runtime: **the operator to rule** on the benchmark numbers. |
 | D9 | The minimum `lease_ms` is 300, so the `Extend` tick is at least 100 ms. A smaller value, 0 included (the proto3 default), is a wire or backend fault, not a work fault. The adapter Nacks the unit with the D5 delay and stops `Recv` with an error that names `lease_ms` and its value. The stop is final until a restart: a reconnect would Nack again until `max_deliver`, and the backend would dead-letter the backlog. It never Terms it: on a dropped proto3 field, `Term` would dead-letter the whole backlog. | Integrator ruling w25:p1, 2026-10-10, mesh 4653a43a (lane decision, the operator may override); the 300 floor: cas-engineer, critic round 1 |
+| D10 | The lease `Budget` is the host's task cap, set in the adapter config. The adapter never derives it from `ttl`, and renewals move `expires_at` only. `max_wall_secs` is the task's wall-clock cap. Spec 0023 plans to freeze a slot whose budget runs out, so a budget of `ttl + 1` would freeze any task longer than one lease window. Nothing reads `max_wall_secs` today [verified, `git grep max_wall_secs` at 3009f8d]. | cas-engineer, 2026-10-10, P1 Part A critic (the operator may override) |
+| D11 | Two paths the first build added, kept: (a) a delivery with no `Warm` slot gets `Nack` with the D5 delay, because the server sent more than `free_slots` (F1) and that is not a work fault; (b) the `Recv` reconnect backoff has D5's shape, 1 s doubling to 60 s, and resets after a delivery. | cas-engineer, 2026-10-10, P1 Part A departures 3 and 9 (the operator may override) |
 
 ## Plan
 
@@ -219,6 +224,14 @@ Red-first tests. P1 uses a fake port and a fake clock:
 - `cortex_pool_term_on_bad_payload`: a payload that does not parse sends `Term`.
 - `cortex_pool_extend_fails_twice_releases`: no `Ack`, the slot is `Warm`.
 - `cortex_pool_shutdown_nacks_then_drains`: `Nack` with 0, then `Draining`.
+- `cortex_pool_task_error_nacks_and_releases`: a recoverable error sends `Nack` with
+  the D5 delay; the slot is `Warm`.
+- `cortex_pool_stream_end_reconnects_with_backoff`: reconnects after 1, 2, 4 ... 60
+  and 60 s, then 1 s again after a delivery (D11).
+- `cortex_pool_nack_when_no_warm_slot`: 3 slots, the fake sends one unit more; that
+  unit gets `Nack` with the D5 delay, no lease and no task (D11).
+- `cortex_pool_lease_budget_is_task_cap`: the lease carries the configured `Budget`,
+  and renewals change `expires_at` only (D10).
 
 P1 also adds one test per RPC against an in-process fake server (tonic `server`, dev
 only): `cortex_pool_grpc_recv`, `_ack`, `_extend`, `_nack` and `_term`. Each checks
