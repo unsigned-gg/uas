@@ -55,6 +55,36 @@ pub trait Compensator: Send + Sync {
     ) -> Result<Vec<CompensationReceipt>, EngineError>;
 }
 
+/// Turn one compensator result into receipts. An `Err` becomes one failed receipt.
+pub(crate) fn receipts_or_failure(
+    name: &str,
+    activity: &Activity,
+    result: Result<Vec<CompensationReceipt>, EngineError>,
+) -> Vec<CompensationReceipt> {
+    match result {
+        Ok(receipts) => receipts,
+        Err(e) => vec![CompensationReceipt::new(
+            &activity.id,
+            name,
+            false,
+            e.to_string(),
+            0,
+        )],
+    }
+}
+
+/// Finish a rollback. Return `Ok` when every receipt succeeded, else `CompensationIncomplete`.
+pub(crate) fn finish_rollback(
+    receipts: Vec<CompensationReceipt>,
+) -> Result<Vec<CompensationReceipt>, EngineError> {
+    let failed = receipts.iter().filter(|r| !r.success).count();
+    if failed == 0 {
+        Ok(receipts)
+    } else {
+        Err(EngineError::CompensationIncomplete { failed, receipts })
+    }
+}
+
 /// No-op compensator for read-only checks or stateless activities.
 #[derive(Debug, Default, Clone, Copy)]
 pub struct NoopCompensator;
@@ -298,6 +328,58 @@ impl Compensator for LeaseReturnCompensator {
     }
 }
 
+/// Test double that fails for one activity id and records every call.
+#[cfg(test)]
+#[derive(Debug, Clone)]
+pub(crate) struct FailOnCompensator {
+    fail_on: String,
+    calls: Arc<Mutex<Vec<String>>>,
+}
+
+#[cfg(test)]
+impl FailOnCompensator {
+    /// Create a compensator that fails when `activity.id` equals `fail_on`.
+    pub(crate) fn new(fail_on: &str) -> Self {
+        Self {
+            fail_on: fail_on.to_string(),
+            calls: Arc::default(),
+        }
+    }
+
+    /// Activity ids this compensator received, in call order.
+    pub(crate) fn calls(&self) -> Vec<String> {
+        self.calls.lock().unwrap().clone()
+    }
+}
+
+#[cfg(test)]
+impl Compensator for FailOnCompensator {
+    fn name(&self) -> &'static str {
+        "fail_on"
+    }
+
+    fn compensate(
+        &self,
+        activity: &Activity,
+        _reason: &str,
+    ) -> Result<Vec<CompensationReceipt>, EngineError> {
+        self.calls.lock().unwrap().push(activity.id.clone());
+        if activity.id == self.fail_on {
+            return Err(EngineError::CompensationFailed {
+                activity_id: activity.id.clone(),
+                reason: "injected".into(),
+            });
+        }
+        Ok(vec![CompensationReceipt::new(
+            &activity.id,
+            "fail_on",
+            true,
+            "ok",
+            0,
+        )])
+    }
+}
+
 /// Composite compensator aggregating multiple child compensators.
 #[derive(Default)]
 pub struct CompositeCompensator {
@@ -329,6 +411,7 @@ impl Compensator for CompositeCompensator {
         "composite"
     }
 
+    /// Run every child in add order. A failed child yields a failed receipt, and the rest still run.
     fn compensate(
         &self,
         activity: &Activity,
@@ -336,8 +419,8 @@ impl Compensator for CompositeCompensator {
     ) -> Result<Vec<CompensationReceipt>, EngineError> {
         let mut receipts = Vec::new();
         for handler in &self.handlers {
-            let res = handler.compensate(activity, reason)?;
-            receipts.extend(res);
+            let result = handler.compensate(activity, reason);
+            receipts.extend(receipts_or_failure(handler.name(), activity, result));
         }
         Ok(receipts)
     }
@@ -402,5 +485,22 @@ mod tests {
         assert_eq!(receipts[0].handler_name, "worktree_cleanup");
         assert_eq!(receipts[1].handler_name, "branch_prune");
         assert_eq!(receipts[2].handler_name, "lease_return");
+    }
+
+    #[test]
+    fn composite_compensation_continues_after_child_failure() {
+        let first = RecordingCompensator::new();
+        let failing = FailOnCompensator::new("act-fail");
+        let last = RecordingCompensator::new();
+        let comp = CompositeCompensator::new()
+            .with(first)
+            .with(failing)
+            .with(last.clone());
+
+        let act = Activity::new("act-fail", "Run", ActivityKind::Impl);
+        let receipts = comp.compensate(&act, "error").unwrap();
+        assert_eq!(receipts.len(), 3);
+        assert!(!receipts[1].success);
+        assert_eq!(last.recorded().len(), 1);
     }
 }

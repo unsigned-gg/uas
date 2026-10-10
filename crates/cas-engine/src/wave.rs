@@ -7,6 +7,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
+use crate::compensator::{finish_rollback, receipts_or_failure};
 use crate::{
     Activity, ActivityKind, CompensationReceipt, Compensator, CpmSchedule, CpmStepSchedule,
     EngineError, SagaStep,
@@ -418,12 +419,16 @@ impl WaveCoordinator {
         for step_id in self.completed_steps.iter().rev() {
             if let Some(step) = step_map.get(step_id) {
                 let activity = Activity::new(&step.id, &step.title, step.kind);
-                let receipts = self.compensator.compensate(&activity, reason)?;
-                all_receipts.extend(receipts);
+                let result = self.compensator.compensate(&activity, reason);
+                all_receipts.extend(receipts_or_failure(
+                    self.compensator.name(),
+                    &activity,
+                    result,
+                ));
             }
         }
 
-        Ok(all_receipts)
+        finish_rollback(all_receipts)
     }
 
     /// Access the list of completed step IDs.
@@ -435,7 +440,7 @@ impl WaveCoordinator {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::compensator::RecordingCompensator;
+    use crate::compensator::{FailOnCompensator, RecordingCompensator};
 
     #[test]
     fn wave_planning_bounded_concurrency_and_cpm_priority() {
@@ -541,5 +546,65 @@ mod tests {
             .join("\n");
         let err = validate_verdict(&long_verdict).unwrap_err();
         assert!(matches!(err, EngineError::InvalidFlow { .. }));
+    }
+
+    fn three_independent_steps() -> Vec<SagaStep> {
+        vec![
+            SagaStep::new("s1", "Step 1", ActivityKind::Verify, vec![]),
+            SagaStep::new("s2", "Step 2", ActivityKind::Verify, vec![]),
+            SagaStep::new("s3", "Step 3", ActivityKind::Impl, vec![]),
+        ]
+    }
+
+    fn completed_wave_coordinator(fail_on: &str) -> (WaveCoordinator, FailOnCompensator) {
+        let steps = three_independent_steps();
+        let fc = FailOnCompensator::new(fail_on);
+        let plan = WavePlan::plan(&steps, 3).unwrap();
+        let mut coord = WaveCoordinator::new(plan, Box::new(fc.clone()));
+        for id in ["s1", "s2", "s3"] {
+            coord.mark_step_completed(id, None).unwrap();
+        }
+        (coord, fc)
+    }
+
+    #[test]
+    fn rollback_all_compensations_succeed() {
+        let (coord, fc) = completed_wave_coordinator("none");
+        let receipts = coord.rollback("s3", "build failed").unwrap();
+        assert_eq!(fc.calls(), vec!["s3", "s2", "s1"]);
+        assert_eq!(receipts.len(), 3);
+        assert!(receipts.iter().all(|r| r.success));
+    }
+
+    #[test]
+    fn rollback_continues_after_middle_compensation_failure() {
+        let (coord, fc) = completed_wave_coordinator("s2");
+        let err = coord.rollback("s3", "build failed").unwrap_err();
+        assert_eq!(fc.calls(), vec!["s3", "s2", "s1"]);
+        match err {
+            EngineError::CompensationIncomplete { failed, receipts } => {
+                assert_eq!(failed, 1);
+                assert_eq!(receipts.len(), 3);
+                assert_eq!(receipts[1].activity_id, "s2");
+                assert!(!receipts[1].success);
+                assert_eq!(receipts[1].handler_name, "fail_on");
+            }
+            other => panic!("expected CompensationIncomplete, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn rollback_continues_after_first_compensation_failure() {
+        let (coord, fc) = completed_wave_coordinator("s3");
+        let err = coord.rollback("s3", "build failed").unwrap_err();
+        assert_eq!(fc.calls(), vec!["s3", "s2", "s1"]);
+        match err {
+            EngineError::CompensationIncomplete { failed, receipts } => {
+                assert_eq!(failed, 1);
+                assert_eq!(receipts.len(), 3);
+                assert!(!receipts[0].success);
+            }
+            other => panic!("expected CompensationIncomplete, got {other:?}"),
+        }
     }
 }

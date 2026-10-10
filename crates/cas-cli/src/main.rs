@@ -9,7 +9,7 @@ use cas_domain::{
 };
 use cas_engine::{
     Activity, ActivityKind, ActivityResult, BranchPruneCompensator, CompensationReceipt,
-    CompositeCompensator, CpmSchedule, InMemoryEventStore, LeaseReturnCompensator,
+    CompositeCompensator, CpmSchedule, EngineError, InMemoryEventStore, LeaseReturnCompensator,
     SagaFlowCoordinator, SagaFlowDef, SessionId, SessionState, SomaAdmissionGate, WaveCoordinator,
     WavePlan, WorkflowEvent, WorkflowSession, WorktreeCleanupCompensator,
     DEFAULT_MAX_WAVE_CONCURRENCY,
@@ -160,6 +160,17 @@ struct VerificationReport {
     state: SessionState,
     event_count: usize,
     satisfies_gate: bool,
+}
+
+/// Keep the receipts of a rollback that had failed compensations, so the report still lists them.
+fn keep_receipts(
+    result: Result<Vec<CompensationReceipt>, EngineError>,
+) -> Result<Vec<CompensationReceipt>, EngineError> {
+    match result {
+        Ok(receipts) => Ok(receipts),
+        Err(EngineError::CompensationIncomplete { receipts, .. }) => Ok(receipts),
+        Err(other) => Err(other),
+    }
 }
 
 fn parse_evidence_tier(s: &str) -> Result<EvidenceTier> {
@@ -578,7 +589,8 @@ fn harness_run_flow(
                     let reason = format!("policy admission rejected for step {}: {e}", step.id);
                     workflow.fail_activity(&activity, reason.clone(), step_now)?;
                     let mut receipts = workflow.compensation_receipts().to_vec();
-                    let rollback_receipts = wave_coordinator.rollback(&step.id, &reason)?;
+                    let rollback_receipts =
+                        keep_receipts(wave_coordinator.rollback(&step.id, &reason))?;
                     receipts.extend(rollback_receipts);
 
                     return Ok(HarnessReport {
@@ -670,7 +682,8 @@ fn harness_run_flow(
                         );
                         workflow.fail_activity(&activity, reason.clone(), step_now)?;
                         let mut receipts = workflow.compensation_receipts().to_vec();
-                        let rollback_receipts = wave_coordinator.rollback(&step.id, &reason)?;
+                        let rollback_receipts =
+                            keep_receipts(wave_coordinator.rollback(&step.id, &reason))?;
                         receipts.extend(rollback_receipts);
 
                         return Ok(HarnessReport {
@@ -741,7 +754,7 @@ fn harness_run_flow(
 
         if !wave_coordinator.is_finished() {
             let reason = "wave flow terminated prematurely".to_string();
-            let receipts = wave_coordinator.rollback("wave-dag", &reason)?;
+            let receipts = keep_receipts(wave_coordinator.rollback("wave-dag", &reason))?;
             return Ok(HarnessReport {
                 session_id: session_id.to_string(),
                 slot_id: slot_id.to_string(),
@@ -789,7 +802,7 @@ fn harness_run_flow(
             let reason = format!("policy admission rejected for step {}: {e}", step.id);
             workflow.fail_activity(&activity, reason.clone(), step_now)?;
             let mut receipts = workflow.compensation_receipts().to_vec();
-            let rollback_receipts = coordinator.rollback(&step.id, &reason)?;
+            let rollback_receipts = keep_receipts(coordinator.rollback(&step.id, &reason))?;
             receipts.extend(rollback_receipts);
 
             return Ok(HarnessReport {
@@ -866,7 +879,7 @@ fn harness_run_flow(
                 );
                 workflow.fail_activity(&activity, reason.clone(), step_now)?;
                 let mut receipts = workflow.compensation_receipts().to_vec();
-                let rollback_receipts = coordinator.rollback(&step.id, &reason)?;
+                let rollback_receipts = keep_receipts(coordinator.rollback(&step.id, &reason))?;
                 receipts.extend(rollback_receipts);
 
                 return Ok(HarnessReport {
@@ -929,7 +942,7 @@ fn harness_run_flow(
     if !coordinator.is_finished() {
         let reason =
             "flow terminated prematurely: unsatisfied dependencies or cyclic DAG".to_string();
-        let receipts = coordinator.rollback("flow-dag", &reason)?;
+        let receipts = keep_receipts(coordinator.rollback("flow-dag", &reason))?;
         return Ok(HarnessReport {
             session_id: session_id.to_string(),
             slot_id: slot_id.to_string(),
