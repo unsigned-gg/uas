@@ -90,7 +90,7 @@ pub fn settle_cards(queue: &PendingCards) -> Markup {
                 "Cortex reports " (queue.total) " pending. The deck shows " (queue.cards.len()) "."
             }
         }
-        @if queue.cards.is_empty() {
+        @if queue.total == 0 && queue.cards.is_empty() {
             p { "Nothing waits for a decision." }
         }
         @for card in &queue.cards {
@@ -262,10 +262,80 @@ mod tests {
             "b3f1c2a9",
             "2 files changed, 14 insertions(+), 3 deletions(-)",
             "fleet:builder-1",
+            "Source email",
+            "Vendor asked for a revised invoice",
+            "Age 93600 s",
         ];
         for needle in expected {
             assert!(markup.contains(needle), "missing {needle}: {markup}");
         }
+    }
+
+    #[test]
+    fn every_text_field_is_escaped() {
+        let body = r#"{"by_source": {"<x>": [{"job_id": "a\"b<x>", "source": "<x>", "changeset": {"run_hash": "<x>", "description": "<x>"}, "guard_decision": {"allow": false, "rule_id": "<x>", "reason": "<x>"}, "settle_url": "http://cortex.invalid/v1/settle/x", "created_at": "<x>", "age_secs": 1, "needs_attention": false, "detail": "<x>", "custody": "<x>"}]}, "plans": [], "total": 1}"#;
+        let queue = crate::parse_pending(body).unwrap();
+        let markup = settle_cards(&queue).into_string();
+        let expected = [
+            r#"id="settle/a&quot;b&lt;x&gt;""#,
+            "<h3>&lt;x&gt;</h3>",
+            "Source &lt;x&gt;",
+            "Run &lt;x&gt;",
+            "&lt;x&gt;: &lt;x&gt;",
+            "<p>&lt;x&gt;</p>",
+            "Custody &lt;x&gt;",
+            "Created at &lt;x&gt;",
+        ];
+        for needle in expected {
+            assert!(markup.contains(needle), "missing {needle}: {markup}");
+        }
+        assert!(!markup.contains("<x>"), "{markup}");
+    }
+
+    #[test]
+    fn unknown_source_renders_as_sent() {
+        let body = r#"{"by_source": {"fax": [{"job_id": "f1", "source": "fax", "changeset": {"run_hash": "r1", "description": "Send the form"}, "guard_decision": {"allow": true, "rule_id": "r", "reason": "ok"}, "settle_url": "http://cortex.invalid/v1/settle/f1", "created_at": "2026-10-10T00:00:00Z", "age_secs": 5, "needs_attention": false}]}, "plans": [], "total": 1}"#;
+        let queue = crate::parse_pending(body).unwrap();
+        let markup = settle_cards(&queue).into_string();
+        assert!(markup.contains("Source fax"), "{markup}");
+    }
+
+    #[test]
+    fn guard_and_attention_are_per_card() {
+        let markup = settle_cards(&fixture()).into_string();
+        let deny = r#"<article class="card guard-deny card-attention" id="settle/e1">"#;
+        let allow = r#"<article class="card guard-allow" id="settle/g1">"#;
+        assert!(markup.contains(deny), "{markup}");
+        assert!(markup.contains(allow), "{markup}");
+    }
+
+    #[test]
+    fn empty_cards_with_total_shows_notice_not_empty_text() {
+        let queue = PendingCards {
+            cards: Vec::new(),
+            total: 2,
+        };
+        let markup = settle_cards(&queue).into_string();
+        assert!(
+            markup.contains("Cortex reports 2 pending. The deck shows 0."),
+            "{markup}"
+        );
+        assert!(!markup.contains("Nothing waits"), "{markup}");
+        let empty = settle_cards(&queue_of(Vec::new())).into_string();
+        assert!(empty.contains("Nothing waits for a decision."), "{empty}");
+    }
+
+    #[test]
+    fn count_notice_from_source_total() {
+        let body = include_str!("../tests/fixtures/settle-pending.json")
+            .replace("\"total\": 4", "\"total\": 5");
+        let queue = crate::parse_pending(&body).unwrap();
+        assert_eq!(queue.total, 5);
+        let markup = settle_cards(&queue).into_string();
+        assert!(
+            markup.contains("Cortex reports 5 pending. The deck shows 4."),
+            "{markup}"
+        );
     }
 
     #[test]

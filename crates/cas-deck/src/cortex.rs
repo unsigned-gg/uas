@@ -236,4 +236,19 @@ mod tests {
             other => panic!("expected CortexUnavailable, got {:?}", other.map(|_| ())),
         }
     }
+
+    #[test]
+    fn parse_total_is_the_source_total() {
+        let body = FIXTURE.replace("\"total\": 4", "\"total\": 5");
+        let parsed = parse_pending(&body).unwrap();
+        assert_eq!(parsed.total, 5);
+        assert_eq!(parsed.cards.len(), 4);
+    }
+
+    #[test]
+    fn parse_keeps_unknown_source_as_sent() {
+        let body = r#"{"by_source": {"fax": [{"job_id": "f1", "source": "fax", "changeset": {"run_hash": "r1", "description": "Send the form"}, "guard_decision": {"allow": true, "rule_id": "r", "reason": "ok"}, "settle_url": "http://cortex.invalid/v1/settle/f1", "created_at": "2026-10-10T00:00:00Z", "age_secs": 5, "needs_attention": false}]}, "plans": [], "total": 1}"#;
+        let parsed = parse_pending(body).unwrap();
+        assert_eq!(parsed.cards[0].source, "fax");
+    }
 }

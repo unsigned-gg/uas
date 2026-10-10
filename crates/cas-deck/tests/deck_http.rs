@@ -163,6 +163,15 @@ impl PendingFetch for EmptyFetch {
     }
 }
 
+/// Serves the fixture with a source total of 5 for 4 cards.
+struct FiveTotalFetch;
+
+impl PendingFetch for FiveTotalFetch {
+    fn fetch_pending(&self) -> Result<String, DeckError> {
+        Ok(include_str!("fixtures/settle-pending.json").replace("\"total\": 4", "\"total\": 5"))
+    }
+}
+
 /// Fails the way a refused connection fails.
 struct RefusedFetch;
 
@@ -250,6 +259,20 @@ async fn get_settle_disconnected_on_parse_error() {
     assert_eq!(response.status, 200);
     assert!(response.body.contains("disconnected"), "{}", response.body);
     assert!(!response.body.contains("class=\"card"), "{}", response.body);
+}
+
+#[tokio::test]
+async fn get_settle_shows_count_notice_when_total_differs() {
+    let response = get(cortex_state(FiveTotalFetch), "/settle").await;
+    assert_eq!(response.status, 200);
+    assert!(
+        response
+            .body
+            .contains("Cortex reports 5 pending. The deck shows 4."),
+        "{}",
+        response.body
+    );
+    assert!(!response.body.contains("disconnected"), "{}", response.body);
 }
 
 #[tokio::test]
