@@ -798,7 +798,13 @@ fn wave_step_open_prs_off_unless_env() {
             xdg_state_home: Some("/xdg".into()),
             ..WaveEnv::default()
         };
-        wave_flow::step_config(&args, &env, "fixture", &cwd)
+        wave_flow::step_config(
+            &args,
+            &env,
+            "fixture",
+            &wave_flow::PlanMerge::default(),
+            &cwd,
+        )
     };
     assert!(!cfg(None).open_prs, "off by default");
     assert!(!cfg(Some("0")).open_prs);
@@ -1022,4 +1028,313 @@ fn wave_step_executor_error_halts_and_exits_3() {
             .unwrap();
     assert_eq!(rec["outcome"]["result"], "halted");
     assert_eq!(rec["outcome"]["reason"], "ExecutorError");
+}
+
+// ------------------------------------------------------------ merge on green
+
+/// A Builder and its Critic, with the merge keys under `[flow]`.
+const MERGE_PLAN: &str = r#"
+[flow]
+name = "fixture"
+merge_on_green = true
+merge_wait_secs = 120
+
+[[step]]
+id = "wave-x-build"
+title = "Build"
+kind = "impl"
+agent = "builder"
+
+[[step]]
+id = "wave-x-critic"
+title = "Review"
+kind = "verify"
+agent = "critic"
+deps = ["wave-x-build"]
+"#;
+
+fn merge_step_of(
+    files: &[(String, String)],
+) -> Vec<(String, String, Vec<String>, Option<String>, Vec<String>)> {
+    files
+        .iter()
+        .flat_map(|(_, text)| steps(text))
+        .filter(|s| s.0.starts_with("merge-"))
+        .collect()
+}
+
+#[test]
+fn wave_flow_merge_steps_emitted() {
+    let src = plan("merge-emit", MERGE_PLAN);
+    let argv = |wait: &str, extra: &[&str]| -> Vec<String> {
+        let mut v: Vec<String> = [
+            "timeout",
+            "-k",
+            "30",
+            wait,
+            "cas",
+            "wave",
+            "merge-gate",
+            "--flow",
+        ]
+        .iter()
+        .map(|s| (*s).to_owned())
+        .collect();
+        v.push(src.display().to_string());
+        v.extend(
+            ["--builder", "wave-x-build"]
+                .iter()
+                .map(|s| (*s).to_owned()),
+        );
+        v.extend(extra.iter().map(|s| (*s).to_owned()));
+        v
+    };
+    let files = generate(&src, None);
+    let got = merge_step_of(&files);
+    assert_eq!(got.len(), 1, "{got:?}");
+    let (id, kind, deps, gate, verify) = &got[0];
+    assert_eq!((id.as_str(), kind.as_str()), ("merge-wave-x-build", "test"));
+    assert_eq!(deps, &["wave-x-critic"]);
+    assert_eq!(gate, &None);
+    assert_eq!(verify, &argv("180", &[]));
+    // The step sits in the Critic's flow, and the shim prompt and agent are the same.
+    let critic_flow = files
+        .iter()
+        .find(|(_, t)| t.contains("\"wave-x-critic\""))
+        .unwrap();
+    assert!(critic_flow.1.contains("id = \"merge-wave-x-build\""));
+    assert!(critic_flow.1.matches("agent = \"auto\"").count() == 2);
+    // --max-concurrency is repeated, as for a shim step.
+    assert_eq!(
+        merge_step_of(&generate(&src, Some("2")))[0].4,
+        argv("180", &["--max-concurrency", "2"])
+    );
+    // The default wait is 900 s, so the outer timeout is 960.
+    let no_wait = plan(
+        "merge-emit-default",
+        &MERGE_PLAN.replace("merge_wait_secs = 120\n", ""),
+    );
+    assert_eq!(merge_step_of(&generate(&no_wait, None))[0].4[3], "960");
+}
+
+#[test]
+fn wave_flow_merge_id_collision_refused() {
+    let text = format!(
+        "{MERGE_PLAN}\n[[step]]\nid = \"merge-wave-x-build\"\ntitle = \"Clash\"\nkind = \"verify\"\nagent = \"probe\"\nverify_cmd = [\"true\"]\n"
+    );
+    let src = plan("merge-clash", &text);
+    let out_dir = scratch("merge-clash-out");
+    write(&out_dir.join("cas-cpm-wave-w9.toml"), "stale\n");
+    let out = cas(&root(), &out_dir)
+        .args(["wave", "flow", "--from"])
+        .arg(&src)
+        .arg("--out-dir")
+        .arg(&out_dir)
+        .output()
+        .unwrap();
+    assert!(!out.status.success());
+    assert!(
+        stderr(&out).contains("merge-wave-x-build"),
+        "{}",
+        stderr(&out)
+    );
+    // It writes no file and removes none.
+    assert_eq!(read_waves(&out_dir).len(), 1);
+    assert!(out_dir.join("cas-cpm-wave-w9.toml").exists());
+    // Control: with the flag off the same plan generates.
+    let off = plan(
+        "merge-clash-off",
+        &text.replace("merge_on_green = true", "merge_on_green = false"),
+    );
+    assert!(!generate(&off, None).is_empty());
+}
+
+/// With the flag off the output equals the checked-in flows, byte for byte.
+#[test]
+fn wave_flow_merge_off_byte_identical() {
+    let smoke = fs::read_to_string(root().join(SMOKE)).unwrap();
+    let text = smoke.replace("[flow]\n", "[flow]\nmerge_on_green = false\n");
+    assert_ne!(text, smoke);
+    let src = plan("merge-off", &text);
+    let out_dir = scratch("merge-off-out");
+    let out = cas(&root(), &out_dir)
+        .args(["wave", "flow", "--from"])
+        .arg(&src)
+        .arg("--out-dir")
+        .arg(&out_dir)
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "{}", stderr(&out));
+    let norm = |t: String| {
+        t.replace(&src.display().to_string(), SMOKE)
+            .replace(&out_dir.display().to_string(), FLOW_DIR)
+    };
+    let got: Vec<_> = read_waves(&out_dir)
+        .into_iter()
+        .map(|(n, t)| (n, norm(t)))
+        .collect();
+    assert_eq!(got, read_waves(&root().join(FLOW_DIR)));
+}
+
+#[test]
+fn wave_step_bad_merge_key_exits_2() {
+    let src = plan(
+        "merge-bad",
+        &MERGE_PLAN.replace("merge_on_green = true", "merge_on_green = \"yes\""),
+    );
+    let home = scratch("merge-bad-home");
+    let out = cas(&root(), &home)
+        .args(["wave", "step", "--flow"])
+        .arg(&src)
+        .args(["--step", "wave-x-build", "--state-dir"])
+        .arg(home.join("state"))
+        .output()
+        .unwrap();
+    assert_eq!(out.status.code(), Some(2), "{}", stderr(&out));
+    assert!(stderr(&out).contains("parse plan"), "{}", stderr(&out));
+}
+
+/// A state dir with a Passed Builder record (PR 57), a plan, and a `bin` with a `git` shim that
+/// prints `log` as given and a fake `blackwall` that logs its argv, cwd and the automerge variable.
+struct Gate {
+    home: PathBuf,
+    repo: PathBuf,
+    bin: PathBuf,
+    state: PathBuf,
+    src: PathBuf,
+}
+
+fn gate_case(name: &str, log: &str, blackwall_exit: i32) -> Gate {
+    let home = scratch(name);
+    let (repo, bin, state) = (home.join("repo"), home.join("bin"), home.join("state"));
+    fs::create_dir_all(&repo).unwrap();
+    let real_git = std::env::var_os("PATH")
+        .and_then(|p| {
+            std::env::split_paths(&p)
+                .map(|d| d.join("git"))
+                .find(|g| g.is_file())
+        })
+        .expect("git on PATH");
+    let script = |body: String, name: &str| {
+        write(&bin.join(name), &format!("#!/bin/sh\n{body}"));
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(bin.join(name), fs::Permissions::from_mode(0o755)).unwrap();
+    };
+    script(
+        format!("if [ \"$1\" = log ] && [ \"$2\" = '--format=%G?' ]; then printf '{log}'; exit 0; fi\nexec '{}' \"$@\"\n", real_git.display()),
+        "git",
+    );
+    script(
+        format!(
+            "{{ echo \"$*\"; pwd -P; echo \"AUTOMERGE=${{BLACKWALL_AUTOMERGE-absent}}\"; }} > '{}'\necho 'ready: 57'\nexit {blackwall_exit}\n",
+            home.join("blackwall.log").display()
+        ),
+        "blackwall",
+    );
+    write(
+        &state.join("wave-x-build.json"),
+        r#"{"step":"wave-x-build","role":"Builder","outcome":{"result":"passed"},"base":"aaa","head":"bbb","pr":57,"at":1,"seq":0}"#,
+    );
+    let src = plan(&format!("{name}-plan"), MERGE_PLAN);
+    Gate {
+        home,
+        repo,
+        bin,
+        state,
+        src,
+    }
+}
+
+fn run_gate(g: &Gate) -> Output {
+    cas(&root(), &g.home)
+        .env("PATH", &g.bin)
+        .env("BLACKWALL_AUTOMERGE", "true")
+        .args(["wave", "merge-gate", "--flow"])
+        .arg(&g.src)
+        .args(["--builder", "wave-x-build", "--repo"])
+        .arg(&g.repo)
+        .arg("--state-dir")
+        .arg(&g.state)
+        .output()
+        .unwrap()
+}
+
+#[test]
+fn wave_merge_gate_execs_blackwall() {
+    let g = gate_case("gate-exec", "G\\nG\\n", 7);
+    let out = run_gate(&g);
+    assert_eq!(out.status.code(), Some(7), "stderr: {}", stderr(&out));
+    let log = fs::read_to_string(g.home.join("blackwall.log")).unwrap();
+    let want = format!(
+        "merge-gate 57 --watch --timeout 120\n{}\nAUTOMERGE=absent\n",
+        g.repo.canonicalize().unwrap().display()
+    );
+    assert_eq!(log, want);
+}
+
+#[test]
+fn wave_merge_gate_ready_on_exit_0() {
+    let g = gate_case("gate-ready", "G\\n", 0);
+    let out = run_gate(&g);
+    assert_eq!(out.status.code(), Some(0), "stderr: {}", stderr(&out));
+    assert!(stdout(&out).contains("ready: 57"), "{}", stdout(&out));
+}
+
+#[test]
+fn wave_merge_gate_refuses_unsigned_cli() {
+    let g = gate_case("gate-unsigned", "G\\nN\\n", 0);
+    let out = run_gate(&g);
+    assert_eq!(out.status.code(), Some(1), "stderr: {}", stderr(&out));
+    assert!(
+        stderr(&out).contains("merge-gate refused"),
+        "{}",
+        stderr(&out)
+    );
+    assert!(!g.home.join("blackwall.log").exists(), "no blackwall ran");
+}
+
+#[test]
+fn wave_step_merge_config_from_plan_and_admission() {
+    let cwd = scratch("merge-cfg");
+    let args = StepArgs {
+        flow: "unused".into(),
+        step: "wave-x-build".into(),
+        repo: None,
+        state_dir: None,
+        max_concurrency: 0,
+    };
+    let cfg = |merge: &wave_flow::PlanMerge| {
+        wave_flow::step_config(&args, &WaveEnv::default(), "fixture", merge, &cwd)
+    };
+    let off = cfg(&wave_flow::PlanMerge::default());
+    assert!(!off.merge_on_green);
+    assert_eq!(off.merge_wait, std::time::Duration::from_secs(900));
+    let on = cfg(&wave_flow::plan_merge(MERGE_PLAN).unwrap());
+    assert!(on.merge_on_green && !on.open_prs);
+    assert_eq!(on.merge_wait, std::time::Duration::from_secs(120));
+    // Through the binary: the plan alone asks for merge, and admission refuses it without
+    // CAS_WAVE_OPEN_PRS. With the variable set the merge row no longer fires.
+    let src = plan("merge-admit", MERGE_PLAN);
+    let run = |open: bool| {
+        let home = scratch("merge-admit-home");
+        let mut cmd = cas(&root(), &home);
+        cmd.args(["wave", "step", "--flow"])
+            .arg(&src)
+            .args(["--step", "wave-x-build", "--repo"])
+            .arg(home.join("repo"))
+            .arg("--state-dir")
+            .arg(home.join("state"));
+        if open {
+            cmd.env("CAS_WAVE_OPEN_PRS", "1");
+        }
+        cmd.output().unwrap()
+    };
+    let refused = run(false);
+    assert_eq!(refused.status.code(), Some(2), "{}", stderr(&refused));
+    assert!(
+        stderr(&refused).contains("merge_on_green needs open_prs"),
+        "{}",
+        stderr(&refused)
+    );
+    assert!(!stderr(&run(true)).contains("merge_on_green needs open_prs"));
 }

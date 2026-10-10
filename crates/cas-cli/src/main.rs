@@ -89,6 +89,25 @@ enum WaveCommand {
         #[arg(long, default_value_t = 0)]
         max_concurrency: usize,
     },
+    /// Resolve a Builder's PR and run `blackwall merge-gate` on it. Saga calls this as the
+    /// `verify_cmd` of a generated merge step.
+    MergeGate {
+        /// The plan, as given to `wave flow --from`.
+        #[arg(long)]
+        flow: String,
+        /// The Builder step id.
+        #[arg(long)]
+        builder: String,
+        /// The custody checkout. Defaults to `CAS_WAVE_REPO`, then the working directory.
+        #[arg(long)]
+        repo: Option<std::path::PathBuf>,
+        /// The state directory. Defaults to `CAS_WAVE_STATE_DIR`, then under `XDG_STATE_HOME`.
+        #[arg(long)]
+        state_dir: Option<std::path::PathBuf>,
+        /// The most steps in flight, as given to `wave flow`. 0 means the default of 3.
+        #[arg(long, default_value_t = 0)]
+        max_concurrency: usize,
+    },
 }
 
 #[derive(Debug, Subcommand)]
@@ -1095,6 +1114,24 @@ fn main() -> Result<()> {
                 let cwd = std::env::current_dir()?;
                 let code = wave_flow::run_step(&args, &wave_flow::WaveEnv::from_process(), &cwd);
                 std::process::exit(code);
+            }
+            WaveCommand::MergeGate {
+                flow,
+                builder,
+                repo,
+                state_dir,
+                max_concurrency,
+            } => {
+                let args = wave_flow::StepArgs {
+                    flow,
+                    step: builder,
+                    repo,
+                    state_dir,
+                    max_concurrency,
+                };
+                let cwd = std::env::current_dir()?;
+                let env = wave_flow::WaveEnv::from_process();
+                std::process::exit(wave_flow::run_merge_gate(&args, &env, &cwd));
             }
         },
         Command::Harness { command } => match command {
