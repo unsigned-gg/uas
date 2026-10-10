@@ -37,8 +37,11 @@ Measured 2026-10-08:
     0014 T16 and D13 hold the detail.
   - `unshare -Upf --fork` fails with `Operation not permitted`, so the nested
     live case prints its allowed skip line there. The green run 38028859773
-    passed 9 with that skip. The cause, no user namespaces on the node, is
-    [asserted]: the log shows only the error.
+    passed 9 with that skip. The cause is the pod's `RuntimeDefault` seccomp
+    profile, which refuses `CLONE_NEWUSER`; the node itself has user namespaces
+    (`CONFIG_USER_NS=y`, `user.max_user_namespaces` 15000) [reported, paas lane
+    probe on cygnus-principes-4, 2026-10-10, mesh 906c9a88]. Lifting it is the
+    held OPS-1660 seccomp half, Christian's gate.
   - Per-run toolchain cost, from the step start times: 22 s in run 38027192645
     and 19 s in run 38028859773 (install-action under 1 s, pinned nightly 8 to
     11 s, drift rebuild 10 to 11 s). Run 38027008230 stopped at the `zstd`
