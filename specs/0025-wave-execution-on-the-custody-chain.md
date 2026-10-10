@@ -253,8 +253,7 @@ exit 1 and run nothing. Only a person removes one.
   parse, the host lock, `WorkflowEvent::WaveStep` and `WaveCompensator`. Tests use fake
   `blackwall`, `git` and `claude` scripts, red first. It starts after P5b and P5c (spec 0022
   D7, D9 to D11) land: all three edit `landing.rs`.
-- [ ] P9b, `cas-cli`, `cas-builder` haiku. It adds `cas wave flow` and
-  `cas wave step` with the state directory, and the source plan
+- [ ] P9b, `cas-cli`, `cas-builder` haiku. It adds `cas wave flow` and `cas wave step` with the state directory, and the source plan
   `.saga/plans/cas-wave-smoke.toml`. It generates `.saga/flows/cas-cpm-wave-w*.toml`
   and adds `tasks/wave-smoke-build/`. Tests: a round-trip and a drift test.
 - [ ] P9c, integrator on ceres, once D14 is ruled: `blackwall doctor`,
