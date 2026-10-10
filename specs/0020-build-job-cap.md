@@ -89,7 +89,7 @@ process from blocking on I/O or from allocating memory (`memory.high` and
 |---|---|---|
 | D1 | The claim "eBPF enforces `-j 2`" is dropped. Spec 0001 gap 2 closes with this spec. | CAS lane w25:p1, 2026-10-10 |
 | D2 | The job cap is the cgroup v2 CPU quota per slot, written by `CgroupFreezer::configure_limits`, plus the `-j 2` convention. | CAS lane w25:p1, 2026-10-10 |
-| D3 | Default quota per slot: `200000 100000` (two CPUs). Alternatives: one CPU (`100000 100000`) for a crowded host; `max` for a dedicated one. | **the operator to rule** |
+| D3 | Default quota per slot: `200000 100000` (two CPUs). Alternatives considered: one CPU (`100000 100000`) for a crowded host; `max` for a dedicated one. | the operator, interview in lane w25:p1, 2026-10-10: two CPUs |
 | D4 | A missing `cpu` controller is recorded, not fatal: `cpu_cap: uncapped` in the receipt, a warn log. This replaces the silent skip in F6. | CAS lane w25:p1, 2026-10-10 |
 | D5 | The quota applies to the slot, not to builds alone. The kernel cannot tell a build from an editor; the slot is the unit of isolation. | CAS lane w25:p1, 2026-10-10 |
 
@@ -101,8 +101,8 @@ Saga reads it as evidence that the host throttling invariant held for the run.
 
 ## Plan
 
-- [ ] the operator rules D3.
-- [ ] `cas-pool`: default `ResourceLimits` to the ruled quota at slot launch (today
+- [x] the operator rules D3 (two CPUs, 2026-10-10).
+- [ ] `cas-pool`: default `ResourceLimits` to `cpu_quota_us: 200_000, cpu_period_us: 100_000` at slot launch (today
   the caller passes limits; the default is `None`, which writes nothing).
 - [ ] `cas-pool`: replace the silent skip (F6) with the `uncapped` receipt field and
   a warn log; test goes red first on a cgroup without the `cpu` controller
