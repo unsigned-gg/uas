@@ -1,0 +1,3 @@
+provider = "claude"
+model = "haiku"
+budget_tokens = 100000
