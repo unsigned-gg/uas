@@ -108,7 +108,7 @@ Facts, 2026-10-10:
   rest; ties go by slot order (D12).
 - **Ubiquitous:** Every other call on the adapter thread (`Ack`, `Nack`, `Term`, the
   `Recv` open) shall be bounded by the smaller of its cap and the time left to the
-  earliest pending `Extend` deadline (D12).
+  earliest pending `Extend` deadline (D12), where pending means the next deadline of every running unit, due or not (test `extend_deadline_bounds_other_rpcs`).
 - **Unwanted behavior:** IF `Extend` fails twice in a row, or a CAS renew fails,
   THEN the adapter shall stop the task and release the slot. It sends no `Ack`, so
   Cortex redelivers after `lease_ms`.
