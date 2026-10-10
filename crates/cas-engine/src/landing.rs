@@ -69,11 +69,13 @@ pub struct LandingInput {
 /// The result of one landing attempt.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum LandingOutcome {
-    /// The pull request was opened. The tier is `verified` only when `blackwall.toml` sets
-    /// a verify command, reconcile exited zero and no evaluator file changed.
+    /// The pull request was opened. The tier is `verified` only when reconcile exited zero
+    /// and no evaluator file changed.
     Opened(LandingReceipt),
     /// `blackwall reconcile` exited non-zero. No pull request was opened.
     VerifyFailed(LandingReceipt),
+    /// `blackwall.toml` has no `[verify]` command. No pull request was opened.
+    NoVerifyGate(LandingReceipt),
     /// The base is not an ancestor of the development head. Nothing was applied.
     StaleBase {
         /// The receipt, with `stale_base` set.
@@ -174,6 +176,12 @@ impl LandingActivity {
         if reconcile_exit != 0 {
             let receipt = self.receipt(input, verify_cmd, Some(reconcile_exit), None, None, false);
             return Ok(LandingOutcome::VerifyFailed(receipt));
+        }
+
+        if verify_cmd.is_none() {
+            // Fail closed: the custody process opens no PR without a verify gate.
+            let receipt = self.receipt(input, None, None, None, None, false);
+            return Ok(LandingOutcome::NoVerifyGate(receipt));
         }
 
         let pr_base = self.config.pr_base.as_str();

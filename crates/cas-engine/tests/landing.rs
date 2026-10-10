@@ -235,8 +235,8 @@ fn landing_evaluator_touched_caps_tier() {
 
 #[test]
 fn landing_missing_verify_is_reported() {
-    // blackwall 1.2.0 exits 0 with only a warning when [verify] is absent, so exit 0
-    // alone must not earn `verified`.
+    // blackwall 1.2.0 exits 0 with only a warning when [verify] is absent. The custody
+    // process is fail-closed, so the activity must not open a PR without a verify gate.
     let scratch = Scratch::new("landing_missing_verify_is_reported");
     let dir = scratch.path();
     write_blackwall_toml_without_verify(dir);
@@ -248,11 +248,17 @@ fn landing_missing_verify_is_reported() {
     );
     let outcome = run_landing(dir, false);
 
-    let LandingOutcome::Opened(receipt) = outcome else {
-        panic!("expected Opened, got {outcome:?}");
+    let LandingOutcome::NoVerifyGate(receipt) = outcome else {
+        panic!("expected NoVerifyGate, got {outcome:?}");
     };
     assert_eq!(receipt.facts().verify_cmd, None);
-    assert_eq!(receipt.facts().verify_exit, Some(0));
-    assert_eq!(receipt.facts().pr_number, Some(59));
+    assert_eq!(receipt.facts().verify_exit, None);
+    assert_eq!(receipt.facts().branch, None);
+    assert_eq!(receipt.facts().pr_number, None);
     assert_eq!(receipt.evidence(), EvidenceTier::Reported);
+    let log = argv_log(dir);
+    assert!(
+        !log.iter().any(|line| line.starts_with("blackwall pr")),
+        "no verify gate must not open a PR: {log:?}"
+    );
 }
