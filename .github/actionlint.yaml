@@ -2,4 +2,5 @@
 self-hosted-runner:
   labels:
     - ci-rust
+    - ci-kernel
     - reverie

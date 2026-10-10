@@ -125,3 +125,73 @@ jobs:
           fi
           # --downstream deep: dependents of a changed crate run too (EST-219).
           moon ci --base "$base" --downstream deep
+
+  ebpf-live:
+    name: ebpf-live
+    # Fork guard: this runner loads BPF into the node kernel. Never run a fork's code here.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    # ci-kernel lane (spec 0005): uid 0 in the pod, bounding set {BPF, PERFMON}, tracefs read-only.
+    runs-on: [self-hosted, ci-kernel]
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    env:
+      CARGO_TERM_COLOR: always
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: kernel facts
+        run: |
+          set -euo pipefail
+          uname -r
+          grep Cap /proc/self/status
+          ls -l /sys/kernel/btf/vmlinux
+          cat /sys/kernel/tracing/events/sched/sched_process_fork/format
+
+      # bpf-linker 0.11.1 is a static release binary, so no LLVM build runs here.
+      - uses: taiki-e/install-action@f7e5d7c961414b23f5b25b2da9294395d08513ad # v2.87.26
+        with:
+          tool: bpf-linker@0.11.1
+      - name: bpf-linker
+        run: bpf-linker --version
+
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          shared-key: ebpf-live
+          save-if: ${{ github.ref == 'refs/heads/development' || github.ref == 'refs/heads/main' }}
+
+      # The ci-kernel image has stable Rust only. The dated nightly goes into a job-local RUSTUP_HOME,
+      # never into the baked /usr/local/rustup.
+      - name: install pinned nightly (job-local RUSTUP_HOME)
+        env:
+          RUSTUP_HOME: ${{ runner.temp }}/rustup
+        run: |
+          set -euo pipefail
+          rustup toolchain install nightly-2026-10-06 --profile minimal --component rust-src
+
+      - name: "drift: rebuild cas-ebpf.o and compare with the committed object"
+        env:
+          RUSTUP_HOME: ${{ runner.temp }}/rustup
+        run: |
+          set -euo pipefail
+          make ebpf-build JOBS=10 EBPF_TOOLCHAIN=nightly-2026-10-06
+          git diff --exit-code -- crates/cas-ebpf/ebpf/
+
+      - name: live probes (uid 0, no sudo)
+        run: |
+          set -euo pipefail
+          make ebpf-test SUDO= JOBS=10 2>&1 | tee ebpf-live.log
+          {
+            echo "### ebpf-live"
+            echo "- kernel: $(uname -r)"
+            echo "- skipped lines: $(grep -c 'skipped:' ebpf-live.log || true)"
+            echo "- result: $(grep -o 'test result: .*' ebpf-live.log | tail -n1 || true)"
+          } >> "$GITHUB_STEP_SUMMARY"
+          # A live case that cannot load prints "skipped:" and passes, so the job checks the log itself.
+          unexpected=$(grep 'skipped:' ebpf-live.log | grep -v -F 'skipped: unshare -Upf --fork is refused here' || true)
+          if [ -n "$unexpected" ]; then
+            echo "::error::a live case was skipped, not run:"
+            echo "$unexpected"
+            exit 1
+          fi
+          grep -q 'test result: ok. 9 passed' ebpf-live.log || { echo "::error::expected 9 passed"; exit 1; }
