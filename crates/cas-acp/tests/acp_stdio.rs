@@ -301,9 +301,18 @@ fn every_error_variant_maps_to_its_code() {
         (AcpError::MethodNotFound("x".into()), -32601),
         (AcpError::InvalidParams("x".into()), -32602),
         (AcpError::Pool(PoolError::CapacityExhausted(2)), -32001),
-        (AcpError::Pool(PoolError::LeaseExpired(slot.clone())), -32002),
-        (AcpError::Pool(PoolError::NoActiveLease(slot.clone())), -32002),
-        (AcpError::Pool(PoolError::TokenMismatch(slot.clone())), -32002),
+        (
+            AcpError::Pool(PoolError::LeaseExpired(slot.clone())),
+            -32002,
+        ),
+        (
+            AcpError::Pool(PoolError::NoActiveLease(slot.clone())),
+            -32002,
+        ),
+        (
+            AcpError::Pool(PoolError::TokenMismatch(slot.clone())),
+            -32002,
+        ),
         (AcpError::Pool(PoolError::SlotNotFound(slot)), -32603),
         (AcpError::Engine("x".into()), -32603),
     ];
@@ -321,7 +330,10 @@ fn session_new_with_missing_params_is_32602() {
         "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"session/new\",\"params\":{}}\n",
     );
     assert_eq!(ids_and_codes(&frames), vec![(Value::from(3), -32602)]);
-    assert!(pool.calls().is_empty(), "bad params must not reach the pool");
+    assert!(
+        pool.calls().is_empty(),
+        "bad params must not reach the pool"
+    );
 }
 
 #[test]
@@ -329,7 +341,10 @@ fn second_session_on_one_slot_is_32001_without_a_pool_call() {
     let pool = MockPool::default();
     let mut server = AcpServer::new(pool.clone(), config());
     let first = serve(&mut server, &format!("{SESSION_NEW}\n"));
-    assert!(first[0]["result"]["sessionId"].is_string(), "frames: {first:?}");
+    assert!(
+        first[0]["result"]["sessionId"].is_string(),
+        "frames: {first:?}"
+    );
     let second = serve(
         &mut server,
         "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"session/new\",\"params\":{\"cwd\":\"/work\",\"mcpServers\":[]}}\n",
