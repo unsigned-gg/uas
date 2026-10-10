@@ -1,0 +1,31 @@
+# Pane topologies for cas-substrate, read by bifrost::yggdrasil from .saga/ when saga runs here.
+# Overlay on saga's built-in catalog (cockpit-grid and the others stay available).
+#
+# estate-cockpit (the operator, 2026-10-10, in session, lane w25:p1 interview): nine panes in three
+# columns. Left: lead, spec designer, architect. Middle: three builders. Right: engineer, critic,
+# prober. Slot roles are the Norse catalog; the team file sets harness, effort and persona.
+# Apply: cd <repo> && saga yggdrasil topology apply estate-cockpit (splits panes, starts no agent).
+
+[topologies.estate-cockpit]
+slots = [
+  { role = "brokkr",  label = "lead" },
+  { role = "mimir",   label = "spec-designer" },
+  { role = "mimir",   label = "architect" },
+  { role = "sindri",  label = "builder-top" },
+  { role = "sindri",  label = "builder-mid" },
+  { role = "sindri",  label = "builder-bottom" },
+  { role = "sindri",  label = "engineer" },
+  { role = "loki",    label = "critic" },
+  { role = "thjalfi", label = "prober" },
+]
+# Three columns first, then each column splits down. Ratios are the share kept by `from`.
+splits = [
+  { from = 0, direction = "right", ratio = 0.34, new = 3 },
+  { from = 3, direction = "right", ratio = 0.5,  new = 6 },
+  { from = 0, direction = "down",  ratio = 0.34, new = 1 },
+  { from = 1, direction = "down",  ratio = 0.5,  new = 2 },
+  { from = 3, direction = "down",  ratio = 0.34, new = 4 },
+  { from = 4, direction = "down",  ratio = 0.5,  new = 5 },
+  { from = 6, direction = "down",  ratio = 0.34, new = 7 },
+  { from = 7, direction = "down",  ratio = 0.5,  new = 8 },
+]
