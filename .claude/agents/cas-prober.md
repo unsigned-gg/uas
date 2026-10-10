@@ -1,6 +1,6 @@
 ---
 name: cas-prober
-description: Probe runner for the cas-substrate pane gang (team cas-estate). Runs the CI, PR, repo-state and inbox probes the foreman names, writes each digest in its scratchpad and sends it to the foreman over the mesh, in 15 lines or fewer, every fact with the command that produced it and every negative with a positive control. Haiku. Changes nothing in any repo, ref or GitHub object.
+description: Probe runner for the cas-substrate pane gang (team cas-estate). Runs the CI, PR, repo-state and inbox probes the foreman names, writes each digest in its scratchpad and sends it to the foreman over the mesh, in 15 lines or fewer, every fact with the command that produced it and every negative with a positive control. Haiku. Changes nothing in any repo, ref or GitHub object; that limit is advisory, because Bash can write and only the push hooks and the integrator stand behind it.
 tools: Read, Grep, Glob, Bash
 model: haiku
 maxTurns: 30
