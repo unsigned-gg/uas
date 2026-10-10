@@ -66,6 +66,7 @@ mod saga;
 mod session;
 mod soma;
 mod wave;
+mod wave_exec;
 mod workflow;
 
 pub use activity::{Activity, ActivityKind, ActivityResult};
@@ -87,5 +88,9 @@ pub use soma::SomaAdmissionGate;
 pub use wave::{
     classify_step, validate_verdict, AgentRole, ExecutionWave, ModelTier, WaveCoordinator,
     WavePlan, WaveStep, WorkspaceMode, DEFAULT_MAX_WAVE_CONCURRENCY, MAX_VERDICT_LINES,
+};
+pub use wave_exec::{
+    parse_critic_verdict, AdmitError, CriticVerdict, HaltReason, NotReady, StepOutcome, StepResult,
+    WaveError, WaveExecConfig, WaveExecutor, WaveReport,
 };
 pub use workflow::WorkflowSession;
