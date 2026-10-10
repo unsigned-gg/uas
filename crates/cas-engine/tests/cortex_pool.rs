@@ -680,3 +680,241 @@ fn cortex_pool_shutdown_nacks_then_drains() {
     );
     assert_eq!(rig.states(), [SlotState::Draining, SlotState::Draining]);
 }
+
+// The gRPC client against an in-process fake PoolWork server on 127.0.0.1:0. Each test calls
+// one RPC and checks the request as the server decoded it, as bytes: the field numbers and the
+// absence of a pool name are then pinned to the spec's Wire contract table.
+mod grpc {
+    use std::pin::Pin;
+    use std::sync::{Arc, Mutex};
+
+    use cas_engine::cortex_pool::pb::{
+        self,
+        pool_work_server::{PoolWork as PoolWorkService, PoolWorkServer},
+    };
+    use cas_engine::cortex_pool::{GrpcPoolWork, GrpcTimeouts, PoolDelivery, PoolWork, RecvEvent};
+    use prost::Message;
+    use std::time::{Duration, Instant};
+    use tonic::codegen::tokio_stream::{self, Stream};
+    use tonic::{Request, Response, Status};
+
+    /// The encoded request of each RPC, in arrival order.
+    type Seen = Arc<Mutex<Vec<(&'static str, Vec<u8>)>>>;
+
+    #[derive(Clone, Default)]
+    struct Fake {
+        seen: Seen,
+    }
+
+    impl Fake {
+        fn note(&self, rpc: &'static str, msg: &impl Message) {
+            self.seen.lock().unwrap().push((rpc, msg.encode_to_vec()));
+        }
+    }
+
+    #[tonic::async_trait]
+    impl PoolWorkService for Fake {
+        type RecvStream = Pin<Box<dyn Stream<Item = Result<pb::PoolDelivery, Status>> + Send>>;
+
+        async fn recv(
+            &self,
+            request: Request<pb::PoolRecvRequest>,
+        ) -> Result<Response<Self::RecvStream>, Status> {
+            self.note("recv", request.get_ref());
+            if request.get_ref().free_slots == 9 {
+                // Hold the stream open and silent.
+                return Ok(Response::new(Box::pin(tokio_stream::pending())));
+            }
+            let delivery = pb::PoolDelivery {
+                delivery_token: "t1".into(),
+                stream_seq: 7,
+                message: Some(pb::LaneMessage {
+                    subject: "s".into(),
+                    body: "b".into(),
+                    ..Default::default()
+                }),
+                lease_ms: 3000,
+                delivery_attempt: 2,
+            };
+            Ok(Response::new(Box::pin(tokio_stream::iter([Ok(delivery)]))))
+        }
+        async fn ack(&self, request: Request<pb::PoolAckRequest>) -> Result<Response<()>, Status> {
+            self.note("ack", request.get_ref());
+            Ok(Response::new(()))
+        }
+        async fn extend(
+            &self,
+            request: Request<pb::PoolExtendRequest>,
+        ) -> Result<Response<()>, Status> {
+            self.note("extend", request.get_ref());
+            if request.get_ref().delivery_token == "hang" {
+                std::future::pending::<()>().await;
+            }
+            Ok(Response::new(()))
+        }
+        async fn nack(
+            &self,
+            request: Request<pb::PoolNackRequest>,
+        ) -> Result<Response<()>, Status> {
+            self.note("nack", request.get_ref());
+            Ok(Response::new(()))
+        }
+        async fn term(
+            &self,
+            request: Request<pb::PoolTermRequest>,
+        ) -> Result<Response<()>, Status> {
+            self.note("term", request.get_ref());
+            Ok(Response::new(()))
+        }
+    }
+
+    /// Serve the fake on its own thread and runtime; the address it listens on comes back.
+    fn serve() -> (Fake, Seen, std::net::SocketAddr) {
+        let fake = Fake::default();
+        let seen = fake.seen.clone();
+        let fake_handle = fake.clone();
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let rt = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .unwrap();
+            rt.block_on(async {
+                let incoming =
+                    tonic::transport::server::TcpIncoming::bind("127.0.0.1:0".parse().unwrap())
+                        .unwrap();
+                tx.send(incoming.local_addr().unwrap()).unwrap();
+                // `add_service` needs tonic's `router` feature; this call takes the service.
+                tonic::transport::Server::builder()
+                    .serve_with_incoming(PoolWorkServer::new(fake), incoming)
+                    .await
+                    .unwrap();
+            });
+        });
+        (fake_handle, seen, rx.recv().unwrap())
+    }
+
+    /// Serve the fake, and connect a client from plain test code.
+    fn rig() -> (GrpcPoolWork, Seen) {
+        let (_, seen, addr) = serve();
+        let client = GrpcPoolWork::connect(format!("http://{addr}"), "p1").unwrap();
+        (client, seen)
+    }
+
+    /// `peer_id = "p1"` is field 1: 0x0a, length 2.
+    const PEER: [u8; 4] = [0x0a, 2, b'p', b'1'];
+
+    fn wire(rpc: &str, seen: &Seen) -> Vec<u8> {
+        let seen = seen.lock().unwrap();
+        assert_eq!(seen.len(), 1, "one request");
+        assert_eq!(seen[0].0, rpc);
+        seen[0].1.clone()
+    }
+
+    #[test]
+    fn cortex_pool_grpc_recv() {
+        let (mut client, seen) = rig();
+        client.recv(3, 2000).unwrap();
+        // free_slots = 3 is field 2, a varint: 0x10, 3.
+        assert_eq!(wire("recv", &seen), [PEER.as_slice(), &[0x10, 3]].concat());
+        let event = client.next_event(2000).unwrap();
+        let want = PoolDelivery {
+            delivery_token: "t1".into(),
+            stream_seq: 7,
+            subject: "s".into(),
+            body: "b".into(),
+            lease_ms: 3000,
+            delivery_attempt: 2,
+        };
+        assert_eq!(event, RecvEvent::Delivery(want));
+        assert_eq!(client.next_event(2000).unwrap(), RecvEvent::End);
+    }
+
+    #[test]
+    fn cortex_pool_grpc_ack() {
+        let (mut client, seen) = rig();
+        client.ack(&["a".into(), "b".into()], 2000).unwrap();
+        // delivery_tokens is field 2, repeated: 0x12 for each.
+        assert_eq!(
+            wire("ack", &seen),
+            [PEER.as_slice(), &[0x12, 1, b'a', 0x12, 1, b'b']].concat()
+        );
+    }
+
+    #[test]
+    fn cortex_pool_grpc_extend() {
+        let (mut client, seen) = rig();
+        client.extend("t1", 2000).unwrap();
+        assert_eq!(
+            wire("extend", &seen),
+            [PEER.as_slice(), &[0x12, 2, b't', b'1']].concat()
+        );
+    }
+
+    #[test]
+    fn cortex_pool_grpc_nack() {
+        let (mut client, seen) = rig();
+        client.nack("t1", 1500, 2000).unwrap();
+        // delay_ms = 1500 is field 3, a varint: 0x18, 0xdc, 0x0b.
+        let want = [PEER.as_slice(), &[0x12, 2, b't', b'1', 0x18, 0xdc, 0x0b]].concat();
+        assert_eq!(wire("nack", &seen), want);
+    }
+
+    #[test]
+    fn cortex_pool_grpc_term() {
+        let (mut client, seen) = rig();
+        client.term("t1", "bad", 2000).unwrap();
+        // reason is field 3, a string: 0x1a.
+        let want = [
+            PEER.as_slice(),
+            &[0x12, 2, b't', b'1', 0x1a, 3, b'b', b'a', b'd'],
+        ]
+        .concat();
+        assert_eq!(wire("term", &seen), want);
+    }
+
+    #[test]
+    fn cortex_pool_grpc_quiet_stream_is_idle() {
+        let (mut client, _seen) = rig();
+        client.recv(9, 2000).unwrap();
+        // The server holds the stream open and sends nothing: a timed-out wait is Idle, never End.
+        assert_eq!(client.next_event(50).unwrap(), RecvEvent::Idle);
+        assert_eq!(client.next_event(50).unwrap(), RecvEvent::Idle);
+    }
+
+    /// Call `extend("hang", within_ms)` on a server that never answers it, with the channel
+    /// `request` cap; return whether it failed and how long it took.
+    fn hung_extend(request: Duration, within_ms: u64) -> (bool, Duration) {
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let (_, _, addr) = serve();
+            let timeouts = GrpcTimeouts {
+                connect: Duration::from_secs(2),
+                request,
+            };
+            let mut client =
+                GrpcPoolWork::connect_with(format!("http://{addr}"), "p1", timeouts).unwrap();
+            let started = Instant::now();
+            let result = client.extend("hang", within_ms);
+            let _ = tx.send((result.is_err(), started.elapsed()));
+        });
+        rx.recv_timeout(Duration::from_secs(10))
+            .expect("Extend returned")
+    }
+
+    #[test]
+    fn cortex_pool_grpc_hung_extend_times_out() {
+        // The channel cap (300 ms) cuts a hung Extend when the caller's bound is longer.
+        let (failed, took) = hung_extend(Duration::from_millis(300), 5000);
+        assert!(failed, "a hung Extend is an error");
+        assert!(took < Duration::from_secs(3), "{took:?}");
+    }
+
+    #[test]
+    fn cortex_pool_grpc_extend_bound_in_the_call() {
+        // The caller's bound (300 ms, D12) cuts the call long before the 4 s channel cap.
+        let (failed, took) = hung_extend(Duration::from_secs(4), 300);
+        assert!(failed, "a cut Extend is an error");
+        assert!(took < Duration::from_secs(2), "{took:?}");
+    }
+}
