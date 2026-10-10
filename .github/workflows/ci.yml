@@ -131,7 +131,7 @@ jobs:
     # Fork guard: this runner loads BPF into the node kernel. Never run a fork's code here.
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     # ci-kernel lane (spec 0005): uid 0 in the pod, bounding set {BPF, PERFMON}, tracefs read-only.
-    runs-on: [self-hosted, ci-kernel]
+    runs-on: {group: ent-default, labels: [ci-kernel]}
     timeout-minutes: 45
     permissions:
       contents: read
