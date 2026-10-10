@@ -43,6 +43,10 @@ Methodology: LeanSpec. The reference copy is in `../vendor/leanspec/`.
 | [0037](0037-repository-migration-to-uas.md) | Repository migration to uas | planned | high |
 | [0038](0038-uas-operator-and-crds.md) | uas-operator and CRDs | planned | high |
 | [0039](0039-k8s-dependency-and-ci-plan.md) | k8s dependency and CI plan | planned | high |
+| [0040](0040-pool-restart-and-orphan-reclamation.md) | Pool restart and orphan reclamation | planned | high |
+| [0041](0041-slot-memory-pids-and-disk-limits.md) | Slot memory, pids and disk limits | planned | high |
+| [0042](0042-cas-binary-conventions.md) | cas binary conventions | planned | high |
+| [0043](0043-seccomp-syscall-filter-for-slot-workers.md) | seccomp syscall filter for slot workers | planned | high |
 
 
 ## How to add a spec
