@@ -625,6 +625,7 @@ fn wave_step_open_prs_off_unless_env() {
         step: "probe-a".into(),
         repo: None,
         state_dir: None,
+        max_concurrency: 0,
     };
     let cfg = |open: Option<&str>| {
         let env = WaveEnv {
@@ -639,4 +640,221 @@ fn wave_step_open_prs_off_unless_env() {
     assert!(!cfg(Some("true")).open_prs, "only the value 1 turns it on");
     assert!(cfg(Some("1")).open_prs);
     assert_eq!(cfg(None).lock_path, PathBuf::from("/xdg/cas/build.lock"));
+}
+
+/// A Builder and its Critic. Admission passes with the task files, and then the step runs.
+const BUILDER_PLAN: &str = r#"
+[flow]
+name = "fixture"
+
+[[step]]
+id = "wave-x-build"
+title = "Build"
+kind = "impl"
+agent = "builder"
+
+[[step]]
+id = "wave-x-critic"
+title = "Review"
+kind = "verify"
+agent = "critic"
+deps = ["wave-x-build"]
+"#;
+
+/// A probe, and a Builder with no Critic. Admission refuses the plan.
+const UNADMITTED: &str = r#"
+[flow]
+name = "fixture"
+
+[[step]]
+id = "probe-a"
+title = "A"
+kind = "verify"
+agent = "probe"
+verify_cmd = ["true"]
+
+[[step]]
+id = "build-x"
+title = "Build"
+kind = "impl"
+agent = "builder"
+"#;
+
+#[test]
+fn wave_flow_every_step_has_prompt() {
+    let mut texts: Vec<(String, String)> = read_waves(&root().join(FLOW_DIR));
+    texts.extend(generate(&plan("prompt-gate", WITH_GATE), None));
+    for (name, text) in texts {
+        let def = SagaFlowDef::from_toml(&text).unwrap();
+        let prompts = text.lines().filter(|l| l.starts_with("prompt = ")).count();
+        assert_eq!(
+            prompts,
+            def.steps.len(),
+            "{name}: every step has a prompt line"
+        );
+        for s in &def.steps {
+            let p = s.prompt.as_deref().unwrap_or("").trim();
+            assert!(!p.is_empty(), "{name}: step {} has an empty prompt", s.id);
+        }
+    }
+}
+
+#[test]
+fn wave_flow_max_concurrency_in_verify_cmd() {
+    let src = plan("maxc", CHAIN);
+    let files = generate(&src, Some("2"));
+    for (name, text) in &files {
+        assert!(
+            text.contains("--max-concurrency 2"),
+            "{name}: header names the flag"
+        );
+        for (id, kind, _, _, verify) in steps(text) {
+            if kind == "gate" {
+                continue;
+            }
+            assert_eq!(
+                verify[verify.len() - 2..],
+                ["--max-concurrency".to_owned(), "2".to_owned()],
+                "{name}: step {id} carries the flag"
+            );
+        }
+    }
+    // The step command accepts the flag and plans with it: no init-head, so exit 2 by readiness.
+    let home = scratch("maxc-step");
+    let repo = home.join("repo");
+    fs::create_dir_all(&repo).unwrap();
+    let out = cas(&root(), &home)
+        .args(["wave", "step", "--flow"])
+        .arg(&src)
+        .args(["--step", "probe-a", "--max-concurrency", "2", "--repo"])
+        .arg(&repo)
+        .arg("--state-dir")
+        .arg(home.join("state"))
+        .output()
+        .unwrap();
+    assert_eq!(out.status.code(), Some(2), "stderr: {}", stderr(&out));
+    assert!(
+        stderr(&out).contains("NoInitHead"),
+        "reached readiness: {}",
+        stderr(&out)
+    );
+}
+
+#[test]
+fn wave_step_stale_own_pass_exits_2() {
+    let home = scratch("stale");
+    let repo = home.join("repo");
+    init_repo(&repo);
+    let state = home.join("state");
+    let record = r#"{"step":"probe-a","role":"Probe","outcome":{"result":"passed"},"base":"0000000000000000000000000000000000000000","at":1,"seq":0}"#;
+    write(&state.join("probe-a.json"), record);
+    let src = plan("stale-plan", ONE_PROBE);
+    let out = cas(&root(), &home)
+        .args(["wave", "step", "--flow"])
+        .arg(&src)
+        .args(["--step", "probe-a", "--repo"])
+        .arg(&repo)
+        .arg("--state-dir")
+        .arg(&state)
+        .output()
+        .unwrap();
+    assert_eq!(out.status.code(), Some(2), "stderr: {}", stderr(&out));
+    assert!(
+        stderr(&out).contains("stale"),
+        "says stale: {}",
+        stderr(&out)
+    );
+    assert_eq!(
+        fs::read_to_string(state.join("probe-a.json")).unwrap(),
+        record,
+        "record untouched"
+    );
+    assert!(!state.join("scratch").exists(), "nothing ran");
+}
+
+#[test]
+fn wave_step_own_pass_before_admission() {
+    let home = scratch("own-first");
+    let repo = home.join("repo");
+    let sha = init_repo(&repo);
+    let state = home.join("state");
+    let record = format!(
+        r#"{{"step":"probe-a","role":"Probe","outcome":{{"result":"passed"}},"base":"{sha}","at":1,"seq":0}}"#
+    );
+    write(&state.join("probe-a.json"), &record);
+    let src = plan("own-first-plan", UNADMITTED);
+    let out = cas(&root(), &home)
+        .args(["wave", "step", "--flow"])
+        .arg(&src)
+        .args(["--step", "probe-a", "--repo"])
+        .arg(&repo)
+        .arg("--state-dir")
+        .arg(&state)
+        .output()
+        .unwrap();
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "a current pass exits 0 before admission: {}",
+        stderr(&out)
+    );
+    assert!(
+        stdout(&out).contains("\"probe-a\""),
+        "prints the record: {}",
+        stdout(&out)
+    );
+    assert_eq!(
+        fs::read_to_string(state.join("probe-a.json")).unwrap(),
+        record,
+        "record untouched"
+    );
+}
+
+#[test]
+fn wave_step_executor_error_halts_and_exits_3() {
+    let home = scratch("exec-err");
+    let repo = home.join("repo");
+    init_repo(&repo);
+    write(
+        &repo.join("tasks/wave-x-build/prompt.md"),
+        "Build the thing.\n",
+    );
+    write(
+        &repo.join("tasks/wave-x-build/task.toml"),
+        "provider = \"claude\"\nmodel = \"haiku\"\n",
+    );
+    // A PATH with git and no blackwall: the Builder's first call cannot start.
+    let bin = home.join("bin");
+    fs::create_dir_all(&bin).unwrap();
+    let git = std::env::var_os("PATH")
+        .and_then(|p| {
+            std::env::split_paths(&p)
+                .map(|d| d.join("git"))
+                .find(|g| g.is_file())
+        })
+        .expect("git on PATH");
+    std::os::unix::fs::symlink(git, bin.join("git")).unwrap();
+    let state = home.join("state");
+    let src = plan("exec-err-plan", BUILDER_PLAN);
+    let out = cas(&root(), &home)
+        .env("PATH", &bin)
+        .args(["wave", "step", "--flow"])
+        .arg(&src)
+        .args(["--step", "wave-x-build", "--repo"])
+        .arg(&repo)
+        .arg("--state-dir")
+        .arg(&state)
+        .output()
+        .unwrap();
+    assert_eq!(out.status.code(), Some(3), "stderr: {}", stderr(&out));
+    assert!(
+        stderr(&out).contains("ExecutorError"),
+        "prints the reason: {}",
+        stderr(&out)
+    );
+    let rec: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(state.join("wave-x-build.json")).unwrap())
+            .unwrap();
+    assert_eq!(rec["outcome"]["result"], "halted");
+    assert_eq!(rec["outcome"]["reason"], "ExecutorError");
 }
