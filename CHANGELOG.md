@@ -8,7 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- Spec 0036, slot arbitration across processes, with 10 EARS requirements: host-wide worker capacity held as flock-locked slot files, so two CAS processes on one host cannot each admit `max_slots` workers; dead holders release through kernel lock release, not a reaper. Status planned.
+- Spec 0036, slot arbitration across processes, with 12 EARS requirements: host-wide worker capacity held as flock-locked slot files, so two CAS processes on one host cannot each admit `max_slots` workers; dead holders release through kernel lock release, not a reaper. Status planned.
 - Specs 0032 to 0035, with 35 EARS requirements: reverie access from a jailed slot, which resolves a contradiction between specs 0008 and 0011; a cargo feature policy and CI matrix, because no gate builds with a feature on; tool pinning beyond cargo, which records two live violations of rule 12; and the cas-acp transport scope, which proposes stdio only against a TCP claim the crate README made and no spec defined. All four are status planned.
 - Specs 0028 to 0031, with 47 EARS requirements, for four architectural invariants that no spec owned: branchless CRDT worktrees, agent identity and on-behalf-of delegation, A2A multi-agent interop, and the MCP security baseline. All four are status planned. Spec 0029's identity rules need the Director of Engineering's ratification under his identity veto.
 
