@@ -84,7 +84,7 @@ Facts, 2026-10-10. Source facts from `unsigned-gg/blackwall@3d98dc1` are
   `SAGA_HEIMDAL_GATE_TIMEOUT_SECS` and denies on timeout. [verified,
   `git merge-base --is-ancestor 35ee74a HEAD` exits 1] the saga checkout at d0d6b9e lacks
   35ee74a. [verified, `ls -l`] the installed `saga` links to its `target/release/saga`,
-  built two minutes after d0d6b9e. That the binary holds d0d6b9e is an inference.
+  built two minutes after d0d6b9e. That the binary holds d0d6b9e is an inference [heuristic].
 - **F19 [verified, read `crates/cas-engine/src/compensator.rs`, `wave.rs`]:**
   `Compensator::compensate` returns receipts in a `Result`. The field is `details`, not
   0009's `reason`. `CompositeCompensator` and `WaveCoordinator::rollback` stop at the first
@@ -144,11 +144,11 @@ Facts, 2026-10-10. Source facts from `unsigned-gg/blackwall@3d98dc1` are
 | not ready | `<repo>/.blackwall/init-head` is absent | exit 2 |
 | not ready | `git rev-parse HEAD` differs from `init-head` | exit 2 |
 | not ready | a dependency that is not MainSession has no `Passed` record | exit 2 |
-| not ready | an upstream Builder in the deps' closure has not merged (D7) | exit 2 |
+| not ready | a Builder step whose deps' closure holds an unmerged Builder (D7). A Critic never waits on a merge: its own Builder's PR opens only after it passes. | exit 2 |
 | halt | `start` prints no `(ok)` run line (F3) | `BuilderRunFailed` |
 | halt | `start` prints no `changeset:` line (F3) | `BuilderRunFailed` |
 | halt | reconcile does not return `Reconciled` | `VerifyFailed`, `NoVerifyGate` or `StaleBase` |
-| halt | the base-to-head diff touches an evaluator path (D17) | `EvaluatorTouched` |
+| halt | the base-to-head diff touches a D17 halt path | `EvaluatorTouched` |
 | halt | the verdict's first line is `VERDICT: DEFECTS` | `CriticDefects` |
 | halt | another first line, over 15 lines, or a non-zero exit | `CriticUnparsed` |
 | halt | a Probe exits non-zero | `ProbeFailed` |
@@ -158,8 +158,8 @@ Facts, 2026-10-10. Source facts from `unsigned-gg/blackwall@3d98dc1` are
 
 | Role | Persona (D6) | Subprocess argv, in order | Pass when |
 |---|---|---|---|
-| Builder | `cas-builder` | 1. `blackwall start --task <id> --provider claude --model haiku`. 2. `blackwall settle <run> select`. 3. Under the lock, `git merge-base --is-ancestor <base> <dev>`, then `blackwall reconcile <run> --base <base> --branch blackwall/<run>`. 4. `git rev-parse blackwall/<run>`. 5. `git diff --name-only <base> <head>` (D17). | an `(ok)` line, a changeset line, `Reconciled`, no evaluator path |
-| Critic | `cas-critic` | Per Builder dependency, under the lock: 1. `git worktree add --detach <scratch>/<critic>-<builder> <head>`. 2. `git -C <tree> checkout <base> -- .claude`. 3. In the tree, `claude -p --agent cas-critic --allowed-tools Read Grep Glob 'Bash(git diff *)' 'Bash(git log *)' 'Bash(git show *)' 'Bash(make *)' 'Bash(cargo *)'` (F14). The prompt goes on stdin, with no `--model`. 4. `git worktree remove --force`, on every exit path. 5. On a pass, `blackwall pr <run> --base development`. | F10 first line NO DEFECTS, 15 lines or fewer, exit 0 |
+| Builder | `cas-builder` | 1. `blackwall start --task <id> --provider claude --model haiku`. 2. `blackwall settle <run> select`. 3. Under the lock, `git merge-base --is-ancestor <base> <dev>`, then `blackwall reconcile <run> --base <base> --branch blackwall/<run>`. 4. `git rev-parse blackwall/<run>`. 5. `git diff --name-only -z --no-renames <base> <head>`, split on NUL (D17). | an `(ok)` line, a changeset line, `Reconciled`, no evaluator path |
+| Critic | `cas-critic` | Per Builder dependency, under the lock: 1. `git worktree add --detach <scratch>/<critic>-<builder> <head>`. 2. `git -C <tree> checkout --no-overlay <base> -- .claude`. 3. In the tree, `claude -p --agent cas-critic --allowed-tools Read Grep Glob 'Bash(git diff *)' 'Bash(git log *)' 'Bash(git show *)' 'Bash(make *)' 'Bash(cargo *)'` (F14). The prompt goes on stdin, with no `--model`. 4. `git worktree remove --force`, on every exit path. 5. On a pass, `blackwall pr <run> --base development`. | F10 first line NO DEFECTS, 15 lines or fewer, exit 0 |
 | Probe | none | Under the lock: 1. `git worktree add --detach <scratch>/<probe> <base>`. 2. The step's `verify_cmd`, in that tree. 3. `git worktree remove --force`. | exit 0 |
 | MainSession | none | none: the saga gate blocks until `saga gate approve` | saga approves |
 
@@ -167,9 +167,9 @@ Facts, 2026-10-10. Source facts from `unsigned-gg/blackwall@3d98dc1` are
 lies outside the custody checkout, because `init` copies the tree [reported,
 custody-run skill, step 2]. The critic prompt names the base, the branch, the
 head, the reconcile receipt and `tasks/<builder id>/prompt.md`. A Critic's
-`<base>` is the base in its Builder's record. The D17 diff halts on any
-`.claude/` change first. So the base checkout of `.claude` changes nothing when
-the critic runs; it guards a defect in the diff.
+`<base>` is the base in its Builder's record. D17 halts on any `.claude/` change
+first; the base checkout guards a defect in that diff. Overlay mode would keep a
+head-only `.claude/settings.json` [verified, 2026-10-10, git 2.43 scratch repo].
 
 ### Compensation
 
@@ -181,7 +181,8 @@ record, newest first, and keeps every `CompensationReceipt`. It does not use
 1. The record has a PR number: keep everything.
 2. `git ls-remote --exit-code --heads origin blackwall/<run>` exits 0: a `pr`
    may have failed after its push. Keep the branch and list it.
-3. It exits 2 (no such ref, `git ls-remote -h`): `git branch -D blackwall/<run>`.
+3. It exits 2, no such ref: `git branch -D blackwall/<run>`. [verified, 2026-10-10,
+   git 2.43: absent ref 2, present ref 0, bad remote 128]
 4. Any other exit, or a failed `branch -D`: keep the branch, `success: false`.
 
 A Critic or Probe record leaves no state. The halt report lists the runs, PRs
@@ -206,8 +207,7 @@ parameter (F9, F16). Each flow holds:
 
 Between two runs, the wave's open PRs merge as D15 rules. Before a wave with a
 dependent Builder, the integrator runs `git fetch`, moves the custody checkout
-HEAD to the new development head and runs `blackwall init .`. So no saga gate
-waits on CI (F18).
+HEAD to the new development head and runs `blackwall init .`; no gate waits on CI (F18).
 
 `cas wave step` re-plans the source (ties break on step id) and runs one step. Its record
 goes to `--state-dir`, else `CAS_WAVE_STATE_DIR`, else
@@ -235,10 +235,10 @@ exit 1 and run nothing. Only a person removes one.
 | D11 | The blackwall task name is the step id: `tasks/<step id>/`. | cas-engineer, 2026-10-10 |
 | D12 | Receipts carry the 12-character run and changeset prefixes that `start` prints (F3). The other subcommands resolve prefixes (F4). Full hashes wait for a source that P9c finds. | cas-engineer, 2026-10-10 |
 | D13 | The critic reviews in a transient detached worktree at the reconciled head. It runs the gates (F10) and leaves HEAD in the custody checkout alone (F5). | cas-engineer, 2026-10-10 |
-| D14 | First live run: the local `blackwall` CLI on ceres, or blackwall-serve in the cluster through cortex-worker, reflexd and escapement (F13). Lane proposal: local, because the 1.2.0 `serve` only inspects (F6). | **Christian to rule** |
-| D15 | Merging a wave's PRs between runs: may the lane merge on green, or does a person always merge? Lane proposal: the lane merges each PR on green CI with `gh pr merge --merge --match-head-commit`, outside the executor. Until ruled, a person merges and the executor never does (spec 0022, "What stays with people"). | **Christian to rule** |
+| D14 | First live run: the local `blackwall` CLI on ceres, or blackwall-serve in the cluster through cortex-worker, reflexd and escapement (F13). Lane proposal: local, because the 1.2.0 `serve` only inspects (F6). Until ruled, P9c does not run. | **Christian to rule**; proposal lane w25:p1, 2026-10-10 |
+| D15 | Merging a wave's PRs between runs: may the lane merge on green, or does a person always merge? Lane proposal: the lane merges each PR on green CI with `gh pr merge --merge --match-head-commit`, outside the executor. Until ruled, a person merges and the executor never does (spec 0022, "What stays with people"). | **Christian to rule**; proposal lane w25:p1, 2026-10-10 |
 | D16 | `open_prs` is off by default, so a wave run stops after the critic verdict and opens no PR. `CAS_WAVE_LIVE_PR=1` sets it for the live smoke. `CAS_WAVE_OPEN_PRS=1` sets it for `cas wave step`, because a literal `verify_cmd` carries no flag. The integrator then lands or closes each PR. | cas-engineer, 2026-10-10 |
-| D17 | Before a critic, the executor diffs the base against the reconciled head. A path under `.claude/` or in the spec 0023 D4 list sets `evaluator_touched` and halts the step. The executor rebuilds the receipt with `LandingReceipt::new`, so the tier is `reported`. The critic never loads a persona, settings or gate from the changeset. The branch stays; a person may open its PR at `reported` (0023 D3). | cas-engineer, 2026-10-10; narrows the wave path of Christian's 0023 D3 (Christian can override) |
+| D17 | Before a critic, the executor runs `git diff --name-only -z --no-renames <base> <head>` and splits the output on NUL. Without `-z`, git C-quotes a non-ASCII path, so no pattern matches it. Without `--no-renames`, it lists only a rename's destination, so a renamed-away `Makefile` is not seen [verified, 2026-10-10, git 2.43 scratch repo]. The halt set: a path under `.claude/`; `**/CLAUDE.md`, `**/CLAUDE.local.md` and `**/AGENTS.md`; and the spec 0023 D4 and D6 lists. A `**/` pattern matches at the root too. The rule files are in the set because `claude -p` loads the root `CLAUDE.md` of its cwd, which names `AGENTS.md` as the only rule source, and loads a nested `CLAUDE.md` when the critic reads that directory [reported, critic-0025-3]; so a Builder could rewrite its own rubric. A match sets `evaluator_touched` and halts the step. The executor rebuilds the receipt with `LandingReceipt::new`, so the tier is `reported`. The critic never loads a persona, settings, rule file or gate from the changeset. The branch stays; a person may open its PR at `reported` (0023 D3). | cas-engineer, 2026-10-10; halt set widened per critic-0025-3, lane w25:p1, 2026-10-10; narrows the wave path of Christian's 0023 D3 (Christian can override) |
 | D18 | A Probe runs at the wave base in a transient worktree under the lock. It checks the base, not a Builder's output; the Critic checks that. | cas-engineer, 2026-10-10 |
 
 ## Plan
@@ -254,10 +254,10 @@ exit 1 and run nothing. Only a person removes one.
   `cas wave step` with the state directory, and the source plan
   `.saga/plans/cas-wave-smoke.toml`. It generates `.saga/flows/cas-cpm-wave-w*.toml`
   and adds `tasks/wave-smoke-build/`. Tests: a round-trip and a drift test.
-- [ ] P9c, integrator on ceres: `blackwall doctor`, `blackwall init .` in a
-  clean checkout at `origin/development`, the live smoke, then the saga runs
-  `cas-cpm-wave-w0` and `cas-cpm-wave-w1`. Record every output and exit
-  contract, then amend D12 and F3 to F5.
+- [ ] P9c, integrator on ceres, once D14 is ruled: `blackwall doctor`,
+  `blackwall init .` in a clean checkout at `origin/development`, the live smoke,
+  then the saga runs `cas-cpm-wave-w0` and `cas-cpm-wave-w1`. Record every
+  output and exit contract, then amend D12 and F3 to F5.
 - [ ] Christian rules D9, D14 and D15.
 
 ## Test
@@ -289,11 +289,10 @@ CAS_WAVE_LIVE=1 CAS_WAVE_REPO=$L CAS_WAVE_PLAN=$L/.saga/plans/cas-wave-smoke.tom
   and the merge, past the 600 s window (F18).
 - P9c settles two unknowns. The custody-run skill says `blackwall show` prints
   the base; F4 says it does not. Does `init` keep earlier runs? D4 depends on it.
-- Amends spec 0022 (D9, D1); its D11 logs the amendment. P9a builds the spec
-  0023 `EVALUATOR_PATHS` plan item.
-- Out of scope: `CompositeCompensator` and `rollback` break the spec 0009
-  continue rule (F19). `CLAUDE.md` and `AGENTS.md` still reach the critic from
-  the head; D17 does not cover them.
+- Amends spec 0022 D1 and D9 (its D11 logs it). P9a builds 0023's `EVALUATOR_PATHS`.
+- Out of scope: the `?` at `wave.rs:421` and `compensator.rs:339` in
+  `crates/cas-engine/src` [verified at b149d73] stops compensation at the first
+  `Err`, against spec 0009 (F19). Ticket CER-2783 is the fix package, not P9a.
 - Open with the saga lane: a command-only step kind (D2 cost), the `verify_cmd`
   cwd, and when 35ee74a ships. Open with the blackwall owners: overlapping
   `start` runs on one store, and a full-hash or JSON `start` output.
