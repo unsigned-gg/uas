@@ -3,7 +3,7 @@ status: planned
 created: 2026-10-10
 tags: [k8s, operator, crd, pool, sandbox, uas]
 priority: high
-depends_on: [0001-cas-architecture-and-crate-layout, 0002-verification-gates-and-evidence, 0004-dependency-and-licence-policy, 0007-lease-rules, 0010-landlock-ruleset-and-abi-probe, 0011-network-namespace-isolation, 0012-sandbox-escape-suite, 0013-llm-gateway-socket-proxy, 0015-slot-pool-cgroup-freezer-and-gitoxide, 0022-custody-landing, 0032-reverie-access-from-a-jailed-slot, 0033-cargo-feature-policy-and-ci-matrix, 0036-slot-arbitration-across-processes, 0037-repository-migration-to-uas]
+depends_on: [0001-cas-architecture-and-crate-layout, 0002-verification-gates-and-evidence, 0004-dependency-and-licence-policy, 0007-lease-rules, 0010-landlock-ruleset-and-abi-probe, 0011-network-namespace-isolation, 0012-sandbox-escape-suite, 0013-llm-gateway-socket-proxy, 0015-slot-pool-cgroup-freezer-and-gitoxide, 0022-custody-landing, 0032-reverie-access-from-a-jailed-slot, 0033-cargo-feature-policy-and-ci-matrix, 0036-slot-arbitration-across-processes, 0037-repository-migration-to-uas, 0042-cas-binary-conventions]
 ---
 
 # 0038-uas-operator-and-crds
@@ -50,7 +50,7 @@ The operator reconciles two primary Custom Resource Definitions (CRDs):
 | D9 | Feature split and CI gating: Following Spec 0039 D4/D4a, unpublished estate crates enter no tracked manifest until published (avoiding cargo resolve failures on CI runners lacking local paas paths). The operator and in-tree CRD types sit behind the `k8s` feature, which is enabled in the CI test matrix so mocked-API tests run on every PR. The future `k8s-estate` feature remains off in CI until estate crates publish to crates.io. | CI portability and feature split; Spec 0004; Spec 0039 D4, D4a; research lane w1X:p1, 2026-10-10 |
 | D10 | The `WorkerSlot` CRD schema carries `spec.limits` defining `memory_max_bytes`, `memory_high_bytes`, and `pids_max`. These limits flow into `PoolConfig` at runtime and take precedence over the `uas-pool` environment twins (`CAS_SLOT_MEMORY_MAX`, etc.). | Declarative per-slot sizing; Spec 0041 D8; research lane w1X:p1, 2026-10-10 |
 
-| D11 | Operator telemetry uses the observability abstraction defined in `unsigned-k8s-core`, as deferred to Spec 0038 by Spec 0042 D6. | Standardized estate telemetry; Spec 0042 D6; research lane w1X:p1, 2026-10-10 |
+| D11 | `uas-operator` follows Spec 0042 for flags, logging, stdout, exit codes, and `--version`, with telemetry named by 0038 itself using the `unsigned-k8s-core` observability abstraction. | Standardized estate telemetry and CLI conventions; Spec 0042 D6; research lane w1X:p1, 2026-10-10 |
 
 ### Requirements (EARS)
 
@@ -68,7 +68,7 @@ The operator reconciles two primary Custom Resource Definitions (CRDs):
 - **[REQ-0038-12]** (Ubiquitous): The operator shall not autonomously deploy, mutate, or sync workloads in the Cygnus cluster without explicit human sign-off.
 - **[REQ-0038-13]** (Ubiquitous): The `WorkerSlot` CRD shall define `spec.limits` (`memory_max_bytes`, `memory_high_bytes`, `pids_max`), which the operator shall map into `PoolConfig` to override default limits per Spec 0041.
 
-- **[REQ-0038-14]** (Ubiquitous): The `uas-operator` shall export telemetry, logs, and traces using the `unsigned-k8s-core` observability abstraction.
+- **[REQ-0038-14]** (Ubiquitous): The `uas-operator` shall follow Spec 0042 for flags, logging, stdout, exit codes, and `--version`, and shall export telemetry using the `unsigned-k8s-core` observability abstraction.
 
 ## Plan
 
