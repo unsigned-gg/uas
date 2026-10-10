@@ -8,6 +8,9 @@ SHELL := bash
 JOBS ?= 2
 NEXTEST_PROFILE ?= default
 ORG ?= cerebral-work
+# Dated nightly for the eBPF object (spec 0005 D1). Pinned by commit hash in specs/0004.
+EBPF_TOOLCHAIN ?= nightly-2026-10-06
+SUDO ?= sudo
 
 .PHONY: help build fmt fmt-check clippy test doc-test deny check ci hygiene typos machete \
 	spec-check toolchain-check smoke audit sbom doc release-notes custody-check pgt-install new-repo template-check \
@@ -71,17 +74,17 @@ smoke: ## Build the CLI, run it, check the domain crate has no I/O
 	echo "smoke: ok"
 
 ebpf-build: ## Build the kernel eBPF artifact into crates/cas-ebpf/ebpf/cas-ebpf.o
-	PATH="$$HOME/.local/share/mise/shims:$$PATH" cargo +nightly build \
+	PATH="$$HOME/.local/share/mise/shims:$$PATH" cargo +$(EBPF_TOOLCHAIN) build \
 		--manifest-path crates/cas-ebpf/ebpf/Cargo.toml \
-		--target bpfel-unknown-none -Z build-std=core --release -j $(JOBS)
+		--target bpfel-unknown-none -Z build-std=core --release --locked -j $(JOBS)
 	cp crates/cas-ebpf/ebpf/target/bpfel-unknown-none/release/cas-ebpf-ebpf crates/cas-ebpf/ebpf/cas-ebpf.o
 	sha256sum crates/cas-ebpf/ebpf/cas-ebpf.o | cut -d' ' -f1 > crates/cas-ebpf/ebpf/cas-ebpf.o.sha256
 
-# Operator-run on ceres (spec 0014 D8). Build unprivileged, then run only the test binary under sudo.
-ebpf-test: ## Run the live eBPF probe tests (operator-run, needs sudo)
+# Live eBPF probes (spec 0014 D8). Build unprivileged, then run only the test binary. SUDO defaults to sudo on a workstation; CI passes SUDO= (uid 0 in the ci-kernel pod).
+ebpf-test: ## Run the live eBPF probe tests (SUDO on a workstation, SUDO= in CI)
 	BIN=$$(cargo test -p cas-ebpf --test live_probes --no-run -j $(JOBS) --message-format=json 2>/dev/null | jq -r 'select(.reason=="compiler-artifact" and .target.name=="live_probes") | .executable' | grep -v null | tail -n1); \
 	test -x "$$BIN" || { echo "ebpf-test: live_probes binary not found"; exit 1; }; \
-	sudo "$$BIN" --nocapture --test-threads=1
+	$(SUDO) "$$BIN" --nocapture --test-threads=1
 
 audit: ## Check dependencies for known advisories
 	cargo audit
