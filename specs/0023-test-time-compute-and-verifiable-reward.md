@@ -127,13 +127,13 @@ the critic and the PR review remain the line for that (spec 0002).
 |---|---|---|
 | D1 | No CAS rollout loop. CAS is the substrate for saga's. Design section 3.5 V.2 is read as a requirement on saga plus the mapping above. | CAS lane w25:p1, 2026-10-10 |
 | D2 | Budget accounting is harness-reported only, as saga 0020 rules; `cost_source = none` when a harness reports nothing, and such a branch cannot be `verified` for cost claims. | follows saga 0020 (the operator, 2026-10-06) |
-| D3 | A touched evaluator caps the tier at `reported`; it does not block the PR. Alternative: block landing until a human clears it. | **the operator to rule** |
+| D3 | A touched evaluator caps the tier at `reported`; it does not block the PR. Alternatives considered: block landing until a human clears it; no special handling. | the operator, interview in lane w25:p1, 2026-10-10: flag and cap at `reported` |
 | D4 | The evaluator file list for this repo: `Makefile`, `.github/workflows/**`, `blackwall.toml`, `deny.toml`, `rust-toolchain.toml`, `_typos.toml`, `.config/nextest.toml`, `xtask/**`. | CAS lane w25:p1, 2026-10-10 |
 | D5 | Budget exhaustion freezes the slot and reports; it never kills. Saga decides. | CAS lane w25:p1, 2026-10-10 |
 
 ## Plan
 
-- [ ] the operator rules D3.
+- [x] the operator ruled D3 (2026-10-10): flag and cap at `reported`.
 - [ ] `cas-domain`: `EVALUATOR_PATHS` constant and `is_evaluator_path(&Path)`
   with a test for every entry and a negative control (`crates/cas-domain/src/lib.rs`
   is not an evaluator path).
