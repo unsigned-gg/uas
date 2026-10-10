@@ -5,6 +5,7 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::compensator::{finish_rollback, receipts_or_failure};
 use crate::{Activity, ActivityKind, CompensationReceipt, Compensator, EngineError};
 
 /// Metadata header for a Saga flow definition.
@@ -241,18 +242,22 @@ impl SagaFlowCoordinator {
         for step_id in self.completed.iter().rev() {
             if let Some(step) = self.steps.iter().find(|s| &s.id == step_id) {
                 let activity = Activity::new(&step.id, &step.title, step.kind);
-                let receipts = self.compensator.compensate(&activity, reason)?;
-                all_receipts.extend(receipts);
+                let result = self.compensator.compensate(&activity, reason);
+                all_receipts.extend(receipts_or_failure(
+                    self.compensator.name(),
+                    &activity,
+                    result,
+                ));
             }
         }
-        Ok(all_receipts)
+        finish_rollback(all_receipts)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::compensator::RecordingCompensator;
+    use crate::compensator::{FailOnCompensator, RecordingCompensator};
 
     #[test]
     fn flow_dependency_ordering() {
@@ -348,5 +353,25 @@ verify_cmd = ["echo", "b"]
         assert_eq!(steps[1].id, "step-b");
         assert_eq!(steps[1].kind, ActivityKind::Impl);
         assert_eq!(steps[1].deps, vec!["step-a"]);
+    }
+
+    #[test]
+    fn saga_rollback_continues_after_compensation_failure() {
+        let steps = vec![
+            SagaStep::new("step-1", "Step 1", ActivityKind::Verify, vec![]),
+            SagaStep::new("step-2", "Step 2", ActivityKind::Verify, vec![]),
+            SagaStep::new("step-3", "Step 3", ActivityKind::Impl, vec![]),
+        ];
+        let fc = FailOnCompensator::new("step-2");
+        let mut coord = SagaFlowCoordinator::new(steps, Box::new(fc.clone()));
+        for id in ["step-1", "step-2", "step-3"] {
+            coord.mark_completed(id);
+        }
+        let err = coord.rollback("step-3", "compilation failed").unwrap_err();
+        assert_eq!(fc.calls(), vec!["step-3", "step-2", "step-1"]);
+        assert!(matches!(
+            err,
+            EngineError::CompensationIncomplete { failed: 1, .. }
+        ));
     }
 }

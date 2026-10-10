@@ -39,6 +39,15 @@ pub enum EngineError {
         reason: String,
     },
 
+    /// One or more compensators failed during rollback. Every compensator still ran.
+    #[error("compensation incomplete: {failed} compensation(s) failed")]
+    CompensationIncomplete {
+        /// Number of receipts whose `success` is false.
+        failed: usize,
+        /// Receipts from every compensator that ran, in execution order.
+        receipts: Vec<crate::CompensationReceipt>,
+    },
+
     /// Event replay error.
     #[error("event replay failed at sequence {sequence}: {reason}")]
     ReplayFailed {

@@ -45,7 +45,7 @@ in strict reverse order of completed steps:
 - `WorktreeCleanupCompensator`: Cleans up temporary working directories and virtual worktree state.
 - `BranchPruneCompensator`: Prunes unmerged transient git branches.
 - `LeaseReturnCompensator`: Revokes or returns active slot leases to the ledger.
-- `CompositeCompensator`: Aggregates multiple compensators and executes them sequentially.
+- `CompositeCompensator`: Aggregates multiple compensators and executes them sequentially. It runs every child in add order, never returns Err, and records a child Err as a receipt with `success: false`. A rollback returns Err only when at least one receipt has `success: false`, and that Err carries every receipt (lane decision w25:p1, 2026-10-10, CER-2783; the operator may override).
 
 Each executed compensator yields a `CompensationReceipt`:
 
@@ -54,7 +54,7 @@ pub struct CompensationReceipt {
     pub activity_id: String,
     pub handler_name: String,
     pub success: bool,
-    pub reason: String,
+    pub details: String,
     pub timestamp: u64,
 }
 ```
