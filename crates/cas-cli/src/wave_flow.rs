@@ -462,8 +462,9 @@ pub fn plan_merge(text: &str) -> Result<PlanMerge, toml::de::Error> {
     toml::from_str::<Top>(text).map(|top| top.flow)
 }
 
-/// `cas wave merge-gate` (spec 0025 D15). `args.step` is the Builder id. Exit 1: the executor
-/// refuses (a Halted record, no PR, an unsigned commit) and no `blackwall` runs. Exit 2: the plan
+/// `cas wave merge-gate` (spec 0025 D15). `args.step` is the Builder id. Exit 1: admission,
+/// the init-head check or the executor refuses (a Halted record, no PR, an unsigned commit) and no
+/// `blackwall` runs. Exit 2: the plan
 /// cannot be read. Exit 3: the executor or the exec failed. Else the exit is blackwall's.
 pub fn run_merge_gate(args: &StepArgs, env: &WaveEnv, cwd: &Path) -> i32 {
     match merge_gate_inner(args, env, cwd) {
@@ -489,11 +490,24 @@ fn merge_gate_inner(args: &StepArgs, env: &WaveEnv, cwd: &Path) -> Result<i32> {
         Ok(plan) => plan,
         Err(err) => return refuse(format!("plan {}: {err}", args.flow)),
     };
-    // No admission here: the resolver needs the record, not the plan's PR switch.
     let config = step_config(args, env, &def.flow.name, &merge, cwd);
     let repo = config.repo_dir.clone();
     let path_env = config.path_env.clone();
-    let argv = match WaveExecutor::new(config, plan).merge_gate_argv(&args.step) {
+    let exec = WaveExecutor::new(config, plan);
+    // Admission binds the executor before its first subprocess; the resolver runs `git log`.
+    if let Err(err) = exec.admit() {
+        eprintln!("merge-gate refused: {err}");
+        return Ok(1);
+    }
+    // A saga worktree is not the custody checkout (F16): it has no init-head.
+    if !repo.join(".blackwall").join("init-head").is_file() {
+        eprintln!(
+            "merge-gate refused: no .blackwall/init-head in {}; this is not the custody checkout",
+            repo.display()
+        );
+        return Ok(1);
+    }
+    let argv = match exec.merge_gate_argv(&args.step) {
         Ok(argv) => argv,
         Err(err @ WaveError::MergeGate(_)) => {
             eprintln!("{err}");
