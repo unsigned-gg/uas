@@ -143,13 +143,13 @@ landing activity's principal.
 | D1 | Landing goes through the `blackwall` CLI (`reconcile`, `pr`) by subprocess in phase 9. A library path is a later decision with a measurement. | CAS lane w25:p1, 2026-10-10 |
 | D2 | The receipt is `LandingReceipt` above, in `cas-domain`; `verified` only with `verify_exit == 0`. | CAS lane w25:p1, 2026-10-10 |
 | D3 | A stale base refuses to land (F3). No automatic rebase of a whole-file blob. The slot re-runs on a fresh base. | CAS lane w25:p1, 2026-10-10 |
-| D4 | An unattested audit does not block landing; it is recorded and visible in the PR body. | **the operator to rule** (alternative: block until the audit is attested) |
+| D4 | An unattested audit does not block landing; it is recorded and visible in the PR body with the dropped count. Alternatives considered: block until attested; land with the tier capped at `reported`. | the operator, interview in lane w25:p1, 2026-10-10: record it, land anyway |
 | D5 | Target branch is `development` (spec 0003, `blackwall.toml`). Promotion to `main` stays the promotion PR. | spec 0003 |
 | D6 | The `estate-custody-rollout.toml` flow stays as the operator-driven path; the activity is the programmatic one. They share the receipt. | CAS lane w25:p1, 2026-10-10 |
 
 ## Plan
 
-- [ ] the operator rules D4.
+- [x] the operator ruled D4 (2026-10-10): record it, land anyway.
 - [ ] `cas-domain`: `LandingReceipt`, `AuditStatus`; serde roundtrip test.
 - [ ] `cas-engine::landing`: the activity, with a fake `blackwall` (a script on
   `PATH` that records its argv and returns a canned run record) for tests; one
