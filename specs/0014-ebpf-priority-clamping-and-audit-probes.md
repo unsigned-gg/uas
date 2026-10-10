@@ -37,6 +37,13 @@ Facts, measured 2026-10-09 on ceres (kernel `6.6.87.2-microsoft-standard-WSL2`):
 - **T6: Autogroup Configuration [verified]:** `CONFIG_SCHED_AUTOGROUP` is NOT set on WSL2 (`/proc/self/autogroup` ENOENT).
 - **T7: Tracepoint Layouts [verified]:** Formats on ceres: `sched_process_exec` (`filename` at 8, `pid` at 12); `sched_process_fork` (`parent_comm` at 8, `parent_pid` at 24, `child_comm` at 28, `child_pid` at 44; parent tgid from `bpf_get_current_pid_tgid() >> 32`); `sched_process_exit` (`comm` at 8, `pid` at 24, `prio` at 28). Main thread pid equals tgid.
 - **T8: Priority Clamping Behavior on Linux [verified]:** `setpriority(PRIO_PROCESS, tgid, 19)` sets only the main thread ({main: 19, t1..3: 0}). `setpriority(PRIO_PGRP, pgid, 19)` sets all current and future threads to nice 19. Asserted by `crates/cas-ebpf/tests/clamp.rs`.
+- **T13: Pid namespaces [verified 2026-10-10, lane w25:p1]:** ceres runs under a
+  pid namespace (pid 1 is systemd; `/proc/self/ns/pid` inode 4026532221). The
+  sched tracepoint fields and `bpf_get_current_pid_tgid` carry global pids; a
+  `bpf_printk` build showed kernel tgid 2107147 for a process that reported pid
+  1935786, so a map keyed by a userspace pid never matched and the first live
+  gate failed 4 of 8. With the translation below the gate passed 8 of 8
+  (`make ebpf-test`, sudo, 2026-10-10).
 - **T9: Kernel Capability Requirements [verified]:** BPF loading requires `CAP_BPF`, `CAP_PERFMON`, and `CAP_SYS_NICE`. `kernel.unprivileged_bpf_disabled` is 2.
 - **T10: Clean-Room Boundary [verified]:** Clean-room implementation using Aya (`aya 0.14.0`, `aya-ebpf 0.2.1`). Zero code from `neutral-engineering/autonice`.
 - **T11: Dual Licensing Position [verified]:** Kernel BPF program declares `Dual MIT/GPL` in `license`. Userspace loader and crate remain proprietary.
@@ -104,6 +111,19 @@ flowchart TD
    - Slot 0: Ring-buffer reserve failures (`ProbeHandle::dropped_events`, emitted on `{"dropped":N}` lines).
    - Slot 1: Fork inserts refused because `TRACKED_PIDS` was full (`Probes::tracking_failures`); a non-zero count indicates a child worker escaped tracking.
 5. **`ExecEvent` Memory Layout (168 bytes):** `timestamp_ns: u64` (offset 0), `pid: u32` (8), `ppid: u32` (12), `uid: u32` (16), `comm: [u8; 16]` (20), `filename: [u8; 128]` (36), `_pad: u32` (164).
+
+### Pid Namespaces (T13; full amendment by the agy lane after the fix lands)
+
+- `PIDNS_CONFIG`: one-entry array `[dev, ino]` of the daemon's `/proc/self/ns/pid`,
+  written at load; `[0, 0]` means no translation.
+- `TRACK_REQUESTS`: namespace tgid to namespace parent tgid, written by `track(pid, ppid)`.
+  A request is honoured at that process's next fork or exec, when the kernel learns its
+  global tgid (promotion) through `bpf_get_ns_current_pid_tgid`.
+- `TRACKED_PIDS`: global task id to the parent's namespace tgid, kernel-owned.
+- `NS_TO_GLOBAL`: namespace pid to global pid for tracked tasks, so `untrack` and
+  `is_tracked` can resolve the pids userspace knows.
+- `ExecEvent` offset 164 is `ns_pid` (the process in the daemon's namespace) instead of
+  padding; `pid` stays the global tgid; `ppid` is a namespace tgid.
 
 ### Priority Clamping Invariants
 
