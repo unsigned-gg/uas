@@ -527,6 +527,124 @@ fn wave_preread_records_merge_commit() {
     assert_no_merge_calls(&env);
 }
 
+const TIMEOUT_ARGV: &str = "timeout -k 5 30 gh pr view 57 --json mergeCommit --jq .mergeCommit.oid";
+
+fn merge_commit_of(env: &Env, id: &str) -> serde_json::Value {
+    let rec: serde_json::Value = serde_json::from_str(&record_text(env, id)).unwrap();
+    rec["merge_commit"].clone()
+}
+
+#[test]
+fn wave_preread_argv_is_bounded() {
+    let env = Env::new("wave_preread_argv_is_bounded");
+    let exec = with_pr_57(&env);
+    env.tool(
+        "gh",
+        merge_read(b"4e7c000000000000000000000000000000000000\n", 0),
+    );
+    // The fake `timeout` logs its argv, drops `-k 5 30`, and runs the rest.
+    env.tool_pre("timeout", "shift 3; exec \"$@\"", Vec::new());
+    assert_eq!(
+        exec.run_step("build-b", 2).unwrap().outcome,
+        StepOutcome::Passed
+    );
+    let argv = env.argv();
+    assert!(has_line(&argv, TIMEOUT_ARGV), "{argv:?}");
+    assert!(has_line(&argv, PREREAD), "{argv:?}");
+    assert_eq!(merge_commit_of(&env, "build-a"), HEX);
+}
+
+#[test]
+fn wave_preread_timeout_records_nothing() {
+    for code in [124, 137] {
+        let env = Env::new(&format!("wave_preread_timeout_records_nothing_{code}"));
+        let exec = with_pr_57(&env);
+        env.tool("timeout", vec![r("-k *", b"", "", code)]);
+        let before = record_text(&env, "build-a");
+        let got = exec.run_step("build-b", 2).unwrap();
+        assert_eq!(
+            got.outcome,
+            StepOutcome::NotReady(NotReady::UpstreamNotMerged("build-a (PR 57)".into())),
+            "{code}"
+        );
+        assert_eq!(record_text(&env, "build-a"), before, "{code}");
+        assert!(merge_commit_of(&env, "build-a").is_null(), "{code}");
+        assert!(
+            !env.argv().iter().any(|l| l.starts_with("gh pr view")),
+            "{code}: gh ran: {:?}",
+            env.argv()
+        );
+        assert_no_merge_calls(&env);
+    }
+}
+
+#[test]
+fn wave_preread_gh_missing_is_executor_error() {
+    for code in [125, 126, 127] {
+        let env = Env::new(&format!("wave_preread_gh_missing_is_executor_error_{code}"));
+        let exec = with_pr_57(&env);
+        env.tool("timeout", vec![r("-k *", b"", "", code)]);
+        let before = record_text(&env, "build-a");
+        let err = exec.run_step("build-b", 2).unwrap_err().to_string();
+        assert!(err.contains("gh"), "{code}: {err}");
+        assert!(err.contains(&code.to_string()), "{code}: {err}");
+        assert_eq!(record_text(&env, "build-a"), before, "{code}");
+        assert!(
+            !env.state.join("build-b.json").exists(),
+            "{code}: no record"
+        );
+        assert_no_merge_calls(&env);
+    }
+}
+
+#[test]
+fn wave_preread_bounded_pass() {
+    let env = Env::new("wave_preread_bounded_pass");
+    let exec = with_pr_57(&env);
+    // No fake `timeout`: the real one runs the fake `gh`.
+    env.tool(
+        "gh",
+        merge_read(b"4e7c000000000000000000000000000000000000\n", 0),
+    );
+    assert_eq!(
+        exec.run_step("build-b", 2).unwrap().outcome,
+        StepOutcome::Passed
+    );
+    assert!(has_line(&env.argv(), PREREAD), "{:?}", env.argv());
+    assert!(!env.argv().iter().any(|l| l.starts_with("timeout")));
+    assert_eq!(merge_commit_of(&env, "build-a"), HEX);
+}
+
+#[test]
+fn wave_preread_record_save_waits_for_host_lock() {
+    let env = Env::new("wave_preread_record_save_waits_for_host_lock");
+    let exec = with_pr_57(&env);
+    env.tool(
+        "gh",
+        merge_read(b"4e7c000000000000000000000000000000000000\n", 0),
+    );
+    // Hold the host lock on a separate open file description, so flock conflicts.
+    fs::create_dir_all(env.lock.parent().unwrap()).unwrap();
+    let held = fs::File::create(&env.lock).unwrap();
+    held.lock().unwrap();
+    let h = std::thread::spawn(move || exec.run_step("build-b", 2).unwrap());
+    // The read runs outside the lock, so `gh` is called while the lock is held.
+    wait_for(&env, "gh pr view");
+    std::thread::sleep(std::time::Duration::from_millis(500));
+    assert!(
+        merge_commit_of(&env, "build-a").is_null(),
+        "the record was saved while the host lock was held"
+    );
+    assert!(
+        !h.is_finished(),
+        "the step finished while the lock was held"
+    );
+    drop(held);
+    let got = h.join().unwrap();
+    assert_eq!(got.outcome, StepOutcome::Passed);
+    assert_eq!(merge_commit_of(&env, "build-a"), HEX);
+}
+
 #[test]
 fn wave_not_ready_upstream_not_merged() {
     let cases: [(&str, &'static [u8], i32); 5] = [
