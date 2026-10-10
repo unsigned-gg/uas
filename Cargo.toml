@@ -48,6 +48,9 @@ aya = "0.14.0"
 # SHA-256 for the run_hash transcript digest (spec 0014) and the committed BPF object check in cas-ebpf build.rs.
 sha2 = "0.11.0"
 
+# In-process git operations for warm worktrees in cas-pool (spec 0004, 0015, CER-2724).
+gix = { version = "0.88.0", default-features = false, features = ["worktree-mutation", "revision", "sha1"] }
+
 # Example of a private git dependency (record it in specs/0004 before first use):
 # pgt-core = { git = "https://github.com/cerebral-work/pgt", rev = "54d90f5" }
 

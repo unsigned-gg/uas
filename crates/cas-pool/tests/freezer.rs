@@ -230,7 +230,7 @@ fn cgroup_freezer_state_parsing_and_pids() {
 }
 
 // ---------------------------------------------------------------------------
-// POSIX Signal Freezer Fallback (Spec 0015 D4, CER-2724)
+// POSIX Signal Freezer Fallback (Spec 0015 D4, CER-2722)
 // ---------------------------------------------------------------------------
 
 #[test]
