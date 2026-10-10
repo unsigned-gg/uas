@@ -1,0 +1,12 @@
+{
+  "allow_auto_merge": false,
+  "allow_update_branch": false,
+  "default_branch": "main",
+  "has_issues": true,
+  "has_projects": true,
+  "has_wiki": true,
+  "name": "cas-substrate",
+  "private": true,
+  "visibility": "private",
+  "web_commit_signoff_required": false
+}
