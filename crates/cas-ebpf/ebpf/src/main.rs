@@ -11,6 +11,12 @@
 //! request is keyed by the namespace tgid and becomes a tracked global tgid at
 //! that process's next fork or exec. `TRACKED_PIDS` is keyed by global task id;
 //! `NS_TO_GLOBAL` lets userspace resolve a namespace pid it knows.
+//!
+//! Nested pid namespaces (spec 0014 D12): the helper fails for a task whose
+//! active pid namespace is not the daemon's, for example after
+//! `unshare -Upf --fork`. The probes then keep the global ids and carry no
+//! namespace ids. Such a task stays in `TRACKED_PIDS` and in the audit stream
+//! with `ns_pid` 0, and exit still evicts it. Zero is never used as a map key.
 
 #![no_std]
 #![no_main]
@@ -48,7 +54,8 @@ pub struct ExecEvent {
     pub comm: [u8; 16],
     /// Executed binary path.
     pub filename: [u8; 128],
-    /// Process ID as seen in the daemon's pid namespace.
+    /// Process ID as seen in the daemon's pid namespace. 0 when the helper
+    /// failed for this task (a nested pid namespace, spec 0014 D12).
     pub ns_pid: u32,
 }
 
@@ -105,29 +112,43 @@ fn bump(slot: u32) {
     }
 }
 
-/// The ids of `current`: global, and as seen in the configured namespace.
+/// Ids of a task in the daemon's pid namespace.
+struct NsIds {
+    pid: u32,
+    tgid: u32,
+}
+
+/// The ids of `current`. The global ids are always present. The namespace ids
+/// are `None` when the helper fails, which it does for a task whose active pid
+/// namespace is not the configured one (spec 0014 D12).
 struct Ids {
     gpid: u32,
     gtgid: u32,
-    nspid: u32,
-    nstgid: u32,
+    ns: Option<NsIds>,
 }
 
-/// Global ids always; namespace ids when `current` is visible in the
-/// configured namespace. `None` when it is not (a task outside the daemon's
-/// namespace), in which case it cannot be ours.
-fn current_ids() -> Option<Ids> {
+/// Global ids always; namespace ids when `current` is visible as such in the
+/// configured namespace.
+fn current_ids() -> Ids {
     let g = bpf_get_current_pid_tgid();
     let gpid = g as u32;
     let gtgid = (g >> 32) as u32;
-    let cfg = PIDNS_CONFIG.get(0)?;
-    if cfg[1] == 0 {
-        return Some(Ids {
+    let Some(cfg) = PIDNS_CONFIG.get(0) else {
+        return Ids {
             gpid,
             gtgid,
-            nspid: gpid,
-            nstgid: gtgid,
-        });
+            ns: None,
+        };
+    };
+    if cfg[1] == 0 {
+        return Ids {
+            gpid,
+            gtgid,
+            ns: Some(NsIds {
+                pid: gpid,
+                tgid: gtgid,
+            }),
+        };
     }
     let mut info = bpf_pidns_info { pid: 0, tgid: 0 };
     // SAFETY: the helper writes at most `size` bytes into `info`, which is a
@@ -140,33 +161,37 @@ fn current_ids() -> Option<Ids> {
             core::mem::size_of::<bpf_pidns_info>() as u32,
         )
     };
-    if rc != 0 {
-        return None;
-    }
-    Some(Ids {
-        gpid,
-        gtgid,
-        nspid: info.pid,
-        nstgid: info.tgid,
-    })
+    let ns = if rc == 0 {
+        Some(NsIds {
+            pid: info.pid,
+            tgid: info.tgid,
+        })
+    } else {
+        None
+    };
+    Ids { gpid, gtgid, ns }
 }
 
 /// `true` when the current process is tracked, promoting a pending track
-/// request for it on the way.
+/// request for it on the way. Without namespace ids there is no request to
+/// look up: such a task is tracked only through fork inheritance (D12).
 fn promote(ids: &Ids) -> bool {
     // SAFETY: only the presence of the key is used.
     if unsafe { TRACKED_PIDS.get(&ids.gtgid) }.is_some() {
         return true;
     }
+    let Some(ns) = ids.ns.as_ref() else {
+        return false;
+    };
     // SAFETY: the value is copied out before any map update.
-    let Some(ppid) = (unsafe { TRACK_REQUESTS.get(&ids.nstgid) }).copied() else {
+    let Some(ppid) = (unsafe { TRACK_REQUESTS.get(&ns.tgid) }).copied() else {
         return false;
     };
     if TRACKED_PIDS.insert(&ids.gtgid, &ppid, 0).is_err() {
         bump(DROPPED_TRACK);
         return false;
     }
-    let _ = NS_TO_GLOBAL.insert(&ids.nstgid, &ids.gtgid, 0);
+    let _ = NS_TO_GLOBAL.insert(&ns.tgid, &ids.gtgid, 0);
     true
 }
 
@@ -178,9 +203,7 @@ pub fn cas_sched_process_exec(ctx: TracePointContext) -> u32 {
 }
 
 fn try_sched_process_exec(ctx: &TracePointContext) {
-    let Some(ids) = current_ids() else {
-        return;
-    };
+    let ids = current_ids();
     if !promote(&ids) {
         return;
     }
@@ -189,7 +212,11 @@ fn try_sched_process_exec(ctx: &TracePointContext) {
     let ppid = (unsafe { TRACKED_PIDS.get(&ids.gtgid) })
         .copied()
         .unwrap_or(0);
-    let _ = NS_TO_GLOBAL.insert(&ids.nstgid, &ids.gtgid, 0);
+    let mut ns_pid = 0;
+    if let Some(ns) = ids.ns.as_ref() {
+        let _ = NS_TO_GLOBAL.insert(&ns.tgid, &ids.gtgid, 0);
+        ns_pid = ns.tgid;
+    }
     let Some(mut entry) = AUDIT_EVENTS.reserve::<ExecEvent>(0) else {
         bump(DROPPED_RING);
         return;
@@ -212,7 +239,7 @@ fn try_sched_process_exec(ctx: &TracePointContext) {
         uid: bpf_get_current_uid_gid() as u32,
         comm: bpf_get_current_comm().unwrap_or([0u8; 16]),
         filename,
-        ns_pid: ids.nstgid,
+        ns_pid,
     };
     entry.write(event);
     entry.submit(0);
@@ -227,9 +254,7 @@ pub fn cas_sched_process_fork(ctx: TracePointContext) -> u32 {
 
 fn try_sched_process_fork(ctx: &TracePointContext) {
     // `current` is the parent at this tracepoint.
-    let Some(ids) = current_ids() else {
-        return;
-    };
+    let ids = current_ids();
     if !promote(&ids) {
         return;
     }
@@ -238,10 +263,12 @@ fn try_sched_process_fork(ctx: &TracePointContext) {
         return;
     };
     // The child is keyed by its global task id (a thread clone inserts its
-    // tid; exit removes it). The value is the parent's namespace tgid. A full
-    // map refuses the insert, and the child escapes tracking: count it.
+    // tid; exit removes it). The value is the parent's namespace tgid, or 0
+    // when the parent has none (D12). A full map refuses the insert, and the
+    // child escapes tracking: count it.
+    let parent_ns_tgid = ids.ns.as_ref().map_or(0, |ns| ns.tgid);
     if TRACKED_PIDS
-        .insert(&(child_pid as u32), &ids.nstgid, 0)
+        .insert(&(child_pid as u32), &parent_ns_tgid, 0)
         .is_err()
     {
         bump(DROPPED_TRACK);
@@ -256,16 +283,15 @@ pub fn cas_sched_process_exit(_ctx: TracePointContext) -> u32 {
 }
 
 fn try_sched_process_exit() {
-    // `current` is the exiting task. Evict by global id even when the task is
-    // outside the namespace (then only the global key can exist).
-    let g = bpf_get_current_pid_tgid();
-    let gpid = g as u32;
-    let gtgid = (g >> 32) as u32;
-    let _ = TRACKED_PIDS.remove(&gpid);
-    if let Some(ids) = current_ids() {
-        let _ = NS_TO_GLOBAL.remove(&ids.nspid);
-        if gpid == gtgid {
-            let _ = TRACK_REQUESTS.remove(&ids.nstgid);
+    // `current` is the exiting task. Evict by global id, which works for a
+    // task in a nested namespace too (D12). The namespace-keyed cleanup runs
+    // only when the task has namespace ids.
+    let ids = current_ids();
+    let _ = TRACKED_PIDS.remove(&ids.gpid);
+    if let Some(ns) = ids.ns.as_ref() {
+        let _ = NS_TO_GLOBAL.remove(&ns.pid);
+        if ids.gpid == ids.gtgid {
+            let _ = TRACK_REQUESTS.remove(&ns.tgid);
         }
     }
 }

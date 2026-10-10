@@ -4,7 +4,8 @@
 //! and returns a typed error instead of a raw `EPERM` when the host cannot load.
 //!
 //! Pid namespaces (spec 0014 T13): every pid this API takes or returns is a pid
-//! of this process's pid namespace. The kernel program keys its tracked map by
+//! of this process's pid namespace, with one exception:
+//! [`Probes::is_tracked_global`]. The kernel program keys its tracked map by
 //! global task id and translates through `PIDNS_CONFIG`, which `load` fills
 //! with the `(dev, ino)` of `/proc/self/ns/pid`. A `track` call is a request
 //! that the kernel honours at that process's next fork or exec.
@@ -120,6 +121,21 @@ impl Probes {
             Ok(global) => Ok(Some(global)),
             Err(MapError::KeyNotFound) => Ok(None),
             Err(e) => Err(map_err(NS_TO_GLOBAL_MAP, e)),
+        }
+    }
+
+    /// `true` when the global task id `gpid` is in `TRACKED_PIDS`.
+    ///
+    /// This is the one exception to "every pid is a namespace pid": `gpid` is
+    /// the pid the kernel knows, which is the `pid` field of an [`ExecEvent`].
+    /// It sees a task that the namespace-keyed lookups cannot, such as a task
+    /// in a nested pid namespace (spec 0014 D12) or a forked child that has
+    /// not exec'd yet.
+    pub fn is_tracked_global(&self, gpid: u32) -> Result<bool, EbpfError> {
+        match self.tracked.get(&gpid, 0) {
+            Ok(_) => Ok(true),
+            Err(MapError::KeyNotFound) => Ok(false),
+            Err(e) => Err(map_err(TRACKED_PIDS_MAP, e)),
         }
     }
 
