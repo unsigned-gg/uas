@@ -14,6 +14,14 @@
 //! peer's. A root peer is exempt from all three. The re-clamp after an exec
 //! skips a process whose effective uid differs from its real uid (a setuid
 //! binary), so the daemon never renices a privileged process.
+//!
+//! Pid namespaces (spec 0014 D12): every pid a request carries is a pid of the
+//! daemon's namespace. A peer in another pid namespace would send pids of its
+//! own, so the daemon refuses it, root included: its `SO_PEERCRED` pid must
+//! exist and its `/proc/<pid>/ns/pid` must match the daemon's. An exec event
+//! with `ns_pid` 0 names a task the kernel could not translate; the daemon
+//! logs and streams it but never re-clamps it, and `track` and `untrack` of
+//! pid 0 are refused.
 
 use std::{
     collections::BTreeMap,
@@ -45,6 +53,8 @@ const STREAM_BACKLOG: usize = 1024;
 const POLL_INTERVAL: Duration = Duration::from_millis(200);
 /// Socket mode: owner and group may connect (spec 0014 Deployment).
 const SOCKET_MODE: u32 = 0o660;
+/// The error a peer in another pid namespace gets on its first request.
+const NAMESPACE_REFUSAL: &str = "peer pid namespace differs from the daemon's";
 /// Default number of pids one non-root uid may track at once. `TRACKED_PIDS`
 /// has 1024 entries shared by every client and every thread clone.
 pub const DEFAULT_TRACK_QUOTA: usize = 256;
@@ -57,6 +67,8 @@ struct Shared<H> {
     tracked: Mutex<BTreeMap<u32, u32>>,
     events: broadcast::Sender<StreamLine>,
     track_quota: usize,
+    /// The pid namespace a peer must share, as `[dev, ino]`.
+    pid_namespace: [u64; 2],
 }
 
 /// The daemon: a probe handle served on a Unix socket.
@@ -65,6 +77,7 @@ pub struct Daemon<H: ProbeHandle + Send + 'static> {
     path: PathBuf,
     socket_gid: Option<u32>,
     track_quota: usize,
+    pid_namespace: Option<[u64; 2]>,
 }
 
 impl<H: ProbeHandle + Send + 'static> Daemon<H> {
@@ -75,7 +88,15 @@ impl<H: ProbeHandle + Send + 'static> Daemon<H> {
             path: path.into(),
             socket_gid: None,
             track_quota: DEFAULT_TRACK_QUOTA,
+            pid_namespace: None,
         }
+    }
+
+    /// Sets the pid namespace, as `[dev, ino]`, that a peer must share. The
+    /// default is the `stat` of `/proc/self/ns/pid` at [`Daemon::serve`].
+    pub fn with_pid_namespace(mut self, namespace: [u64; 2]) -> Self {
+        self.pid_namespace = Some(namespace);
+        self
     }
 
     /// Gives the socket file this group id after bind, so group members can connect.
@@ -106,12 +127,17 @@ impl<H: ProbeHandle + Send + 'static> Daemon<H> {
         std::fs::set_permissions(&self.path, std::fs::Permissions::from_mode(SOCKET_MODE))?;
         tracing::info!(socket = %self.path.display(), gid = ?self.socket_gid, "cas-ebpfd listening");
 
+        let pid_namespace = match self.pid_namespace {
+            Some(namespace) => namespace,
+            None => namespace_of("self")?,
+        };
         let (events, _) = broadcast::channel(STREAM_BACKLOG);
         let shared = Arc::new(Shared {
             handle: self.handle,
             tracked: Mutex::new(BTreeMap::new()),
             events,
             track_quota: self.track_quota,
+            pid_namespace,
         });
         let mut reader = tokio::spawn(reader_task(Arc::clone(&shared)));
         loop {
@@ -215,21 +241,15 @@ fn drain<H: ProbeHandle>(shared: &Shared<H>, last_dropped: &mut u64) {
         // one. Never renice such a process, even if a tracked worker exec'd it.
         // /proc and setpriority take pids of this process's namespace.
         let pid = event.ns_pid;
-        match pid_uids(pid) {
-            Ok((real, effective)) if real == effective => match clamp::reclamp_if_needed(pid) {
-                Ok(true) => {
-                    tracing::info!(pid, "re-clamped a tracked pid after exec");
-                }
-                Ok(false) => {}
-                Err(e) => tracing::debug!(pid, error = %e, "re-clamp skipped"),
-            },
-            Ok((real, effective)) => tracing::warn!(
-                pid,
-                real,
-                effective,
-                "re-clamp skipped: effective uid differs from real uid"
-            ),
-            Err(e) => tracing::debug!(pid, error = %e, "re-clamp skipped"),
+        if pid == 0 {
+            // Unresolved (D12): the task has no pid the daemon can name. `who`
+            // 0 in setpriority names the caller, so never pass it on.
+            tracing::warn!(
+                global_pid = event.pid,
+                "exec of a tracked task with no pid in the daemon's namespace; not re-clamped"
+            );
+        } else {
+            reclamp_event(pid);
         }
         // No receivers is normal: nobody is streaming.
         let _ = shared.events.send(StreamLine::Event(event.record()));
@@ -244,9 +264,32 @@ fn drain<H: ProbeHandle>(shared: &Shared<H>, last_dropped: &mut u64) {
     }
 }
 
+/// Re-clamps `pid` (a pid of the daemon's namespace) unless it runs setuid.
+fn reclamp_event(pid: u32) {
+    match pid_uids(pid) {
+        Ok((real, effective)) if real == effective => match clamp::reclamp_if_needed(pid) {
+            Ok(true) => {
+                tracing::info!(pid, "re-clamped a tracked pid after exec");
+            }
+            Ok(false) => {}
+            Err(e) => tracing::debug!(pid, error = %e, "re-clamp skipped"),
+        },
+        Ok((real, effective)) => tracing::warn!(
+            pid,
+            real,
+            effective,
+            "re-clamp skipped: effective uid differs from real uid"
+        ),
+        Err(e) => tracing::debug!(pid, error = %e, "re-clamp skipped"),
+    }
+}
+
 async fn connection<H: ProbeHandle + Send + 'static>(shared: Arc<Shared<H>>, stream: UnixStream) {
     let peer = match stream.peer_cred() {
-        Ok(cred) => Peer { uid: cred.uid() },
+        Ok(cred) => Peer {
+            uid: cred.uid(),
+            pid: cred.pid().and_then(|pid| u32::try_from(pid).ok()),
+        },
         Err(e) => {
             tracing::warn!(error = %e, "refusing a connection without peer credentials");
             return;
@@ -261,9 +304,20 @@ async fn connection<H: ProbeHandle + Send + 'static>(shared: Arc<Shared<H>>, str
 #[derive(Clone, Copy, Debug)]
 struct Peer {
     uid: u32,
+    /// The peer's pid in the daemon's namespace, when the kernel reports one.
+    pid: Option<u32>,
 }
 
 impl Peer {
+    /// `true` when this peer's pid namespace is `namespace` (`[dev, ino]`).
+    /// A peer with no pid, pid 0, or an unreadable namespace never matches.
+    fn shares_namespace(self, namespace: [u64; 2]) -> bool {
+        match self.pid {
+            None | Some(0) => false,
+            Some(pid) => namespace_of(&pid.to_string()).is_ok_and(|ns| ns == namespace),
+        }
+    }
+
     /// `Ok(())` when this peer may track `pid`: root may track anything, anyone
     /// else only a pid whose real uid is their own.
     fn may_track(self, pid: u32) -> Result<(), String> {
@@ -279,6 +333,12 @@ impl Peer {
             Err(e) => Err(format!("pid {pid}: {e}")),
         }
     }
+}
+
+/// `[dev, ino]` of `/proc/<who>/ns/pid`, where `who` is a pid or `self`.
+fn namespace_of(who: &str) -> io::Result<[u64; 2]> {
+    let st = rustix::fs::stat(format!("/proc/{who}/ns/pid")).map_err(io::Error::from)?;
+    Ok([st.st_dev, st.st_ino])
 }
 
 /// The real uid of `pid`, from the `Uid:` line of `/proc/<pid>/status`.
@@ -308,10 +368,17 @@ async fn serve_connection<H: ProbeHandle + Send + 'static>(
 ) -> Result<(), EbpfError> {
     let (read_half, mut writer) = stream.into_split();
     let mut reader = BufReader::new(read_half);
+    let same_namespace = peer.shares_namespace(shared.pid_namespace);
     loop {
         let Some(line) = read_bounded_line(&mut reader).await? else {
             return Ok(());
         };
+        if !same_namespace {
+            // Its pids are not ours (D12). Answer the first request, then close.
+            tracing::warn!(uid = peer.uid, pid = ?peer.pid, "refused a peer in another pid namespace");
+            write_json(&mut writer, &Response::failure(NAMESPACE_REFUSAL)).await?;
+            return Ok(());
+        }
         let request = match parse_request(&line) {
             Ok(request) => request,
             Err(e) => {
@@ -332,6 +399,8 @@ async fn serve_connection<H: ProbeHandle + Send + 'static>(
 
 fn dispatch<H: ProbeHandle>(shared: &Shared<H>, request: Request, peer: Peer) -> Response {
     match request {
+        Request::Track { pid: 0, .. } => Response::failure("pid 0 cannot be tracked"),
+        Request::Untrack { pid: 0 } => Response::failure("pid 0 cannot be untracked"),
         Request::Track { pid, ppid } => {
             if let Err(reason) = peer.may_track(pid) {
                 tracing::warn!(uid = peer.uid, pid, %reason, "track refused");
@@ -463,6 +532,17 @@ mod tests {
         assert_eq!(parse_uid_line(status), Some((1000, 0)));
         assert_eq!(parse_uid_line("Name:\tx\n"), None);
         assert_eq!(parse_uid_line("Uid:\tnope\t0\n"), None);
+    }
+
+    #[test]
+    fn a_peer_must_have_a_pid_in_the_daemons_namespace() {
+        let own = namespace_of("self").expect("own namespace");
+        let me = std::process::id();
+        let peer = |pid| Peer { uid: 0, pid };
+        assert!(peer(Some(me)).shares_namespace(own));
+        assert!(!peer(Some(me)).shares_namespace([own[0], own[1] + 1]));
+        assert!(!peer(None).shares_namespace(own));
+        assert!(!peer(Some(0)).shares_namespace(own));
     }
 
     #[test]
