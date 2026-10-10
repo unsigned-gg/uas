@@ -87,6 +87,9 @@ pub enum WorkflowEvent {
         head: Option<String>,
         /// The pull request number, when one was opened.
         pr: Option<u64>,
+        /// The merge commit of the pull request, when the executor merged it (spec 0025 D15).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        merge_commit: Option<String>,
         /// Epoch timestamp in seconds.
         timestamp: u64,
     },
@@ -215,6 +218,7 @@ mod tests {
             branch: Some("blackwall/bw-0123456789".into()),
             head: None,
             pr: None,
+            merge_commit: None,
             timestamp: 42,
         };
         let json = serde_json::to_string(&ev).unwrap();
