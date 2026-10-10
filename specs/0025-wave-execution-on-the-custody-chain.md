@@ -108,8 +108,8 @@ Facts, 2026-10-10. Source facts from `unsigned-gg/blackwall@3d98dc1` are
   `--base <wave base>`. It shall open no PR then.
 - **Event-driven:** WHEN a Builder reconciles, the executor shall diff the base against the
   reconciled head (D17).
-- **Event-driven:** WHEN a Critic passes, the executor shall open the PR of each Builder it
-  depends on. It records one `LandingReceipt` per Builder.
+- **Event-driven:** WHEN a Critic passes, the executor shall record one `LandingReceipt` per
+  Builder it depends on.
 - **Event-driven:** WHEN a step halts, the executor shall write a `Halted` record. Then it
   compensates the passed records, newest first.
 - **State-driven:** WHILE the state directory holds a `Halted` record, the executor shall
@@ -128,8 +128,8 @@ Facts, 2026-10-10. Source facts from `unsigned-gg/blackwall@3d98dc1` are
   a blackwall run, or close a PR.
 - **Optional feature:** WHERE `CAS_WAVE_LIVE=1` is set, the live smoke shall run the real
   tools. It fails, not skips, when a tool or variable is missing.
-- **Optional feature:** WHERE `CAS_WAVE_LIVE_PR=1` is also set, the live smoke shall run
-  `blackwall pr` after the critic passes (D16).
+- **Optional feature:** WHERE `open_prs` is set (D16), the executor shall open the PR of each
+  Builder whose Critic passed.
 
 ### Admission, readiness and halt
 
@@ -209,14 +209,14 @@ dependent Builder, the integrator runs `git fetch`, moves the custody checkout
 HEAD to the new development head and runs `blackwall init .`. So no saga gate
 waits on CI (F18).
 
-`cas wave step` re-plans the source (ties break on step id) and runs one step.
-Its record goes to `${XDG_STATE_HOME:-<home>/.local/state}/cas/wave/<plan>/<step>.json`,
-outside the repo, because `init` copies the tree. All wave runs of one plan
-share it. The step finds the custody checkout from `--repo`, else
-`CAS_WAVE_REPO`, else its cwd. Saga may run `verify_cmd` in a run worktree
-with no `init-head` (F16); the step then exits 2. A `Passed` record on the
-current base exits 0 and runs nothing, so a saga retry is safe. Any `Halted`
-record makes the step exit 1 and run nothing. Only a person removes one.
+`cas wave step` re-plans the source (ties break on step id) and runs one step. Its record
+goes to `--state-dir`, else `CAS_WAVE_STATE_DIR`, else
+`${XDG_STATE_HOME:-<home>/.local/state}/cas/wave/<plan>/`, outside the repo, because `init`
+copies the tree. All wave runs of one plan share it. The step finds the custody checkout
+from `--repo`, else `CAS_WAVE_REPO`, else its cwd. Saga may run `verify_cmd` in a run
+worktree with no `init-head` (F16); the step then exits 2. A `Passed` record on the current
+base exits 0 and runs nothing, so a saga retry is safe. Any `Halted` record makes the step
+exit 1 and run nothing. Only a person removes one.
 
 ### Decisions
 
@@ -237,7 +237,7 @@ record makes the step exit 1 and run nothing. Only a person removes one.
 | D13 | The critic reviews in a transient detached worktree at the reconciled head. It runs the gates (F10) and leaves HEAD in the custody checkout alone (F5). | cas-engineer, 2026-10-10 |
 | D14 | First live run: the local `blackwall` CLI on ceres, or blackwall-serve in the cluster through cortex-worker, reflexd and escapement (F13). Lane proposal: local, because the 1.2.0 `serve` only inspects (F6). | **the operator to rule** |
 | D15 | Merging a wave's PRs between runs: may the lane merge on green, or does a person always merge? Lane proposal: the lane merges each PR on green CI with `gh pr merge --merge --match-head-commit`, outside the executor. Until ruled, a person merges and the executor never does (spec 0022, "What stays with people"). | **the operator to rule** |
-| D16 | The live smoke stops after the critic verdict. `CAS_WAVE_LIVE_PR=1` adds `blackwall pr`. The integrator then lands or closes that PR. | cas-engineer, 2026-10-10 |
+| D16 | `open_prs` is off by default, so a wave run stops after the critic verdict and opens no PR. `CAS_WAVE_LIVE_PR=1` sets it for the live smoke. `CAS_WAVE_OPEN_PRS=1` sets it for `cas wave step`, because a literal `verify_cmd` carries no flag. The integrator then lands or closes each PR. | cas-engineer, 2026-10-10 |
 | D17 | Before a critic, the executor diffs the base against the reconciled head. A path under `.claude/` or in the spec 0023 D4 list sets `evaluator_touched` and halts the step. The executor rebuilds the receipt with `LandingReceipt::new`, so the tier is `reported`. The critic never loads a persona, settings or gate from the changeset. The branch stays; a person may open its PR at `reported` (0023 D3). | cas-engineer, 2026-10-10; narrows the wave path of the operator's 0023 D3 (the operator can override) |
 | D18 | A Probe runs at the wave base in a transient worktree under the lock. It checks the base, not a Builder's output; the Critic checks that. | cas-engineer, 2026-10-10 |
 
