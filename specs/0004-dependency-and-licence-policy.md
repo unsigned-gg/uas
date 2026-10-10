@@ -211,12 +211,7 @@ project, 522 packages, 2026-10-09):
 
 ### Cortex pool-member transport (spec 0026)
 
-Status: pinned by the lane (cas-engineer w10:pM), 2026-10-10. This is not the
-approved epic list above. No crate enters a `Cargo.toml` until spec 0026 P1 starts.
-Christian ruled 0026 D1 [reported, 2026-10-10]: `tonic` and `prost` 0.14 go here; the other
-rows are lane pins (0026 D3). Each row enters a `Cargo.toml` with an `=` requirement (D3). The versions are the ones
-cortex@c7fdb85 uses (0026 F6). Licences read from each crate's `Cargo.toml` in the
-local cargo registry, 2026-10-10. MSRV of the tonic crates is 1.88, under D2's 1.89.
+Status: pinned by the lane (cas-engineer w10:pM), 2026-10-10. This is not the approved epic list above. No crate enters a `Cargo.toml` until spec 0026 P1 starts. Christian ruled 0026 D1 [reported, 2026-10-10]: `tonic` and `prost` 0.14 go here; the other rows are lane pins (0026 D3). Each row enters a `Cargo.toml` with an `=` requirement (D3). The versions are the ones cortex@c7fdb85 uses (0026 F6). Licences read from each crate's `Cargo.toml` in the local cargo registry, 2026-10-10. MSRV of the tonic crates is 1.88, under D2's 1.89.
 
 | Crate | Version | Licence | Used by | Conditions |
 |---|---|---|---|---|
@@ -227,12 +222,16 @@ local cargo registry, 2026-10-10. MSRV of the tonic crates is 1.88, under D2's 1
 | `tonic-prost-build` | 0.14.6 | MIT | cas-engine `build.rs` | default-features off; optional build-dependency, enabled by `cortex-grpc` |
 | `protox` | 0.9.1 | MIT OR Apache-2.0 | cas-engine `build.rs` | optional build-dependency, enabled by `cortex-grpc`; no system `protoc`; 0.10.0 not taken (0026 D3) |
 
-`build.rs` does nothing unless `CARGO_FEATURE_CORTEX_GRPC` is set, so a build
-without the feature pulls none of these crates. Check [verified, 2026-10-10T16:26Z]:
-a throwaway project with these pins, `tokio` 1.53.1 (features as its row) and tonic
-`server` in dev ran `cargo deny check` with this repo's `deny.toml`: "advisories ok,
-bans ok, licenses ok, sources ok", 106 packages.
-Warnings: duplicate `hashbrown`, `logos` (3 crates) and `syn`, all through `protox`.
+`build.rs` does nothing unless `CARGO_FEATURE_CORTEX_GRPC` is set, so a build without the feature pulls none of these crates. Check [verified, 2026-10-10T16:26Z]: a throwaway project with these pins, `tokio` 1.53.1 (features as its row) and tonic `server` in dev ran `cargo deny check` with this repo's `deny.toml`: "advisories ok, bans ok, licenses ok, sources ok", 106 packages. Warnings: duplicate `hashbrown`, `logos` (3 crates) and `syn`, all through `protox`.
+
+### Pool runtime benchmark (spec 0019, benchmark only)
+
+Status: pinned by the lane, 2026-10-10, for the spec 0019 D2 comparison only; no workspace member declares them until Christian rules D2. Licences and versions read with `cargo info` from the crates.io index [verified, 2026-10-10]; `cargo deny check` on a throwaway project with both pins: "advisories ok, bans ok, licenses ok, sources ok", 50 packages [verified, 2026-10-10T18:41Z]. The dossier (`research@6835e21:repos/heph.md`, a draft) names io_uring; the 0.4.x releases use `mio` 0.8 (epoll) [verified, the probe's lockfile].
+
+| Crate | Version | Licence | Used by | Conditions |
+|---|---|---|---|---|
+| `heph` | 0.4.0 | MIT | the Option C benchmark | `=` requirement; nightly only (`#![feature]`); does not build on nightly 2026-10-05 (E0557, `doc_auto_cfg` and `doc_cfg_hide` removed) [verified, `cargo +nightly check -j 2`] |
+| `heph-rt` | 0.4.1 | MIT | the Option C benchmark | `=` requirement; nightly only; its features include the removed `drain_filter` [verified, read `src/lib.rs`] |
 
 ### CI tools
 

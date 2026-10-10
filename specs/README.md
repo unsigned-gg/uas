@@ -23,7 +23,7 @@ Methodology: LeanSpec. The reference copy is in `../vendor/leanspec/`.
 | [0016](0016-zed-agent-communication-protocol.md) | Zed Agent Communication Protocol (ACP) server | planned | high |
 | [0017](0017-fastcache-prefix-hashing-and-affinity-routing.md) | FastCache prefix hashing and affinity routing | planned | high |
 | [0018](0018-mad-stack-operator-deck-and-settle-queue.md) | MAD stack operator deck and settle queue | planned | high |
-| [0019](0019-pool-runtime-decision.md) | Pool runtime decision | complete | high |
+| [0019](0019-pool-runtime-decision.md) | Pool runtime decision | in-progress | high |
 | [0020](0020-build-job-cap.md) | Build job cap | planned | high |
 | [0021](0021-cas-storage-scope-and-phase.md) | cas-storage scope and phase | planned | medium |
 | [0022](0022-custody-landing.md) | Custody landing | planned | high |

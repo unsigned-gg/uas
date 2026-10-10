@@ -1,5 +1,5 @@
 ---
-status: complete
+status: in-progress
 created: 2026-10-10
 tags: [pool, runtime, tokio, heph, threads, phase-3]
 priority: high
@@ -81,8 +81,8 @@ Facts, measured 2026-10-10 on ceres unless stated:
 | # | Decision | Who, when |
 |---|---|---|
 | D1 | Recommendation of this spec: **Option A** for the pool's slot lifecycle and control loop, as spec 0015 D5 already states; **Option B** only where a crate serves a socket or HTTP endpoint (router, ebpfd, acp, deck). No heph. | CAS lane w25:p1, 2026-10-10, pending Christian |
-| D2 | The runtime for `cas-pool`: A, B or C. | Christian, interview in lane w25:p1, 2026-10-10: **benchmark first, then rule.** Spec 0015 D5 (Option A) stays the interim choice. The lane writes the criterion benchmark of the slot lifecycle (lease, launch, freeze, thaw, reclaim) under Option A; Christian rules D2 on its numbers. **Ruled: Option A**, OS threads as built, on the benchmark addendum numbers: Christian, in session, lane w25:p1 interview, 2026-10-10 [reported, relayed by the integrator, mesh e42efbc2]. |
-| D3 | If D2 is A or B, spec 0001 gap 1 and Plan item 3 close, and 0015 D5 gains the citation "ruled in spec 0019". If D2 is C, spec 0004 gets the `heph` pin and licence row first, and a measurement plan precedes code. Applied 2026-10-10: D2 is A, so spec 0001 gap 1 and Plan item 3 close and 0015 D5 cites spec 0019. | Follows D2 |
+| D2 | The runtime for `cas-pool`: A, B or C. | Christian, interview in lane w25:p1, 2026-10-10: **benchmark first, then rule.** Spec 0015 D5 (Option A) stays the interim choice. The lane writes the criterion benchmark of the slot lifecycle (lease, launch, freeze, thaw, reclaim) under Option A; Christian rules D2 on its numbers. Christian ruled Option A on the addendum numbers, then **re-opened D2 the same day**: the gang benchmarks Options B (tokio) and C (heph) against the Option A numbers before he rules again. Christian, in session, lane w25:p1 interview, 2026-10-10 [reported, relayed by the integrator, mesh e42efbc2 and ca37e233]. |
+| D3 | If D2 is A or B, spec 0001 gap 1 and Plan item 3 close, and 0015 D5 gains the citation "ruled in spec 0019". If D2 is C, spec 0004 gets the `heph` pin and licence row first, and a measurement plan precedes code. Applied on the A ruling and undone when D2 re-opened, both 2026-10-10: spec 0001 gap 1 is open again, and 0015 D5 no longer cites spec 0019. | Follows D2 |
 | D4 | Any later runtime change needs a measurement recorded in a new spec (the Unwanted-behavior requirement above). A criterion benchmark of the slot lifecycle (lease, launch, freeze, thaw, reclaim) under Option A is the first such measurement, and it is the evidence a move to C would need (F9). | CAS lane, 2026-10-10 |
 
 ### What does not change with the ruling
@@ -97,9 +97,11 @@ Facts, measured 2026-10-10 on ceres unless stated:
 
 - [x] Christian ruled on D2 (2026-10-10): benchmark first. Spec 0001 gap 1 stays open until the numbers are in.
 - [x] Write the criterion benchmark of the slot lifecycle in `cas-pool` (`benches/`), Option A, `-j 2`, results dated in a new spec or an addendum here; a package for the cas-pool lane (agy, spec 0015).
-- [x] Christian ruled D2 on the benchmark numbers: Option A, 2026-10-10 [reported, relayed by the integrator, mesh e42efbc2].
-- [x] Record the ruling in spec 0001 (gap 1, Plan item 3) and spec 0015 D5.
-- [x] If C: pin `heph` and `heph-rt` in spec 0004 and write the measurement plan. Not needed: D2 is A.
+- [x] Christian ruled D2 on the Option A numbers (Option A), then re-opened it the same day for a comparative benchmark, 2026-10-10 [reported, relayed by the integrator, mesh e42efbc2 and ca37e233].
+- [ ] Benchmark Options B (tokio) and C (heph) on the four addendum operations: Criterion, JOBS=2, ceres; append the dated numbers below.
+- [ ] Christian rules D2 on the comparison.
+- [ ] Record the ruling in spec 0001 (gap 1, Plan item 3) and spec 0015 D5 (done for A, undone on the re-open).
+- [ ] If C: write the measurement plan. `heph` 0.4.0 and `heph-rt` 0.4.1 are pinned in spec 0004 for the benchmark only; they need nightly, and `heph` 0.4.0 does not build on nightly 2026-10-05 (spec 0004).
 
 ### Benchmark Addendum (2026-10-10, host ceres, JOBS=2)
 
