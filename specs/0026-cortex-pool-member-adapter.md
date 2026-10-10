@@ -85,8 +85,9 @@ Facts, 2026-10-10:
   the slot is free (R1). Then it issues a CAS lease of `ttl + 1` seconds (lease
   bridge) and moves the slot `Warm -> Leased`.
 - **Unwanted behavior:** IF a `PoolDelivery` has `lease_ms` below 300 (proto3 sends 0
-  when the field is unset), THEN the adapter shall call `Term` with a reason, start
-  no `Extend` and lease no slot (D9).
+  when the field is unset), THEN the adapter shall call `Nack` with the D5 delay and
+  stop `Recv` with an error that names `lease_ms` and its value. It shall not call
+  `Term`, start `Extend` or lease a slot (D9).
 - **State-driven:** WHILE a delivery runs, the adapter shall call `Extend` every
   `lease_ms / 3` and renew the CAS lease as the lease bridge says.
 - **Event-driven:** WHEN a task succeeds, the adapter shall call `Ack` and release
@@ -152,6 +153,7 @@ most `ttl + 1` seconds after `now`.
 | Success | `Ack` | `release`: `Leased -> Warm` |
 | Recoverable error | `Nack`, delay by D5 | `release` |
 | Payload does not parse, or breaks policy | `Term`, with a reason | `release` |
+| `lease_ms` below 300 (D9) | `Nack` with the D5 delay, then stop `Recv` | none: no slot is leased |
 | `Extend` fails twice, renew fails, reconnect misses the lease | none: Cortex redelivers after `lease_ms` | `release` |
 | Adapter shutdown | `Nack`, `delay_ms = 0`, for each running unit (D6) | `release`, then `drain` (final) |
 
@@ -167,7 +169,7 @@ most `ttl + 1` seconds after `now`.
 | D6 | On shutdown the adapter stops `Recv`, Nacks each running unit with `delay_ms = 0`, releases the slots and drains them. `drain` happens only at shutdown, because `Draining` is final (F4). | cas-engineer, 2026-10-10 (the operator may override) |
 | D7 | Member join tokens and their auth stay in cortex spec 0005 (CER-1988). This spec decides nothing there. | **the Director of Engineering's area** (identity services veto). Not decided here. |
 | D8 | A real `TaskRunner` (a harness run in a slot) needs the `cas-pool` runtime. Until then the port has a fake only. | **the operator to rule**, as spec 0019 D2 (F11). |
-| D9 | The minimum `lease_ms` is 300, so the `Extend` tick is at least 100 ms. A smaller value, 0 included (the proto3 default), is a broken delivery: the adapter Terms it. | cas-engineer, 2026-10-10, critic round 1 (the operator may override) |
+| D9 | The minimum `lease_ms` is 300, so the `Extend` tick is at least 100 ms. A smaller value, 0 included (the proto3 default), is a wire or backend fault, not a work fault. The adapter Nacks the unit with the D5 delay and stops `Recv` with an error that names `lease_ms` and its value. It never Terms it: on a dropped proto3 field, `Term` would dead-letter the whole backlog. | Integrator ruling w25:p1, 2026-10-10, mesh 4653a43a (lane decision, the operator may override); the 300 floor: cas-engineer, critic round 1 |
 
 ## Plan
 
@@ -204,8 +206,9 @@ Red-first tests. P1 uses a fake port and a fake clock:
 - `cortex_pool_short_lease_survives_second_boundaries`: `lease_ms = 900`, 10 ticks
   over 3 s. Every renew is `Ok` and the slot stays `Leased`. A `target = now + ttl`
   mutant must go red.
-- `cortex_pool_term_below_min_lease`: `lease_ms = 0` and `299` each send `Term`, no
-  `Extend`, and lease no slot (D9).
+- `cortex_pool_nack_below_min_lease_stops_recv`: `lease_ms = 0` and `299` each send
+  `Nack` with the D5 delay and no `Term`, start no `Extend` and lease no slot. `Recv`
+  stops with an error that names `lease_ms` and the value (D9).
 - `cortex_pool_nack_delay_grows`: attempts 0, 1, 2, 8 and `u32::MAX` give 1000,
   1000, 2000, 60000 and 60000 ms (D5).
 - `cortex_pool_term_on_bad_payload`: a payload that does not parse sends `Term`.
