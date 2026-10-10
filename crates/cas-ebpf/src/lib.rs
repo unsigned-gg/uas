@@ -22,6 +22,7 @@ pub mod handle;
 pub mod loader;
 pub mod probe;
 pub mod protocol;
+pub mod tracefs;
 pub mod wire;
 
 pub use audit::{AuditReceipt, RunHash};
@@ -40,6 +41,9 @@ pub const TRACK_REQUESTS_MAP: &str = "TRACK_REQUESTS";
 pub const TRACKED_PIDS_MAP: &str = "TRACKED_PIDS";
 /// Name of the BPF hash map from namespace pid to global pid for tracked tasks.
 pub const NS_TO_GLOBAL_MAP: &str = "NS_TO_GLOBAL";
+/// Name of the five-slot array of tracepoint field offsets the loader writes
+/// before attach (spec 0014 D13).
+pub const TP_OFFSETS_MAP: &str = "TP_OFFSETS";
 /// Name of the BPF ring buffer that carries [`ExecEvent`] records.
 pub const AUDIT_EVENTS_MAP: &str = "AUDIT_EVENTS";
 /// Name of the per-cpu counter array. Slot [`DROPPED_RING_SLOT`] counts records
