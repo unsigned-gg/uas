@@ -46,7 +46,7 @@ Facts, measured and recorded 2026-10-09:
 
 | # | Decision | Who, when |
 |---|---|---|
-| D1 | Canonical prefix serialization: Sort tool schemas alphabetically by name. Normalize system instructions to deterministic UTF-8 bytes before hashing. | CAS lane, 2026-10-09 |
+| D1 | Canonical prefix serialization: Sort tool schemas alphabetically by name, then by json bytes. Normalize system instructions to deterministic UTF-8 bytes before hashing. Every field is length-prefixed with its byte length in decimal: `SYS:<len>:<part>,...\|TOOLS:<len>:<name><len>:<json>,...`. Length prefixes stop a separator inside a part from imitating another separator. | CAS lane, 2026-10-09. Amended 2026-10-10, lane w25:p1, Christian may override (the unescaped `\|`-joined form collided). |
 | D2 | SHA-256 prefix hash: Hash the invariant prefix with `sha2` 0.11.0. Use the first 16 bytes as the affinity routing key. | CAS lane, 2026-10-09 |
 | D3 | Rendezvous routing: Use Highest Random Weight (HRW) rendezvous hashing across active replica nodes. Achieve deterministic sticky routing without centralized state. | CAS lane, 2026-10-09 |
 | D4 | Dual-stream token multiplexer: Intercept streaming SSE chunks. Parse and strip `<think>` blocks. Route thought traces to telemetry and clean completions to client. | CAS lane, 2026-10-09 |
@@ -162,3 +162,4 @@ cargo test -p cas-router -j 2
   Consistent routing ensures agent sessions reuse KV cache blocks across turns.
 - **LiteLLM Compatibility:** Request and response framing complies with OpenAI
   v1 Chat Completions specification.
+- **Invariant 2 deferral (2026-10-10):** the round-robin fallback for an all-unhealthy replica set is deferred to the D5 package. Today `AffinityTable::choose` returns `NoHealthyReplicas` in that case.
