@@ -14,7 +14,7 @@ Roadmap phase 9 (research design section 6): connect saga `orlog` exit-0
 receipts to Blackwall `reconcile`, so a worker's changeset lands as a signed PR
 to `development` with its provenance attached. Today the chain exists as
 separate tools and a hand-driven flow. This spec names the contract between
-them and the one activity in `cas-engine` that drives it. It is the custody
+them and the one activity in `uas-engine` that drives it. It is the custody
 half of the roadmap; the slot half is spec 0015.
 
 Facts, measured 2026-10-10 on ceres unless stated:
@@ -42,7 +42,7 @@ Facts, measured 2026-10-10 on ceres unless stated:
 - **F5 [reported]:** saga spec 0035 (status proposed, evidence asserted) adds a
   `runner = { blackwall_dispatch = ... }` placement to a flow step and a
   `RunnerKind` in `saga-domain`. It is a design seam, not shipped code.
-- **F6 [verified]:** `cas-domain::attestation` has `EvidenceTier { Verified,
+- **F6 [verified]:** `uas-domain::attestation` has `EvidenceTier { Verified,
   Reported, Heuristic, Asserted }` and `Attestation { signer: PrincipalRef,
   evidence: EvidenceTier, receipt: String, at: u64 }`. The vendored saga
   contract `vendor/saga/contracts/evidence.rs` has the same four tiers,
@@ -50,7 +50,7 @@ Facts, measured 2026-10-10 on ceres unless stated:
 - **F7 [verified]:** spec 0014 gives every slot an `AuditReceipt { run_hash,
   events, dropped_events, attested }`: a per-run transcript digest of the
   exec events, `attested` only when nothing was dropped.
-- **F8 [verified]:** `cas-engine::saga` already parses flows (`SagaFlowDef`,
+- **F8 [verified]:** `uas-engine::saga` already parses flows (`SagaFlowDef`,
   `SagaStep`) and runs them with compensation (`SagaFlowCoordinator`,
   `CompensationReceipt`), spec 0009. There is no landing activity yet.
 - **F9 [verified]:** `.saga/flows/estate-custody-rollout.toml` in this repo drives
@@ -97,7 +97,7 @@ main `ec076f6`, installed on ceres at `~/.local/bin/blackwall` (mtime
 - **F16 [verified 2026-10-10, `blackwall doctor; echo $?`]:** `doctor` exits 1
   in an empty temp dir and in a fresh worktree of this repo, which has no
   `.blackwall/` (`.gitignore` excludes it). The control: it exits 0 in the main
-  checkout `/home/ctodie/projects/cerebral/cas-substrate`, where `blackwall init`
+  checkout `/home/ctodie/projects/cerebral/uas`, where `blackwall init`
   ran. So the Test line `blackwall doctor` can fail.
 
 ## Design
@@ -111,7 +111,7 @@ main `ec076f6`, installed on ceres at `~/.local/bin/blackwall` (mtime
   blackwall run hash, the changeset hash, the base commit, the verify command,
   the `reconcile` exit code, the slot `run_hash`, and the evidence tier. A
   `LandingError` is not an outcome and carries no receipt (D7).
-- **Event-driven:** WHEN a slot run settles with a changeset, `cas-engine` shall
+- **Event-driven:** WHEN a slot run settles with a changeset, `uas-engine` shall
   run the landing activity: reconcile against the slot's recorded base commit,
   then open the PR.
 - **Event-driven:** WHEN `blackwall reconcile` exits 3 (the verify gate failed,
@@ -141,7 +141,7 @@ main `ec076f6`, installed on ceres at `~/.local/bin/blackwall` (mtime
 
 ### The landing activity
 
-`cas-engine::landing::LandingActivity`, one activity in the saga step graph
+`uas-engine::landing::LandingActivity`, one activity in the saga step graph
 (spec 0009), after the slot's settle step and before the operator gate:
 
 | # | Step | Command or call | Receipt field |
@@ -187,7 +187,7 @@ pub struct LandingReceipt {
 }
 ```
 
-It lives in `cas-domain` as pure types (zero I/O), is serialized with serde,
+It lives in `uas-domain` as pure types (zero I/O), is serialized with serde,
 and gets a roundtrip test. `cpu_cap` is copied from the slot's audit record
 (spec 0020 D4), so the PR body shows whether the host throttling invariant
 held. The PR body carries this receipt as JSON (D11). The same record
@@ -199,7 +199,7 @@ landing activity's principal.
 - The merge. `automerge` stays false (F2). A lane merges on green with a merge
   commit pinned to the head, or the operator does. The activity ends at the
   open PR. Spec 0025 D15, re-ruled on 2026-10-10, has the wave executor never
-  merge: merging runs through saga and blackwall, and no `cas` code reads PR
+  merge: merging runs through saga and blackwall, and no `uas` code reads PR
   checks or runs `gh pr merge`. An earlier form of D15 allowed an executor merge
   behind a default-off flag; that form is retired.
 - The operator gate before landing (spec 0008 settle queue, heimdal in saga)
@@ -209,32 +209,32 @@ landing activity's principal.
 
 | # | Decision | Who, when |
 |---|---|---|
-| D1 | Landing goes through the `blackwall` CLI (`reconcile`, `pr`) by subprocess in phase 9. A library path is a later decision with a measurement. | CAS lane w25:p1, 2026-10-10 |
-| D2 | The receipt is `LandingReceipt` above, in `cas-domain`. The computed tier is `verified` iff `verify_exit == Some(0)`, a `[verify]` command exists (`verify_cmd` is `Some`), and `evaluator_touched` is false (spec 0023 D3); otherwise `reported`. | CAS lane w25:p1, 2026-10-10; amended the same day from the P5a critic findings (lane w25:p1, Christian can override) |
-| D3 | A stale base refuses to land (F3). No automatic rebase of a whole-file blob. The slot re-runs on a fresh base. | CAS lane w25:p1, 2026-10-10 |
+| D1 | Landing goes through the `blackwall` CLI (`reconcile`, `pr`) by subprocess in phase 9. A library path is a later decision with a measurement. | UAS lane w25:p1, 2026-10-10 |
+| D2 | The receipt is `LandingReceipt` above, in `uas-domain`. The computed tier is `verified` iff `verify_exit == Some(0)`, a `[verify]` command exists (`verify_cmd` is `Some`), and `evaluator_touched` is false (spec 0023 D3); otherwise `reported`. | UAS lane w25:p1, 2026-10-10; amended the same day from the P5a critic findings (lane w25:p1, Christian can override) |
+| D3 | A stale base refuses to land (F3). No automatic rebase of a whole-file blob. The slot re-runs on a fresh base. | UAS lane w25:p1, 2026-10-10 |
 | D4 | An unattested audit does not block landing; it is recorded and visible in the PR body with the dropped count. Alternatives considered: block until attested; land with the tier capped at `reported`. | Christian, interview in lane w25:p1, 2026-10-10: record it, land anyway |
 | D5 | Target branch is `development` (spec 0003, `blackwall.toml`). Promotion to `main` stays the promotion PR. | spec 0003 |
-| D6 | The `estate-custody-rollout.toml` flow stays as the operator-driven path; the activity is the programmatic one. They share the receipt. | CAS lane w25:p1, 2026-10-10 |
-| D7 | `verify_exit` is the exit code of the `blackwall reconcile` process, not of the verify command. For blackwall at soma `ec076f6` (F14): exit 0 goes on to `pr`; exit 3 returns `VerifyFailed` with `verify_exit = Some(3)`; exit 1 (another reconcile error) and exit 2 (a usage error in the activity's own argv) return a `LandingError`, never a receipt. Any other code or a signal is a `LandingError` too (fail closed). An F10 build exits 1 on a failed verify, so it gets a `LandingError`, not a receipt; it also has no `--body`, so `pr` exits 2. A non-zero `blackwall pr` exit, 3 included, is a `LandingError`: `pr` runs the gate only when it must reconcile (F15). | CAS lane w25:p1, 2026-10-10, P5a critic finding; amended the same day for soma `ec076f6` (Christian can override) |
-| D8 | With no `[verify]` command in the host `blackwall.toml`, the activity returns `NoVerifyGate` before any `blackwall` call and opens no PR. Fail closed: blackwall itself would reconcile without a gate (F11), and SOP `blackwall-custody-process` requires a changeset to pass the verify gate before a PR opens. | CAS lane w25:p1, 2026-10-10, P5a critic finding (Christian can override) |
-| D9 | A stale base records both commits on the receipt, `base_sha` and `development_head`, not only on the `StaleBase` outcome. `development_head` is `Some` iff `stale_base`. | CAS lane w25:p1, 2026-10-10, P5a critic finding (Christian can override) |
-| D10 | For P5b: the receipt's `try_from` check allows the spec 0023 D3 human raise. Tier order: `verified` > `reported` > `heuristic` > `asserted` (`EvidenceTier` derives no `Ord`, so P5b adds an explicit rank). The stored tier shall not exceed the computed tier (D2) unless `human_raise` is `Some(HumanRaise { by: PrincipalRef, at: u64 })`, which names who raised it and when. A raise lifts only the evaluator cap: the stored tier shall not exceed the tier computed with `evaluator_touched = false`, so no raise gives `verified` without exit 0 and a `[verify]` command. A stored tier below the computed tier is accepted. | CAS lane w25:p1, 2026-10-10, P5a critic finding (Christian can override) |
-| D11 | D4's PR-body record goes through `blackwall pr <run> --base <pr_base> --body -` (F13). The activity writes to stdin a fenced block: the line `` ```json ``, then `serde_json::to_string_pretty` of the receipt, then the line `` ``` ``. It is the receipt after reconcile: `verify_exit` 0, `branch` set, `pr_number` null, because the PR does not exist yet. The `Opened` receipt adds `pr_number`; both have the same tier, since the tier rule (D2) does not read `branch` or `pr_number`. Alternatives considered: a Markdown table (people read it, no program can read it back); blackwall's own body (no receipt). | CAS lane w25:p1, 2026-10-10 (Christian can override) |
-| D12 | Spec 0025 amends this spec. `AuditStatus` gains `NotAudited` for a wave Builder with no CAS slot: `run_hash` is empty and `cpu_cap` is `"uncapped"`. Landing proceeds; this extends D4 to runs with no audit, pending Christian's ruling on spec 0025 D9. `LandingActivity` splits into `reconcile` and `open_pr`; `land` keeps calling both, so a caller can put a critic between them. `open_pr` takes the reconciled receipt and writes it as the D11 body. | cas-engineer, 2026-10-10, spec 0025 D1 (Christian can override) and D9 (**Christian to rule**) |
+| D6 | The `estate-custody-rollout.toml` flow stays as the operator-driven path; the activity is the programmatic one. They share the receipt. | UAS lane w25:p1, 2026-10-10 |
+| D7 | `verify_exit` is the exit code of the `blackwall reconcile` process, not of the verify command. For blackwall at soma `ec076f6` (F14): exit 0 goes on to `pr`; exit 3 returns `VerifyFailed` with `verify_exit = Some(3)`; exit 1 (another reconcile error) and exit 2 (a usage error in the activity's own argv) return a `LandingError`, never a receipt. Any other code or a signal is a `LandingError` too (fail closed). An F10 build exits 1 on a failed verify, so it gets a `LandingError`, not a receipt; it also has no `--body`, so `pr` exits 2. A non-zero `blackwall pr` exit, 3 included, is a `LandingError`: `pr` runs the gate only when it must reconcile (F15). | UAS lane w25:p1, 2026-10-10, P5a critic finding; amended the same day for soma `ec076f6` (Christian can override) |
+| D8 | With no `[verify]` command in the host `blackwall.toml`, the activity returns `NoVerifyGate` before any `blackwall` call and opens no PR. Fail closed: blackwall itself would reconcile without a gate (F11), and SOP `blackwall-custody-process` requires a changeset to pass the verify gate before a PR opens. | UAS lane w25:p1, 2026-10-10, P5a critic finding (Christian can override) |
+| D9 | A stale base records both commits on the receipt, `base_sha` and `development_head`, not only on the `StaleBase` outcome. `development_head` is `Some` iff `stale_base`. | UAS lane w25:p1, 2026-10-10, P5a critic finding (Christian can override) |
+| D10 | For P5b: the receipt's `try_from` check allows the spec 0023 D3 human raise. Tier order: `verified` > `reported` > `heuristic` > `asserted` (`EvidenceTier` derives no `Ord`, so P5b adds an explicit rank). The stored tier shall not exceed the computed tier (D2) unless `human_raise` is `Some(HumanRaise { by: PrincipalRef, at: u64 })`, which names who raised it and when. A raise lifts only the evaluator cap: the stored tier shall not exceed the tier computed with `evaluator_touched = false`, so no raise gives `verified` without exit 0 and a `[verify]` command. A stored tier below the computed tier is accepted. | UAS lane w25:p1, 2026-10-10, P5a critic finding (Christian can override) |
+| D11 | D4's PR-body record goes through `blackwall pr <run> --base <pr_base> --body -` (F13). The activity writes to stdin a fenced block: the line `` ```json ``, then `serde_json::to_string_pretty` of the receipt, then the line `` ``` ``. It is the receipt after reconcile: `verify_exit` 0, `branch` set, `pr_number` null, because the PR does not exist yet. The `Opened` receipt adds `pr_number`; both have the same tier, since the tier rule (D2) does not read `branch` or `pr_number`. Alternatives considered: a Markdown table (people read it, no program can read it back); blackwall's own body (no receipt). | UAS lane w25:p1, 2026-10-10 (Christian can override) |
+| D12 | Spec 0025 amends this spec. `AuditStatus` gains `NotAudited` for a wave Builder with no UAS slot: `run_hash` is empty and `cpu_cap` is `"uncapped"`. Landing proceeds; this extends D4 to runs with no audit, pending Christian's ruling on spec 0025 D9. `LandingActivity` splits into `reconcile` and `open_pr`; `land` keeps calling both, so a caller can put a critic between them. `open_pr` takes the reconciled receipt and writes it as the D11 body. | uas-engineer, 2026-10-10, spec 0025 D1 (Christian can override) and D9 (**Christian to rule**) |
 
 ## Plan
 
 - [x] Christian ruled D4 (2026-10-10): record it, land anyway.
-- [x] `cas-domain`: `LandingReceipt`, `AuditStatus`; serde roundtrip test (P5a, PR #47).
-- [x] `cas-engine::landing` (P5a, PR #47): the activity, with a fake `blackwall` (a script on
+- [x] `uas-domain`: `LandingReceipt`, `AuditStatus`; serde roundtrip test (P5a, PR #47).
+- [x] `uas-engine::landing` (P5a, PR #47): the activity, with a fake `blackwall` (a script on
   `PATH` that records its argv and returns a canned run record) for tests; one
   red-first test per Unwanted-behavior requirement (stale base refuses;
   non-zero verify opens no PR; no `[verify]` command makes no `blackwall` call).
-- [x] P5b, `cas-domain`: `development_head` on the receipt (D9); `HumanRaise`
+- [x] P5b, `uas-domain`: `development_head` on the receipt (D9); `HumanRaise`
   and the D10 `try_from` rule. Red first: a raise above the computed tier with
   no `human_raise` is rejected; a raise to `verified` with `verify_exit` 1 is
   rejected even with `human_raise` (PR #61).
-- [ ] P5c, `cas-engine::landing`: the D7 exit mapping and the D11 PR body. Red
+- [ ] P5c, `uas-engine::landing`: the D7 exit mapping and the D11 PR body. Red
   first: reconcile exit 1 and exit 2 each return a `LandingError`; the `pr`
   argv ends in `--body -`; the fake `blackwall` gets the receipt JSON on stdin,
   `pr_number` null, and an unattested run shows its dropped count there.
@@ -249,8 +249,8 @@ landing activity's principal.
 
 ```bash
 make spec-check
-cargo nextest run -p cas-domain --build-jobs 2 landing_receipt
-cargo nextest run -p cas-engine --build-jobs 2 landing
+cargo nextest run -p uas-domain --build-jobs 2 landing_receipt
+cargo nextest run -p uas-engine --build-jobs 2 landing
 blackwall doctor
 ```
 
@@ -279,7 +279,7 @@ worktree or a tree with no store (F16), and a non-zero exit fails the gate.
   ticked, P5c planned.
 - Amendment log: 2026-10-10, from spec 0025: D12 (`NotAudited`, the
   `reconcile`/`open_pr` split). Second, from spec 0025 D15: `merge_commit` in the receipt.
-  Third, 2026-10-10, Christian's ruling on spec 0025 D15: no cas code merges; a pre-read sets it.
+  Third, 2026-10-10, Christian's ruling on spec 0025 D15: no uas code merges; a pre-read sets it.
 - Queue label: this spec was "0027 custody landing" on the lane's candidate list
-  (`~/handoffs/2026-10-09/cas-ears-spec-queue.md`); spec numbers are sequential,
+  (`~/handoffs/2026-10-09/uas-ears-spec-queue.md`); spec numbers are sequential,
   so it is 0022.
