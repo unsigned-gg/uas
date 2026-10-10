@@ -167,13 +167,11 @@ The research names nine crates. This repo has ten because of `cas-cli`.
 
 These are not decided. Each needs a spec or an operator ruling before code.
 
-1. **Pool runtime.** The pool design shows thread-per-core actors (heph). The
-   heph evaluation keeps Tokio for cortex. See
-   `cerebral-work/research@4068134:repos/heph.md` line 92. Spec 0019 records
-   the options and the facts. the operator ruled on 2026-10-10: benchmark first,
-   then rule; spec 0015 D5 (OS threads) is the interim choice. The gap closes
-   when the criterion benchmark in spec 0019's Plan has numbers and he rules.
-   `cas-domain` stays runtime-neutral either way.
+1. **Pool runtime.** Closed by spec 0019 D2 (2026-10-10): the operator ruled
+   Option A, OS threads with `std::sync` as built, on the benchmark addendum
+   numbers [reported, relayed by the integrator, mesh e42efbc2]. The heph design and the
+   options are in spec 0019 and `cerebral-work/research@4068134:repos/heph.md`
+   line 92. `cas-domain` stays runtime-neutral.
 2. **Kernel `-j 2`.** Closed by spec 0020 (2026-10-10). The research claim that
    eBPF enforces two parallel jobs is dropped: `nice 19` is a priority, not a
    cap. The cap is the cgroup v2 CPU quota per slot (`cpu.max`, two CPUs by
@@ -207,7 +205,7 @@ These are not decided. Each needs a spec or an operator ruling before code.
 
 - [x] Scaffold from the estate template. Ten crates compile.
 - [x] Build `cas-domain` (slot, lease, envelope, attestation, error). PR #3.
-- [x] Write the spec that chooses the pool runtime: spec 0019 (ruling pending the benchmark).
+- [x] Write the spec that chooses the pool runtime: spec 0019, ruled Option A on 2026-10-10 (D2).
 - [x] Write the spec that designs a job cap for builds, or drops the claim: spec 0020.
 - [x] Give `cas-storage` a phase or merge it into another crate (spec 0021).
 - [x] Decide the eBPF licence position and record it in spec 0004 (2026-10-09).
