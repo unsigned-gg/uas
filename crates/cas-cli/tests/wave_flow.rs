@@ -294,7 +294,10 @@ fn wave_flow_skips_a_wave_whose_only_step_moved() {
     );
     for (name, text) in &files {
         assert!(!steps(text).is_empty(), "{name} holds no steps");
-        assert!(!text.contains("step = []"), "{name} holds an empty step list");
+        assert!(
+            !text.contains("step = []"),
+            "{name} holds an empty step list"
+        );
     }
 }
 
@@ -469,7 +472,8 @@ fn wave_flow_header_command_parses_with_cli() {
     assert_eq!(argv[0], "cas");
     let out_str = out_dir.to_str().unwrap();
     assert!(
-        argv.windows(2).any(|w| w[0] == "--out-dir" && w[1] == out_str),
+        argv.windows(2)
+            .any(|w| w[0] == "--out-dir" && w[1] == out_str),
         "the header names the out dir as given: {line}"
     );
     // The header's own command line, split on spaces, parses with the CLI and writes the same flows.
@@ -479,7 +483,11 @@ fn wave_flow_header_command_parses_with_cli() {
         "header command failed: {}",
         stderr(&rerun)
     );
-    assert_eq!(read_waves(&out_dir), files, "the header command rewrites the same flows");
+    assert_eq!(
+        read_waves(&out_dir),
+        files,
+        "the header command rewrites the same flows"
+    );
 }
 
 // ---------------------------------------------------------------- cas wave step
