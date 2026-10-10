@@ -439,11 +439,13 @@ name = "cas-pool"
 version = "0.1.0"
 dependencies = [
  "cas-domain",
+ "cas-ebpf",
  "criterion",
  "gix",
  "rustix",
  "serde",
  "thiserror",
+ "tokio",
  "tracing",
 ]
 

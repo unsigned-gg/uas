@@ -266,6 +266,10 @@ impl ProbeHandle for Probes {
         self.counter(DROPPED_RING_SLOT)
     }
 
+    fn tracking_failures(&self) -> Result<u64, EbpfError> {
+        Probes::tracking_failures(self)
+    }
+
     fn next_event(&mut self) -> Option<ExecEvent> {
         // A short item is not an ExecEvent. Skip it and read on.
         while let Some(item) = self.events.next() {

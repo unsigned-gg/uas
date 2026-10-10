@@ -15,7 +15,7 @@ use std::{
 
 use crate::{
     error::EbpfError,
-    protocol::{Request, Response, StreamLine, MAX_LINE},
+    protocol::{ReceiptFrame, Request, Response, StreamLine, MAX_LINE},
 };
 
 /// A connection to the daemon. One request at a time.
@@ -37,6 +37,23 @@ impl DaemonClient {
         })
     }
 
+    /// Connects like [`DaemonClient::connect`], and gives every request on the
+    /// connection a read and write timeout. A daemon that stops answering then
+    /// fails the request with an I/O timeout instead of blocking the caller.
+    /// The bound covers requests, not the connect itself: a daemon whose listen
+    /// backlog is full blocks `connect` without a bound (Unix sockets have no
+    /// connect timeout in std).
+    pub fn connect_with_timeout(
+        path: impl AsRef<Path>,
+        timeout: std::time::Duration,
+    ) -> Result<Self, EbpfError> {
+        let client = Self::connect(path)?;
+        let stream = client.reader.get_ref();
+        stream.set_read_timeout(Some(timeout))?;
+        stream.set_write_timeout(Some(timeout))?;
+        Ok(client)
+    }
+
     /// Tracks `pid` with parent `ppid`.
     pub fn track(&mut self, pid: u32, ppid: u32) -> Result<(), EbpfError> {
         self.expect_ack(&Request::Track { pid, ppid })
@@ -56,8 +73,27 @@ impl DaemonClient {
                 ..
             } => Ok((tracked, dropped_events)),
             Response::Failure { error, .. } => Err(EbpfError::Protocol(error)),
-            Response::Ack { .. } => Err(EbpfError::Protocol("status reply had no counts".into())),
+            Response::Ack { .. } | Response::Receipt { .. } => {
+                Err(EbpfError::Protocol("status reply had no counts".into()))
+            }
         }
+    }
+
+    /// Reads the receipt window of `pid`: the totals since its `track` (spec 0014 D14).
+    ///
+    /// The window stays open. A window is owned by this connection: when the
+    /// connection closes, the daemon discards it.
+    pub fn receipt(&mut self, pid: u32) -> Result<ReceiptFrame, EbpfError> {
+        match self.round_trip(&Request::Receipt { pid })? {
+            Response::Receipt { receipt } => Ok(receipt),
+            Response::Failure { error, .. } => Err(EbpfError::Protocol(error)),
+            _ => Err(EbpfError::Protocol("receipt reply had no receipt".into())),
+        }
+    }
+
+    /// Discards the receipt window of `pid`. Kernel tracking is unchanged (spec 0014 D14).
+    pub fn forget(&mut self, pid: u32) -> Result<(), EbpfError> {
+        self.expect_ack(&Request::Forget { pid })
     }
 
     /// Switches this connection to the event stream.
