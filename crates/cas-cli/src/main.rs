@@ -1382,4 +1382,29 @@ verify_cmd = ["echo", "critic pass"]
 
         let _ = std::fs::remove_file(path);
     }
+
+    #[test]
+    fn keep_receipts_returns_every_receipt_when_compensation_incomplete() {
+        let receipts = vec![
+            CompensationReceipt::new("s3", "recording", true, "ok", 0),
+            CompensationReceipt::new("s2", "fail_on", false, "injected", 0),
+            CompensationReceipt::new("s1", "recording", true, "ok", 0),
+        ];
+        let err = EngineError::CompensationIncomplete {
+            failed: 1,
+            receipts: receipts.clone(),
+        };
+        let kept = keep_receipts(Err(err)).unwrap();
+        assert_eq!(kept, receipts);
+        assert!(!kept[1].success);
+    }
+
+    #[test]
+    fn keep_receipts_passes_other_errors_through() {
+        let err = EngineError::StoreError("boom".into());
+        match keep_receipts(Err(err)) {
+            Err(EngineError::StoreError(msg)) => assert_eq!(msg, "boom"),
+            other => panic!("expected StoreError pass-through, got {other:?}"),
+        }
+    }
 }
