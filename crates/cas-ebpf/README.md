@@ -44,6 +44,9 @@ depends only on crates in lower layers.
   request is checked against the peer's uid (`SO_PEERCRED`): own pids only, a per-uid
   quota, own events only. `--socket-group` names who may connect.
 - **Audit:** exec events only (CER-2720 narrowed). `run_hash` is a per-run transcript digest.
+- **Pid namespaces:** ceres runs under one. Every pid the API takes or returns is a pid of
+  the daemon's namespace; the kernel keys its map by global task id and translates with
+  `bpf_get_ns_current_pid_tgid`. A `track` request takes effect at the next fork or exec.
 
 ## Build and test
 
