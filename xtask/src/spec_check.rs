@@ -1,14 +1,19 @@
-//! `cargo xtask spec-check`: validate the lean-spec files under `specs/`.
+//! `cargo xtask spec-check`: validate specification files under `specs/`.
 //!
-//! Rules (see `specs/0002-verification-gates-and-evidence.md`):
+//! Rules (derived from estate standard in cerebral research):
 //! 1. File names are `NNNN-kebab-slug.md`. Numbers are unique.
 //! 2. YAML frontmatter with `status` and `created`. Unknown keys are errors.
 //! 3. One H1, `# NNNN-slug`, equal to the file stem.
-//! 4. H2 sections Overview, Design, Plan, Test, Notes, in that order.
-//! 5. The Test section holds a fenced code block.
-//! 6. More than 300 lines warns. More than 400 lines is an error.
-//! 7. `specs/README.md` links every spec exactly once and no missing file.
-//! 8. Relative markdown links in `specs/*.md` resolve.
+//! 4. Dual-mode H2 sections:
+//!    - Modern: Requirements, Design, Tasks, Verification, Notes, in that order.
+//!    - Legacy: Overview, Design, Plan, Test, Notes, in that order.
+//! 5. The Verification (or Test) section holds a fenced code block.
+//! 6. In modern mode, Requirements section requires at least one EARS clause with `shall`.
+//! 7. Ambiguous modals (`should`, `could`, `might`, `may`) are flagged.
+//! 8. Bullet clauses must begin with standard EARS keywords (The, When, While, If, Where).
+//! 9. More than 300 lines warns. More than 400 lines is an error.
+//! 10. `specs/README.md` links every spec exactly once and no missing file.
+//! 11. Relative markdown links in `specs/*.md` resolve.
 //!
 //! A missing or empty `specs/` directory passes with a notice.
 
@@ -19,8 +24,16 @@ use std::process::ExitCode;
 
 const STATUSES: &[&str] = &["planned", "in-progress", "complete", "archived"];
 const PRIORITIES: &[&str] = &["low", "medium", "high", "critical"];
-const KEYS: &[&str] = &["status", "created", "tags", "priority", "depends_on"];
-const SECTIONS: &[&str] = &["Overview", "Design", "Plan", "Test", "Notes"];
+const KEYS: &[&str] = &[
+    "status",
+    "created",
+    "tags",
+    "priority",
+    "depends_on",
+    "scope",
+];
+const MODERN_SECTIONS: &[&str] = &["Requirements", "Design", "Tasks", "Verification", "Notes"];
+const LEGACY_SECTIONS: &[&str] = &["Overview", "Design", "Plan", "Test", "Notes"];
 const WARN_LINES: usize = 300;
 const ERROR_LINES: usize = 400;
 
@@ -113,7 +126,7 @@ pub fn check(root: &Path) -> Report {
         }
     }
 
-    // Rules 7 and 8 for the README.
+    // Rules for README.md.
     let readme = dir.join("README.md");
     match fs::read_to_string(&readme) {
         Ok(text) => {
@@ -266,7 +279,7 @@ fn valid_date(s: &str) -> bool {
 fn check_spec(rel: &str, text: &str, stem: &str, stems: &BTreeSet<String>, report: &mut Report) {
     let lines: Vec<&str> = text.lines().collect();
 
-    // Rule 6: length.
+    // Length limit.
     if lines.len() > ERROR_LINES {
         report.errors.push(format!(
             "{rel}:{}: {} lines is over the {ERROR_LINES}-line limit; split into sub-spec files",
@@ -281,7 +294,7 @@ fn check_spec(rel: &str, text: &str, stem: &str, stems: &BTreeSet<String>, repor
         ));
     }
 
-    // Rule 2: frontmatter.
+    // Frontmatter.
     if lines.first().map(|l| l.trim_end()) != Some("---") {
         report.errors.push(format!(
             "{rel}:1: missing frontmatter (first line must be ---)"
@@ -302,7 +315,7 @@ fn check_spec(rel: &str, text: &str, stem: &str, stems: &BTreeSet<String>, repor
     let entries = parse_frontmatter(rel, &lines[1..end], 2, report);
     check_entries(rel, &entries, stems, report);
 
-    // Rules 3-5: body.
+    // Body headings.
     let body = classify(&lines[end + 1..], end + 2);
     let h1: Vec<&Line> = body
         .iter()
@@ -334,8 +347,16 @@ fn check_spec(rel: &str, text: &str, stem: &str, stems: &BTreeSet<String>, repor
         .filter(|(_, l)| !l.inside && l.text.starts_with("## "))
         .map(|(i, l)| (i, l.text[3..].trim()))
         .collect();
+
+    let is_modern = h2.iter().any(|(_, h)| *h == "Requirements");
+    let (expected_sections, verif_section) = if is_modern {
+        (MODERN_SECTIONS, "Verification")
+    } else {
+        (LEGACY_SECTIONS, "Test")
+    };
+
     let mut last_pos: Option<usize> = None;
-    for section in SECTIONS {
+    for section in expected_sections {
         match h2.iter().position(|(_, h)| h == section) {
             None => report
                 .errors
@@ -352,15 +373,96 @@ fn check_spec(rel: &str, text: &str, stem: &str, stems: &BTreeSet<String>, repor
         }
     }
 
-    if let Some(pos) = h2.iter().position(|(_, h)| *h == "Test") {
+    if let Some(pos) = h2.iter().position(|(_, h)| *h == verif_section) {
         let from = h2[pos].0 + 1;
         let to = h2.get(pos + 1).map_or(body.len(), |(i, _)| *i);
         if !body[from..to].iter().any(|l| l.marker) {
             report.errors.push(format!(
-                "{rel}:{}: `## Test` needs a fenced code block with a runnable command",
+                "{rel}:{}: `## {verif_section}` needs a fenced code block with a runnable command",
                 body[h2[pos].0].no
             ));
         }
+    }
+
+    if is_modern {
+        if let Some(pos) = h2.iter().position(|(_, h)| *h == "Requirements") {
+            let from = h2[pos].0 + 1;
+            let to = h2.get(pos + 1).map_or(body.len(), |(i, _)| *i);
+            check_ears_requirements(rel, &body[from..to], body[h2[pos].0].no, report);
+        }
+    }
+}
+
+fn contains_word(text: &str, word: &str) -> bool {
+    text.split(|c: char| !c.is_alphanumeric() && c != '_')
+        .any(|w| w.eq_ignore_ascii_case(word))
+}
+
+fn is_ears_prefix(line: &str) -> bool {
+    let mut s = line.trim();
+    if s.starts_with('*') || s.starts_with('-') {
+        s = s[1..].trim();
+    }
+    if let Some(rest) = s.strip_prefix("**") {
+        if let Some(idx) = rest.find("**") {
+            s = rest[idx + 2..].trim();
+            if let Some(rest2) = s.strip_prefix(':') {
+                s = rest2.trim();
+            }
+        }
+    }
+    let lower = s.to_ascii_lowercase();
+    lower.starts_with("the ")
+        || lower.starts_with("when ")
+        || lower.starts_with("while ")
+        || lower.starts_with("if ")
+        || lower.starts_with("where ")
+}
+
+/// Strip inline code spans enclosed in backticks (`).
+fn strip_inline_code(line: &str) -> String {
+    let mut stripped = String::with_capacity(line.len());
+    let mut in_code = false;
+    for c in line.chars() {
+        if c == '`' {
+            in_code = !in_code;
+        } else if !in_code {
+            stripped.push(c);
+        }
+    }
+    stripped
+}
+
+fn check_ears_requirements(rel: &str, lines: &[Line], heading_no: usize, report: &mut Report) {
+    let mut shall_count = 0;
+    for l in lines {
+        if l.inside {
+            continue;
+        }
+        let clean = strip_inline_code(l.text);
+        if contains_word(&clean, "shall") {
+            shall_count += 1;
+            for bad in ["should", "could", "might", "may"] {
+                if contains_word(&clean, bad) {
+                    report.warnings.push(format!(
+                        "{rel}:{}: requirement contains ambiguous modal '{bad}'; use 'shall' for mandatory requirements",
+                        l.no
+                    ));
+                }
+            }
+            let trimmed = clean.trim();
+            if (trimmed.starts_with('*') || trimmed.starts_with('-')) && !is_ears_prefix(trimmed) {
+                report.warnings.push(format!(
+                    "{rel}:{}: requirement clause does not begin with a standard EARS pattern keyword (The, When, While, If, Where)",
+                    l.no
+                ));
+            }
+        }
+    }
+    if shall_count == 0 {
+        report.errors.push(format!(
+            "{rel}:{heading_no}: `## Requirements` needs at least one EARS requirement clause containing 'shall'"
+        ));
     }
 }
 
@@ -396,6 +498,7 @@ fn check_entries(
                 }
             }
             ("tags", Value::List(_)) => {}
+            ("scope", Value::List(_)) => {}
             ("depends_on", Value::List(items)) => {
                 for dep in items {
                     if !stems.contains(dep) {
@@ -406,7 +509,7 @@ fn check_entries(
                 }
             }
             (k, _) if KEYS.contains(&k) => {
-                let want = if matches!(k, "tags" | "depends_on") {
+                let want = if matches!(k, "tags" | "depends_on" | "scope") {
                     "a list"
                 } else {
                     "a single value"
@@ -431,15 +534,7 @@ fn check_entries(
 
 /// Link targets in one line, ignoring inline code spans.
 fn line_links(line: &str) -> Vec<String> {
-    let mut stripped = String::with_capacity(line.len());
-    let mut in_code = false;
-    for c in line.chars() {
-        if c == '`' {
-            in_code = !in_code;
-        } else if !in_code {
-            stripped.push(c);
-        }
-    }
+    let stripped = strip_inline_code(line);
     let mut out = Vec::new();
     let mut rest = stripped.as_str();
     while let Some(i) = rest.find("](") {
@@ -555,6 +650,14 @@ mod tests {
         )
     }
 
+    fn modern_spec(stem: &str) -> String {
+        format!(
+            "---\nstatus: planned\ncreated: 2026-10-09\ntags: [a, b]\npriority: high\nscope: [core]\n---\n\n# {stem}\n\n\
+             ## Requirements\n\n* **Ubiquitous:** The system shall operate continuously.\n\n## Design\n\nText.\n\n## Tasks\n\n- [ ] one\n\n\
+             ## Verification\n\n```bash\nmake check\n```\n\n## Notes\n\nText.\n"
+        )
+    }
+
     fn readme(names: &[&str]) -> String {
         let mut s = String::from("# Specs\n\n| Spec | Title |\n|---|---|\n");
         for n in names {
@@ -585,6 +688,67 @@ mod tests {
         let r = check(&t.0);
         assert!(r.errors.is_empty(), "{:?}", r.errors);
         assert!(r.warnings.is_empty());
+    }
+
+    #[test]
+    fn modern_ears_spec_passes() {
+        let t = Tmp::new();
+        t.write("specs/0001-first.md", &spec("0001-first"));
+        t.write("specs/0002-second.md", &modern_spec("0002-second"));
+        t.write(
+            "specs/README.md",
+            &readme(&["0001-first.md", "0002-second.md"]),
+        );
+        let r = check(&t.0);
+        assert!(r.errors.is_empty(), "{:?}", r.errors);
+        assert!(r.warnings.is_empty(), "{:?}", r.warnings);
+    }
+
+    #[test]
+    fn modern_ears_spec_missing_shall_fails() {
+        let t = Tmp::new();
+        let bad = modern_spec("0001-bad").replace(
+            "The system shall operate continuously.",
+            "The system operates continuously.",
+        );
+        t.write("specs/0001-bad.md", &bad);
+        t.write("specs/README.md", &readme(&["0001-bad.md"]));
+        let r = check(&t.0);
+        assert!(has(
+            &r.errors,
+            "needs at least one EARS requirement clause containing 'shall'"
+        ));
+    }
+
+    #[test]
+    fn modern_ears_spec_ambiguous_modal_warns() {
+        let t = Tmp::new();
+        let with_warning = modern_spec("0001-warn").replace(
+            "The system shall operate continuously.",
+            "* The system shall operate continuously and should handle faults.",
+        );
+        t.write("specs/0001-warn.md", &with_warning);
+        t.write("specs/README.md", &readme(&["0001-warn.md"]));
+        let r = check(&t.0);
+        assert!(r.errors.is_empty(), "{:?}", r.errors);
+        assert!(r
+            .warnings
+            .iter()
+            .any(|w| w.contains("contains ambiguous modal 'should'")));
+    }
+
+    #[test]
+    fn modern_ears_spec_backticked_modals_do_not_warn() {
+        let t = Tmp::new();
+        let with_code = modern_spec("0001-code").replace(
+            "The system shall operate continuously.",
+            "The system shall flag modals like `should`, `could`, and `may`.",
+        );
+        t.write("specs/0001-code.md", &with_code);
+        t.write("specs/README.md", &readme(&["0001-code.md"]));
+        let r = check(&t.0);
+        assert!(r.errors.is_empty(), "{:?}", r.errors);
+        assert!(r.warnings.is_empty(), "{:?}", r.warnings);
     }
 
     #[test]
@@ -669,7 +833,6 @@ mod tests {
             ),
         );
         assert!(t.errors().is_empty(), "{:?}", t.errors());
-        // Inline form is still validated.
         t.write(
             "specs/0001-first.md",
             &base.replace("tags: [a, b]", "depends_on: [0002-second, 0009-ghost]"),
@@ -851,5 +1014,16 @@ mod tests {
         assert!(!valid_date("2026-1-08"));
         assert!(!valid_date("2026-00-08"));
         assert_eq!(line_links("[a](x.md \"t\") [b](y.md)"), ["x.md", "y.md"]);
+    }
+
+    #[test]
+    fn repository_specs_pass_check() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+        let report = check(root);
+        assert!(
+            report.errors.is_empty(),
+            "repository specs must be valid: {:?}",
+            report.errors
+        );
     }
 }

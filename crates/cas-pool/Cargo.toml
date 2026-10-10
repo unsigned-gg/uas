@@ -10,6 +10,11 @@ authors.workspace = true
 repository.workspace = true
 
 [dependencies]
+cas-domain = { path = "../cas-domain" }
+rustix = { workspace = true }
+serde = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
 
 [lints.rust]
 # Spec 0001 decision 2026-10-09: this crate makes raw syscalls. unsafe is denied,
