@@ -63,6 +63,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - cas-ebpf reads the sched tracepoint field offsets from tracefs at load (spec 0014 D13, T16). Fork `child_pid` is at offset 20 on kernel 6.18, not 44, so the fork probe read the wrong bytes there. A format file that breaks the layout rules stops the load before any attach.
 - `cas-ebpf` tracefs load refuses a `filename` field typed `__data_locx`. The check matches the exact `__data_loc` token (spec 0014 D13).
 - Rollback runs every compensator. A failed compensator leaves a failed receipt, the rest still run, and rollback then returns `CompensationIncomplete` with all receipts (spec 0009, spec 0024).
+- A workflow compensator that returns `Err` no longer leaves the session at `Compensating`. `fail_activity` keeps its receipt, ends the log with `SessionFinished` in `Failed`, and returns `CompensationIncomplete` (spec 0009, CER-2785).
 
 ## [0.1.0] - 2026-10-08
 
