@@ -1,30 +1,30 @@
 //! The landing activity: reconcile a settled changeset with Blackwall and open its pull request.
 //!
 //! The activity runs `git` and the `blackwall` CLI as subprocesses (spec 0022 D1). It
-//! never pushes, never passes `--force`, `--no-verify`, `--pr` or `--draft`, and it
-//! never calls `blackwall` when the base is stale (spec 0022 D3). The receipt it
-//! returns comes from `cas-domain` and carries the evidence tier.
+//! reads the verify command from the repository's `blackwall.toml`. It never pushes,
+//! never passes `--force`, `--no-verify`, `--pr` or `--draft`, and it never calls
+//! `blackwall` when the base is stale (spec 0022 D3). The receipt comes from `cas-domain`
+//! and carries the evidence tier.
 
 use std::ffi::OsString;
-use std::path::PathBuf;
+use std::fs;
+use std::io;
+use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
 use cas_domain::{AuditStatus, CostSource, LandingFacts, LandingReceipt, SlotId};
-
-/// The verify command that `blackwall.toml` names for this repository.
-pub const DEFAULT_VERIFY_CMD: &str = "make check JOBS=2 && make hygiene JOBS=2";
+use serde::Deserialize;
 
 /// Where the activity runs and which refs it uses.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LandingConfig {
-    /// The repository checkout that `git` and `blackwall` run in.
+    /// The repository checkout that `git` and `blackwall` run in. Its `blackwall.toml`
+    /// names the verify command.
     pub repo_dir: PathBuf,
     /// The development ref that a changeset must be based on.
     pub development_ref: String,
     /// The base branch of the pull request.
     pub pr_base: String,
-    /// The verify command the receipt records. `blackwall.toml` runs it.
-    pub verify_cmd: String,
     /// The `PATH` for each child process. `None` inherits the parent `PATH`.
     pub path_env: Option<OsString>,
 }
@@ -36,7 +36,6 @@ impl LandingConfig {
             repo_dir: repo_dir.into(),
             development_ref: "origin/development".into(),
             pr_base: "development".into(),
-            verify_cmd: DEFAULT_VERIFY_CMD.into(),
             path_env: None,
         }
     }
@@ -70,9 +69,10 @@ pub struct LandingInput {
 /// The result of one landing attempt.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum LandingOutcome {
-    /// The pull request was opened. The receipt is `verified` unless an evaluator file changed.
+    /// The pull request was opened. The tier is `verified` only when `blackwall.toml` sets
+    /// a verify command, reconcile exited zero and no evaluator file changed.
     Opened(LandingReceipt),
-    /// The verify command failed. No pull request was opened.
+    /// `blackwall reconcile` exited non-zero. No pull request was opened.
     VerifyFailed(LandingReceipt),
     /// The base is not an ancestor of the development head. Nothing was applied.
     StaleBase {
@@ -93,7 +93,7 @@ pub enum LandingError {
         program: &'static str,
         /// The operating system error.
         #[source]
-        source: std::io::Error,
+        source: io::Error,
     },
     /// A step exited with a status the activity does not accept.
     #[error("{step} exited with {code:?}: {stderr}")]
@@ -108,6 +108,24 @@ pub enum LandingError {
     /// `blackwall pr` succeeded but printed no `/pull/<n>` link.
     #[error("blackwall pr printed no pull request number")]
     PrNumberUnparsed,
+    /// `blackwall.toml` exists but could not be read.
+    #[error("could not read {path}: {source}")]
+    ReadConfig {
+        /// The file that could not be read.
+        path: PathBuf,
+        /// The operating system error.
+        #[source]
+        source: io::Error,
+    },
+    /// `blackwall.toml` exists but is not valid TOML.
+    #[error("could not parse {path}: {source}")]
+    ParseConfig {
+        /// The file that did not parse.
+        path: PathBuf,
+        /// The TOML error.
+        #[source]
+        source: toml::de::Error,
+    },
 }
 
 /// Runs the landing steps for one changeset.
@@ -122,8 +140,10 @@ impl LandingActivity {
         Self { config }
     }
 
-    /// Land one changeset: check the base, reconcile, then open the pull request.
+    /// Land one changeset: read the verify command, check the base, reconcile, then open
+    /// the pull request.
     pub fn land(&self, input: &LandingInput) -> Result<LandingOutcome, LandingError> {
+        let verify_cmd = read_verify_cmd(&self.config.repo_dir)?;
         let base = input.base_sha.as_str();
         let dev = self.config.development_ref.as_str();
 
@@ -132,7 +152,7 @@ impl LandingActivity {
             Some(0) => {}
             Some(1) => {
                 let development_head = self.git_head()?;
-                let receipt = self.receipt(input, None, None, None, true);
+                let receipt = self.receipt(input, verify_cmd, None, None, None, true);
                 return Ok(LandingOutcome::StaleBase {
                     receipt,
                     development_head,
@@ -147,12 +167,12 @@ impl LandingActivity {
             "blackwall",
             &["reconcile", run, "--base", base, "--branch", &branch],
         )?;
-        let verify_exit = match reconcile.status.code() {
+        let reconcile_exit = match reconcile.status.code() {
             Some(code) => code,
             None => return Err(unexpected("reconcile", None, &reconcile)),
         };
-        if verify_exit != 0 {
-            let receipt = self.receipt(input, Some(verify_exit), None, None, false);
+        if reconcile_exit != 0 {
+            let receipt = self.receipt(input, verify_cmd, Some(reconcile_exit), None, None, false);
             return Ok(LandingOutcome::VerifyFailed(receipt));
         }
 
@@ -163,13 +183,21 @@ impl LandingActivity {
         }
         let stdout = String::from_utf8_lossy(&pr.stdout);
         let number = parse_pr_number(&stdout).ok_or(LandingError::PrNumberUnparsed)?;
-        let receipt = self.receipt(input, Some(0), Some(branch), Some(number), false);
+        let receipt = self.receipt(
+            input,
+            verify_cmd,
+            Some(0),
+            Some(branch),
+            Some(number),
+            false,
+        );
         Ok(LandingOutcome::Opened(receipt))
     }
 
     fn receipt(
         &self,
         input: &LandingInput,
+        verify_cmd: Option<String>,
         verify_exit: Option<i32>,
         branch: Option<String>,
         pr_number: Option<u64>,
@@ -184,7 +212,7 @@ impl LandingActivity {
             changeset_hash: input.changeset_hash.clone(),
             base_sha: input.base_sha.clone(),
             stale_base,
-            verify_cmd: self.config.verify_cmd.clone(),
+            verify_cmd,
             verify_exit,
             branch,
             pr_number,
@@ -212,6 +240,34 @@ impl LandingActivity {
         cmd.output()
             .map_err(|source| LandingError::Spawn { program, source })
     }
+}
+
+/// The subset of `blackwall.toml` the activity reads.
+#[derive(Deserialize)]
+struct BlackwallConfig {
+    verify: Option<VerifySection>,
+}
+
+#[derive(Deserialize)]
+struct VerifySection {
+    command: Option<String>,
+}
+
+/// The `[verify] command` of `<repo_dir>/blackwall.toml`. `None` when the file is absent,
+/// has no `[verify]` section, or sets an empty command.
+fn read_verify_cmd(repo_dir: &Path) -> Result<Option<String>, LandingError> {
+    let path = repo_dir.join("blackwall.toml");
+    let text = match fs::read_to_string(&path) {
+        Ok(text) => text,
+        Err(err) if err.kind() == io::ErrorKind::NotFound => return Ok(None),
+        Err(source) => return Err(LandingError::ReadConfig { path, source }),
+    };
+    let parsed: BlackwallConfig =
+        toml::from_str(&text).map_err(|source| LandingError::ParseConfig { path, source })?;
+    Ok(parsed
+        .verify
+        .and_then(|verify| verify.command)
+        .filter(|command| !command.trim().is_empty()))
 }
 
 fn unexpected(step: &'static str, code: Option<i32>, out: &Output) -> LandingError {

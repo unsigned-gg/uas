@@ -51,9 +51,12 @@ pub struct LandingFacts {
     pub base_sha: String,
     /// True when the base was not an ancestor of the development head. Nothing landed.
     pub stale_base: bool,
-    /// The verify command that reconcile ran.
-    pub verify_cmd: String,
-    /// The exit code of the verify command. `None` when reconcile did not run.
+    /// The verify command from the repository's `blackwall.toml`. `None` when the file sets
+    /// none. Without one, the tier cannot be `verified`.
+    pub verify_cmd: Option<String>,
+    /// The exit code of the `blackwall reconcile` process. It is not the verify command's own
+    /// exit. blackwall 1.2.0 exits 1 on every error and 2 on a usage error. `None` when
+    /// reconcile did not run.
     pub verify_exit: Option<i32>,
     /// The landing branch, `blackwall/<short run>`, when one was created.
     pub branch: Option<String>,
@@ -107,14 +110,22 @@ struct RawLandingReceipt {
 impl LandingReceipt {
     /// Build a receipt. The evidence tier follows from the facts.
     pub fn new(facts: LandingFacts) -> Self {
-        let evidence = Self::evidence_for(facts.verify_exit, facts.evaluator_touched);
+        let evidence = Self::evidence_for(
+            facts.verify_cmd.as_deref(),
+            facts.verify_exit,
+            facts.evaluator_touched,
+        );
         Self { facts, evidence }
     }
 
-    /// The tier rule: `verified` iff the verify command exited zero and no
+    /// The tier rule: `verified` iff a verify command is set, reconcile exited zero and no
     /// evaluator file changed. Otherwise `reported`.
-    pub fn evidence_for(verify_exit: Option<i32>, evaluator_touched: bool) -> EvidenceTier {
-        if verify_exit == Some(0) && !evaluator_touched {
+    pub fn evidence_for(
+        verify_cmd: Option<&str>,
+        verify_exit: Option<i32>,
+        evaluator_touched: bool,
+    ) -> EvidenceTier {
+        if verify_cmd.is_some() && verify_exit == Some(0) && !evaluator_touched {
             EvidenceTier::Verified
         } else {
             EvidenceTier::Reported
@@ -136,7 +147,11 @@ impl TryFrom<RawLandingReceipt> for LandingReceipt {
     type Error = LandingReceiptError;
 
     fn try_from(raw: RawLandingReceipt) -> Result<Self, Self::Error> {
-        let expected = Self::evidence_for(raw.facts.verify_exit, raw.facts.evaluator_touched);
+        let expected = Self::evidence_for(
+            raw.facts.verify_cmd.as_deref(),
+            raw.facts.verify_exit,
+            raw.facts.evaluator_touched,
+        );
         if raw.evidence != expected {
             return Err(LandingReceiptError::EvidenceMismatch {
                 evidence: raw.evidence,
@@ -166,7 +181,7 @@ mod tests {
             changeset_hash: "blake3-deadbeef".into(),
             base_sha: "056d7c7".into(),
             stale_base: false,
-            verify_cmd: "make check JOBS=2 && make hygiene JOBS=2".into(),
+            verify_cmd: Some("make check JOBS=2 && make hygiene JOBS=2".into()),
             verify_exit,
             branch: Some("blackwall/bw-0123456789".into()),
             pr_number: Some(57),
@@ -187,25 +202,28 @@ mod tests {
 
     #[test]
     fn landing_receipt_tier_rule() {
+        let cmd = Some("make check JOBS=2");
         let cases = [
-            (Some(0), false, EvidenceTier::Verified),
-            (Some(0), true, EvidenceTier::Reported),
-            (Some(2), false, EvidenceTier::Reported),
-            (None, false, EvidenceTier::Reported),
+            (cmd, Some(0), false, EvidenceTier::Verified),
+            (cmd, Some(0), true, EvidenceTier::Reported),
+            (cmd, Some(1), false, EvidenceTier::Reported),
+            (None, Some(0), false, EvidenceTier::Reported),
         ];
-        for (verify_exit, touched, want) in cases {
-            let receipt = LandingReceipt::new(facts(verify_exit, touched));
+        for (verify_cmd, verify_exit, touched, want) in cases {
+            let mut f = facts(verify_exit, touched);
+            f.verify_cmd = verify_cmd.map(str::to_owned);
+            let receipt = LandingReceipt::new(f);
             assert_eq!(
                 receipt.evidence(),
                 want,
-                "exit {verify_exit:?}, touched {touched}"
+                "cmd {verify_cmd:?}, exit {verify_exit:?}, touched {touched}"
             );
         }
     }
 
     #[test]
     fn landing_receipt_rejects_verified_with_nonzero_exit() {
-        let receipt = LandingReceipt::new(facts(Some(2), false));
+        let receipt = LandingReceipt::new(facts(Some(1), false));
         let json = serde_json::to_string(&receipt).unwrap();
         assert!(json.contains("\"evidence\":\"reported\""), "{json}");
         let forged = json.replace("\"evidence\":\"reported\"", "\"evidence\":\"verified\"");
