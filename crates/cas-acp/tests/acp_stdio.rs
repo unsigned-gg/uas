@@ -290,3 +290,50 @@ fn oversize_frame_is_32600_and_the_next_frame_is_served() {
     assert_eq!(frames[1]["id"], 1);
     assert_eq!(frames[1]["result"]["protocolVersion"], 1);
 }
+
+#[test]
+fn every_error_variant_maps_to_its_code() {
+    use cas_acp::AcpError;
+    let slot = SlotId::new("slot-1").unwrap();
+    let cases: Vec<(AcpError, i32)> = vec![
+        (AcpError::Parse("x".into()), -32700),
+        (AcpError::InvalidRequest("x".into()), -32600),
+        (AcpError::MethodNotFound("x".into()), -32601),
+        (AcpError::InvalidParams("x".into()), -32602),
+        (AcpError::Pool(PoolError::CapacityExhausted(2)), -32001),
+        (AcpError::Pool(PoolError::LeaseExpired(slot.clone())), -32002),
+        (AcpError::Pool(PoolError::NoActiveLease(slot.clone())), -32002),
+        (AcpError::Pool(PoolError::TokenMismatch(slot.clone())), -32002),
+        (AcpError::Pool(PoolError::SlotNotFound(slot)), -32603),
+        (AcpError::Engine("x".into()), -32603),
+    ];
+    for (err, code) in cases {
+        assert_eq!(err.code(), code, "variant: {err}");
+    }
+}
+
+#[test]
+fn session_new_with_missing_params_is_32602() {
+    let pool = MockPool::default();
+    let mut server = AcpServer::new(pool.clone(), config());
+    let frames = serve(
+        &mut server,
+        "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"session/new\",\"params\":{}}\n",
+    );
+    assert_eq!(ids_and_codes(&frames), vec![(Value::from(3), -32602)]);
+    assert!(pool.calls().is_empty(), "bad params must not reach the pool");
+}
+
+#[test]
+fn second_session_on_one_slot_is_32001_without_a_pool_call() {
+    let pool = MockPool::default();
+    let mut server = AcpServer::new(pool.clone(), config());
+    let first = serve(&mut server, &format!("{SESSION_NEW}\n"));
+    assert!(first[0]["result"]["sessionId"].is_string(), "frames: {first:?}");
+    let second = serve(
+        &mut server,
+        "{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"session/new\",\"params\":{\"cwd\":\"/work\",\"mcpServers\":[]}}\n",
+    );
+    assert_eq!(ids_and_codes(&second), vec![(Value::from(3), -32001)]);
+    assert_eq!(pool.calls(), vec!["acquire:slot-1".to_string()]);
+}
