@@ -1,7 +1,7 @@
 ---
 status: planned
 created: 2026-10-10
-tags: [cargo, features, ci, gates, cas-engine]
+tags: [cargo, features, ci, gates, uas-engine]
 priority: high
 depends_on: [0001-cas-architecture-and-crate-layout, 0004-dependency-and-licence-policy, 0005-ci-cache-and-runners, 0026-cortex-pool-member-adapter]
 ---
@@ -27,7 +27,7 @@ Facts, measured 2026-10-10 on `origin/development` at `51c6dac`:
   count is not evidence of a feature: `delegation` appears 25 times as prose, and
   spec 0028's `crdt-collab` is named in text but never invoked.
 - **F2 [verified]:** One `[features]` section exists in the whole workspace,
-  `crates/cas-engine/Cargo.toml` line 35, declaring `cortex-grpc` only. Command:
+  `crates/uas-engine/Cargo.toml` line 35, declaring `cortex-grpc` only. Command:
   `grep -rn '^\[features\]' crates/*/Cargo.toml Cargo.toml`.
 - **F3 [verified]:** No CI workflow and no Makefile target passes `--features`
   or `--all-features`. Command:
@@ -55,13 +55,13 @@ This spec sets the policy. It adds no feature of its own.
 
 | | Decision | Source |
 |---|---|---|
-| D1 | A feature is declared in the crate that owns the code, never in the workspace root, and it is listed in that crate's `[features]` with a comment naming the spec that introduced it. `cas-engine`'s `cortex-grpc` is the pattern. | CAS lane w25:p1, 2026-10-10; `crates/cas-engine/Cargo.toml` line 36 |
-| D2 | A feature is off by default. The default build stays the shipped build, so `make check` keeps its present meaning. | spec 0026 D1; CAS lane w25:p1, 2026-10-10 |
-| D3 | A feature name is kebab-case and names the capability rather than the crate. One capability may use the SAME name in several crates, each declaring its own entry, which is what landed spec 0029 does: it passes `--features delegation` to `cas-domain`, `cas-engine` and `cas-router` [verified: read `specs/0029` lines 118 to 120]. What must not happen is one name meaning two different capabilities. | CAS lane w25:p1, 2026-10-10; reconciled with spec 0029 |
-| D4 | A spec that introduces a feature must name it, say which crate declares it, and say what the default build loses without it. Specs 0026, 0028 and 0029 are retrofitted by their own authors, not here. | CAS lane w25:p1, 2026-10-10 |
-| D5 | The gate is a matrix, not `--all-features`. Each feature gets its own leg [asserted]: a combined build can pass while a single feature fails to compile alone, and `--all-features` cannot express two features that are mutually exclusive by construction. A combined leg may be added later for pairs specified to work together. | CAS lane w25:p1, 2026-10-10 |
-| D6 | The matrix runs `clippy` and `test` per feature, not the full `check`. `fmt` and `deny` are feature-independent, and `doc-test` is covered by the default leg. | CAS lane w25:p1, 2026-10-10 |
-| D7 | A declared feature with no matrix leg fails `make hygiene`. This is the enforcement half: without it the policy erodes exactly as the three current features did. | CAS lane w25:p1, 2026-10-10 |
+| D1 | A feature is declared in the crate that owns the code, never in the workspace root, and it is listed in that crate's `[features]` with a comment naming the spec that introduced it. `uas-engine`'s `cortex-grpc` is the pattern. | UAS lane w25:p1, 2026-10-10; `crates/uas-engine/Cargo.toml` line 36 |
+| D2 | A feature is off by default. The default build stays the shipped build, so `make check` keeps its present meaning. | spec 0026 D1; UAS lane w25:p1, 2026-10-10 |
+| D3 | A feature name is kebab-case and names the capability rather than the crate. One capability may use the SAME name in several crates, each declaring its own entry, which is what landed spec 0029 does: it passes `--features delegation` to `uas-domain`, `uas-engine` and `uas-router` [verified: read `specs/0029` lines 118 to 120]. What must not happen is one name meaning two different capabilities. | UAS lane w25:p1, 2026-10-10; reconciled with spec 0029 |
+| D4 | A spec that introduces a feature must name it, say which crate declares it, and say what the default build loses without it. Specs 0026, 0028 and 0029 are retrofitted by their own authors, not here. | UAS lane w25:p1, 2026-10-10 |
+| D5 | The gate is a matrix, not `--all-features`. Each feature gets its own leg [asserted]: a combined build can pass while a single feature fails to compile alone, and `--all-features` cannot express two features that are mutually exclusive by construction. A combined leg may be added later for pairs specified to work together. | UAS lane w25:p1, 2026-10-10 |
+| D6 | The matrix runs `clippy` and `test` per feature, not the full `check`. `fmt` and `deny` are feature-independent, and `doc-test` is covered by the default leg. | UAS lane w25:p1, 2026-10-10 |
+| D7 | A declared feature with no matrix leg fails `make hygiene`. This is the enforcement half: without it the policy erodes exactly as the three current features did. | UAS lane w25:p1, 2026-10-10 |
 | D8 | `-j 2` applies to every matrix leg on a workstation, and CI keeps `JOBS=10`. The matrix multiplies build time, so the leg count is a cost the operator sees. | AGENTS.md rule 2; spec 0002 |
 
 ### Requirements (EARS)
