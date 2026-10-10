@@ -5,13 +5,13 @@ Repo-specific Claude Code subagents. They load at session start from this direct
 `surface-builder`, `prober`, `ci-watcher`, `verifier`, `prompt-linter` and `linear-filer` as they
 are. The global `builder` and `pr-reviewer` assume `origin/main`; here `cas-builder` and
 `cas-critic` replace them. Models follow Christian's rule of 2026-10-10: engineer and critic on
-opus, foreman on sonnet, builders on haiku, every model a Claude 5.x.
+opus, foreman on sonnet, builders on sonnet (Christian, 2026-10-10, estate-wide; the haiku rule of the same day is superseded), prober on haiku, every model a Claude 5.x.
 
 | Agent | Model | Writes | Runs when |
 |---|---|---|---|
 | `cas-engineer` | opus | specs, briefs | a concept or architecture change, or a package needs a brief |
-| `cas-builder` | haiku | one package in a worktree | a brief names stable-Rust files and a done-when |
-| `cas-ebpf-builder` | haiku, sonnet after one critic defect | `crates/cas-ebpf`, the object and its hash | the package touches the kernel program or the loader |
+| `cas-builder` | sonnet | one package in a worktree | a brief names stable-Rust files and a done-when |
+| `cas-ebpf-builder` | sonnet | `crates/cas-ebpf`, the object and its hash | the package touches the kernel program or the loader |
 | `cas-critic` | opus | nothing | before any PR is marked ready, and on every builder SHA |
 | `cas-foreman` | sonnet | nothing | only when a pane gang is applied through saga (`cas-cockpit`) |
 

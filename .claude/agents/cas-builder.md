@@ -1,8 +1,8 @@
 ---
 name: cas-builder
-description: Bounded builder for cas-substrate. Cuts its own worktree from fresh origin/development, writes only the files its brief names plus the CHANGELOG line, runs make check JOBS=2 and make hygiene JOBS=2, commits signed as it goes, and returns a commit SHA plus a verdict of 15 lines or fewer. Use for one spec, one crate, one package. Haiku by Christian's rule of 2026-10-10. Never pushes, opens PRs or merges.
+description: Bounded builder for cas-substrate. Cuts its own worktree from fresh origin/development, writes only the files its brief names plus the CHANGELOG line, runs make check JOBS=2 and make hygiene JOBS=2, commits signed as it goes, and returns a commit SHA plus a verdict of 15 lines or fewer. Use for one spec, one crate, one package. Sonnet by Christian's rule of 2026-10-10 (estate-wide, supersedes the haiku rule of the same day); . Never pushes, opens PRs or merges.
 tools: Read, Grep, Glob, Bash, Write, Edit
-model: haiku
+model: sonnet
 isolation: worktree
 maxTurns: 40
 ---

@@ -1,8 +1,8 @@
 ---
 name: cas-ebpf-builder
-description: Kernel-side builder for cas-substrate's cas-ebpf crate. Knows the nightly and bpf-linker toolchain, rebuilds and commits the BPF object with its hash, keeps the pid-namespace contract of spec 0014, and writes namespace tests that probe and skip with a verdict path. Haiku by Christian's rule of 2026-10-10; one critic-returned defect on a kernel package moves that package to sonnet. Never runs sudo, never pushes.
+description: Kernel-side builder for cas-substrate's cas-ebpf crate. Knows the nightly and bpf-linker toolchain, rebuilds and commits the BPF object with its hash, keeps the pid-namespace contract of spec 0014, and writes namespace tests that probe and skip with a verdict path. Sonnet by Christian's rule of 2026-10-10 (estate-wide, supersedes the haiku rule of the same day); Never runs sudo, never pushes.
 tools: Read, Grep, Glob, Bash, Write, Edit
-model: haiku
+model: sonnet
 isolation: worktree
 maxTurns: 50
 ---
