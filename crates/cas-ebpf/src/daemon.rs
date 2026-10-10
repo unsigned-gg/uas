@@ -838,8 +838,16 @@ mod tests {
     #[test]
     fn a_foreign_uid_cannot_read_or_forget_another_uids_window() {
         let shared = test_shared();
-        let root = Peer { uid: 0, pid: None, conn: 1 };
-        let foreign = Peer { uid: 4242, pid: None, conn: 2 };
+        let root = Peer {
+            uid: 0,
+            pid: None,
+            conn: 1,
+        };
+        let foreign = Peer {
+            uid: 4242,
+            pid: None,
+            conn: 2,
+        };
         assert!(matches!(
             dispatch(&shared, Request::Track { pid: 77, ppid: 1 }, root),
             Response::Ack { .. }
@@ -864,8 +872,16 @@ mod tests {
         }
         let shared = test_shared();
         let me = std::process::id();
-        let root = Peer { uid: 0, pid: None, conn: 1 };
-        let owner = Peer { uid, pid: None, conn: 2 };
+        let root = Peer {
+            uid: 0,
+            pid: None,
+            conn: 1,
+        };
+        let owner = Peer {
+            uid,
+            pid: None,
+            conn: 2,
+        };
         assert!(matches!(
             dispatch(&shared, Request::Track { pid: me, ppid: 1 }, root),
             Response::Ack { .. }
@@ -888,7 +904,9 @@ mod tests {
     #[test]
     fn a_record_whose_ppid_and_ns_pid_name_different_windows_goes_by_ppid() {
         let mut ledger = Ledger::default();
-        ledger.windows.extend([window(100, 7, &[101]), window(200, 7, &[201])]);
+        ledger
+            .windows
+            .extend([window(100, 7, &[101]), window(200, 7, &[201])]);
         ledger.place(&event_at(101, 201, 7));
         assert_eq!(ledger.windows[&100].transcript.events(), 1, "ppid window");
         assert_eq!(ledger.windows[&200].transcript.events(), 0, "ns_pid window");
@@ -899,11 +917,17 @@ mod tests {
         // The rule (D14): a ppid that matches more than one window leaves the record
         // unplaced. It does not fall through to ns_pid, and it does not take the first match.
         let mut ledger = Ledger::default();
-        ledger.windows.extend([window(100, 7, &[300]), window(200, 7, &[300])]);
+        ledger
+            .windows
+            .extend([window(100, 7, &[300]), window(200, 7, &[300])]);
         ledger.place(&event_at(300, 0, 7));
         for root in [100, 200] {
             assert_eq!(ledger.windows[&root].transcript.events(), 0, "root {root}");
-            assert_eq!(ledger.windows[&root].transcript.dropped_events(), 1, "root {root}");
+            assert_eq!(
+                ledger.windows[&root].transcript.dropped_events(),
+                1,
+                "root {root}"
+            );
         }
     }
 
@@ -913,6 +937,10 @@ mod tests {
         ledger.windows.extend([window(100, 7, &[100])]);
         ledger.place(&event_at(401, 400, 8));
         assert_eq!(ledger.windows[&100].transcript.events(), 0);
-        assert_eq!(ledger.windows[&100].transcript.dropped_events(), 0, "uid 7 window");
+        assert_eq!(
+            ledger.windows[&100].transcript.dropped_events(),
+            0,
+            "uid 7 window"
+        );
     }
 }
