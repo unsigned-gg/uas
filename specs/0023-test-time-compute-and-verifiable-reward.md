@@ -142,7 +142,7 @@ the critic and the PR review remain the line for that (spec 0002).
 - [x] Christian ruled D3 (2026-10-10): flag and cap at `reported`.
 - [ ] `cas-domain`: `EVALUATOR_PATHS` constant and `is_evaluator_path(&Path)`
   with a test for every entry and a negative control (`crates/cas-domain/src/lib.rs`
-  is not an evaluator path).
+  is not an evaluator path). Spec 0025 package P9a builds it.
 - [ ] Spec 0022's `LandingReceipt` gains `evaluator_touched: bool` and
   `cost_source: CostSource { Reported, None }`.
 - [x] Probe answered (2026-10-10, soma lane): `reconcile` reads `[verify]` from the
