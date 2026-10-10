@@ -58,7 +58,7 @@ section 6).
 | `cas-acp` | Agent Communication Protocol server (JSON-RPC 2.0) for IDEs. | 3 |
 | `cas-router` | Prefix-hash routing and load balancing for model calls. | 4 |
 | `cas-deck` | Operator dashboard: Axum, Maud, htmx, Tailwind. | 5 |
-| `cas-storage` | Clients for rustfs, minikv and aistore. | none (gap) |
+| `cas-storage` | Clients for rustfs, minikv and aistore. | 6 |
 | `cas-cli` | Binary `cas`. Kept from the template, see Decisions. | n/a |
 
 `xtask/` also exists. It holds `spec-check` and `toolchain-check`. It is not a
@@ -175,9 +175,12 @@ These are not decided. Each needs a spec or an operator ruling before code.
    (`SYNTHESIS-ESTATE-AND-SUBSTRATE.md` section 4.2). The mechanism it
    describes sets `nice 19` on build processes. Nice is a scheduling priority.
    It does not cap the number of jobs. No mechanism for a job cap is designed.
-3. **`cas-storage` has no phase.** The roadmap lists no phase for this crate.
-   Phase 6 deploys a Kubernetes operator for aistore. That is not a crate.
-4. **aistore is Go.** `cas-storage` can only be an HTTP client of it.
+3. **`cas-storage` has no phase.** Resolved by spec 0021 (2026-10-10): `cas-storage`
+   is assigned to Phase 6 (Distributed Storage & Operator Client) alongside
+   the AIStore Kubernetes operator deployment.
+4. **aistore is Go.** Resolved by spec 0021 (2026-10-10): `cas-storage` provides
+   Rust client adapters over network protocols (S3-compatible REST API for rustfs
+   and AIStore, HTTP/REST for minikv) and does not link Go internals.
 5. **eBPF licence.** Decided 2026-10-09, see Decisions of record and spec 0004:
    the kernel-side BPF program object declares `Dual MIT/GPL`. Every other
    crate, the userspace loader included, stays proprietary. (An eBPF program
@@ -203,7 +206,7 @@ These are not decided. Each needs a spec or an operator ruling before code.
 - [x] Build `cas-domain` (slot, lease, envelope, attestation, error). PR #3.
 - [ ] Write the spec that chooses the pool runtime.
 - [ ] Write the spec that designs a job cap for builds, or drops the claim.
-- [ ] Give `cas-storage` a phase or merge it into another crate.
+- [x] Give `cas-storage` a phase or merge it into another crate (spec 0021).
 - [x] Decide the eBPF licence position and record it in spec 0004 (2026-10-09).
 - [ ] Add each crate dependency only when its first real code lands.
 

@@ -5,7 +5,7 @@ Storage clients: rustfs (WORM S3), minikv (Raft metadata) and aistore (GPU strea
 | | |
 |---|---|
 | Status | Placeholder. No code yet. |
-| Roadmap phase | None in the research roadmap (open gap) |
+| Roadmap phase | Phase 6 (Distributed Storage & Operator Client; spec 0021) |
 | Research | `cerebral-work/research@4068134:SYNTHESIS-ESTATE-AND-SUBSTRATE.md section 5` |
 | Will depend on | cas-domain |
 
@@ -13,7 +13,10 @@ The layering rule is in `specs/0001-cas-architecture-and-crate-layout.md`: a cra
 depends only on crates in lower layers. Add the Cargo dependency when the first
 real code needs it, not before.
 
-## Open questions
+## Scope and protocols
 
-- The research roadmap (DES section 6) gives this crate no phase.
-- aistore is written in Go. This crate can only be a client of its HTTP API.
+Spec `specs/0021-cas-storage-scope-and-phase.md` resolves the open questions:
+- **Roadmap phase:** Phase 6 (Distributed Storage & Operator Client).
+- **rustfs:** Object Lock (WORM) S3 client using `aws-sdk-s3` with BLAKE3 checksums.
+- **aistore:** HTTP REST and S3 gateway client for line-rate GPU weight and dataset streaming. No Go runtime or CGO is used.
+- **minikv:** Lightweight HTTP/REST client for Raft metadata consensus.

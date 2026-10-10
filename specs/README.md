@@ -24,6 +24,7 @@ Methodology: LeanSpec. The reference copy is in `../vendor/leanspec/`.
 | [0017](0017-fastcache-prefix-hashing-and-affinity-routing.md) | FastCache prefix hashing and affinity routing | planned | high |
 | [0018](0018-mad-stack-operator-deck-and-settle-queue.md) | MAD stack operator deck and settle queue | planned | high |
 | [0019](0019-pool-runtime-decision.md) | Pool runtime decision | planned | high |
+| [0021](0021-cas-storage-scope-and-phase.md) | cas-storage scope and phase | planned | medium |
 
 
 ## How to add a spec
