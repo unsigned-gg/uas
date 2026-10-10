@@ -75,7 +75,7 @@ Facts, measured 2026-10-10 on `origin/development` at `ab8112a`:
 | | Decision | Source |
 |---|---|---|
 | D1 | The transfer of the repository to `unsigned-gg`, the rename to `uas`, and any change of visibility from private to public are **Christian's acts**, performed by him. No lane performs them. Every estate SOP already lists org transfers and visibility changes as operator-gated. | revenant-bridge-authority SOP, the floor; CAS lane w25:p1, 2026-10-10 |
-| D2 | The move is one cutover, not a drift. Before it: the hold stands, every lane commits and parks (F8), and the preparation PRs of this spec land on `development`. Then Christian transfers and renames. Then one post-cutover PR fixes what only the new name can fix. Development resumes only when he lifts the hold. | CAS lane w25:p1, 2026-10-10 |
+| D2 | The move is one cutover, not a drift. Before it: the hold stands, every lane commits and parks (F8), and the preparation PRs of this spec land on `development`. Then Christian transfers and renames. Then one post-cutover PR fixes what only the new name can fix. Development resumes only when he lifts the hold. **Proposed, not ruled:** where this cutover sits relative to the `soma` to `vespertin` move is undecided and is Christian's call [reported: research lane w1X:p22, 2026-10-10 about 21:5xZ, "not decided yet"]. | CAS lane w25:p1, 2026-10-10 |
 | D3 | The crate prefix changes from `cas-` to `uas-` and the binary from `cas` to `uas`, in the same cutover, by `make new-repo NAME=uas ORG=unsigned-gg`. That target must first be fixed to rename every `cas-*` crate directory (F2, CER-2813), and `make template-check` must pass on `development` before the cutover is attempted. A rename tool that is proven broken is not used on the real repository. | spec 0001; CER-2813; CAS lane w25:p1, 2026-10-10 |
 | D4 | Spec numbers, spec file names and their `REQ-NNNN-NN` ids do not change. A spec's prose that says `cas-pool` becomes `uas-pool` in the post-cutover PR; a requirement id is a stable reference and stays. The registry keeps its order. | CAS lane w25:p1, 2026-10-10 |
 | D5 | History is preserved. The transfer keeps every commit, tag and PR number. No history rewrite, no re-initialisation. | AGENTS.md rule 10 and the NEVER floor; CAS lane w25:p1, 2026-10-10 |
@@ -84,6 +84,7 @@ Facts, measured 2026-10-10 on `origin/development` at `ab8112a`:
 | D8 | `release-plz` continues to tag from the renamed CLI package as `v{{ version }}`, and the version does not reset. The first release after the cutover is a minor bump whose changelog names the rename. | F9; spec 0003; CAS lane w25:p1, 2026-10-10 |
 | D9 | Linear stays as it is. The 52 `CER-` references in specs remain valid identifiers; the Linear project is renamed if Christian wants, which is his act. | F9; CAS lane w25:p1, 2026-10-10 |
 | D10 | Other lanes' checkouts (F8) are not touched by this lane. After the transfer, GitHub redirects the old remote, so an existing checkout keeps working until its owner updates `origin`. The cutover notice tells each owner to run `git remote set-url origin` and to move the directory under `~/projects/unsigned/` when they choose. | post-merge-branch-hygiene SOP, concurrency; CAS lane w25:p1, 2026-10-10 |
+| D12 | Facts F1 to F9 are the **transfer impact list** for `uas` that the implementation plan's step 7 waits on, and they are published as `docs/migration/uas-impact-list.md` in the preparation phase, so the `vespertin` lane and Christian read one file rather than this spec [reported: research lane w1X:p22 confirmed the list is "exactly what is needed", 2026-10-10 about 21:5xZ]. | CAS lane w25:p1, 2026-10-10 |
 | D11 | The estate brief, the agentic context package, memory files and the `.saga` team files name this repo. Those outside this repository are not this spec's to edit; the cutover notice lists them for their owners. Those inside, `.saga/teams.toml` and `.saga/topologies.toml`, are part of the post-cutover PR. | CAS lane w25:p1, 2026-10-10 |
 
 ### Requirements (EARS)
@@ -108,6 +109,7 @@ Preparation, on `development`, before the transfer:
 
 - [ ] Fix `make new-repo` to rename every `cas-*` crate directory, and make `make template-check` pass on `development` (CER-2813). Red first: the current failure is the control.
 - [ ] Export the settings of REQ-0037-03 to `docs/migration/settings-before.*`, names only for anything secret-adjacent.
+- [ ] Publish F1 to F9 as `docs/migration/uas-impact-list.md`, the step-7 input for the `vespertin` lane and Christian (D12).
 - [ ] Rewrite `.github/workflows/_rust.yml` so the sccache step degrades to a warning when its secrets are absent, so a missing organisation secret does not fail the build on the other side.
 - [ ] Add a `docs/migration/cutover.md` runbook from this spec: the order, the owner of each step, the rollback.
 - [ ] Open a Linear ticket under CER for the cutover with Christian as owner of D1 steps and the two D7 items.
@@ -116,7 +118,8 @@ Cutover, by Christian:
 
 - [ ] Resolve D7: organisation secrets and runner access on `unsigned-gg`, or CI that needs neither.
 - [ ] Transfer `cerebral-work/cas-substrate` to `unsigned-gg` and rename it `uas`.
-- [ ] Decide visibility. The plan says public; that is a separate act with its own blast radius, and this spec does not presume it.
+- [ ] Decide visibility. The plan says public; that is a separate act with its own blast radius, and this spec does not presume it. Confirmed undecided as of 2026-10-10 about 21:5xZ [reported: research lane w1X:p22].
+- [ ] Decide the order of the `uas` cutover relative to the `vespertin` move (D2). Undecided as of the same time.
 
 Post-cutover, one pull request:
 
