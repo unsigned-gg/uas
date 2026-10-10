@@ -231,12 +231,13 @@ impl<P: PoolPort> AcpServer<P> {
 
     /// The first configured slot that no open session holds.
     fn free_slot(&self) -> Result<SlotId, AcpError> {
+        let full = AcpError::Pool(PoolError::CapacityExhausted(self.config.slots.len()));
         self.config
             .slots
             .iter()
             .find(|slot| !self.sessions.values().any(|s| &s.slot == *slot))
             .cloned()
-            .ok_or_else(|| AcpError::Pool(PoolError::CapacityExhausted(self.config.slots.len())))
+            .ok_or(full)
     }
 
     fn new_lease(&mut self, slot: SlotId) -> Result<Lease, AcpError> {
