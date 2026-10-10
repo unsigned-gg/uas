@@ -108,7 +108,10 @@ Facts, 2026-10-10:
   tasks continue while `Extend` succeeds.
 - **Event-driven:** WHEN the `Recv` stream ends after it delivered `free_slots` units,
   the adapter shall call `Recv` again when a slot is free, with no backoff. It reads
-  each stream to its end, so a surplus unit reaches the D11 `Nack`.
+  a filled stream until it ends or a slot frees, so a surplus unit reaches the D11
+  `Nack`.
+- **Event-driven:** WHEN a slot frees while a filled stream is still open, the adapter
+  shall drop that stream and call `Recv` with the free count, with no backoff (D11).
 - **Optional feature:** WHERE the feature `cortex-grpc` is off, `cas-engine` shall
   build with no `tonic`, `prost`, `prost-types` or `tokio`. The build-dependencies
   `tonic-prost-build` and `protox` are optional and enabled by that feature, and
@@ -179,7 +182,7 @@ most `ttl + 1` seconds after `now`.
 | D8 | A real `TaskRunner` (a harness run in a slot) needs the `cas-pool` runtime. Spec 0019 D2 reads: "Christian, interview in lane w25:p1, 2026-10-10: benchmark first, then rule." Option A (spec 0015 D5) stays the interim choice, and Christian rules D2 on the numbers of the slot lifecycle benchmark. So the sequence is ruled and the runtime is not. Until then the port has a fake only. | Sequence: Christian (spec 0019 D2). The runtime: **Christian to rule** on the benchmark numbers. |
 | D9 | The minimum `lease_ms` is 300, so the `Extend` tick is at least 100 ms. A smaller value, 0 included (the proto3 default), is a wire or backend fault, not a work fault. The adapter Nacks the unit with the D5 delay and stops `Recv` with an error that names `lease_ms` and its value. The stop is final until a restart: a reconnect would Nack again until `max_deliver`, and the backend would dead-letter the backlog. It never Terms it: on a dropped proto3 field, `Term` would dead-letter the whole backlog. | Integrator ruling w25:p1, 2026-10-10, mesh 4653a43a (lane decision, Christian may override); the 300 floor: cas-engineer, critic round 1 |
 | D10 | The lease `Budget` is the host's task cap, set in the adapter config. The adapter never derives it from `ttl`, and renewals move `expires_at` only. `max_wall_secs` is the task's wall-clock cap. Spec 0023 plans to freeze a slot whose budget runs out, so a budget of `ttl + 1` would freeze any task longer than one lease window. Nothing reads `max_wall_secs` today [verified, `git grep max_wall_secs` at 3009f8d]. | cas-engineer, 2026-10-10, P1 Part A critic (Christian may override) |
-| D11 | Two paths the first build added, kept: (a) a delivery with no `Warm` slot gets `Nack` with the D5 delay, because the server sent more than `free_slots` (F1) and that is not a work fault; (b) the `Recv` reconnect backoff has D5's shape, 1 s doubling to 60 s, and resets after a delivery; (c) a `Recv` stream that ends after it delivered `free_slots` units is the normal end, not a fault, so it costs no backoff, and the adapter reads each stream to its end so a surplus unit gets the (a) `Nack`. | cas-engineer, 2026-10-10, P1 Part A departures 3 and 9; (c) P1 Part A critic item 2 (Christian may override) |
+| D11 | Two paths the first build added, kept: (a) a delivery with no `Warm` slot gets `Nack` with the D5 delay, because the server sent more than `free_slots` (F1) and that is not a work fault; (b) the `Recv` reconnect backoff has D5's shape, 1 s doubling to 60 s, and resets after a delivery; (c) a `Recv` stream that ends after it delivered `free_slots` units is the normal end, not a fault, so it costs no backoff, and the adapter reads a filled stream until it ends or a slot frees, so a surplus unit gets the (a) `Nack`; when a slot frees first, it drops that stream and calls `Recv` with the free count, with no backoff, so a server that keeps a filled stream open cannot stall new work. | cas-engineer, 2026-10-10, P1 Part A departures 3 and 9; (c) P1 Part A critic item 2 (Christian may override) |
 
 ## Plan
 
@@ -232,6 +235,9 @@ Red-first tests. P1 uses a fake port and a fake clock:
   the D5 delay; the slot is `Warm`.
 - `cortex_pool_filled_stream_end_no_backoff`: `free_slots = 2`, the fake sends 2
   units and ends; once a slot is free, the next `Recv` follows with no backoff (D11).
+- `cortex_pool_filled_stream_dropped_when_slot_frees`: the fake sends 2 of 2 units and
+  keeps the stream open; when a slot frees, the adapter drops the stream and calls
+  `Recv` with `free_slots = 1`, with no backoff (D11).
 - `cortex_pool_stream_end_reconnects_with_backoff`: an early end reconnects after 1, 2, 4 ... 60
   and 60 s, then 1 s again after a delivery (D11).
 - `cortex_pool_nack_when_no_warm_slot`: 3 slots, the fake sends one unit more; that
