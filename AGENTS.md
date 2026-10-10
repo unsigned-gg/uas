@@ -26,7 +26,7 @@ is a different system.
 | `crates/cas-deck` | Operator dashboard. Placeholder. Phase 5. |
 | `crates/cas-storage` | Storage clients. Placeholder. No phase yet. |
 | `crates/cas-cli` | Binary `cas`. Parses arguments and calls the domain. |
-| `xtask/` | Repo tasks in Rust: `spec-check` and `toolchain-check`. The package name stays `xtask`. |
+| `xtask/` | Repo tasks in Rust: `spec-check`, `toolchain-check` and `pin-check`. The package name stays `xtask`. |
 | `specs/` | LeanSpec specs and the registry `specs/README.md`. |
 | `vendor/leanspec/` | Vendored LeanSpec method (MIT). Do not edit. |
 | `vendor/soma/` | Vendored Soma OS containment and dispatch JSON schemas. |
@@ -72,7 +72,7 @@ Run `make help` for the full list. These targets are the contract.
 | `make deny` | Check licences, advisories and sources. |
 | `make check` | `fmt-check`, `clippy`, `test`, `doc-test`, `deny`. Run before you push. |
 | `make ci` | What the CI `rust` job runs. |
-| `make hygiene` | `typos`, `machete`, `spec-check`, `toolchain-check`. |
+| `make hygiene` | `typos`, `machete`, `spec-check`, `toolchain-check`, `pin-check`. |
 | `make spec-check` | Validate `specs/`. |
 | `make toolchain-check` | Compare `rust-toolchain.toml` with the installed Rust. |
 | `make smoke` | Build the CLI, run `cas --version`, check the domain has no I/O. |

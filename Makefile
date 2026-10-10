@@ -13,7 +13,7 @@ EBPF_TOOLCHAIN ?= nightly-2026-10-06
 SUDO ?= sudo
 
 .PHONY: help build fmt fmt-check clippy test doc-test deny check ci hygiene typos machete \
-	spec-check toolchain-check smoke audit sbom doc release-notes custody-check pgt-install new-repo template-check \
+	spec-check toolchain-check pin-check smoke audit sbom doc release-notes custody-check pgt-install new-repo template-check \
 	ebpf-build ebpf-test
 
 help: ## List targets
@@ -45,7 +45,7 @@ check: fmt-check clippy test doc-test deny ## Full gate: fmt, clippy, test, doc-
 ci: ## What the CI rust job runs
 	$(MAKE) NEXTEST_PROFILE=ci fmt-check clippy test doc-test
 
-hygiene: typos machete spec-check toolchain-check ## Typos, unused deps, specs, toolchain
+hygiene: typos machete spec-check toolchain-check pin-check ## Typos, unused deps, specs, toolchain, pins
 
 typos: ## Spell check
 	typos
@@ -58,6 +58,9 @@ spec-check: ## Validate specs/ (EARS rules)
 
 toolchain-check: ## Verify rustc matches rust-toolchain.toml
 	cargo xtask toolchain-check
+
+pin-check: ## Verify the spec 0004 pin tables against the lockfiles
+	cargo xtask pin-check
 
 smoke: ## Build the CLI, run it, check the domain crate has no I/O
 	cargo build -p cas-cli --locked -j $(JOBS)
