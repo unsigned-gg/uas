@@ -360,18 +360,35 @@ fn wave_flow_deps_stay_in_file() {
     );
 }
 
+/// Every shim step names `agent = "auto"`, as the shipped flows do. A gate names no agent, as
+/// `.saga/flows/gates.toml` does. Saga fails a step with no agent as "unassigned agent".
 #[test]
-fn wave_flow_has_no_agent_field() {
-    for (name, text) in read_waves(&root().join(FLOW_DIR))
-        .into_iter()
-        .chain(generate(&plan("no-agent", WITH_GATE), None))
-    {
-        for line in text.lines() {
-            assert!(
-                !line.trim_start().starts_with("agent"),
-                "{name} has an agent field: {line}"
-            );
+fn wave_flow_every_shim_step_names_agent_auto() {
+    let files = generate(&plan("agent-auto", WITH_GATE), None);
+    assert!(!files.is_empty());
+    for (name, text) in &files {
+        let def = SagaFlowDef::from_toml(text).unwrap_or_else(|e| panic!("{name}: {e}"));
+        for step in &def.steps {
+            if step.kind == "gate" {
+                assert_eq!(step.agent, None, "{name}: gate {} names an agent", step.id);
+            } else {
+                assert_eq!(
+                    step.agent.as_deref(),
+                    Some("auto"),
+                    "{name}: step {} has no agent auto",
+                    step.id
+                );
+            }
         }
+    }
+    for (name, text) in read_waves(&root().join(FLOW_DIR)) {
+        let def = SagaFlowDef::from_toml(&text).unwrap_or_else(|e| panic!("{name}: {e}"));
+        assert!(
+            def.steps
+                .iter()
+                .all(|s| s.kind == "gate" || s.agent.as_deref() == Some("auto")),
+            "{name}: a checked-in step has no agent auto"
+        );
     }
 }
 

@@ -28,6 +28,8 @@ const WAVE_PREFIX: &str = "cas-cpm-wave-w";
 const SHIM_PROMPT: &str = "Do nothing. The verify_cmd runs this step. Report its exit.";
 /// The approval gate of a MainSession step, unless the plan names another gate.
 const DEFAULT_GATE: &str = "heimdal:approval";
+/// The saga agent of every shim step. Saga fails a step with no agent as "unassigned agent".
+const SHIM_AGENT: &str = "auto";
 /// The prompt of a gate step. Saga requires a prompt on every step, so a gate has one too.
 const GATE_PROMPT: &str = "Operator gate: a person approves or denies this step in saga. Read the results of the steps before it first.";
 
@@ -38,7 +40,8 @@ pub struct Limits {
     pub max_in_flight: usize,
 }
 
-/// One step of a generated flow. It never has an `agent` field: saga classifies it (spec F15).
+/// One step of a generated flow. A shim step names `agent = "auto"`. A gate names no agent,
+/// as `.saga/flows/gates.toml` does.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct GenStep {
     /// The step id, the same as the plan's.
@@ -47,6 +50,9 @@ pub struct GenStep {
     pub title: String,
     /// `impl` for a Builder, `review` for a Critic, `test` for a Probe, `gate` for a MainSession.
     pub kind: &'static str,
+    /// The saga agent: `auto` on a shim step, absent on a gate.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub agent: Option<&'static str>,
     /// The dependencies that lie in the same file.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub deps: Vec<String>,
@@ -169,6 +175,7 @@ pub fn generate(plan: &WavePlan, source: &str, requested: usize) -> Vec<WaveFile
                     id: g.step.id.clone(),
                     title: g.step.title.clone(),
                     kind: "gate",
+                    agent: None,
                     deps: keep(&g.step.deps),
                     verify_cmd: Vec::new(),
                     prompt: Some(GATE_PROMPT.to_owned()),
@@ -188,6 +195,7 @@ pub fn generate(plan: &WavePlan, source: &str, requested: usize) -> Vec<WaveFile
                     AgentRole::Critic => "review",
                     AgentRole::Probe | AgentRole::MainSession => "test",
                 },
+                agent: Some(SHIM_AGENT),
                 deps: keep(&s.step.deps),
                 verify_cmd: shim_argv(source, &s.step.id, requested),
                 prompt: Some(SHIM_PROMPT.to_owned()),
