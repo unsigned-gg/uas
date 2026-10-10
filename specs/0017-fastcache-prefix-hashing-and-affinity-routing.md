@@ -10,11 +10,11 @@ depends_on: [0001-cas-architecture-and-crate-layout, 0004-dependency-and-licence
 
 ## Overview
 
-CAS agent runners make frequent LLM completions. Every agent turn sends a large
+UAS agent runners make frequent LLM completions. Every agent turn sends a large
 prompt prefix. This prefix includes system rules, tool definitions, and LeanSpecs.
 Re-computing KV-cache tokens across vLLM replicas wastes GPU memory and compute.
 
-This spec defines intelligent model call routing in `cas-router`:
+This spec defines intelligent model call routing in `uas-router`:
 - **CER-2729**: Canonical prompt prefix serializer and SHA-256 hasher.
 - **CER-2730**: Consistent hash ring with replica affinity and cache hit scoring.
 - **CER-2731**: Dual-stream token multiplexer for cognitive `<think>` telemetry.
@@ -26,8 +26,8 @@ Facts, measured and recorded 2026-10-09:
 - **Upstream Gateway [verified]:** Estate LLM gateway operates at
   `http://llm.tail769bd2.ts.net` and in-cluster at `http://llm.llm:4000`.
 - **Approved Crates [verified]:** Spec 0004 approves `sha2` 0.11.0 and
-  `futures-util` 0.3.34 for `cas-router`. `tokio` 1.53.1 is in use.
-- **Domain Purity [verified]:** `cas-router` depends on `cas-domain` for
+  `futures-util` 0.3.34 for `uas-router`. `tokio` 1.53.1 is in use.
+- **Domain Purity [verified]:** `uas-router` depends on `uas-domain` for
   session identifiers and slot leases. It performs asynchronous network I/O.
 - **Cognitive Tag Conventions [reported]:** Reasoning models emit thinking
   tokens wrapped in `<think>...</think>` XML-like blocks.
@@ -36,8 +36,8 @@ Facts, measured and recorded 2026-10-09:
 
 ### Requirements (EARS)
 
-- **Ubiquitous:** The `cas-router` shall serialize and hash prompt prefixes deterministically using SHA-256 for replica affinity.
-- **Event-driven:** WHEN a completion request arrives, `cas-router` shall select the target replica using rendezvous hashing.
+- **Ubiquitous:** The `uas-router` shall serialize and hash prompt prefixes deterministically using SHA-256 for replica affinity.
+- **Event-driven:** WHEN a completion request arrives, `uas-router` shall select the target replica using rendezvous hashing.
 - **Event-driven:** WHEN streaming tokens contain `<think>` tags, the router shall route thought traces to telemetry and clean tokens to clients.
 - **State-driven:** WHILE polling replica health endpoints, the router shall trip circuit breakers after two consecutive probe failures.
 - **Unwanted behavior:** IF a chosen replica becomes unavailable, THEN the router shall fail over to the next healthy replica.
@@ -46,12 +46,12 @@ Facts, measured and recorded 2026-10-09:
 
 | # | Decision | Who, when |
 |---|---|---|
-| D1 | Canonical prefix serialization: Sort tool schemas alphabetically by name, then by json bytes. Normalize system instructions to deterministic UTF-8 bytes before hashing. Every field is length-prefixed with its byte length in decimal: `SYS:<len>:<part>,...\|TOOLS:<len>:<name><len>:<json>,...`. Length prefixes stop a separator inside a part from imitating another separator. | CAS lane, 2026-10-09. Amended 2026-10-10, lane w25:p1, Christian may override (the unescaped `\|`-joined form collided). |
-| D2 | SHA-256 prefix hash: Hash the invariant prefix with `sha2` 0.11.0. Use the first 16 bytes as the affinity routing key. | CAS lane, 2026-10-09 |
-| D3 | Rendezvous routing: Use Highest Random Weight (HRW) rendezvous hashing across active replica nodes. Achieve deterministic sticky routing without centralized state. | CAS lane, 2026-10-09 |
-| D4 | Dual-stream token multiplexer: Intercept streaming SSE chunks. Parse and strip `<think>` blocks. Route thought traces to telemetry and clean completions to client. | CAS lane, 2026-10-09 |
-| D5 | Active health probe: Probe replica `/healthz` or `/health` every 5 seconds. Mark replica unavailable after 2 consecutive failures. Fail over in-flight requests. Fallback: when every replica is unhealthy, `choose` picks over all registered replicas in ascending id order at index `u64::from_be_bytes(prefix_hash[0..8]) % n` and returns `ReplicaChoice::Fallback`, so callers can log it. An empty table is `NoHealthyReplicas`. | CAS lane, 2026-10-09. Fallback added 2026-10-10, lane w25:p1, Christian may override. |
-| D6 | Zero-allocation buffer: Use circular byte window for streaming token parsing. Detect boundary tags without heap allocations. | CAS lane, 2026-10-09 |
+| D1 | Canonical prefix serialization: Sort tool schemas alphabetically by name, then by json bytes. Normalize system instructions to deterministic UTF-8 bytes before hashing. Every field is length-prefixed with its byte length in decimal: `SYS:<len>:<part>,...\|TOOLS:<len>:<name><len>:<json>,...`. Length prefixes stop a separator inside a part from imitating another separator. | UAS lane, 2026-10-09. Amended 2026-10-10, lane w25:p1, Christian may override (the unescaped `\|`-joined form collided). |
+| D2 | SHA-256 prefix hash: Hash the invariant prefix with `sha2` 0.11.0. Use the first 16 bytes as the affinity routing key. | UAS lane, 2026-10-09 |
+| D3 | Rendezvous routing: Use Highest Random Weight (HRW) rendezvous hashing across active replica nodes. Achieve deterministic sticky routing without centralized state. | UAS lane, 2026-10-09 |
+| D4 | Dual-stream token multiplexer: Intercept streaming SSE chunks. Parse and strip `<think>` blocks. Route thought traces to telemetry and clean completions to client. | UAS lane, 2026-10-09 |
+| D5 | Active health probe: Probe replica `/healthz` or `/health` every 5 seconds. Mark replica unavailable after 2 consecutive failures. Fail over in-flight requests. Fallback: when every replica is unhealthy, `choose` picks over all registered replicas in ascending id order at index `u64::from_be_bytes(prefix_hash[0..8]) % n` and returns `ReplicaChoice::Fallback`, so callers can log it. An empty table is `NoHealthyReplicas`. | UAS lane, 2026-10-09. Fallback added 2026-10-10, lane w25:p1, Christian may override. |
+| D6 | Zero-allocation buffer: Use circular byte window for streaming token parsing. Detect boundary tags without heap allocations. | UAS lane, 2026-10-09 |
 
 ### Architecture and Flow
 
@@ -62,7 +62,7 @@ flowchart TD
         RespStream["Clean Stream (Markdown / Tools)"]
     end
 
-    subgraph Router["cas-router (Phase 4)"]
+    subgraph Router["uas-router (Phase 4)"]
         Parser["Prefix Canonicalizer"]
         Hasher["SHA-256 Hasher"]
         HRW["Rendezvous Hash Selector"]
@@ -140,10 +140,10 @@ flowchart TD
 
 - [ ] Add `sha2 = { version = "0.11.0", default-features = false }` to workspace dependencies.
 - [ ] Add `futures-util = { version = "0.3.34", default-features = false }` to workspace dependencies.
-- [ ] Implement `cas-router::prefix::PrefixHasher` with JSON canonicalization.
-- [ ] Implement `cas-router::affinity::RendezvousRouter` with node health weights.
-- [ ] Implement `cas-router::multiplexer::DualStreamMultiplexer` state machine.
-- [ ] Implement `cas-router::health::HealthMonitor` background prober.
+- [ ] Implement `uas-router::prefix::PrefixHasher` with JSON canonicalization.
+- [ ] Implement `uas-router::affinity::RendezvousRouter` with node health weights.
+- [ ] Implement `uas-router::multiplexer::DualStreamMultiplexer` state machine.
+- [ ] Implement `uas-router::health::HealthMonitor` background prober.
 - [ ] Unit and property tests:
   - Tool ordering permutations produce identical `PrefixHash`.
   - Node removal moves only 1/N keys in HRW ring.
@@ -153,7 +153,7 @@ flowchart TD
 ## Test
 
 ```bash
-cargo test -p cas-router -j 2
+cargo test -p uas-router -j 2
 ```
 
 ## Notes

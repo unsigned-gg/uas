@@ -10,7 +10,7 @@ depends_on: [0001-cas-architecture-and-crate-layout]
 
 ## Overview
 
-`cas-domain` has slots and leases, but four rules about them were never
+`uas-domain` has slots and leases, but four rules about them were never
 decided. A code review of the landed crates found them on 2026-10-08:
 
 - One slot could hold two live leases. The ledger checked only the lease id.
@@ -18,18 +18,18 @@ decided. A code review of the landed crates found them on 2026-10-08:
 - A renewal by zero seconds returned success and changed nothing.
 - No test or document said whether a draining slot keeps its worktree.
 
-Christian ruled on all four by interview in the CAS lane on 2026-10-08. He
+Christian ruled on all four by interview in the UAS lane on 2026-10-08. He
 chose the recommended option each time. This spec records the rules. The code
 that enforces them lands in the same PR.
 
-Why now: spec 0006 builds `cas-engine` on slots and leases. The engine must
+Why now: spec 0006 builds `uas-engine` on slots and leases. The engine must
 rely on these rules, not on whatever the first adapter happens to do.
 
 ## Design
 
 ### Requirements (EARS)
 
-- **Ubiquitous:** The `cas-domain` ledger shall permit at most one unexpired lease per slot at any point in time.
+- **Ubiquitous:** The `uas-domain` ledger shall permit at most one unexpired lease per slot at any point in time.
 - **Event-driven:** WHEN renewing a lease, the caller shall provide a matching `LeaseToken` and an extension of at least one second.
 - **State-driven:** WHILE a slot transitions to `Draining`, the slot shall retain its associated worktree reference.
 - **Unwanted behavior:** IF a caller attempts to issue a lease for an occupied slot, THEN the ledger shall return `SlotLeased`.
@@ -79,14 +79,14 @@ the deserialization rule from PR #10.
   exhaustively must add the two arms. On 2026-10-08 no crate in the
   workspace does (checked with grep for `DomainError::` in `crates/`).
 
-The only caller of `renew` and `issue` on 2026-10-08 is `cas demo` in
-`cas-cli`. It is updated in the same PR.
+The only caller of `renew` and `issue` on 2026-10-08 is `uas demo` in
+`uas-cli`. It is updated in the same PR.
 
 ### Not covered
 
 - Public fields on `Lease`, `Budget` and `Envelope` still let a struct literal
   skip validation. Christian ruled on 2026-10-08 to keep them public while
-  `cas-engine` is under construction. Revisit with spec 0006.
+  `uas-engine` is under construction. Revisit with spec 0006.
 - Who may issue a lease. That is the capacity gate in swarm-control
   (spec 0001, integration edges), not the ledger.
 
@@ -97,7 +97,7 @@ The only caller of `renew` and `issue` on 2026-10-08 is `cas demo` in
 - [x] R2: add `LeaseToken::matches` and the token parameter on both `renew` methods.
 - [x] R3: reject `extend_by == 0` in `Lease::renew`.
 - [x] R4: document the rule on `Slot::drain` and pin it with a test.
-- [x] Update `cas demo` to renew with the token.
+- [x] Update `uas demo` to renew with the token.
 
 ## Test
 
@@ -105,7 +105,7 @@ Each rule has a test that failed, or did not compile, before the change. The
 R4 test pins behaviour that already held.
 
 ```bash
-cargo nextest run -p cas-domain -p cas-cli
+cargo nextest run -p uas-domain -p uas-cli
 ```
 
 Passing means exit 0. The rule tests are:
@@ -117,7 +117,7 @@ Passing means exit 0. The rule tests are:
 
 ## Notes
 
-Source of the findings: a read-only review of `cas-domain` and `cas-cli` at
+Source of the findings: a read-only review of `uas-domain` and `uas-cli` at
 `b529ead`, 2026-10-08. PR #10 fixed the deserialization findings from the
 same review.
 

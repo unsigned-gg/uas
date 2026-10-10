@@ -10,9 +10,9 @@ depends_on: [0001-cas-architecture-and-crate-layout, 0004-dependency-and-licence
 
 ## Overview
 
-Spec 0001 open gap 1 says nobody chose the runtime for `cas-pool`. The research
+Spec 0001 open gap 1 says nobody chose the runtime for `uas-pool`. The research
 design shows thread-per-core actors (heph). Spec 0015 D5 then picked standard OS
-threads for the pool, as a CAS lane decision, not an operator ruling. Spec 0001
+threads for the pool, as a UAS lane decision, not an operator ruling. Spec 0001
 Plan item 3 still asks for the spec that chooses the pool runtime. This spec is
 that record. It lays out the three options with measured facts and leaves the
 ruling to Christian.
@@ -21,15 +21,15 @@ Facts, measured 2026-10-10 on ceres unless stated:
 
 - **F1 [verified]:** `tokio` 1.53.1 is pinned in the workspace with features
   `rt-multi-thread`, `macros`, `net`, `time`, `sync`, `io-util`. Two crates use
-  it: `cas-router` (the gateway socket proxy, spec 0013) and `cas-ebpf` (the
-  `cas-ebpfd` socket daemon, spec 0014). Command: `grep -l tokio crates/*/Cargo.toml`.
-- **F2 [verified]:** spec 0015 D5: "`cas-pool` uses standard OS threads with
+  it: `uas-router` (the gateway socket proxy, spec 0013) and `uas-ebpf` (the
+  `uas-ebpfd` socket daemon, spec 0014). Command: `grep -l tokio crates/*/Cargo.toml`.
+- **F2 [verified]:** spec 0015 D5: "`uas-pool` uses standard OS threads with
   `std::sync` primitives for slot management. Thread blocking operations handle
-  synchronous `gix` disk operations and cgroup file I/O." Decided by the CAS lane
+  synchronous `gix` disk operations and cgroup file I/O." Decided by the UAS lane
   on 2026-10-09.
 - **F3 [verified]:** spec 0017 names `futures-util` 0.3.34 and `tokio` 1.53.1 for
-  `cas-router`; spec 0018 names `tokio-stream` 0.1.19 and Axum SSE for `cas-deck`.
-  Every I/O server in CAS is on Tokio.
+  `uas-router`; spec 0018 names `tokio-stream` 0.1.19 and Axum SSE for `uas-deck`.
+  Every I/O server in UAS is on Tokio.
 - **F4 [verified]:** ceres: 16 CPUs (`nproc`), kernel `6.6.87.2-microsoft-standard-WSL2`,
   `CONFIG_IO_URING=y`, `/proc/sys/kernel/io_uring_disabled` is `0`. heph can run here.
 - **F5 [verified]:** crates.io: `heph` 0.4.0, `heph-rt` 0.4.1 (`cargo search`).
@@ -47,8 +47,8 @@ Facts, measured 2026-10-10 on ceres unless stated:
   throttling invariant, `-j 2` on shared workstations (AGENTS.md rule 2). Slot
   count is small by design; it is not thousands of actors.
 - **F9 [reported]:** the research lane (mesh reply 1b8213f2, 2026-10-10) confirms
-  the fork is open, that no benchmark has measured `cas-pool`, and recommends
-  keeping `cas-domain` runtime-neutral until criterion benchmarks measure the pool.
+  the fork is open, that no benchmark has measured `uas-pool`, and recommends
+  keeping `uas-domain` runtime-neutral until criterion benchmarks measure the pool.
   Approval of the design itself follows the same benchmarks (research `AGENTS.md`,
   Christian by deck merge).
 
@@ -56,7 +56,7 @@ Facts, measured 2026-10-10 on ceres unless stated:
 
 ### Requirements (EARS)
 
-- **Ubiquitous:** `cas-domain` shall stay runtime-neutral: no `tokio`, no `heph`,
+- **Ubiquitous:** `uas-domain` shall stay runtime-neutral: no `tokio`, no `heph`,
   no thread spawning (spec 0001).
 - **Ubiquitous:** The pool shall run every blocking syscall and file operation on
   a thread that may block, never on an async executor's worker thread.
@@ -70,40 +70,40 @@ Facts, measured 2026-10-10 on ceres unless stated:
 
 ### Options
 
-| Option | What `cas-pool` would use | For | Against |
+| Option | What `uas-pool` would use | For | Against |
 |---|---|---|---|
 | A. OS threads (spec 0015 D5, the status quo) | `std::thread`, `std::sync`, `rustix` syscalls; one thread per slot plus a control thread | Matches the workload (F7): blocking I/O, few slots (F8). No new dependency. The sandbox launcher already works this way (0010, 0011). Simplest to reason about with `pre_exec`. | Hand-written channels and lifecycle. No shared timer or cancellation primitives. |
-| B. Tokio (already in the workspace, F1, F3) | `tokio` multi-thread runtime; blocking work through `spawn_blocking` | One runtime for pool, router, ebpfd and deck. Timers, cancellation, `AsyncFd` for the ring buffer already used by `cas-ebpfd`. Same stack as cortex (F6). | `spawn_blocking` for every gix and cgroup call adds a thread pool anyway. `pre_exec` and fork from an async worker need care. |
+| B. Tokio (already in the workspace, F1, F3) | `tokio` multi-thread runtime; blocking work through `spawn_blocking` | One runtime for pool, router, ebpfd and deck. Timers, cancellation, `AsyncFd` for the ring buffer already used by `uas-ebpfd`. Same stack as cortex (F6). | `spawn_blocking` for every gix and cgroup call adds a thread pool anyway. `pre_exec` and fork from an async worker need care. |
 | C. heph thread-per-core actors (research design) | `heph` 0.4, `heph-rt` 0.4 on io_uring | Share-nothing actors per slot. io_uring is available on ceres (F4). | Second runtime next to Tokio (F1). Linux only. Not pinned, not approved (F5, spec 0004 rule). No estate code uses it. The workload is not the one it is built for (F7, F8). The research verdict itself keeps Tokio (F6). |
 
 ### Decisions
 
 | # | Decision | Who, when |
 |---|---|---|
-| D1 | Recommendation of this spec: **Option A** for the pool's slot lifecycle and control loop, as spec 0015 D5 already states; **Option B** only where a crate serves a socket or HTTP endpoint (router, ebpfd, acp, deck). No heph. | CAS lane w25:p1, 2026-10-10, pending Christian |
-| D2 | The runtime for `cas-pool`: A, B or C. | Christian, interview in lane w25:p1, 2026-10-10: **benchmark first, then rule.** Spec 0015 D5 (Option A) stays the interim choice. The lane writes the criterion benchmark of the slot lifecycle (lease, launch, freeze, thaw, reclaim) under Option A; Christian rules D2 on its numbers. **Ruled: Option A**, OS threads as built, on the benchmark addendum numbers: Christian, in session, lane w25:p1 interview, 2026-10-10 [reported, relayed by the integrator, mesh e42efbc2]. |
+| D1 | Recommendation of this spec: **Option A** for the pool's slot lifecycle and control loop, as spec 0015 D5 already states; **Option B** only where a crate serves a socket or HTTP endpoint (router, ebpfd, acp, deck). No heph. | UAS lane w25:p1, 2026-10-10, pending Christian |
+| D2 | The runtime for `uas-pool`: A, B or C. | Christian, interview in lane w25:p1, 2026-10-10: **benchmark first, then rule.** Spec 0015 D5 (Option A) stays the interim choice. The lane writes the criterion benchmark of the slot lifecycle (lease, launch, freeze, thaw, reclaim) under Option A; Christian rules D2 on its numbers. **Ruled: Option A**, OS threads as built, on the benchmark addendum numbers: Christian, in session, lane w25:p1 interview, 2026-10-10 [reported, relayed by the integrator, mesh e42efbc2]. |
 | D3 | If D2 is A or B, spec 0001 gap 1 and Plan item 3 close, and 0015 D5 gains the citation "ruled in spec 0019". If D2 is C, spec 0004 gets the `heph` pin and licence row first, and a measurement plan precedes code. Applied 2026-10-10: D2 is A, so spec 0001 gap 1 and Plan item 3 close and 0015 D5 cites spec 0019. | Follows D2 |
-| D4 | Any later runtime change needs a measurement recorded in a new spec (the Unwanted-behavior requirement above). A criterion benchmark of the slot lifecycle (lease, launch, freeze, thaw, reclaim) under Option A is the first such measurement, and it is the evidence a move to C would need (F9). | CAS lane, 2026-10-10 |
+| D4 | Any later runtime change needs a measurement recorded in a new spec (the Unwanted-behavior requirement above). A criterion benchmark of the slot lifecycle (lease, launch, freeze, thaw, reclaim) under Option A is the first such measurement, and it is the evidence a move to C would need (F9). | UAS lane, 2026-10-10 |
 
 ### What does not change with the ruling
 
-- `cas-acp` (spec 0016) serves JSON-RPC to editors and runs on Tokio under every
+- `uas-acp` (spec 0016) serves JSON-RPC to editors and runs on Tokio under every
   option.
 - The clamp and the audit path (spec 0014) are syscalls and one socket client; they
   work from a plain thread or from `spawn_blocking`.
-- `cas-domain` stays pure types and zero I/O.
+- `uas-domain` stays pure types and zero I/O.
 
 ## Plan
 
 - [x] Christian ruled on D2 (2026-10-10): benchmark first. Spec 0001 gap 1 stays open until the numbers are in.
-- [x] Write the criterion benchmark of the slot lifecycle in `cas-pool` (`benches/`), Option A, `-j 2`, results dated in a new spec or an addendum here; a package for the cas-pool lane (agy, spec 0015).
+- [x] Write the criterion benchmark of the slot lifecycle in `uas-pool` (`benches/`), Option A, `-j 2`, results dated in a new spec or an addendum here; a package for the uas-pool lane (agy, spec 0015).
 - [x] Christian ruled D2 on the benchmark numbers: Option A, 2026-10-10 [reported, relayed by the integrator, mesh e42efbc2].
 - [x] Record the ruling in spec 0001 (gap 1, Plan item 3) and spec 0015 D5.
 - [x] If C: pin `heph` and `heph-rt` in spec 0004 and write the measurement plan. Not needed: D2 is A.
 
 ### Benchmark Addendum (2026-10-10, host ceres, JOBS=2)
 
-Measured with Criterion on `crates/cas-pool/benches/slot_lifecycle.rs` (Option A: OS threads + `std::sync`) [reported, cas-pool lane, PR #42, merge a1165e6; no run log kept; the commit is dated 2026-10-09, the heading 2026-10-10]:
+Measured with Criterion on `crates/uas-pool/benches/slot_lifecycle.rs` (Option A: OS threads + `std::sync`) [reported, uas-pool lane, PR #42, merge a1165e6; no run log kept; the commit is dated 2026-10-09, the heading 2026-10-10]:
 
 | Operation | Target / Spec | Measured Time | Iterations / Samples |
 |---|---|---|---|
@@ -118,10 +118,10 @@ Finding: All core slot domain lifecycle operations complete in sub-microsecond t
 
 ```bash
 make spec-check
-grep -L 'tokio\|heph' crates/cas-domain/Cargo.toml   # prints the path: domain stays runtime-neutral
+grep -L 'tokio\|heph' crates/uas-domain/Cargo.toml   # prints the path: domain stays runtime-neutral
 ```
 
-The second command prints `crates/cas-domain/Cargo.toml` when the file names
+The second command prints `crates/uas-domain/Cargo.toml` when the file names
 neither runtime. An empty result means the invariant broke.
 
 ## Notes

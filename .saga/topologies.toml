@@ -1,4 +1,4 @@
-# Pane topologies for cas-substrate, read by bifrost::yggdrasil from .saga/ when saga runs here.
+# Pane topologies for uas, read by bifrost::yggdrasil from .saga/ when saga runs here.
 # Overlay on saga's built-in catalog (cockpit-grid and the others stay available).
 #
 # estate-cockpit (Christian, 2026-10-10, in session, lane w25:p1 interview): nine panes in three

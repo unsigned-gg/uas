@@ -10,12 +10,12 @@ depends_on: [0002-verification-gates-and-evidence, 0007-lease-rules, 0008-soma-c
 
 ## Overview
 
-The research design (section 3.5, Pillar V.2) says CAS "activates test-time
+The research design (section 3.5, Pillar V.2) says UAS "activates test-time
 compute scaling" for hard tasks: candidate branches, each validated against
 execution receipts, failed branches pruned. Saga already specifies that loop:
 rollout trees with a promote, advance, backtrack and speculate policy (saga
 spec 0017) and budget caps with harness-reported tokens only (saga spec 0020).
-CAS does not build a second loop. This spec says what CAS provides to saga's
+UAS does not build a second loop. This spec says what UAS provides to saga's
 loop and what it refuses to do, and it adds the one hardening the research
 finding asks for: the evaluator stays out of the agent's reach.
 
@@ -47,7 +47,7 @@ Facts, read 2026-10-10:
   pre-training scale on hard problems); DeepSeek-R1 and DeepSeekMath
   (rule-based execution verification over neural reward models, against reward
   hacking).
-- **F5 [verified]:** `cas-domain::lease::Budget { max_tokens: u64, max_wall_secs: u64 }`,
+- **F5 [verified]:** `uas-domain::lease::Budget { max_tokens: u64, max_wall_secs: u64 }`,
   both above zero (spec 0007). One lease, one slot, one budget. The domain never
   reads a clock.
 - **F6 [verified]:** a slot has its own worktree (spec 0015 D2, `gix` checkout
@@ -65,34 +65,34 @@ Facts, read 2026-10-10:
 
 ### Requirements (EARS)
 
-- **Ubiquitous:** CAS shall implement no rollout policy, no branch selection and
+- **Ubiquitous:** UAS shall implement no rollout policy, no branch selection and
   no scalar metric of its own; those are saga's (`volva`, spec 0017) and the
   world model's.
-- **Ubiquitous:** One rollout branch shall map to one CAS slot lease: its own
+- **Ubiquitous:** One rollout branch shall map to one UAS slot lease: its own
   worktree, cgroup, Landlock ruleset, budget and audit receipt.
-- **Event-driven:** WHEN saga backtracks or prunes a branch, CAS shall release
+- **Event-driven:** WHEN saga backtracks or prunes a branch, UAS shall release
   the lease and reclaim the slot (worktree reset, cgroup removed); nothing from
   the pruned branch survives in the pool.
 - **Event-driven:** WHEN a branch's `verify_cmd` exits 0 inside the landing
   activity (spec 0022), the branch receipt shall be `verified`; any other exit
   or no run shall leave it at most `reported`.
 - **State-driven:** WHILE a branch runs, its token and wall-clock use shall count
-  against the lease `Budget` from harness-reported usage only; CAS shall never
+  against the lease `Budget` from harness-reported usage only; UAS shall never
   estimate tokens.
 - **Unwanted behavior:** IF a branch's changeset touches an evaluator file
   (D4, D6), THEN the landing receipt shall carry `evaluator_touched: true` and
   the branch shall not be `verified` by its own verify run; a human reviews
   the evaluator change before the tier can rise.
-- **Unwanted behavior:** IF a lease budget is exhausted, THEN CAS shall freeze
+- **Unwanted behavior:** IF a lease budget is exhausted, THEN UAS shall freeze
   the slot (spec 0015 D3) and report `budget exceeded` to saga; it shall not
   kill the branch on its own, so saga can decide to extend or prune.
 - **Optional feature:** WHERE saga speculates `k` siblings from one checkpoint,
-  CAS shall fork `k` worktrees from the same base commit, each a separate
+  UAS shall fork `k` worktrees from the same base commit, each a separate
   lease, bounded by the pool's slot count and the host throttling invariant.
 
-### What CAS provides to the loop
+### What UAS provides to the loop
 
-| saga concept (spec 0017, 0020) | CAS object | spec |
+| saga concept (spec 0017, 0020) | UAS object | spec |
 |---|---|---|
 | `TrajectoryNode.git_checkpoint` | the slot worktree's base commit; the lease records it | 0015, 0022 |
 | `IsolatedWorktree` per branch | one slot: worktree, cgroup, Landlock, netns | 0010, 0011, 0015 |
@@ -109,7 +109,7 @@ The agent must not be able to move the goalposts. Three lines, in order of cost:
 1. **Detect.** The landing activity (spec 0022) diffs the base against the head
    with the spec 0025 D17 argv, `git diff --name-only -z --no-renames <base> <head>`,
    split on NUL. It sets `evaluator_touched` when any path matches the evaluator list.
-   The list lives in `cas-domain` as a constant with a test, and the repo's
+   The list lives in `uas-domain` as a constant with a test, and the repo's
    `blackwall.toml` may extend it.
 2. **Cap.** A touched evaluator caps the branch tier at `reported` regardless of
    the verify exit code. Only a human review (the PR) can raise it.
@@ -132,18 +132,18 @@ the critic and the PR review remain the line for that (spec 0002).
 
 | # | Decision | Who, when |
 |---|---|---|
-| D1 | No CAS rollout loop. CAS is the substrate for saga's. Design section 3.5 V.2 is read as a requirement on saga plus the mapping above. | CAS lane w25:p1, 2026-10-10 |
+| D1 | No UAS rollout loop. UAS is the substrate for saga's. Design section 3.5 V.2 is read as a requirement on saga plus the mapping above. | UAS lane w25:p1, 2026-10-10 |
 | D2 | Budget accounting is harness-reported only, as saga 0020 rules; `cost_source = none` when a harness reports nothing, and such a branch cannot be `verified` for cost claims. | follows saga 0020 (Christian, 2026-10-06) |
 | D3 | A touched evaluator caps the tier at `reported`; it does not block the PR. Alternatives considered: block landing until a human clears it; no special handling. | Christian, interview in lane w25:p1, 2026-10-10: flag and cap at `reported` |
-| D4 | The evaluator file list for this repo: `Makefile`, `.github/workflows/**`, `blackwall.toml`, `deny.toml`, `rust-toolchain.toml`, `_typos.toml`, `.config/nextest.toml`, `xtask/**`. | CAS lane w25:p1, 2026-10-10 |
-| D5 | Budget exhaustion freezes the slot and reports; it never kills. Saga decides. | CAS lane w25:p1, 2026-10-10 |
-| D6 | Extends D4 with the config that the verify command reads: `**/Cargo.toml`, `**/build.rs`, `**/.cargo/config`, `**/.cargo/config.toml`, `**/clippy.toml`, `**/.clippy.toml`, `**/rustfmt.toml`, `**/.rustfmt.toml` and a root `typos.toml`. A `**/` pattern matches at the root too. `runner = "true"` in either `.cargo` file turns a failing `cargo test` into exit 0. The legacy `.cargo/config` still loads, with a warning [verified, 2026-10-10, cargo 1.94.1 scratch crate: exit 0 with each file, 101 without]. An `[alias] nextest` shadows `cargo nextest` [verified, 2026-10-10, cargo 1.94.1: "user-defined alias `nextest` is shadowing an external subcommand"]. Clippy and rustfmt read their names above at the root and in a member crate [verified, 2026-10-10, cargo 1.94.1 scratch workspace: an invalid file fails each run]. Found by critic-0025-3. Each `Cargo.toml` edit below turned a red gate green [reported, critic-0025-4, cargo 1.94.1]. The edits: `[workspace.lints.clippy] all = "allow"`; a member `[lints.rust] unsafe_code = "allow"` over the root `forbid`; `[lib] test = false`. Also `[profile.test] debug-assertions = false`, a member moved to `exclude`, and `build = "gen.rs"`. That last edit runs a build script with another name, so only the `Cargo.toml` entry catches it. `crates/cas-ebpf/build.rs` is the BPF hash gate [verified, read 2026-10-10: it checks `ebpf/cas-ebpf.o` against its recorded SHA-256]. Lane decision, fail closed: any Builder change to a `Cargo.toml` or `build.rs` halts the wave (spec 0025 D17). A dependency add is not wave Builder work, because rule 12 needs a spec 0004 pin first. On the `land` path the same change caps the tier at `reported` (D3) until a person raises it (spec 0022 D10). A table-aware narrowing is a later package. A root `typos.toml` overrides `_typos.toml` [verified, 2026-10-10, typos 1.45.0 scratch dir: exit 0 with it, 2 without]. A root `.typos.toml` and a nested `typos.toml` did not override, so that entry is root only. The list also holds `crates/cas-ebpf/ebpf/**`: the committed BPF object, its `.sha256` and the kernel source. `build.rs` checks only that the object matches the recorded hash (spec 0014 D3). A Builder could rewrite both files, and the verify command `make check JOBS=2 && make hygiene JOBS=2` stays green because it runs no `ebpf-build` [verified, read crates/cas-ebpf/build.rs, blackwall.toml `[verify]` and the Makefile, 2026-10-10]. The CI job `ebpf-live` rebuilds the object and goes red on such a pair. Rebuilding the object is kernel work and never a wave Builder step. | CAS lane w25:p1, 2026-10-10; `Cargo.toml`, `build.rs` and `typos.toml` added per critic-0025-4, lane decision w25:p1, 2026-10-10; `crates/cas-ebpf/ebpf/**` added, lane decision w25:p1, 2026-10-10 (Christian can override) |
+| D4 | The evaluator file list for this repo: `Makefile`, `.github/workflows/**`, `blackwall.toml`, `deny.toml`, `rust-toolchain.toml`, `_typos.toml`, `.config/nextest.toml`, `xtask/**`. | UAS lane w25:p1, 2026-10-10 |
+| D5 | Budget exhaustion freezes the slot and reports; it never kills. Saga decides. | UAS lane w25:p1, 2026-10-10 |
+| D6 | Extends D4 with the config that the verify command reads: `**/Cargo.toml`, `**/build.rs`, `**/.cargo/config`, `**/.cargo/config.toml`, `**/clippy.toml`, `**/.clippy.toml`, `**/rustfmt.toml`, `**/.rustfmt.toml` and a root `typos.toml`. A `**/` pattern matches at the root too. `runner = "true"` in either `.cargo` file turns a failing `cargo test` into exit 0. The legacy `.cargo/config` still loads, with a warning [verified, 2026-10-10, cargo 1.94.1 scratch crate: exit 0 with each file, 101 without]. An `[alias] nextest` shadows `cargo nextest` [verified, 2026-10-10, cargo 1.94.1: "user-defined alias `nextest` is shadowing an external subcommand"]. Clippy and rustfmt read their names above at the root and in a member crate [verified, 2026-10-10, cargo 1.94.1 scratch workspace: an invalid file fails each run]. Found by critic-0025-3. Each `Cargo.toml` edit below turned a red gate green [reported, critic-0025-4, cargo 1.94.1]. The edits: `[workspace.lints.clippy] all = "allow"`; a member `[lints.rust] unsafe_code = "allow"` over the root `forbid`; `[lib] test = false`. Also `[profile.test] debug-assertions = false`, a member moved to `exclude`, and `build = "gen.rs"`. That last edit runs a build script with another name, so only the `Cargo.toml` entry catches it. `crates/uas-ebpf/build.rs` is the BPF hash gate [verified, read 2026-10-10: it checks `ebpf/uas-ebpf.o` against its recorded SHA-256]. Lane decision, fail closed: any Builder change to a `Cargo.toml` or `build.rs` halts the wave (spec 0025 D17). A dependency add is not wave Builder work, because rule 12 needs a spec 0004 pin first. On the `land` path the same change caps the tier at `reported` (D3) until a person raises it (spec 0022 D10). A table-aware narrowing is a later package. A root `typos.toml` overrides `_typos.toml` [verified, 2026-10-10, typos 1.45.0 scratch dir: exit 0 with it, 2 without]. A root `.typos.toml` and a nested `typos.toml` did not override, so that entry is root only. The list also holds `crates/uas-ebpf/ebpf/**`: the committed BPF object, its `.sha256` and the kernel source. `build.rs` checks only that the object matches the recorded hash (spec 0014 D3). A Builder could rewrite both files, and the verify command `make check JOBS=2 && make hygiene JOBS=2` stays green because it runs no `ebpf-build` [verified, read crates/uas-ebpf/build.rs, blackwall.toml `[verify]` and the Makefile, 2026-10-10]. The CI job `ebpf-live` rebuilds the object and goes red on such a pair. Rebuilding the object is kernel work and never a wave Builder step. | UAS lane w25:p1, 2026-10-10; `Cargo.toml`, `build.rs` and `typos.toml` added per critic-0025-4, lane decision w25:p1, 2026-10-10; `crates/uas-ebpf/ebpf/**` added, lane decision w25:p1, 2026-10-10 (Christian can override) |
 
 ## Plan
 
 - [x] Christian ruled D3 (2026-10-10): flag and cap at `reported`.
-- [ ] `cas-domain`: `EVALUATOR_PATHS` constant (D4 and D6) and `is_evaluator_path(&Path)`
-  with a test for every entry and a negative control (`crates/cas-domain/src/lib.rs`
+- [ ] `uas-domain`: `EVALUATOR_PATHS` constant (D4 and D6) and `is_evaluator_path(&Path)`
+  with a test for every entry and a negative control (`crates/uas-domain/src/lib.rs`
   is not an evaluator path). Spec 0025 package P9a builds it.
 - [ ] Spec 0022's `LandingReceipt` gains `evaluator_touched: bool` and
   `cost_source: CostSource { Reported, None }`.
@@ -152,14 +152,14 @@ the critic and the PR review remain the line for that (spec 0002).
   change, tracked by that lane.
 - [ ] Wire budget exhaustion to the freezer (spec 0015) with a test that freezes
   on `max_tokens` from a fake harness report and never on an estimate.
-- [ ] Cross-link: saga spec 0017 names the CAS slot as its `IsolatedWorktree`
+- [ ] Cross-link: saga spec 0017 names the UAS slot as its `IsolatedWorktree`
   carrier (proposal to lane w1P, not an edit by this lane).
 
 ## Test
 
 ```bash
 make spec-check
-cargo nextest run -p cas-domain --build-jobs 2 evaluator_path
+cargo nextest run -p uas-domain --build-jobs 2 evaluator_path
 ```
 
 The evaluator test goes red first by adding `src/lib.rs` to the list and
@@ -171,10 +171,10 @@ watching the negative control fail.
   (CER-2731), not this spec.
 - Gitoxide snapshot and rollback before destructive tool actions (design 3.5
   V.3) is spec 0015 D2, not this spec.
-- The public autoresearch numbers (F3 Limits) are not evidence for CAS; nothing
+- The public autoresearch numbers (F3 Limits) are not evidence for UAS; nothing
   here cites them as measured.
 - On `origin/development` (66655a6) nothing computes `evaluator_touched` on the
-  `land` path: `crates/cas-engine/src/landing.rs:239` copies it from the caller's
+  `land` path: `crates/uas-engine/src/landing.rs:239` copies it from the caller's
   `LandingInput` [verified, `git grep`, 2026-10-10]. Ticket CER-2784 (Triage, read
   2026-10-10) computes it from the base-to-head diff. Spec 0025 P9a keeps `land`
   unchanged.

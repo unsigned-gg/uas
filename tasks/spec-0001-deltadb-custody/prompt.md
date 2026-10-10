@@ -1,6 +1,6 @@
-# Task: Update CAS Spec 0001 to adopt DeltaDB and Blackwall custody ({{ticket}})
+# Task: Update UAS Spec 0001 to adopt DeltaDB and Blackwall custody ({{ticket}})
 
-You work in the cas-substrate Rust workspace. Change only `specs/0001-cas-architecture-and-crate-layout.md` and `CHANGELOG.md`.
+You work in the uas Rust workspace. Change only `specs/0001-cas-architecture-and-crate-layout.md` and `CHANGELOG.md`.
 
 ## Background
 

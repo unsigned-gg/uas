@@ -1,0 +1,23 @@
+[package]
+name = "uas-deck"
+description = "Operator dashboard (Axum, Maud) with a read-only session table and cortex settle queue view."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[dependencies]
+axum = { workspace = true }
+uas-domain = { path = "../uas-domain" }
+uas-engine = { path = "../uas-engine" }
+maud = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+
+[lints]
+workspace = true

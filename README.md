@@ -1,6 +1,6 @@
-# cas-substrate
+# uas
 
-CAS is the Cerebral Agent Substrate. It is a Rust-native, pooled runtime for agent
+UAS is the Unsigned Agent Substrate. It is a Rust-native, pooled runtime for agent
 harnesses. The design calls for durable workflows, kernel confinement, prefix-aware
 model routing and an operator dashboard.
 
@@ -11,18 +11,18 @@ licence (see `LICENSE`). The design is a draft from `cerebral-work/research@4068
 
 | Crate | Role | Phase |
 |---|---|---|
-| `cas-domain` | Slots, leases, envelopes, attestations. Zero I/O. | 1 |
-| `cas-engine` | Durable workflows and saga compensators. | 1 |
-| `cas-sandbox` | Landlock rulesets and namespaces. | 2 |
-| `cas-ebpf` | eBPF priority clamping and audit probes. | 2 |
-| `cas-pool` | Worker slots, warm worktrees, cgroup suspend. | 3 |
-| `cas-acp` | JSON-RPC server for IDEs. | 3 |
-| `cas-router` | Prefix-hash routing for model calls. | 4 |
-| `cas-deck` | Operator dashboard. | 5 |
-| `cas-storage` | Storage clients. No phase yet. | open |
-| `cas-cli` | Binary `cas`. | n/a |
+| `uas-domain` | Slots, leases, envelopes, attestations. Zero I/O. | 1 |
+| `uas-engine` | Durable workflows and saga compensators. | 1 |
+| `uas-sandbox` | Landlock rulesets and namespaces. | 2 |
+| `uas-ebpf` | eBPF priority clamping and audit probes. | 2 |
+| `uas-pool` | Worker slots, warm worktrees, cgroup suspend. | 3 |
+| `uas-acp` | JSON-RPC server for IDEs. | 3 |
+| `uas-router` | Prefix-hash routing for model calls. | 4 |
+| `uas-deck` | Operator dashboard. | 5 |
+| `uas-storage` | Storage clients. No phase yet. | open |
+| `uas-cli` | Binary `uas`. | n/a |
 
-A crate depends only on crates in lower layers. `cas-domain` depends on no other crate
+A crate depends only on crates in lower layers. `uas-domain` depends on no other crate
 and does no I/O. The full rule and the open gaps are in
 [specs/0001](specs/0001-cas-architecture-and-crate-layout.md).
 
@@ -31,9 +31,9 @@ and does no I/O. The full rule and the open gaps are in
 - **soma** classifies tasks. **swarm-control** leases slots.
 - **saga** validates execution receipts and compensates failures.
 - **reverie** stores run memory. The **cortex** mesh carries messages and settle cards.
-- CAS integrates with these as services. It does not vendor them.
+- UAS integrates with these as services. It does not vendor them.
 - `unsigned-gg/substrate` is a different system. It is a Go Kubernetes sandbox runtime.
-  CAS does not use it.
+  UAS does not use it.
 
 ## Build
 

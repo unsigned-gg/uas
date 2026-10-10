@@ -11,7 +11,7 @@ rust-version = "1.89"
 publish = false
 license = "LicenseRef-Proprietary"
 authors = ["Christian M. Todie <chris@todie.io>"]
-repository = "https://github.com/cerebral-work/cas-substrate"
+repository = "https://github.com/unsigned-gg/uas"
 
 [workspace.lints.rust]
 unsafe_code = "forbid"
@@ -39,21 +39,21 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 toml = "0.8"
 # Landlock LSM rulesets for the worker filesystem jail (spec 0010, CER-2715).
 landlock = "0.4.7"
-# Async runtime for the gateway proxy in cas-router (spec 0013, CER-2718). Approved features
+# Async runtime for the gateway proxy in uas-router (spec 0013, CER-2718). Approved features
 # plus io-util, which AsyncReadExt and AsyncWriteExt need; recorded in spec 0004.
 tokio = { version = "=1.53.1", default-features = false, features = ["rt-multi-thread", "macros", "net", "time", "sync", "io-util"] }
 # unshare, procfs writes and the lo ioctl for the worker network namespace (spec 0011, CER-2717).
 rustix = { version = "1.1.5", default-features = false, features = ["std", "thread", "process", "fs"] }
-# Userspace eBPF loader, tracepoint attach and ring buffer reader in cas-ebpf (spec 0014, CER-2719, CER-2720).
+# Userspace eBPF loader, tracepoint attach and ring buffer reader in uas-ebpf (spec 0014, CER-2719, CER-2720).
 aya = "0.14.0"
-# SHA-256 for the run_hash transcript digest (spec 0014), the committed BPF object check in cas-ebpf build.rs, and the cas-router prefix hash and HRW weight (spec 0017).
+# SHA-256 for the run_hash transcript digest (spec 0014), the committed BPF object check in uas-ebpf build.rs, and the uas-router prefix hash and HRW weight (spec 0017).
 sha2 = "0.11.0"
-# Agent Client Protocol wire types for cas-acp (spec 0016, amendment A1). The crate pins schema 1.9.1; ACP is JSON-RPC 2.0 over stdio.
+# Agent Client Protocol wire types for uas-acp (spec 0016, amendment A1). The crate pins schema 1.9.1; ACP is JSON-RPC 2.0 over stdio.
 agent-client-protocol = "2.2.0"
 # Axum web service for the operator deck (spec 0018, CER-2733). `serve` needs http1 and tokio;
 # `ws` waits for the WebSocket slice (D2). Madstack pin, spec 0004.
 axum = { version = "0.8.9", default-features = false, features = ["http1", "tokio"] }
-# Cortex pool-member transport in cas-engine, feature cortex-grpc (spec 0026 D3, spec 0004): the
+# Cortex pool-member transport in uas-engine, feature cortex-grpc (spec 0026 D3, spec 0004): the
 # versions cortex@c7fdb85 uses, each pinned with `=`.
 # gRPC client for the PoolWork service; `server` is a dev-dependency feature for the fake server.
 tonic = { version = "=0.14.6", default-features = false, features = ["channel", "codegen"] }
@@ -70,7 +70,7 @@ protox = "=0.9.1"
 # Compile-time HTML templates for the deck (spec 0018 D1). The `axum` feature gives Markup a response type.
 maud = { version = "0.27.0", features = ["axum"] }
 
-# In-process git operations for warm worktrees in cas-pool (spec 0004, 0015, CER-2724).
+# In-process git operations for warm worktrees in uas-pool (spec 0004, 0015, CER-2724).
 gix = { version = "0.88.0", default-features = false, features = ["worktree-mutation", "revision", "sha1"] }
 
 # Example of a private git dependency (record it in specs/0004 before first use):

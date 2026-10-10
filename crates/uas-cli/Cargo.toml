@@ -1,0 +1,28 @@
+[package]
+name = "uas-cli"
+description = "Command line interface for uas."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "uas"
+path = "src/main.rs"
+
+[dependencies]
+uas-domain = { path = "../uas-domain" }
+uas-engine = { path = "../uas-engine" }
+anyhow = { workspace = true }
+clap = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+toml = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+
+[lints]
+workspace = true

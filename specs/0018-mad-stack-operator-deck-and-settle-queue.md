@@ -10,12 +10,12 @@ depends_on: [0001-cas-architecture-and-crate-layout, 0004-dependency-and-licence
 
 ## Overview
 
-CAS agents execute speculative compute and multi-step workflows. Irreversible
+UAS agents execute speculative compute and multi-step workflows. Irreversible
 actions (e.g., git push to main, OpenBao secret rotations, cluster deploys) require
 human-in-the-loop approval. The estate operator needs a live dashboard to inspect
 running agent slots, review diffs, and approve settle cards.
 
-This spec defines the operator interface in `cas-deck`:
+This spec defines the operator interface in `uas-deck`:
 - **CER-2733**: Axum web service and Maud compile-time HTML components.
 - **CER-2734**: Real-time SSE and WebSocket stream with htmx fragment swap.
 - **CER-2735**: Cortex settle queue client (`/v1/settle/pending`) and approval UI.
@@ -27,7 +27,7 @@ Facts, measured and recorded 2026-10-09:
 - **Zero-Node Decision [verified]:** Spec 0001 and research require pure Rust
   MAD stack (Maud, Axum, Datastar/htmx). No Node.js runtime or npm dependencies.
 - **Approved Crates [verified]:** Spec 0004 approves `axum` 0.8.9, `maud` 0.27.0,
-  `tower-http` 0.7.1, `similar` 3.2.0, and `tokio-stream` 0.1.19 for `cas-deck`.
+  `tower-http` 0.7.1, `similar` 3.2.0, and `tokio-stream` 0.1.19 for `uas-deck`.
 - **Cortex Settle API (retracted 2026-10-10, lane w25:p1, our error):** this row
   said `[verified]` that Cortex exposes `/v1/settle/pending` and
   `/v1/settle/decision` over a Unix domain socket or local HTTP. No command backed
@@ -38,7 +38,7 @@ Facts, measured and recorded 2026-10-09:
 
 ### Amendment A1 (2026-10-10): the Cortex settle contract
 
-Slice 1 (PR #68) renders `cas_engine::SettleCard`. That type is not the Cortex
+Slice 1 (PR #68) renders `uas_engine::SettleCard`. That type is not the Cortex
 contract. A1 records the contract and maps it to one deck card. It also closes
 two gaps in the first draft: the card fields, and Request-Info against Hold.
 Lane w25:p1 wrote A1; Christian may override any part. `cortex@a91ffd8` is
@@ -74,7 +74,7 @@ showed it as `main` on 2026-10-10.
   `apply` is refused (422). A `session` card settles as advisory: Cortex records
   it and calls no blackwall. The `custody` doc says a deck shows no sign button
   on a `fleet:*` card.
-- **A1-F6 [verified 2026-10-10, `sed -n 96,115p crates/cas-engine/src/cortex.rs` at 36e3af2]:**
+- **A1-F6 [verified 2026-10-10, `sed -n 96,115p crates/uas-engine/src/cortex.rs` at 36e3af2]:**
   `SettleCard` has `id`, `session_id`, `step_id`, `title`, `rationale`,
   `diff_summary`, `status` and `created_at` (epoch seconds). Its doc says it
   matches the `/v1/settle/pending` contract. It does not. Component 3 named
@@ -89,11 +89,11 @@ showed it as `main` on 2026-10-10.
 
 ### Requirements (EARS)
 
-- **Ubiquitous:** The `cas-deck` dashboard shall render operator UI components using Axum and Maud without Node.js dependencies.
+- **Ubiquitous:** The `uas-deck` dashboard shall render operator UI components using Axum and Maud without Node.js dependencies.
 - **Ubiquitous:** The dashboard shall display verification evidence tiers with standard badge colors (Green for `verified`).
 - **Ubiquitous:** The dashboard shall map each Cortex `SettleJobView` to one deck card, with `job_id` as the card id (D7).
-- **Event-driven:** WHEN an operator submits Approve or Reject, `cas-deck` shall forward `select` or `discard` to Cortex (D8).
-- **Event-driven:** WHEN an operator submits Hold, `cas-deck` shall keep the card pending in Cortex and send no request (D8).
+- **Event-driven:** WHEN an operator submits Approve or Reject, `uas-deck` shall forward `select` or `discard` to Cortex (D8).
+- **Event-driven:** WHEN an operator submits Hold, `uas-deck` shall keep the card pending in Cortex and send no request (D8).
 - **State-driven:** WHILE streaming slot telemetry, the dashboard shall push live updates over Server-Sent Events to htmx frontends.
 - **State-driven:** WHILE a card has `needs_attention` set, the dashboard shall highlight the card.
 - **Unwanted behavior:** IF communication with Cortex fails, THEN the dashboard shall display an error notification and prevent submissions.
@@ -105,16 +105,16 @@ showed it as `main` on 2026-10-10.
 | # | Decision | Who, when |
 |---|---|---|
 | D1 | Pure Rust hypermedia: Render all HTML at compile time with `maud` macros. Serve via `axum` routes with `htmx` for dynamic browser updates. | Spec 0001 & Christian, 2026-10-09 |
-| D2 | Real-time event transport: Use Server-Sent Events (`GET /events`) for slot lifecycle telemetry and WebSocket for bidirectional settle actions. | CAS lane, 2026-10-09 |
-| D3 | Cortex settle integration: Poll and stream pending settle items from Cortex. Provide one-click Approve, Reject, and Hold actions. | CAS lane, 2026-10-09. Amended 2026-10-10, lane w25:p1, Christian may override: Request-Info is Hold (D8). |
-| D4 | In-process diff rendering: Compute syntactic diffs using `similar` 3.2.0. Render side-by-side unified diffs with line numbering in pure Maud. | CAS lane, 2026-10-09 |
-| D5 | Evidence badge hierarchy: Display colored badges for evidence tiers: Green (`verified`), Blue (`reported`), Yellow (`heuristic`), Gray (`asserted`). | AGENTS.md rule 3 & CAS lane, 2026-10-09 |
-| D6 | Asset bundling: Embed minimal CSS and `htmx.min.js` directly into the binary using `include_str!`. Zero runtime external network dependencies. | CAS lane, 2026-10-09 |
-| D7 | One deck card type, owned by `cas-deck`. The Cortex `SettleJobView` maps to it by the table in Component 3. `cas_engine::SettleCard` maps to it too, so the in-process queue stays. No settle type goes into `cas-domain` or `cas-engine`. Component 3's `lane`, `action_type`, `evidence_tier` and `diff` are dropped: the contract has none of them (A1-F6). The card badge is the guard decision. Evidence badges stay on session rows (D5). | lane w25:p1, 2026-10-10 (Christian may override) |
+| D2 | Real-time event transport: Use Server-Sent Events (`GET /events`) for slot lifecycle telemetry and WebSocket for bidirectional settle actions. | UAS lane, 2026-10-09 |
+| D3 | Cortex settle integration: Poll and stream pending settle items from Cortex. Provide one-click Approve, Reject, and Hold actions. | UAS lane, 2026-10-09. Amended 2026-10-10, lane w25:p1, Christian may override: Request-Info is Hold (D8). |
+| D4 | In-process diff rendering: Compute syntactic diffs using `similar` 3.2.0. Render side-by-side unified diffs with line numbering in pure Maud. | UAS lane, 2026-10-09 |
+| D5 | Evidence badge hierarchy: Display colored badges for evidence tiers: Green (`verified`), Blue (`reported`), Yellow (`heuristic`), Gray (`asserted`). | AGENTS.md rule 3 & UAS lane, 2026-10-09 |
+| D6 | Asset bundling: Embed minimal CSS and `htmx.min.js` directly into the binary using `include_str!`. Zero runtime external network dependencies. | UAS lane, 2026-10-09 |
+| D7 | One deck card type, owned by `uas-deck`. The Cortex `SettleJobView` maps to it by the table in Component 3. `uas_engine::SettleCard` maps to it too, so the in-process queue stays. No settle type goes into `uas-domain` or `uas-engine`. Component 3's `lane`, `action_type`, `evidence_tier` and `diff` are dropped: the contract has none of them (A1-F6). The card badge is the guard decision. Evidence badges stay on session rows (D5). | lane w25:p1, 2026-10-10 (Christian may override) |
 | D8 | Actions: Approve sends `select`. Reject sends `discard`. Hold sends nothing: the card stays pending in Cortex, and the deck marks it held in memory. Request-Info is dropped: Cortex has no such verb, and a settle click must not become a channel into a session (A1-F5). The deck never sends `apply` (422). A `fleet:*` card gets no Approve. No action ships before Invariant 2 is ruled. | lane w25:p1, 2026-10-10 (Christian may override) |
 | D9 | Source seam: the `SettleSource` trait stays, and the in-process `SettleQueue` stays the default. A Cortex source parses the JSON body that a fetch trait returns. The fetch trait is sync. The HTTP slice adds a task that polls Cortex and keeps the last body or error; the fetch reads that snapshot, so the trait does not change again. That slice needs `reqwest` 0.13.5 (spec 0004; `rustls`, `json`), not yet in the workspace. Tests read fixture files and open no socket to Cortex. | lane w25:p1, 2026-10-10 (Christian may override) |
 | D10 | Contract parsing: each optional field reads absent and `null` as none (A1-F3). Unknown fields are ignored. `source` stays a string, shown as sent, so a new source (or `git_hub`, A1-F4) cannot fail the queue. `created_at` stays text and the card shows `age_secs`; no time crate. Cards are `by_source` in key order, then each plan's `active_step`. When `total` differs from the card count, the deck shows a count notice. Any fetch or parse error shows the disconnected notice and no card. | lane w25:p1, 2026-10-10 (Christian may override) |
-| D11 | Two decks (A1-F7): `cas-deck` replaces the Cortex web deck, or sits next to it and takes the `{deck}/#settle/{job_id}` links. **Ruled: beside it, as a read-only operator surface.** Actions stay on the Cortex web deck until Invariant 2 (auth, Allen's veto area) is settled; D8 waits on Invariant 2 only. | Christian, 2026-10-10, in session (lane w25:p1 interview) |
+| D11 | Two decks (A1-F7): `uas-deck` replaces the Cortex web deck, or sits next to it and takes the `{deck}/#settle/{job_id}` links. **Ruled: beside it, as a read-only operator surface.** Actions stay on the Cortex web deck until Invariant 2 (auth, Allen's veto area) is settled; D8 waits on Invariant 2 only. | Christian, 2026-10-10, in session (lane w25:p1 interview) |
 
 ### Architecture and Flow
 
@@ -127,15 +127,15 @@ flowchart TD
         DiffUI["Side-by-Side Diff Component"]
     end
 
-    subgraph DeckServer["cas-deck Web Service (Axum)"]
+    subgraph DeckServer["uas-deck Web Service (Axum)"]
         Router["Axum HTTP & WS Router"]
         ViewRenderer["Maud Template Engine"]
         DiffEngine["Similar Diff Generator"]
         SettleBridge["Cortex Settle Bridge"]
     end
 
-    subgraph Substrate["CAS Core & Mesh"]
-        PoolState["cas-pool Slot State"]
+    subgraph Substrate["UAS Core & Mesh"]
+        PoolState["uas-pool Slot State"]
         CortexMesh["Cortex Settle Endpoint (/v1/settle)"]
         ReverieMem["Reverie Observation Store"]
     end
@@ -189,7 +189,7 @@ flowchart TD
 | `settle_url` | kept for the action slice | never (Invariant 1) |
 | `refs` | not read | never |
 
-- `cas_engine::SettleCard` maps `id` to the card id, `title` to the title,
+- `uas_engine::SettleCard` maps `id` to the card id, `title` to the title,
   `rationale` to the detail and `diff_summary` to the diff stat. Its source is
   `local`. It has no guard badge and no highlight. It keeps the slice 1 line
   "Session S, step T".
@@ -228,16 +228,16 @@ flowchart TD
 - [ ] Slice 3: HTTP fetch and poller with `reqwest` 0.13.5 (D9).
 - [ ] Actions (D8), after Invariant 2 is ruled; they dispatch the decision payload to a mock Cortex in tests.
 - [ ] Add `axum` feature `ws`, `tower-http` 0.7.1, `tokio-stream` 0.1.19 and `similar` 3.2.0 when D2, D4 and D6 land.
-- [ ] Implement `cas-deck::diff`; a test classifies insertions, deletions, and unchanged lines.
+- [ ] Implement `uas-deck::diff`; a test classifies insertions, deletions, and unchanged lines.
 - [ ] Update `specs/README.md` and roadmap artifacts.
 
 ## Test
 
 ```bash
-cargo test -p cas-deck -j 2
+cargo test -p uas-deck -j 2
 ```
 
-A pass means every `cas-deck` test passes. From slice 2, that includes the
+A pass means every `uas-deck` test passes. From slice 2, that includes the
 fixture tests of D10. No test opens a socket to Cortex.
 
 ## Notes
@@ -249,4 +249,4 @@ fixture tests of D10. No test opens a socket to Cortex.
 - **Two decks (A1-F7, D11):** Cortex has its own web deck, and its settle links
   point at `{deck}/#settle/{job_id}`. D11 waits for Christian.
 - **Engine doc (A1-F6):** the `SettleCard` doc claims the Cortex contract. A
-  later `cas-engine` package corrects the doc. This amendment does not touch code.
+  later `uas-engine` package corrects the doc. This amendment does not touch code.

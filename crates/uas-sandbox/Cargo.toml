@@ -1,0 +1,30 @@
+[package]
+name = "uas-sandbox"
+description = "Landlock rulesets, namespace isolation and path canonicalisation for harness processes."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[dependencies]
+landlock = { workspace = true }
+rustix = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+# The spec 0013 gate runs the proxy from the layer below (sandbox > router).
+uas-router = { path = "../uas-router" }
+
+[lints.rust]
+# Spec 0001 decision 2026-10-09: this crate makes raw syscalls. unsafe is denied,
+# not forbidden, so one block may opt in with #[allow(unsafe_code)] and a
+# `// SAFETY:` comment. Keep the other entries in step with [workspace.lints].
+unsafe_code = "deny"
+missing_docs = "warn"
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }
+undocumented_unsafe_blocks = "deny"

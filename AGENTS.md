@@ -1,11 +1,11 @@
-# AGENTS.md - cas-substrate
+# AGENTS.md - uas
 
 This file is the canonical rule set for people and agents. Every rule is stated once, here.
 `CLAUDE.md` only points to this file.
 
 ## What this is
 
-`cerebral-work/cas-substrate` is the Cerebral Agent Substrate (CAS). It is a Rust-native,
+`unsigned-gg/uas` is the Unsigned Agent Substrate (UAS). It is a Rust-native,
 pooled runtime for agent harnesses. Status: scaffold and domain; no runtime yet.
 The design is a draft in `cerebral-work/research@4068134`. Read
 `specs/0001-cas-architecture-and-crate-layout.md` before you change any crate: it holds each
@@ -16,12 +16,12 @@ repo `unsigned-gg/substrate` is a different system.
 
 Layering: from the top layer down, `deck > acp > engine > pool > sandbox, ebpf > router > domain`.
 A crate depends only on crates in lower layers. Add a Cargo dependency only when real code needs it.
-`cas-domain` depends on no other crate in the workspace. It has zero I/O: it must not use `std::net`,
+`uas-domain` depends on no other crate in the workspace. It has zero I/O: it must not use `std::net`,
 `std::fs`, `std::process` or `tokio`. `make smoke` checks this.
 
 | Path | Content |
 |---|---|
-| `crates/` | The `cas-*` crates. `cas-cli` is the binary `cas`; it parses arguments and calls the domain. |
+| `crates/` | The `uas-*` crates. `uas-cli` is the binary `uas`; it parses arguments and calls the domain. |
 | `xtask/` | Repo tasks in Rust: `spec-check`, `toolchain-check` and `pin-check`. The package name stays `xtask`. |
 | `specs/` | LeanSpec specs and the registry `specs/README.md`. |
 | `vendor/` | Vendored and never edited: `leanspec/` (the method, MIT), `soma/` (containment and dispatch JSON schemas), `cortex/` (Mesh v1 protobufs), `saga/` (workflow templates and domain contracts). |
@@ -44,7 +44,7 @@ A crate depends only on crates in lower layers. Add a Cargo dependency only when
 11. **No secrets in the repo.** Enforced: `make` and lefthook run gitleaks.
 12. **Pin every external dependency** and record it in spec 0004 before first use. Enforced: copyleft licences are denied by `deny.toml`, and `make pin-check` binds the spec 0004 tables to the lockfiles.
 13. **Write prose in short sentences.** Use active voice. Use ASCII only in files.
-14. **Keep `unsafe` out, except where syscalls need it.** The workspace forbids `unsafe`. `cas-sandbox`, `cas-pool` and `cas-ebpf` deny it instead: a block opts in with `#[allow(unsafe_code)]` and a `// SAFETY:` comment, and clippy rejects an unsafe block with no SAFETY comment. Spec 0001 records the ruling.
+14. **Keep `unsafe` out, except where syscalls need it.** The workspace forbids `unsafe`. `uas-sandbox`, `uas-pool` and `uas-ebpf` deny it instead: a block opts in with `#[allow(unsafe_code)]` and a `// SAFETY:` comment, and clippy rejects an unsafe block with no SAFETY comment. Spec 0001 records the ruling.
 
 ## Commands
 
@@ -55,7 +55,7 @@ A crate depends only on crates in lower layers. Add a Cargo dependency only when
 | `make check` | `fmt-check`, `clippy`, `test`, `doc-test`, `deny`. Run before you push. |
 | `make hygiene` | `typos`, `machete`, `spec-check`, `toolchain-check`, `pin-check`. |
 | `make ci` | What the CI `rust` job runs. |
-| `make smoke` | Build the CLI, run `cas --version`, check the domain has no I/O. |
+| `make smoke` | Build the CLI, run `uas --version`, check the domain has no I/O. |
 | `make spec-check` | Validate `specs/`. |
 | `make release-notes VERSION=x.y.z` | Roll `[Unreleased]` into a version heading. |
 | `make custody-check` | Check the blackwall custody setup (`blackwall doctor`). See the `custody-run` skill. |

@@ -3,7 +3,7 @@
 //! The `| Crate | Version |` tables in `specs/0004-dependency-and-licence-policy.md` bind the
 //! lockfiles. A crate that a table pins and a manifest declares directly must be locked at the
 //! pinned version. The workspace members are checked against `Cargo.lock`. The eBPF program
-//! `crates/cas-ebpf/ebpf` is its own workspace and is checked against its own lockfile.
+//! `crates/uas-ebpf/ebpf` is its own workspace and is checked against its own lockfile.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
@@ -13,7 +13,7 @@ use std::process::ExitCode;
 use anyhow::{Context, Result};
 
 const SPEC: &str = "specs/0004-dependency-and-licence-policy.md";
-const EBPF_DIR: &str = "crates/cas-ebpf/ebpf";
+const EBPF_DIR: &str = "crates/uas-ebpf/ebpf";
 
 /// The result of one check.
 #[derive(Debug, PartialEq, Eq)]
@@ -132,7 +132,7 @@ pub fn check_repo(
     };
     for (declared, lock_text, label) in [
         (&workspace, lock, "Cargo.lock"),
-        (&ebpf, ebpf_lock, "crates/cas-ebpf/ebpf/Cargo.lock"),
+        (&ebpf, ebpf_lock, "crates/uas-ebpf/ebpf/Cargo.lock"),
     ] {
         let locked = parse_lock(lock_text);
         for (name, version) in &pins {
@@ -278,8 +278,8 @@ mod tests {
 
 | Crate | Version | Licence | Used by |
 |---|---|---|---|
-| `tokio` | 1.53.1 | MIT | cas-router |
-| `aya-log`, `aya-log-ebpf` | 0.3.0, 0.2.0 | MIT | cas-ebpf |
+| `tokio` | 1.53.1 | MIT | uas-router |
+| `aya-log`, `aya-log-ebpf` | 0.3.0, 0.2.0 | MIT | uas-ebpf |
 | `serde` | 0.8 | MIT | none |
 | `thing` | none | MIT | none |
 
@@ -442,7 +442,7 @@ default = []
         assert_eq!(got.checked, 1);
         assert_eq!(
             got.misses,
-            ["pin-check: aya-ebpf pinned 0.2.1 (specs/0004), crates/cas-ebpf/ebpf/Cargo.lock has 0.2.2"]
+            ["pin-check: aya-ebpf pinned 0.2.1 (specs/0004), crates/uas-ebpf/ebpf/Cargo.lock has 0.2.2"]
         );
         // Control: the same manifest passes when the eBPF lock holds the pin.
         let ok = check_repo(
