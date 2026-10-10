@@ -13,6 +13,7 @@ use std::io::{self, Write};
 use std::os::unix::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
+use std::time::Duration;
 
 use cas_domain::{
     is_critic_input_path, is_evaluator_path, AuditStatus, CostSource, LandingReceipt, SlotId,
@@ -51,6 +52,11 @@ pub struct WaveExecConfig {
     pub critic_agent: String,
     /// True when a passed Critic opens the Builder's pull request (spec 0025 D16).
     pub open_prs: bool,
+    /// True when the plan asks for merge on green (spec 0025 D15). The executor never merges;
+    /// the flag only needs `open_prs`, and `cas wave flow` emits the merge steps.
+    pub merge_on_green: bool,
+    /// How long a merge step waits for blackwall's merge-gate (spec 0025 D15).
+    pub merge_wait: Duration,
 }
 
 impl WaveExecConfig {
@@ -73,6 +79,8 @@ impl WaveExecConfig {
             builder_model: "haiku".into(),
             critic_agent: "cas-critic".into(),
             open_prs: false,
+            merge_on_green: false,
+            merge_wait: Duration::from_secs(900),
         }
     }
 }
@@ -111,6 +119,9 @@ pub enum AdmitError {
     /// The step id does not make a valid `wave-<id>` slot id.
     #[error("step id {0} does not make a valid slot id")]
     BadSlotId(String),
+    /// `merge_on_green` is set and `open_prs` is not (D15).
+    #[error("merge_on_green needs open_prs")]
+    MergeWithoutOpenPrs,
 }
 
 /// A failure of the executor itself, not a halt of the wave.
@@ -152,6 +163,9 @@ pub enum WaveError {
     /// The landing activity failed.
     #[error(transparent)]
     Landing(#[from] LandingError),
+    /// `cas wave merge-gate` refuses to run (spec 0025 D15).
+    #[error("merge-gate refused: {0}")]
+    MergeGate(String),
 }
 
 /// A reason a step halts the wave (spec 0025 admission, readiness and halt table).
@@ -299,6 +313,8 @@ struct Facts {
     branch: Option<String>,
     head: Option<String>,
     pr: Option<u64>,
+    #[serde(default)]
+    merge_commit: Option<String>,
 }
 
 /// One step record in the state directory. A `Halted` record blocks every step.
@@ -338,6 +354,10 @@ impl WaveExecutor {
 
     /// Check every admission row. No subprocess runs here.
     pub fn admit(&self) -> Result<(), AdmitError> {
+        // The plan asks for merge on green: the merge steps need the PRs to exist (D15).
+        if self.config.merge_on_green && !self.config.open_prs {
+            return Err(AdmitError::MergeWithoutOpenPrs);
+        }
         let steps = self.all_steps();
         for (_, ws) in &steps {
             let id = ws.step.id.as_str();
@@ -381,6 +401,45 @@ impl WaveExecutor {
             }
         }
         Ok(())
+    }
+
+    /// The `blackwall merge-gate` argv for a Builder's PR (spec 0025 D15). It runs no `gh`.
+    pub fn merge_gate_argv(&self, builder: &str) -> Result<Vec<String>, WaveError> {
+        let refuse = |reason: String| Err(WaveError::MergeGate(reason));
+        if self.any_halted()? {
+            return refuse("the wave is halted (a Halted record exists)".into());
+        }
+        let rec = match self.load(builder)? {
+            Some(rec) if rec.outcome == WaveOutcome::Passed => rec,
+            _ => return refuse(format!("no passed record for {builder}")),
+        };
+        let Some(pr) = rec.facts.pr else {
+            return refuse(format!("no PR on the record of {builder}"));
+        };
+        let (Some(base), Some(head)) = (&rec.facts.base, &rec.facts.head) else {
+            return refuse(format!("the record of {builder} has no base or head"));
+        };
+        let repo = self.config.repo_dir.clone();
+        let range = format!("{base}..{head}");
+        let log = self.run(&repo, "git", &["log", "--format=%G?", &range], None)?;
+        let text = String::from_utf8_lossy(&log.stdout);
+        let signed = log.status.code() == Some(0)
+            && text.lines().next().is_some()
+            && text.lines().all(|l| l == "G");
+        if !signed {
+            return refuse(format!("unsigned commit in {range}"));
+        }
+        Ok([
+            "blackwall",
+            "merge-gate",
+            &pr.to_string(),
+            "--watch",
+            "--timeout",
+            &self.config.merge_wait.as_secs().to_string(),
+        ]
+        .iter()
+        .map(|s| (*s).to_owned())
+        .collect())
     }
 
     /// Run one step by id. A step that is not ready writes no record and no event.
@@ -862,24 +921,76 @@ impl WaveExecutor {
             }
         }
         if ws.role == AgentRole::Builder {
-            let dev = self.config.development_ref.clone();
             for up in self.builder_closure(&ws.step.deps) {
-                let Some(rec) = self.load(&up)? else {
+                let Some(mut rec) = self.load(&up)? else {
                     return Ok(Err(NotReady::DepRecordMissing(up)));
                 };
-                let up_head = rec.facts.head.unwrap_or_default();
-                let merged = self.run(
-                    &repo,
-                    "git",
-                    &["merge-base", "--is-ancestor", &up_head, &dev],
-                    None,
-                )?;
-                if merged.status.code() != Some(0) {
-                    return Ok(Err(NotReady::UpstreamNotMerged(up)));
+                // Merged means: with a PR, a recorded merge commit in the base (D15, D7); with
+                // no PR (D16 off), a head in the base.
+                let (named, tip) = match rec.facts.pr {
+                    None => (format!("{up} (no PR)"), rec.facts.head.clone()),
+                    Some(pr) => {
+                        if rec.facts.merge_commit.is_none() {
+                            self.preread_merge_commit(&up, pr)?;
+                            rec = self.load(&up)?.unwrap_or(rec);
+                        }
+                        (format!("{up} (PR {pr})"), rec.facts.merge_commit.clone())
+                    }
+                };
+                let merged = match tip {
+                    Some(tip) => {
+                        let out = self.run(
+                            &repo,
+                            "git",
+                            &["merge-base", "--is-ancestor", &tip, &base],
+                            None,
+                        )?;
+                        out.status.code() == Some(0)
+                    }
+                    None => false,
+                };
+                if !merged {
+                    return Ok(Err(NotReady::UpstreamNotMerged(named)));
                 }
             }
         }
         Ok(Ok(base))
+    }
+
+    /// Read the merge commit of an upstream Builder's PR (spec 0025 D15). Forty lowercase hex
+    /// characters go to its record and receipt; anything else records nothing. The read runs
+    /// outside the lock, and the load, set and save run under it.
+    fn preread_merge_commit(&self, up: &str, pr: u64) -> Result<(), WaveError> {
+        let repo = self.config.repo_dir.clone();
+        let pr = pr.to_string();
+        let out = self.run(
+            &repo,
+            "gh",
+            &[
+                "pr",
+                "view",
+                &pr,
+                "--json",
+                "mergeCommit",
+                "--jq",
+                ".mergeCommit.oid",
+            ],
+            None,
+        )?;
+        let text = String::from_utf8_lossy(&out.stdout).trim().to_owned();
+        let hex = text.len() == 40 && text.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f'));
+        if out.status.code() != Some(0) || !hex {
+            return Ok(());
+        }
+        let _lock = self.lock()?;
+        if let Some(mut rec) = self.load(up)? {
+            if rec.facts.merge_commit.is_none() {
+                rec.facts.merge_commit = Some(text.clone());
+                rec.receipt = rec.receipt.map(|r| r.with_merge_commit(text));
+                self.save(&rec)?;
+            }
+        }
+        Ok(())
     }
 
     /// Record a pass, and return the event. A Passed record also serves as the dependency record.
