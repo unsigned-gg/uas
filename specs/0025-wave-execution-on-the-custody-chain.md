@@ -48,8 +48,8 @@ Facts, 2026-10-10. Source facts from `unsigned-gg/blackwall@3d98dc1` are `report
 - **F11 [verified, probe on rustc 1.94.1]:** `std::fs::File::lock` works on the pinned
   toolchain. A host lock needs no new dependency.
 - **F12 [verified, read `blackwall.toml` and `tasks/*/task.toml`, 2026-10-10]:** `blackwall.toml`
-  sets `sonnet`; `tasks/wave-smoke-build/task.toml` sets `haiku`. Christian's rule of 2026-10-10 sets builders to haiku [reported,
-  `.claude/agents/README.md`]. [reported, `run.rs:489-503`] a `task.toml` `model` overwrites
+  sets `sonnet`; `tasks/wave-smoke-build/task.toml` sets `haiku` (D6). Christian's rule of 2026-10-10 sets builders to sonnet, estate-wide, and supersedes his haiku rule of that day [reported,
+  `.claude/agents/README.md` l.8 at eeb66de; mesh 4c2e9f04]. [reported, `run.rs:489-503`] a `task.toml` `model` overwrites
   the CLI `--model` with no condition. Whether `blackwall.toml` beats it is unknown. [verified, P9c run 0dbb7f02bf2d and `blackwall list`]
   the `running` line says `haiku`, and `blackwall list` shows `haiku` for all five P9c runs.
 - **F13 [reported, DeltaDB design surface 3.1, draft, w19:p1]:** the cluster loop is
@@ -130,7 +130,7 @@ Facts, 2026-10-10. Source facts from `unsigned-gg/blackwall@3d98dc1` are `report
 |---|---|---|
 | admission | a Builder has not exactly one Critic that directly depends on it | refuse (D10) |
 | admission | a Builder has no `tasks/<id>/prompt.md` | refuse |
-| admission | a Builder's `task.toml` lacks `model = "haiku"` (F12) | refuse |
+| admission | a Builder's `task.toml` lacks `model = "sonnet"` (F12, D6) | refuse |
 | admission | a Probe has no `verify_cmd` | refuse |
 | admission | a Probe depends on a Builder | refuse (D18) |
 | admission | `wave-<step id>` is not a valid `SlotId` | refuse |
@@ -155,7 +155,7 @@ Facts, 2026-10-10. Source facts from `unsigned-gg/blackwall@3d98dc1` are `report
 
 | Role | Persona (D6) | Subprocess argv, in order | Pass when |
 |---|---|---|---|
-| Builder | `cas-builder` | 1. `blackwall start --task <id> --provider claude --model haiku`. 2. `blackwall settle <run> select`. 3. Under the lock, `git merge-base --is-ancestor <base> <dev>`, then `blackwall reconcile <run> --base <base> --branch blackwall/<run>`. 4. `git rev-parse blackwall/<run>`. 5. `git diff --name-only -z --no-renames <base> <head>`, split on NUL (D17). | an `(ok)` line, a changeset line, `Reconciled`, no evaluator path |
+| Builder | `cas-builder` | 1. `blackwall start --task <id> --provider claude --model sonnet`. 2. `blackwall settle <run> select`. 3. Under the lock, `git merge-base --is-ancestor <base> <dev>`, then `blackwall reconcile <run> --base <base> --branch blackwall/<run>`. 4. `git rev-parse blackwall/<run>`. 5. `git diff --name-only -z --no-renames <base> <head>`, split on NUL (D17). | an `(ok)` line, a changeset line, `Reconciled`, no evaluator path |
 | Critic | `cas-critic` | Per Builder dependency, under the lock: 1. `git worktree add --detach <scratch>/<critic>-<builder> <head>`. 2. `git -C <tree> checkout --no-overlay <base> -- .claude`. 3. In the tree, `claude -p --strict-mcp-config --agent cas-critic --allowed-tools Read Grep Glob 'Bash(git diff *)' 'Bash(git log *)' 'Bash(git show *)' 'Bash(make *)' 'Bash(cargo *)'` (F14). The prompt goes on stdin, with no `--model`. 4. `git worktree remove --force`, on every exit path. 5. On a pass and WHERE `open_prs` (D16), `open_pr`: `blackwall pr <run> --base development --body -`. Stdin is the spec 0022 D11 fenced JSON of the Builder record's reconciled receipt. | F10 first line NO DEFECTS, 15 lines or fewer, exit 0 |
 | Probe | none | Under the lock: 1. `git worktree add --detach <scratch>/<probe> <base>`. 2. The step's `verify_cmd`, in that tree. 3. `git worktree remove --force`. | exit 0 |
 | MainSession | none | none: the saga gate blocks until `saga gate approve` | saga approves |
@@ -227,7 +227,7 @@ exit 1 and run nothing. Only a person removes one.
 | D3 | Process boundary: subprocesses with exact argv, as `LandingActivity` does. Every exit and output contract is `asserted` or `reported` until the P9c live run records it. | Caller's default, lane w25:p1, 2026-10-10 |
 | D4 | Halt and compensate as the requirements and the Compensation section say. Blackwall runs stay for inspection. PRs and pushed branches stay; the halt report lists them. | Caller's default, lane w25:p1, 2026-10-10 |
 | D5 | Evidence: a new `WorkflowEvent::WaveStep` per step, with role, persona, run, changeset, base, branch, head, PR and outcome. A merge commit goes on the Builder record and its receipt, not on an event (D15). The wave result is one `LandingReceipt` per Builder, plus the halt reason and the compensation receipts. | Caller's default, lane w25:p1, 2026-10-10 |
-| D6 | Models by persona. Builder `cas-builder` runs as `--model haiku`, because `start` takes no persona (F6). Its `task.toml` must say `model = "haiku"`, because that file beats the flag (F12). Critic `cas-critic` runs through `--agent` with no `--model`, so its opus line holds (F7). The executor does not dispatch `cas-foreman`. Probe and MainSession use no model. D6 supersedes 0024's `ModelTier::Pro` for dispatch. | Christian's model rule, 2026-10-10; mapping lane w25:p1, 2026-10-10 |
+| D6 | Models by persona. Builder `cas-builder` runs as `--model sonnet`, because `start` takes no persona (F6). Its `task.toml` must say `model = "sonnet"`, because that file beats the flag (F12). Until the code package after P13b lands, the `WaveExecConfig::new` default and `tasks/wave-smoke-build/task.toml` still say `haiku`. Critic `cas-critic` runs through `--agent` with no `--model`, so its opus line holds (F7). The executor does not dispatch `cas-foreman`. Probe and MainSession use no model. D6 supersedes 0024's `ModelTier::Pro` for dispatch. | Christian's model rule, 2026-10-10 (sonnet, estate-wide; it supersedes his haiku rule of that day); mapping lane w25:p1, 2026-10-10; a wave Builder is a builder, so sonnet: lane reading w25:p1, 2026-10-10, mesh 4c2e9f04 (Christian may override) |
 | D7 | Base per wave: `.blackwall/init-head`, with HEAD equal to it (F5). A Builder waits until every upstream Builder in its deps' closure has merged: its recorded merge commit (D15 pre-read) is an ancestor of the base. Merge commits make each reconciled head an ancestor of the next base. The wait falls between saga runs, so no gate waits on CI (F18). No `--parent` stacking. | cas-engineer, 2026-10-10 (Christian can override) |
 | D8 | One host-wide lock file (`File::lock`, F11) serializes reconcile, critic runs and Probes. So at most one `make check JOBS=2` runs at a time (rule 2, spec 0020). `start` runs may overlap up to `max_concurrency`. | cas-engineer, 2026-10-10 |
 | D9 | A wave Builder has no CAS slot (F2). Its receipt sets `slot_id = wave-<step id>`, `audit = NotAudited` (a new `AuditStatus` variant), `run_hash` empty and `cpu_cap = "uncapped"`. This extends 0022 D4 to runs with no audit at all. **Ruled: `NotAudited` lands, flagged.** The receipt and the PR body say so, and the planner warns. A `NotAudited` wave PR may be merged by the D15 merge step with the flag in its body (D19). | Christian, 2026-10-10, in session (lane w25:p1 interview); lane default cas-engineer |
