@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Workspace `rust-version` raised to 1.89: the pinned `agent-client-protocol` 2.2.0 (via uuid 1.28) needs it, and aya already needed 1.87 (spec 0004, lane decision 2026-10-10).
 
 ### Added
+- `cas-acp` releases a session's slot when its lease expires, checked on each frame and in `tick()`, and when the input ends or a transport call fails (spec 0016 D6, CER-2683). An ended session answers nothing to a later `session/cancel`.
 - `cas-deck` read-only operator page (spec 0018 slice 1, CER-2733): `GET /` shows the session table with evidence badges and the settle queue; `GET /settle` shows pending cards, or a disconnected notice with HTTP 200 when the queue fails. No actions yet.
 - `cas-router` prefix hashing and affinity choice (spec 0017 D1-D3, CER-2729, CER-2730): `PrefixInput::hash` takes the first 16 bytes of the SHA-256 of a canonical, tool-sorted prefix; `AffinityTable::choose` picks the healthy replica with the highest rendezvous weight and `ranked` lists the fallback order. No network, no multiplexer, no health probe yet.
 - cas-pool launches workers clamped to `nice 19` in their own group and tracks each one with `cas-ebpfd`, then seals a per-root receipt (spec 0015 D6, spec 0014 D14). A missing or refused daemon leaves the worker running and unattested; only `Attested` needs a clean receipt.
