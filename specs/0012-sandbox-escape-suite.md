@@ -51,10 +51,10 @@ asserts the matrix.
 |---|---|---|---|
 | `write_ws` | write inside the workspace | `ok` | positive control |
 | `write_home` | write under `$HOME` | `EACCES` | Landlock |
-| `write_etc` | create `/etc/cas-escape-test` | `EACCES` | Landlock, also DAC |
+| `write_etc` | create `/etc/uas-escape-test` | `EACCES` | Landlock, also DAC |
 | `append_etc_passwd` | open `/etc/passwd` for append | `EACCES` | Landlock, also DAC |
 | `read_home_ssh` | list `$HOME/.ssh` | `EACCES`, or `absent` | Landlock |
-| `write_root` | create `/cas-escape-test` | `EACCES` | Landlock, also DAC |
+| `write_root` | create `/uas-escape-test` | `EACCES` | Landlock, also DAC |
 | `read_outside` | read a file under `$HOME` | `EACCES` | Landlock |
 | `write_via_symlink` | symlink in the workspace to `$HOME`, write through it | `EACCES` | Landlock binds the inode |
 | `rename_out` | rename a workspace file into `$HOME` | `EACCES` on one mount; `EXDEV` across mounts | Landlock refer; across mounts the kernel answers first |
@@ -107,7 +107,7 @@ outside the workspace and that the moved file is still inside it. The
 ## Test
 
 ```bash
-cargo test -p cas-sandbox -j 2 --test escapes
+cargo test -p uas-sandbox -j 2 --test escapes
 ```
 
 Passing means exit 0. Add `-- --nocapture` to see one line per row. The
