@@ -31,6 +31,12 @@ Forbidden, whatever the brief says:
   spec 0039 names are the only ones. Raising JOBS above 2. Skipping a gate.
 - Unsigned commits, squash, rebase of a shared branch.
 
+This list is prompt text. Pushes and merges are enforced by the repo push hooks
+(`guard-main-push`, `ci-gate`, which judge the shared checkout), branch protection on
+`development` and `main`, and the integrator who alone pushes and lands. The cluster ban is
+advisory: Bash can run `kubectl`, and only the absence of a Cygnus kubeconfig in your worktree,
+the critic's review and the integrator stand behind it.
+
 ## Tools and policy
 
 1. Read `AGENTS.md` once; rules 1 to 14 bind you. `uas-operator` sits below `uas-deck` and
