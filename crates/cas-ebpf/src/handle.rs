@@ -25,6 +25,9 @@ pub trait ProbeHandle {
     fn is_tracked(&self, pid: u32) -> Result<bool, EbpfError>;
     /// Records the kernel could not reserve space for, summed over all cpus.
     fn dropped_events(&self) -> Result<u64, EbpfError>;
+    /// Fork inserts and track promotions refused because `TRACKED_PIDS` was
+    /// full, summed over all cpus (spec 0014 D14: the second counter slot).
+    fn tracking_failures(&self) -> Result<u64, EbpfError>;
     /// The next record, or `None` when the ring buffer is empty.
     fn next_event(&mut self) -> Option<ExecEvent>;
     /// A descriptor that becomes readable when a record is available.
@@ -40,6 +43,7 @@ pub struct FakeProbeHandle {
     tracked: BTreeMap<u32, u32>,
     queue: VecDeque<ExecEvent>,
     dropped: u64,
+    tracking_failures: u64,
     reader: UnixStream,
     writer: UnixStream,
 }
@@ -53,6 +57,7 @@ impl FakeProbeHandle {
             tracked: BTreeMap::new(),
             queue: VecDeque::new(),
             dropped: 0,
+            tracking_failures: 0,
             reader,
             writer,
         })
@@ -67,6 +72,11 @@ impl FakeProbeHandle {
     /// Adds to the dropped counter.
     pub fn add_dropped(&mut self, count: u64) {
         self.dropped += count;
+    }
+
+    /// Adds to the tracking-failure counter.
+    pub fn add_tracking_failures(&mut self, count: u64) {
+        self.tracking_failures += count;
     }
 
     /// The tracked map as `(pid, ppid)` pairs, in pid order.
@@ -92,6 +102,10 @@ impl ProbeHandle for FakeProbeHandle {
 
     fn dropped_events(&self) -> Result<u64, EbpfError> {
         Ok(self.dropped)
+    }
+
+    fn tracking_failures(&self) -> Result<u64, EbpfError> {
+        Ok(self.tracking_failures)
     }
 
     fn next_event(&mut self) -> Option<ExecEvent> {
