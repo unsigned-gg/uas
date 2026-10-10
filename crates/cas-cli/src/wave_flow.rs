@@ -12,14 +12,14 @@ use std::ffi::OsString;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use anyhow::{Context, Result};
 use cas_engine::{
     AgentRole, CompensationReceipt, FlowMetadata, HaltReason, SagaFlowDef, StepOutcome, WaveError,
     WaveExecConfig, WaveExecutor, WavePlan, WaveStep,
 };
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
 /// The file name prefix and flow name prefix of a generated wave.
@@ -102,12 +102,46 @@ fn shim_argv(source: &str, step: &str, requested: usize) -> Vec<String> {
     argv
 }
 
+/// The default `merge_wait`, in seconds (spec 0025 D15).
+const DEFAULT_MERGE_WAIT_SECS: u64 = 900;
+
+/// The argv of a merge step: `cas wave merge-gate` under an outer `timeout`, because saga bounds
+/// no `verify_cmd` (spec 0025 F22). `outer` is `merge_wait + 60` seconds.
+fn merge_argv(source: &str, builder: &str, outer: u64, requested: usize) -> Vec<String> {
+    let mut argv: Vec<String> = [
+        "timeout",
+        "-k",
+        "30",
+        &outer.to_string(),
+        "cas",
+        "wave",
+        "merge-gate",
+        "--flow",
+        source,
+        "--builder",
+        builder,
+    ]
+    .iter()
+    .map(|s| (*s).to_owned())
+    .collect();
+    if requested != 0 {
+        argv.push("--max-concurrency".into());
+        argv.push(requested.to_string());
+    }
+    argv
+}
+
 /// Build one flow per wave of `plan`. The output is deterministic: it depends only on the plan
 /// and the arguments. `requested` is the `--max-concurrency` that the command received.
 ///
 /// A wave with no step left writes no flow, for example a wave whose only step is a gate that
 /// moved to its dependent's wave. Each file keeps the plan's wave index in its name.
-pub fn generate(plan: &WavePlan, source: &str, requested: usize) -> Vec<WaveFile> {
+pub fn generate(
+    plan: &WavePlan,
+    source: &str,
+    requested: usize,
+    merge: &PlanMerge,
+) -> Vec<WaveFile> {
     let all: Vec<(usize, &WaveStep)> = plan
         .waves
         .iter()
@@ -202,6 +236,29 @@ pub fn generate(plan: &WavePlan, source: &str, requested: usize) -> Vec<WaveFile
                 gate: None,
             }));
 
+            // WHERE the plan asks for merge on green, one merge step per Builder behind each
+            // Critic (spec 0025 D15). The step runs the resolver under an outer `timeout`.
+            if merge.merge_on_green {
+                let wait = merge.merge_wait_secs.unwrap_or(DEFAULT_MERGE_WAIT_SECS) + 60;
+                for critic in steps.iter().filter(|s| s.role == AgentRole::Critic) {
+                    for builder in &critic.step.deps {
+                        if roles.get(builder.as_str()) != Some(&AgentRole::Builder) {
+                            continue;
+                        }
+                        out.push(GenStep {
+                            id: format!("merge-{builder}"),
+                            title: format!("Merge the PR of {builder}"),
+                            kind: "test",
+                            agent: Some(SHIM_AGENT),
+                            deps: vec![critic.step.id.clone()],
+                            verify_cmd: merge_argv(source, builder, wait, requested),
+                            prompt: Some(SHIM_PROMPT.to_owned()),
+                            gate: None,
+                        });
+                    }
+                }
+            }
+
             if out.is_empty() {
                 return None;
             }
@@ -266,9 +323,31 @@ fn is_wave_name(name: &str) -> bool {
 pub fn run_flow(from: &str, out_dir: &Path, max_concurrency: usize) -> Result<()> {
     let text = fs::read_to_string(from).with_context(|| format!("read plan {from}"))?;
     let def = SagaFlowDef::from_toml(&text).with_context(|| format!("parse plan {from}"))?;
+    let merge = plan_merge(&text).with_context(|| format!("parse plan {from}"))?;
     let plan =
         WavePlan::plan(&def.to_steps(), max_concurrency).with_context(|| format!("plan {from}"))?;
-    let files = generate(&plan, from, max_concurrency);
+    if merge.merge_on_green {
+        // Refuse before any file is written or removed.
+        let ids: BTreeSet<&str> = plan
+            .waves
+            .iter()
+            .flat_map(|w| w.steps.iter().map(|s| s.step.id.as_str()))
+            .collect();
+        let builders = plan
+            .waves
+            .iter()
+            .flat_map(|w| w.steps.iter())
+            .filter(|s| s.role == AgentRole::Builder);
+        for builder in builders {
+            let clash = format!("merge-{}", builder.step.id);
+            if ids.contains(clash.as_str()) {
+                anyhow::bail!(
+                    "plan {from} already holds the step id {clash}, which merge_on_green emits"
+                );
+            }
+        }
+    }
+    let files = generate(&plan, from, max_concurrency, &merge);
     let rendered: Vec<(String, String)> = files
         .iter()
         .map(|f| render(f, from, max_concurrency, out_dir).map(|text| (f.name.clone(), text)))
@@ -361,12 +440,139 @@ pub fn resolve_state_dir(flag: Option<&Path>, env: &WaveEnv, flow_name: &str) ->
     state_root(env).join("cas").join("wave").join(flow_name)
 }
 
+/// The merge keys of a plan's `[flow]` table (spec 0025 D15). `FlowMetadata` stays untouched: it
+/// is serialized into the saga flows, and these keys must not reach them.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+pub struct PlanMerge {
+    /// The plan asks for merge on green.
+    #[serde(default)]
+    pub merge_on_green: bool,
+    /// How long a merge step waits for blackwall's merge-gate, in seconds.
+    #[serde(default)]
+    pub merge_wait_secs: Option<u64>,
+}
+
+/// Read the merge keys from the text of a plan. Other keys are ignored.
+pub fn plan_merge(text: &str) -> Result<PlanMerge, toml::de::Error> {
+    #[derive(Deserialize)]
+    struct Top {
+        #[serde(default)]
+        flow: PlanMerge,
+    }
+    toml::from_str::<Top>(text).map(|top| top.flow)
+}
+
+/// `cas wave merge-gate` (spec 0025 D15). `args.step` is the Builder id. Exit 1: admission,
+/// the init-head check or the executor refuses (a Halted record, no PR, an unsigned commit) and no
+/// `blackwall` runs. Exit 2: the plan
+/// cannot be read. Exit 3: the executor or the exec failed. Else the exit is blackwall's.
+pub fn run_merge_gate(args: &StepArgs, env: &WaveEnv, cwd: &Path) -> i32 {
+    match merge_gate_inner(args, env, cwd) {
+        Ok(code) => code,
+        Err(err) => {
+            eprintln!("cas wave merge-gate: {err:#}");
+            3
+        }
+    }
+}
+
+/// Whether `<repo>/blackwall.toml` says `[merge] automerge = false`. Fail closed: an absent key,
+/// another value or a file that is missing or does not parse is `Err`, and it names why.
+fn unarmed(repo: &Path) -> std::result::Result<(), String> {
+    let path = repo.join("blackwall.toml");
+    let text = fs::read_to_string(&path).map_err(|e| format!("read {}: {e}", path.display()))?;
+    let value: toml::Value =
+        toml::from_str(&text).map_err(|e| format!("{} does not parse: {e}", path.display()))?;
+    match value.get("merge").and_then(|m| m.get("automerge")) {
+        Some(toml::Value::Boolean(false)) => Ok(()),
+        None => Err(format!(
+            "{} has no [merge] automerge = false; merge-gate stays unarmed",
+            path.display()
+        )),
+        Some(other) => Err(format!(
+            "{} sets [merge] automerge = {other}; merge-gate stays unarmed",
+            path.display()
+        )),
+    }
+}
+
+fn merge_gate_inner(args: &StepArgs, env: &WaveEnv, cwd: &Path) -> Result<i32> {
+    let text = match fs::read_to_string(&args.flow) {
+        Ok(text) => text,
+        Err(err) => return refuse(format!("read plan {}: {err}", args.flow)),
+    };
+    let (def, merge) = match (SagaFlowDef::from_toml(&text), plan_merge(&text)) {
+        (Ok(def), Ok(merge)) => (def, merge),
+        (Err(err), _) => return refuse(format!("parse plan {}: {err}", args.flow)),
+        (_, Err(err)) => return refuse(format!("parse plan {}: {err}", args.flow)),
+    };
+    let plan = match WavePlan::plan(&def.to_steps(), args.max_concurrency) {
+        Ok(plan) => plan,
+        Err(err) => return refuse(format!("plan {}: {err}", args.flow)),
+    };
+    // The repo comes from `--repo` or `CAS_WAVE_REPO`, never from the working directory: saga
+    // may run this step in a run worktree that the shim agent has edited (D2, F16).
+    if args.repo.is_none() && set(&env.repo).is_none() {
+        eprintln!("merge-gate refused: name the custody checkout with --repo or CAS_WAVE_REPO");
+        return Ok(1);
+    }
+    let config = step_config(args, env, &def.flow.name, &merge, cwd);
+    let repo = config.repo_dir.clone();
+    let path_env = config.path_env.clone();
+    let exec = WaveExecutor::new(config, plan);
+    // Admission binds the executor before its first subprocess; the resolver runs `git log`.
+    if let Err(err) = exec.admit() {
+        eprintln!("merge-gate refused: {err}");
+        return Ok(1);
+    }
+    // A saga worktree is not the custody checkout (F16): it has no init-head.
+    if !repo.join(".blackwall").join("init-head").is_file() {
+        eprintln!(
+            "merge-gate refused: no .blackwall/init-head in {}; this is not the custody checkout",
+            repo.display()
+        );
+        return Ok(1);
+    }
+    // Merge-gate stays unarmed while EST-558 stands: the reviewed `blackwall.toml` must exist,
+    // parse, and say `[merge] automerge = false` (F23, D15). The PR that arms merge-gate
+    // lifts this refusal.
+    if let Err(reason) = unarmed(&repo) {
+        eprintln!("merge-gate refused: {reason}");
+        return Ok(1);
+    }
+    let argv = match exec.merge_gate_argv(&args.step) {
+        Ok(argv) => argv,
+        Err(err @ WaveError::MergeGate(_)) => {
+            eprintln!("{err}");
+            return Ok(1);
+        }
+        Err(err) => return Err(err.into()),
+    };
+    // The environment twin beats `blackwall.toml` (F23): only the reviewed file may arm it.
+    let mut cmd = std::process::Command::new(&argv[0]);
+    cmd.args(&argv[1..])
+        .current_dir(&repo)
+        .env_remove("BLACKWALL_AUTOMERGE");
+    if let Some(path) = path_env {
+        cmd.env("PATH", path);
+    }
+    let err = std::os::unix::process::CommandExt::exec(&mut cmd);
+    eprintln!("cas wave merge-gate: exec {}: {err}", argv[0]);
+    Ok(3)
+}
+
 /// The executor config of one `cas wave step` call.
 ///
 /// The repo is `--repo`, then `CAS_WAVE_REPO`, then the working directory. The lock is host-wide,
 /// so it lives under the state root and not under the state directory. Pull requests stay off
 /// unless `CAS_WAVE_OPEN_PRS` is `1`.
-pub fn step_config(args: &StepArgs, env: &WaveEnv, flow_name: &str, cwd: &Path) -> WaveExecConfig {
+pub fn step_config(
+    args: &StepArgs,
+    env: &WaveEnv,
+    flow_name: &str,
+    merge: &PlanMerge,
+    cwd: &Path,
+) -> WaveExecConfig {
     let repo = args
         .repo
         .clone()
@@ -376,6 +582,10 @@ pub fn step_config(args: &StepArgs, env: &WaveEnv, flow_name: &str, cwd: &Path) 
     let lock = state_root(env).join("cas").join("build.lock");
     let mut config = WaveExecConfig::new(repo, state.clone(), state.join("scratch"), lock);
     config.open_prs = env.open_prs.as_ref().and_then(|v| v.to_str()) == Some("1");
+    config.merge_on_green = merge.merge_on_green;
+    if let Some(secs) = merge.merge_wait_secs {
+        config.merge_wait = Duration::from_secs(secs);
+    }
     config
 }
 
@@ -454,6 +664,10 @@ fn step_inner(args: &StepArgs, env: &WaveEnv, cwd: &Path) -> Result<i32> {
         Ok(def) => def,
         Err(err) => return refuse(format!("parse plan {}: {err}", args.flow)),
     };
+    let merge = match plan_merge(&text) {
+        Ok(merge) => merge,
+        Err(err) => return refuse(format!("parse plan {}: {err}", args.flow)),
+    };
     let plan = match WavePlan::plan(&def.to_steps(), args.max_concurrency) {
         Ok(plan) => plan,
         Err(err) => return refuse(format!("plan {}: {err}", args.flow)),
@@ -468,7 +682,7 @@ fn step_inner(args: &StepArgs, env: &WaveEnv, cwd: &Path) -> Result<i32> {
     };
     let role = ws.role;
 
-    let config = step_config(args, env, &def.flow.name, cwd);
+    let config = step_config(args, env, &def.flow.name, &merge, cwd);
     let repo = config.repo_dir.clone();
     let state = config.state_dir.clone();
     let records = read_records(&state)?;
