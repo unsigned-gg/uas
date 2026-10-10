@@ -4,23 +4,39 @@
 //! `cas-ebpfd`. [`Worker::finish`] waits for the worker and seals its receipt.
 //! No daemon socket means the worker still runs, unattested.
 
+use std::io::ErrorKind;
 use std::os::unix::process::CommandExt;
 use std::path::PathBuf;
 use std::process::{Child, Command, ExitStatus};
+use std::time::Duration;
 
 use cas_domain::AuditStatus;
-use cas_ebpf::{clamp::enter_clamped_group, client::DaemonClient};
+use cas_ebpf::{clamp::enter_clamped_group, client::DaemonClient, EbpfError};
 
 use crate::error::PoolError;
 
 /// Where `cas-ebpfd` listens on a production host (spec 0014 D8).
 pub const DEFAULT_DAEMON_SOCKET: &str = "/run/cas/ebpf.sock";
 
+/// How long one daemon request may wait before the worker runs unattested.
+pub const DEFAULT_DAEMON_TIMEOUT: Duration = Duration::from_secs(2);
+
 /// How the pool reaches the audit daemon.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LaunchConfig {
     /// The daemon socket. `None` runs every worker unattested.
     pub daemon_socket: Option<PathBuf>,
+    /// The read and write timeout of every daemon request.
+    pub daemon_timeout: Duration,
+}
+
+impl Default for LaunchConfig {
+    fn default() -> Self {
+        Self {
+            daemon_socket: None,
+            daemon_timeout: DEFAULT_DAEMON_TIMEOUT,
+        }
+    }
 }
 
 /// Why a worker runs without an audit track.
@@ -91,7 +107,9 @@ impl Worker {
                 _ => 0,
             };
             let receipt = tracking.client.receipt(tracking.pid);
-            let _ = tracking.client.forget(tracking.pid);
+            if let Err(e) = tracking.client.forget(tracking.pid) {
+                eprintln!("cas-pool: forget of pid {} failed: {e}", tracking.pid);
+            }
             match receipt {
                 Ok(frame) => {
                     let dropped = grown.max(frame.dropped_events);
@@ -153,13 +171,24 @@ fn attach(cfg: &LaunchConfig, pid: u32) -> (Option<Tracking>, Option<AuditDegrad
     let Some(path) = &cfg.daemon_socket else {
         return (None, Some(AuditDegradation::NoSocket));
     };
-    let mut client = match DaemonClient::connect(path) {
+    let mut client = match DaemonClient::connect_with_timeout(path, cfg.daemon_timeout) {
         Ok(client) => client,
         Err(e) => return (None, Some(AuditDegradation::Unavailable(e.to_string()))),
     };
     // Track first: the daemon refuses a foreign peer on its first request.
     if let Err(e) = client.track(pid, std::process::id()) {
-        return (None, Some(AuditDegradation::Refused(e.to_string())));
+        let silent = matches!(
+            &e,
+            EbpfError::Io(io) if matches!(io.kind(), ErrorKind::TimedOut | ErrorKind::WouldBlock)
+        );
+        return (
+            None,
+            Some(if silent {
+                AuditDegradation::Unavailable(e.to_string())
+            } else {
+                AuditDegradation::Refused(e.to_string())
+            }),
+        );
     }
     let baseline = client.status().ok().map(|(_, dropped)| dropped);
     (
