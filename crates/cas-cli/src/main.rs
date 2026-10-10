@@ -98,7 +98,7 @@ enum WaveCommand {
         /// The Builder step id.
         #[arg(long)]
         builder: String,
-        /// The custody checkout. Defaults to `CAS_WAVE_REPO`, then the working directory.
+        /// The custody checkout. Required unless `CAS_WAVE_REPO` is set; never the working directory.
         #[arg(long)]
         repo: Option<std::path::PathBuf>,
         /// The state directory. Defaults to `CAS_WAVE_STATE_DIR`, then under `XDG_STATE_HOME`.
