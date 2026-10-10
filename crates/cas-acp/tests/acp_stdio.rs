@@ -220,7 +220,10 @@ fn session_new_without_id_is_rejected_before_any_side_effect() {
         &mut server,
         "{\"jsonrpc\":\"2.0\",\"method\":\"session/new\",\"params\":{\"cwd\":\"/work\",\"mcpServers\":[]}}\n",
     );
-    assert_eq!(ids_and_codes(&frames), vec![(Value::Null, -32600)]);
+    assert!(
+        frames.is_empty(),
+        "a request without an id is a notification; no frame: {frames:?}"
+    );
     assert!(
         pool.calls().is_empty(),
         "no slot may be acquired: {:?}",
@@ -257,7 +260,7 @@ fn null_id_request_gets_32600_with_null_id() {
 }
 
 #[test]
-fn cancel_sent_with_an_id_is_32600_with_that_id() {
+fn cancel_sent_with_an_id_is_32601_with_that_id() {
     let pool = MockPool::default();
     let mut server = AcpServer::new(pool.clone(), config());
     let opened = serve(&mut server, &format!("{SESSION_NEW}\n"));
@@ -269,7 +272,7 @@ fn cancel_sent_with_an_id_is_32600_with_that_id() {
         r#"{{"jsonrpc":"2.0","id":9,"method":"session/cancel","params":{{"sessionId":"{session_id}"}}}}"#
     );
     let frames = serve(&mut server, &format!("{cancel}\n"));
-    assert_eq!(ids_and_codes(&frames), vec![(Value::from(9), -32600)]);
+    assert_eq!(ids_and_codes(&frames), vec![(Value::from(9), -32601)]);
     assert_eq!(
         pool.calls(),
         vec!["acquire:slot-1".to_string()],
