@@ -67,6 +67,7 @@ fn conventions_help_lists_wave_env() {
     let text = String::from_utf8(out.stdout).unwrap();
     assert!(text.contains("[env: UAS_WAVE_REPO"), "{text}");
     assert!(text.contains("[env: UAS_WAVE_STATE_DIR"), "{text}");
+    assert!(text.contains("[env: UAS_WAVE_OPEN_PRS"), "{text}");
 }
 
 #[test]

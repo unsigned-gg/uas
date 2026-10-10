@@ -400,6 +400,18 @@ impl WaveEnv {
     }
 }
 
+impl WaveEnv {
+    /// Apply `--open-prs`: a given flag decides, true or false, whatever `UAS_WAVE_OPEN_PRS`
+    /// holds (spec 0042 D1: the flag wins). `None` leaves the variable standing.
+    #[must_use]
+    pub fn with_open_prs_flag(mut self, flag: Option<bool>) -> Self {
+        if let Some(on) = flag {
+            self.open_prs = Some(OsString::from(if on { "1" } else { "0" }));
+        }
+        self
+    }
+}
+
 /// The arguments of `uas wave step`.
 #[derive(Debug, Clone)]
 pub struct StepArgs {
@@ -816,4 +828,53 @@ fn record_halt(config: &WaveExecConfig, step: &str, role: AgentRole, now: u64) -
         .with_context(|| format!("write {}", tmp.display()))?;
     fs::rename(&tmp, &path).with_context(|| format!("rename to {}", path.display()))?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn open_prs(env: &WaveEnv) -> bool {
+        let args = StepArgs {
+            flow: "f".into(),
+            step: "s".into(),
+            repo: None,
+            state_dir: None,
+            max_concurrency: 0,
+        };
+        let merge = PlanMerge::default();
+        step_config(&args, env, "f", &merge, Path::new("/tmp")).open_prs
+    }
+
+    #[test]
+    fn open_prs_flag_overrides_env() {
+        let off = WaveEnv {
+            open_prs: Some("0".into()),
+            ..WaveEnv::default()
+        };
+        assert!(
+            !open_prs(&off.clone().with_open_prs_flag(None)),
+            "env 0 stands without the flag"
+        );
+        assert!(
+            open_prs(&off.with_open_prs_flag(Some(true))),
+            "the flag beats env 0"
+        );
+        assert!(
+            open_prs(&WaveEnv::default().with_open_prs_flag(Some(true))),
+            "the flag beats an unset env"
+        );
+        let on = WaveEnv {
+            open_prs: Some("1".into()),
+            ..WaveEnv::default()
+        };
+        assert!(
+            open_prs(&on.clone().with_open_prs_flag(None)),
+            "env 1 stands without the flag"
+        );
+        assert!(
+            !open_prs(&on.with_open_prs_flag(Some(false))),
+            "an explicit --open-prs=0 beats env 1"
+        );
+    }
 }
