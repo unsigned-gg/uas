@@ -169,7 +169,8 @@ These are not decided. Each needs a spec or an operator ruling before code.
 
 1. **Pool runtime.** Spec 0019 records the options and the facts. Christian ruled
    Option A on the benchmark addendum on 2026-10-10, then re-opened D2 the same day:
-   the gang benchmarks Options B (tokio) and C (heph) against the Option A numbers
+   the gang benchmarks Option B (tokio) against the Option A numbers (Option C is
+   ruled out: not buildable from crates.io)
    before he rules again [reported, relayed by the integrator, mesh e42efbc2 and ca37e233]. Spec 0015 D5
    (OS threads) stays the interim choice. `cas-domain` stays runtime-neutral.
 2. **Kernel `-j 2`.** Closed by spec 0020 (2026-10-10). The research claim that
