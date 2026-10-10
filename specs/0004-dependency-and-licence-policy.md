@@ -140,7 +140,7 @@ the first use.
 | autumn-harvest | MIT OR Apache-2.0 | `cas-engine`: durable workflows | evaluated, unpinned, NOT approved | `repos/autumn-harvest.md` line 15 |
 | aya | MIT OR Apache-2.0 (not in the research; `aya-rs/aya` workspace `Cargo.toml`, read 2026-10-08) | `cas-ebpf`: eBPF programs and loader | approved 2026-10-09 (Christian, epic list below; spec 0014 D2), pinned at 0.14.0, in the workspace `Cargo.toml`, used by `crates/cas-ebpf/Cargo.toml` | `repos/neutral-engineering.md` section 2.1 |
 | `landlock` 0.4.7 | MIT OR Apache-2.0 | `cas-sandbox`: filesystem rulesets | approved 2026-10-09, pinned, in use (spec 0010) | `rust-native-agent-substrate.md` section 3.3 |
-| madstack (`pgray/madstack`: Axum, Maud, htmx) | MIT | `cas-deck`: operator dashboard | approved 2026-10-09 (Christian, epic list below) as its crate pins: axum 0.8.9, maud 0.27.0, tower-http 0.7.1, tokio-stream 0.1.19; htmx is not a crate; not yet in a Cargo.toml | `repos/madstack.md` |
+| madstack (`pgray/madstack`: Axum, Maud, htmx) | MIT | `cas-deck`: operator dashboard | approved 2026-10-09 (Christian, epic list below) as its crate pins: axum 0.8.9, maud 0.27.0, tower-http 0.7.1, tokio-stream 0.1.19; htmx is not a crate; axum and maud in the root Cargo.toml since P4 (2026-10-10), tower-http and tokio-stream not yet | `repos/madstack.md` |
 | rig-core 0.44 | MIT | model calls through the LiteLLM gateway, on need | pinned at 0.44.0 by the decision above, not in the workspace | `0xPlaygrounds/rig` |
 
 The research does not state the aya licence. The `aya-rs/aya` workspace
@@ -178,7 +178,7 @@ metadata, read 2026-10-09.
 | `sha2` | 0.11.0 | MIT OR Apache-2.0 | cas-ebpf, cas-router | 2, 4 | none |
 | `reqwest` | 0.13.5 | MIT OR Apache-2.0 | cas-router, cas-deck | 4, 5 | default-features off; `rustls` (aws-lc-rs provider, needs cmake), `http2`, `json`, `stream` |
 | `futures-util` | 0.3.34 | MIT OR Apache-2.0 | cas-router, cas-deck | 4, 5 | none |
-| `axum` | 0.8.9 | MIT | cas-deck | 5 | `ws` covers WebSocket |
+| `axum` | 0.8.9 | MIT | cas-deck | 5 | default features off, `http1` and `tokio` (P4, 2026-10-10); `ws` waits for D2 |
 | `tower-http` | 0.7.1 | MIT | cas-deck | 5 | `fs`, `trace`, `timeout`, `compression-gzip` |
 | `tokio-stream` | 0.1.19 | MIT | cas-deck | 5 | none |
 | `maud` | 0.27.0 | MIT OR Apache-2.0 | cas-deck | 5 | `axum`; last release 2025-02-02 (stale, accepted with the MAD stack) |

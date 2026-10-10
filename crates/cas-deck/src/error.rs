@@ -16,7 +16,8 @@ pub enum DeckError {
         /// Underlying I/O error.
         source: io::Error,
     },
-    /// The settle queue could not be reached. The text is for logs, never for the page.
+    /// The settle queue could not be reached. The page shows a fixed notice; the
+    /// text is kept for a later log line and is never rendered.
     #[error("settle queue unavailable: {0}")]
     CortexUnavailable(String),
 }

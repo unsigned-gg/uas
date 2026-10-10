@@ -56,12 +56,17 @@ async fn get(state: DeckState, path: &str) -> Response {
     let addr = listener.local_addr().unwrap();
     tokio::spawn(serve(listener, state));
 
-    let mut stream = TcpStream::connect(addr).await.unwrap();
-    let request = format!("GET {path} HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
-    stream.write_all(request.as_bytes()).await.unwrap();
-    let mut raw = Vec::new();
-    stream.read_to_end(&mut raw).await.unwrap();
-    parse(&String::from_utf8_lossy(&raw))
+    tokio::time::timeout(std::time::Duration::from_secs(5), async move {
+        let mut stream = TcpStream::connect(addr).await.unwrap();
+        let request =
+            format!("GET {path} HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
+        stream.write_all(request.as_bytes()).await.unwrap();
+        let mut raw = Vec::new();
+        stream.read_to_end(&mut raw).await.unwrap();
+        parse(&String::from_utf8_lossy(&raw))
+    })
+    .await
+    .expect("the deck answered within 5 s")
 }
 
 fn session_events() -> Vec<WorkflowEvent> {
