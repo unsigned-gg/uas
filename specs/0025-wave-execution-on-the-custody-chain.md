@@ -154,7 +154,7 @@ Facts, 2026-10-10. Source facts from `unsigned-gg/blackwall@3d98dc1` are
 | halt | a Probe exits non-zero | `ProbeFailed` |
 | halt | WHERE `open_prs` (D16), `open_pr` returns Err after a Critic pass. D4 applies to the branch: pushed stays, unpushed is deleted | `PrFailed` |
 | halt | a `Halted` record appears after the step started | `WaveHalted` |
-| halt | the executor itself fails before an outcome (a missing tool on PATH, an I/O or record error). The step writes a `Halted` record so siblings and later waves stop (F17), prints the reason on stderr, and `cas wave step` exits 3 (lane decision w25:p1, 2026-10-10; the operator may override) | `ExecutorError` |
+| halt | the executor itself fails before an outcome (a missing tool on PATH, an I/O or record error). The step writes a `Halted` record so siblings and later waves stop (F17), prints the reason on stderr, and `cas wave step` exits 3. It runs no compensation: the fault is in the environment, not the work, and the operator re-runs the step once it is fixed (lane decision w25:p1, 2026-10-10; the operator may override) | `ExecutorError` |
 
 ### Dispatch by role
 
