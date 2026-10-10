@@ -88,6 +88,24 @@ pub enum LandingOutcome {
     },
 }
 
+/// The result of reconciling one changeset, before its pull request (spec 0025 D1).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ReconcileOutcome {
+    /// Reconcile exited zero. The receipt has `verify_exit` 0, a branch and no PR number.
+    Reconciled(LandingReceipt),
+    /// `blackwall reconcile` exited 3, the verify gate failed. Nothing was opened.
+    VerifyFailed(LandingReceipt),
+    /// `blackwall.toml` has no `[verify]` command. Nothing was reconciled.
+    NoVerifyGate(LandingReceipt),
+    /// The base is not an ancestor of the development head. Nothing was applied.
+    StaleBase {
+        /// The receipt, with `stale_base` set.
+        receipt: LandingReceipt,
+        /// The commit that the development ref names now.
+        development_head: String,
+    },
+}
+
 /// A landing attempt that could not finish.
 #[derive(Debug, thiserror::Error)]
 pub enum LandingError {
@@ -160,9 +178,28 @@ impl LandingActivity {
         Self { config }
     }
 
-    /// Land one changeset: read the verify command, check the base, refuse without a
-    /// verify gate, reconcile, then open the pull request.
+    /// Land one changeset: reconcile it, then open its pull request (spec 0022 D1).
     pub fn land(&self, input: &LandingInput) -> Result<LandingOutcome, LandingError> {
+        match self.reconcile(input)? {
+            ReconcileOutcome::Reconciled(reconciled) => {
+                let opened = self.open_pr(&reconciled)?;
+                Ok(LandingOutcome::Opened(opened))
+            }
+            ReconcileOutcome::VerifyFailed(receipt) => Ok(LandingOutcome::VerifyFailed(receipt)),
+            ReconcileOutcome::NoVerifyGate(receipt) => Ok(LandingOutcome::NoVerifyGate(receipt)),
+            ReconcileOutcome::StaleBase {
+                receipt,
+                development_head,
+            } => Ok(LandingOutcome::StaleBase {
+                receipt,
+                development_head,
+            }),
+        }
+    }
+
+    /// Reconcile one changeset with Blackwall, and open no pull request (steps 0 to 4).
+    /// Read the verify command, check the base, refuse without a verify gate, then reconcile.
+    pub fn reconcile(&self, input: &LandingInput) -> Result<ReconcileOutcome, LandingError> {
         let verify_cmd = read_verify_cmd(&self.config.repo_dir)?;
         let base = input.base_sha.as_str();
         let dev = self.config.development_ref.as_str();
@@ -177,7 +214,7 @@ impl LandingActivity {
                     ..ReceiptParts::default()
                 };
                 let receipt = self.receipt(input, verify_cmd, parts)?;
-                return Ok(LandingOutcome::StaleBase {
+                return Ok(ReconcileOutcome::StaleBase {
                     receipt,
                     development_head,
                 });
@@ -189,7 +226,7 @@ impl LandingActivity {
             // Fail closed: the custody process opens no PR without a verify gate,
             // and reconcile is skipped too so no `blackwall/` branch is created.
             let receipt = self.receipt(input, None, ReceiptParts::default())?;
-            return Ok(LandingOutcome::NoVerifyGate(receipt));
+            return Ok(ReconcileOutcome::NoVerifyGate(receipt));
         }
 
         let run = input.blackwall_run.as_str();
@@ -207,24 +244,32 @@ impl LandingActivity {
                     ..ReceiptParts::default()
                 };
                 let receipt = self.receipt(input, verify_cmd, parts)?;
-                return Ok(LandingOutcome::VerifyFailed(receipt));
+                return Ok(ReconcileOutcome::VerifyFailed(receipt));
             }
             code => return Err(unexpected("reconcile", code, &reconcile)),
         }
 
-        // The PR does not exist yet, so the body receipt has no PR number (spec 0022 D11).
-        let body_receipt = self.receipt(
+        // The PR does not exist yet, so the receipt has no PR number (spec 0022 D11).
+        let reconciled = self.receipt(
             input,
-            verify_cmd.clone(),
+            verify_cmd,
             ReceiptParts {
                 verify_exit: Some(0),
-                branch: Some(branch.clone()),
+                branch: Some(branch),
                 ..ReceiptParts::default()
             },
         )?;
+        Ok(ReconcileOutcome::Reconciled(reconciled))
+    }
+
+    /// Open the pull request of a reconciled changeset (step 5). The body is the fenced JSON
+    /// of `reconciled` (spec 0022 D11). Pass only the receipt that `reconcile` returned: verify
+    /// exit 0, a branch and no PR number.
+    pub fn open_pr(&self, reconciled: &LandingReceipt) -> Result<LandingReceipt, LandingError> {
+        let run = reconciled.facts().blackwall_run.as_str();
         let body = format!(
             "```json\n{}\n```\n",
-            serde_json::to_string_pretty(&body_receipt)?
+            serde_json::to_string_pretty(reconciled)?
         );
         let pr_base = self.config.pr_base.as_str();
         let pr = self.run_with_stdin(
@@ -237,14 +282,9 @@ impl LandingActivity {
         }
         let stdout = String::from_utf8_lossy(&pr.stdout);
         let number = parse_pr_number(&stdout).ok_or(LandingError::PrNumberUnparsed)?;
-        let parts = ReceiptParts {
-            verify_exit: Some(0),
-            branch: Some(branch),
-            pr_number: Some(number),
-            ..ReceiptParts::default()
-        };
-        let receipt = self.receipt(input, verify_cmd, parts)?;
-        Ok(LandingOutcome::Opened(receipt))
+        let mut facts = reconciled.facts().clone();
+        facts.pr_number = Some(number);
+        Ok(LandingReceipt::new(facts)?)
     }
 
     fn receipt(
