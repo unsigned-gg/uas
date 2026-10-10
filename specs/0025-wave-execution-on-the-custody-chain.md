@@ -62,8 +62,8 @@ Facts, 2026-10-10. Source facts from `unsigned-gg/blackwall@3d98dc1` are
   done-when command and the gates itself.
 - **F11 [verified, probe on rustc 1.94.1]:** `std::fs::File::lock` works on the pinned
   toolchain. A host lock needs no new dependency.
-- **F12 [verified, read `blackwall.toml` and `tasks/*/task.toml`]:** both set model
-  `sonnet`. Christian's rule of 2026-10-10 sets builders to haiku [reported,
+- **F12 [verified, read `blackwall.toml` and `tasks/*/task.toml`, 2026-10-10]:** `blackwall.toml`
+  sets `sonnet`; `tasks/wave-smoke-build/task.toml` sets `haiku`. Christian's rule of 2026-10-10 sets builders to haiku [reported,
   `.claude/agents/README.md`]. [reported, `run.rs:489-503`] a `task.toml` `model` overwrites
   the CLI `--model` with no condition. Whether `blackwall.toml` beats it is unknown. [verified, P9c run 0dbb7f02bf2d and `blackwall list`]
   the `running` line says `haiku`, and `blackwall list` shows `haiku` for all five P9c runs.
@@ -226,7 +226,7 @@ exit 1 and run nothing. Only a person removes one.
 | # | Decision | Who, when |
 |---|---|---|
 | D1 | `WaveExecutor` in `cas-engine` dispatches by role (table above). A Builder is a jailed `blackwall start` and `settle select`, then the landed `LandingActivity`. Amendment: `LandingActivity` splits into `reconcile` and `open_pr`, and `land` keeps calling both. `open_pr` takes the reconciled receipt and writes it as the spec 0022 D11 body. The PR opens only after the Critic passes (F10). | Caller's default for Christian's roadmap item, lane w25:p1, 2026-10-10; amendment cas-engineer, 2026-10-10 (Christian can override) |
-| D2 | Saga drives one run per wave, through the generated `cas-cpm-wave-w<i>.toml`. Saga owns the run journal and the gates. `cas-engine` owns the plan, the custody calls, the halt and the compensation, because saga has neither (F17). Each step is an agent shim whose `verify_cmd` runs `cas wave step`. The shim spends one agent run per step, Probes included (F15). | Caller's default, lane w25:p1, 2026-10-10; one run per wave and the shim cost, cas-engineer, 2026-10-10 (Christian can override) |
+| D2 | Saga drives one run per wave, through the generated `cas-cpm-wave-w<i>.toml`. Saga owns the run journal and the gates. `cas-engine` owns the plan, the custody calls, the halt and the compensation, because saga has neither (F17). Each step is an agent shim whose `verify_cmd` runs `cas wave step`. The shim spends one agent run per step, Probes included (F15). | Caller's default, lane w25:p1, 2026-10-10; one run per wave and the shim cost, cas-engineer, 2026-10-10 (Christian can override) The shim agent runs before `verify_cmd` in a writable worktree, so the relative plan path is agent-writable: CER-2788. |
 | D3 | Process boundary: subprocesses with exact argv, as `LandingActivity` does. Every exit and output contract is `asserted` or `reported` until the P9c live run records it. | Caller's default, lane w25:p1, 2026-10-10 |
 | D4 | Halt and compensate as the requirements and the Compensation section say. Blackwall runs stay for inspection. PRs and pushed branches stay; the halt report lists them. | Caller's default, lane w25:p1, 2026-10-10 |
 | D5 | Evidence: a new `WorkflowEvent::WaveStep` per step, with role, persona, run, changeset, base, branch, head, PR and outcome. The wave result is one `LandingReceipt` per Builder, plus the halt reason and the compensation receipts. | Caller's default, lane w25:p1, 2026-10-10 |
