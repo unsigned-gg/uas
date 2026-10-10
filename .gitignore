@@ -4,6 +4,9 @@
 .saga/*
 !.saga/flows/
 !.saga/flows/*.toml
+# Agent teams and topologies are versioned; runs, db and worktrees are not.
+!.saga/teams.toml
+!.saga/topologies.toml
 .env*
 .claude/settings.local.json
 .moon/cache/

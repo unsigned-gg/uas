@@ -1,0 +1,22 @@
+# Agent teams for cas-substrate, read by bifrost::yggdrasil when saga runs from this repo.
+# Overlay on saga's built-in catalog: roles and the cockpit-grid topology are built in.
+#
+# cas-cockpit is the pane gang for multi-package waves (not applied by default; the lane runs
+# in-lane subagent waves first). Personas are the files in .claude/agents/. Models follow
+# Christian's rule of 2026-10-10: foreman sonnet (effort medium), critic opus (effort high),
+# builders haiku (effort low), prober haiku (thjalfi default). Slots follow cockpit-grid:
+# 0 lead, 1 to 3 workers, 4 and 5 verifiers.
+#
+# Apply: cd <repo> && saga yggdrasil team apply cas-cockpit --cwd <repo>
+# Show:  cd <repo> && saga yggdrasil team show cas-cockpit
+
+[teams.cas-cockpit]
+topology = "cockpit-grid"
+members = [
+  { slot = 0, role = "brokkr", effort = "medium", persona = "cas-foreman" },
+  { slot = 1, role = "sindri", effort = "low", persona = "cas-builder" },
+  { slot = 2, role = "sindri", effort = "low", persona = "cas-builder" },
+  { slot = 3, role = "sindri", effort = "low", persona = "cas-ebpf-builder" },
+  { slot = 4, role = "loki", effort = "high", persona = "cas-critic" },
+  { slot = 5, role = "thjalfi" },
+]
