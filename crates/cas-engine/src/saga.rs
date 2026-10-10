@@ -41,6 +41,9 @@ pub struct SagaStepDefRaw {
     /// Approval gate name.
     #[serde(default)]
     pub gate: Option<String>,
+    /// Estimated duration in arbitrary time units.
+    #[serde(default)]
+    pub duration: Option<u64>,
 }
 
 /// A parsed Saga flow definition deserialized from `.saga/flows/*.toml`.
@@ -79,6 +82,8 @@ impl SagaFlowDef {
                     deps: raw.deps.clone(),
                     verify_cmd: raw.verify_cmd.clone(),
                     gate: raw.gate.clone(),
+                    agent: raw.agent.clone(),
+                    duration: raw.duration,
                 }
             })
             .collect()
@@ -100,6 +105,10 @@ pub struct SagaStep {
     pub verify_cmd: Vec<String>,
     /// Operator gate identifier (e.g. `heimdal:approval`).
     pub gate: Option<String>,
+    /// Optional agent persona or hint ("auto", "probe", "builder", "critic").
+    pub agent: Option<String>,
+    /// Estimated duration in arbitrary time units.
+    pub duration: Option<u64>,
 }
 
 impl SagaStep {
@@ -117,6 +126,8 @@ impl SagaStep {
             deps,
             verify_cmd: Vec::new(),
             gate: None,
+            agent: None,
+            duration: None,
         }
     }
 
@@ -130,6 +141,30 @@ impl SagaStep {
     pub fn with_gate(mut self, gate: impl Into<String>) -> Self {
         self.gate = Some(gate.into());
         self
+    }
+
+    /// Builder method to attach an agent persona or hint.
+    pub fn with_agent(mut self, agent: impl Into<String>) -> Self {
+        self.agent = Some(agent.into());
+        self
+    }
+
+    /// Builder method to attach an estimated duration.
+    pub fn with_duration(mut self, duration: u64) -> Self {
+        self.duration = Some(duration);
+        self
+    }
+
+    /// Return estimated duration or default inferred by [`ActivityKind`].
+    pub fn effective_duration(&self) -> u64 {
+        if let Some(d) = self.duration {
+            return d;
+        }
+        match self.kind {
+            ActivityKind::Verify => 5,
+            ActivityKind::Impl => 20,
+            ActivityKind::Gate => 1,
+        }
     }
 }
 
@@ -183,6 +218,16 @@ impl SagaFlowCoordinator {
     /// Check if all steps in the flow are completed.
     pub fn is_finished(&self) -> bool {
         self.completed.len() == self.steps.len()
+    }
+
+    /// Compute the Critical Path Method (CPM) schedule for this flow.
+    pub fn cpm_schedule(&self) -> Result<crate::CpmSchedule, EngineError> {
+        crate::CpmSchedule::compute(&self.steps)
+    }
+
+    /// Plan concurrent execution waves using CPM critical path priority.
+    pub fn plan_waves(&self, max_concurrency: usize) -> Result<crate::WavePlan, EngineError> {
+        crate::WavePlan::plan(&self.steps, max_concurrency)
     }
 
     /// Trigger compensations for all completed steps in reverse order.

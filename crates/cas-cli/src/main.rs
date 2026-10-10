@@ -9,9 +9,10 @@ use cas_domain::{
 };
 use cas_engine::{
     Activity, ActivityKind, ActivityResult, BranchPruneCompensator, CompensationReceipt,
-    CompositeCompensator, InMemoryEventStore, LeaseReturnCompensator, SagaFlowCoordinator,
-    SagaFlowDef, SessionId, SessionState, SomaAdmissionGate, WorkflowEvent, WorkflowSession,
-    WorktreeCleanupCompensator,
+    CompositeCompensator, CpmSchedule, InMemoryEventStore, LeaseReturnCompensator,
+    SagaFlowCoordinator, SagaFlowDef, SessionId, SessionState, SomaAdmissionGate, WaveCoordinator,
+    WavePlan, WorkflowEvent, WorkflowSession, WorktreeCleanupCompensator,
+    DEFAULT_MAX_WAVE_CONCURRENCY,
 };
 use clap::{Parser, Subcommand};
 use serde::{Deserialize, Serialize};
@@ -87,6 +88,18 @@ enum HarnessCommand {
         /// Dry-run mode: do not execute shell command, simulate success.
         #[arg(long)]
         dry_run: bool,
+
+        /// Print or include Critical Path Method (CPM) schedule analysis for flow.
+        #[arg(long)]
+        show_cpm: bool,
+
+        /// Execute flow organized by agent sprint waves.
+        #[arg(long)]
+        wave: bool,
+
+        /// Maximum concurrent subagents per wave (defaults to 3).
+        #[arg(long, default_value_t = DEFAULT_MAX_WAVE_CONCURRENCY)]
+        max_concurrency: usize,
     },
 
     /// Verify a receipt file by replaying events and checking evidence tiers.
@@ -131,6 +144,10 @@ struct HarnessReport {
     compensation_receipts: Vec<CompensationReceipt>,
     failure_reason: Option<String>,
     events: Vec<WorkflowEvent>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    cpm_schedule: Option<CpmSchedule>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    wave_plan: Option<WavePlan>,
 }
 
 /// Output report for a harness receipt verification.
@@ -312,6 +329,8 @@ fn harness_run(
             compensation_receipts: workflow.compensation_receipts().to_vec(),
             failure_reason: Some(reason),
             events: workflow.events().to_vec(),
+            cpm_schedule: None,
+            wave_plan: None,
         });
     }
 
@@ -345,6 +364,8 @@ fn harness_run(
             compensation_receipts: Vec::new(),
             failure_reason: None,
             events: workflow.events().to_vec(),
+            cpm_schedule: None,
+            wave_plan: None,
         })
     } else {
         let output = std::process::Command::new("sh")
@@ -387,6 +408,8 @@ fn harness_run(
                 compensation_receipts: Vec::new(),
                 failure_reason: None,
                 events: workflow.events().to_vec(),
+                cpm_schedule: None,
+                wave_plan: None,
             })
         } else {
             let reason = format!(
@@ -408,7 +431,42 @@ fn harness_run(
                 compensation_receipts: workflow.compensation_receipts().to_vec(),
                 failure_reason: Some(reason),
                 events: workflow.events().to_vec(),
+                cpm_schedule: None,
+                wave_plan: None,
             })
+        }
+    }
+}
+
+/// Execution options for running a saga flow through the harness.
+#[derive(Debug, Clone, Copy)]
+pub struct FlowRunOptions<'a> {
+    /// Evidence tier override.
+    pub evidence: Option<&'a str>,
+    /// Policy tier override.
+    pub policy_tier: Option<&'a str>,
+    /// Signer principal identifier.
+    pub signer: &'a str,
+    /// Whether to run in simulation dry-run mode.
+    pub dry_run: bool,
+    /// Whether to calculate and include the CPM schedule.
+    pub show_cpm: bool,
+    /// Whether to execute activities organized by concurrent waves.
+    pub wave: bool,
+    /// Maximum concurrent activities allowed per wave.
+    pub max_concurrency: usize,
+}
+
+impl<'a> Default for FlowRunOptions<'a> {
+    fn default() -> Self {
+        Self {
+            evidence: None,
+            policy_tier: None,
+            signer: "cas/test",
+            dry_run: false,
+            show_cpm: false,
+            wave: false,
+            max_concurrency: DEFAULT_MAX_WAVE_CONCURRENCY,
         }
     }
 }
@@ -417,19 +475,16 @@ fn harness_run_flow(
     slot: &str,
     session: Option<String>,
     flow_path: &str,
-    evidence_opt: Option<&str>,
-    policy_tier_opt: Option<&str>,
-    signer: &str,
-    dry_run: bool,
+    opts: &FlowRunOptions<'_>,
 ) -> Result<HarnessReport> {
     let slot_id = SlotId::new(slot).context("invalid --slot")?;
     let sess_name = session.unwrap_or_else(|| format!("sess-{}", slot_id.as_str()));
     let session_id = SessionId::new(sess_name).context("invalid session id")?;
     let lease_id =
         LeaseId::new(format!("lease-{}", slot_id.as_str())).context("invalid lease id")?;
-    let signer = PrincipalRef::new(signer).context("invalid --signer")?;
+    let signer = PrincipalRef::new(opts.signer).context("invalid --signer")?;
 
-    let evidence = match (evidence_opt, dry_run) {
+    let evidence = match (opts.evidence, opts.dry_run) {
         (None, true) => EvidenceTier::Heuristic,
         (None, false) => EvidenceTier::Verified,
         (Some(raw), true) => {
@@ -459,14 +514,18 @@ fn harness_run_flow(
         PolicyTier::Tier0
     };
 
-    let policy_tier = match policy_tier_opt {
+    let policy_tier = match opts.policy_tier {
         Some(raw) => parse_policy_tier(raw)?,
         None => default_tier,
     };
 
     let classification = SomaClassification::new(
         policy_tier,
-        if dry_run { "simulation" } else { "execution" },
+        if opts.dry_run {
+            "simulation"
+        } else {
+            "execution"
+        },
         format!(
             "soma reflex admission check for flow {}",
             flow_def.flow.name
@@ -478,7 +537,6 @@ fn harness_run_flow(
         .with(WorktreeCleanupCompensator::new())
         .with(BranchPruneCompensator::new())
         .with(LeaseReturnCompensator::new());
-    let mut coordinator = SagaFlowCoordinator::new(steps, Box::new(coord_compensator));
 
     let sess_compensator = CompositeCompensator::new()
         .with(WorktreeCleanupCompensator::new())
@@ -493,7 +551,235 @@ fn harness_run_flow(
     let now = current_epoch_seconds();
     workflow.start(slot_id.clone(), lease_id.clone(), now)?;
 
+    let cpm_schedule = if opts.show_cpm || opts.wave {
+        Some(CpmSchedule::compute(&steps)?)
+    } else {
+        None
+    };
+
+    let wave_plan = if opts.wave {
+        Some(WavePlan::plan(&steps, opts.max_concurrency)?)
+    } else {
+        None
+    };
+
     let mut attestations = Vec::new();
+
+    if let Some(plan) = wave_plan.clone() {
+        let mut wave_coordinator = WaveCoordinator::new(plan, Box::new(coord_compensator));
+
+        while let Some(current_wave) = wave_coordinator.current_wave().cloned() {
+            for wave_step in &current_wave.steps {
+                let step = &wave_step.step;
+                let step_now = current_epoch_seconds();
+                let activity = Activity::new(&step.id, &step.title, step.kind);
+
+                if let Err(e) = admission_gate.admit_activity(&activity) {
+                    let reason = format!("policy admission rejected for step {}: {e}", step.id);
+                    workflow.fail_activity(&activity, reason.clone(), step_now)?;
+                    let mut receipts = workflow.compensation_receipts().to_vec();
+                    let rollback_receipts = wave_coordinator.rollback(&step.id, &reason)?;
+                    receipts.extend(rollback_receipts);
+
+                    return Ok(HarnessReport {
+                        session_id: session_id.to_string(),
+                        slot_id: slot_id.to_string(),
+                        lease_id: lease_id.to_string(),
+                        state: workflow.state(),
+                        done: false,
+                        policy_tier: Some(policy_tier),
+                        attestation: attestations.last().cloned(),
+                        attestations,
+                        compensation_receipts: receipts,
+                        failure_reason: Some(reason),
+                        events: workflow.events().to_vec(),
+                        cpm_schedule,
+                        wave_plan: Some(wave_coordinator.plan().clone()),
+                    });
+                }
+
+                workflow.start_activity(activity.clone(), step_now)?;
+
+                if opts.dry_run {
+                    let receipt = format!(
+                        "dry-run simulated step: {} ({}) [role={:?}, wave={}]",
+                        step.id, step.title, wave_step.role, current_wave.wave_index
+                    );
+                    let attestation = Attestation {
+                        signer: signer.clone(),
+                        evidence,
+                        receipt,
+                        at: step_now,
+                    };
+                    let result = ActivityResult {
+                        activity_id: activity.id.clone(),
+                        success: true,
+                        attestation: attestation.clone(),
+                        summary: Some(format!("simulated dry-run: {}", step.title)),
+                    };
+                    workflow.complete_activity(result, step_now)?;
+                    wave_coordinator.mark_step_completed(
+                        &step.id,
+                        Some(format!("Step {} completed", step.id)),
+                    )?;
+                    attestations.push(attestation);
+                } else if !step.verify_cmd.is_empty() {
+                    let output = std::process::Command::new(&step.verify_cmd[0])
+                        .args(&step.verify_cmd[1..])
+                        .output()
+                        .with_context(|| {
+                            format!("failed to execute verify_cmd for step {}", step.id)
+                        })?;
+
+                    if output.status.success() {
+                        let receipt = format!(
+                            "step: {}, command: {:?}, status: 0, stdout_bytes: {}, stderr_bytes: {}",
+                            step.id,
+                            step.verify_cmd,
+                            output.stdout.len(),
+                            output.stderr.len()
+                        );
+                        let attestation = Attestation {
+                            signer: signer.clone(),
+                            evidence,
+                            receipt,
+                            at: step_now,
+                        };
+                        let summary_raw =
+                            String::from_utf8_lossy(&output.stdout).trim().to_string();
+                        let result = ActivityResult {
+                            activity_id: activity.id.clone(),
+                            success: true,
+                            attestation: attestation.clone(),
+                            summary: Some(summary_raw.clone()),
+                        };
+                        workflow.complete_activity(result, step_now)?;
+                        let verdict = if summary_raw.is_empty() {
+                            format!("Step {} verified", step.id)
+                        } else {
+                            summary_raw.lines().take(15).collect::<Vec<_>>().join("\n")
+                        };
+                        wave_coordinator.mark_step_completed(&step.id, Some(verdict))?;
+                        attestations.push(attestation);
+                    } else {
+                        let reason = format!(
+                            "step {} failed with exit code: {:?}, stderr: {}",
+                            step.id,
+                            output.status.code(),
+                            String::from_utf8_lossy(&output.stderr).trim()
+                        );
+                        workflow.fail_activity(&activity, reason.clone(), step_now)?;
+                        let mut receipts = workflow.compensation_receipts().to_vec();
+                        let rollback_receipts = wave_coordinator.rollback(&step.id, &reason)?;
+                        receipts.extend(rollback_receipts);
+
+                        return Ok(HarnessReport {
+                            session_id: session_id.to_string(),
+                            slot_id: slot_id.to_string(),
+                            lease_id: lease_id.to_string(),
+                            state: workflow.state(),
+                            done: false,
+                            policy_tier: Some(policy_tier),
+                            attestation: attestations.last().cloned(),
+                            attestations,
+                            compensation_receipts: receipts,
+                            failure_reason: Some(reason),
+                            events: workflow.events().to_vec(),
+                            cpm_schedule,
+                            wave_plan: Some(wave_coordinator.plan().clone()),
+                        });
+                    }
+                } else if step.kind == ActivityKind::Gate {
+                    let receipt = format!(
+                        "gate approved: {} ({})",
+                        step.id,
+                        step.gate.as_deref().unwrap_or("operator")
+                    );
+                    let attestation = Attestation {
+                        signer: signer.clone(),
+                        evidence,
+                        receipt,
+                        at: step_now,
+                    };
+                    let result = ActivityResult {
+                        activity_id: activity.id.clone(),
+                        success: true,
+                        attestation: attestation.clone(),
+                        summary: Some(format!("gate approved: {}", step.id)),
+                    };
+                    workflow.complete_activity(result, step_now)?;
+                    wave_coordinator.mark_step_completed(
+                        &step.id,
+                        Some(format!("Gate {} approved", step.id)),
+                    )?;
+                    attestations.push(attestation);
+                } else {
+                    let receipt = format!("step executed: {} ({})", step.id, step.title);
+                    let attestation = Attestation {
+                        signer: signer.clone(),
+                        evidence,
+                        receipt,
+                        at: step_now,
+                    };
+                    let result = ActivityResult {
+                        activity_id: activity.id.clone(),
+                        success: true,
+                        attestation: attestation.clone(),
+                        summary: Some(format!("step completed: {}", step.title)),
+                    };
+                    workflow.complete_activity(result, step_now)?;
+                    wave_coordinator.mark_step_completed(
+                        &step.id,
+                        Some(format!("Step {} complete", step.id)),
+                    )?;
+                    attestations.push(attestation);
+                }
+            }
+
+            wave_coordinator.advance_wave()?;
+        }
+
+        if !wave_coordinator.is_finished() {
+            let reason = "wave flow terminated prematurely".to_string();
+            let receipts = wave_coordinator.rollback("wave-dag", &reason)?;
+            return Ok(HarnessReport {
+                session_id: session_id.to_string(),
+                slot_id: slot_id.to_string(),
+                lease_id: lease_id.to_string(),
+                state: SessionState::Failed,
+                done: false,
+                policy_tier: Some(policy_tier),
+                attestation: attestations.last().cloned(),
+                attestations,
+                compensation_receipts: receipts,
+                failure_reason: Some(reason),
+                events: workflow.events().to_vec(),
+                cpm_schedule,
+                wave_plan: Some(wave_coordinator.plan().clone()),
+            });
+        }
+
+        let end_now = current_epoch_seconds();
+        workflow.finish_success(end_now)?;
+
+        return Ok(HarnessReport {
+            session_id: session_id.to_string(),
+            slot_id: slot_id.to_string(),
+            lease_id: lease_id.to_string(),
+            state: workflow.state(),
+            done: true,
+            policy_tier: Some(policy_tier),
+            attestation: attestations.last().cloned(),
+            attestations,
+            compensation_receipts: Vec::new(),
+            failure_reason: None,
+            events: workflow.events().to_vec(),
+            cpm_schedule,
+            wave_plan: Some(wave_coordinator.plan().clone()),
+        });
+    }
+
+    let mut coordinator = SagaFlowCoordinator::new(steps, Box::new(coord_compensator));
 
     while let Some(step) = coordinator.next_runnable_step().cloned() {
         let step_now = current_epoch_seconds();
@@ -518,12 +804,14 @@ fn harness_run_flow(
                 compensation_receipts: receipts,
                 failure_reason: Some(reason),
                 events: workflow.events().to_vec(),
+                cpm_schedule,
+                wave_plan: None,
             });
         }
 
         workflow.start_activity(activity.clone(), step_now)?;
 
-        if dry_run {
+        if opts.dry_run {
             let receipt = format!("dry-run simulated step: {} ({})", step.id, step.title);
             let attestation = Attestation {
                 signer: signer.clone(),
@@ -593,6 +881,8 @@ fn harness_run_flow(
                     compensation_receipts: receipts,
                     failure_reason: Some(reason),
                     events: workflow.events().to_vec(),
+                    cpm_schedule,
+                    wave_plan: None,
                 });
             }
         } else if step.kind == ActivityKind::Gate {
@@ -652,6 +942,8 @@ fn harness_run_flow(
             compensation_receipts: receipts,
             failure_reason: Some(reason),
             events: workflow.events().to_vec(),
+            cpm_schedule,
+            wave_plan: None,
         });
     }
 
@@ -670,6 +962,8 @@ fn harness_run_flow(
         compensation_receipts: Vec::new(),
         failure_reason: None,
         events: workflow.events().to_vec(),
+        cpm_schedule,
+        wave_plan: None,
     })
 }
 
@@ -735,17 +1029,23 @@ fn main() -> Result<()> {
                 policy_tier,
                 signer,
                 dry_run,
+                show_cpm,
+                wave,
+                max_concurrency,
             } => {
                 let report = match (flow, task) {
-                    (Some(flow_path), _) => harness_run_flow(
-                        &slot,
-                        session,
-                        &flow_path,
-                        evidence.as_deref(),
-                        policy_tier.as_deref(),
-                        &signer,
-                        dry_run,
-                    )?,
+                    (Some(flow_path), _) => {
+                        let opts = FlowRunOptions {
+                            evidence: evidence.as_deref(),
+                            policy_tier: policy_tier.as_deref(),
+                            signer: &signer,
+                            dry_run,
+                            show_cpm,
+                            wave,
+                            max_concurrency,
+                        };
+                        harness_run_flow(&slot, session, &flow_path, &opts)?
+                    }
                     (None, Some(task_cmd)) => harness_run(
                         &slot,
                         session,
@@ -937,16 +1237,13 @@ mod tests {
             std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
                 .join("../../.saga/flows/gates.toml")
         };
-        let report = harness_run_flow(
-            "slot-test",
-            None,
-            flow_path.to_str().unwrap(),
-            Some("heuristic"),
-            None,
-            "cas/test",
-            true,
-        )
-        .unwrap();
+        let opts = FlowRunOptions {
+            evidence: Some("heuristic"),
+            dry_run: true,
+            ..Default::default()
+        };
+        let report =
+            harness_run_flow("slot-test", None, flow_path.to_str().unwrap(), &opts).unwrap();
 
         assert!(report.done);
         assert_eq!(report.state, SessionState::Succeeded);
@@ -954,6 +1251,37 @@ mod tests {
         assert_eq!(report.attestation.unwrap().signer.as_str(), "cas/test");
         assert!(report.compensation_receipts.is_empty());
         assert!(report.failure_reason.is_none());
+        assert!(report.cpm_schedule.is_none());
+        assert!(report.wave_plan.is_none());
+    }
+
+    #[test]
+    fn harness_run_flow_dry_run_with_cpm_and_wave() {
+        let flow_path = if std::path::Path::new(".saga/flows/gates.toml").exists() {
+            std::path::PathBuf::from(".saga/flows/gates.toml")
+        } else {
+            std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("../../.saga/flows/gates.toml")
+        };
+        let opts = FlowRunOptions {
+            evidence: Some("heuristic"),
+            dry_run: true,
+            show_cpm: true,
+            wave: true,
+            ..Default::default()
+        };
+        let report =
+            harness_run_flow("slot-test", None, flow_path.to_str().unwrap(), &opts).unwrap();
+
+        assert!(report.done);
+        assert_eq!(report.state, SessionState::Succeeded);
+        assert_eq!(report.attestations.len(), 4);
+        assert!(report.cpm_schedule.is_some());
+        let cpm = report.cpm_schedule.as_ref().unwrap();
+        assert!(!cpm.critical_path.is_empty());
+        assert!(report.wave_plan.is_some());
+        let wave_plan = report.wave_plan.as_ref().unwrap();
+        assert_eq!(wave_plan.waves.len(), 4);
     }
 
     #[test]
@@ -979,21 +1307,65 @@ verify_cmd = ["bash", "-c", "exit 1"]
         let path = std::env::temp_dir().join("test-failing-flow.toml");
         std::fs::write(&path, flow_content).unwrap();
 
-        let report = harness_run_flow(
-            "slot-test",
-            None,
-            path.to_str().unwrap(),
-            Some("verified"),
-            None,
-            "cas/test",
-            false,
-        )
-        .unwrap();
+        let opts = FlowRunOptions {
+            evidence: Some("verified"),
+            ..Default::default()
+        };
+        let report = harness_run_flow("slot-test", None, path.to_str().unwrap(), &opts).unwrap();
 
         assert!(!report.done);
         assert_eq!(report.state, SessionState::Failed);
         assert!(report.failure_reason.is_some());
         assert!(!report.compensation_receipts.is_empty());
+
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn harness_run_flow_wave_execution_real_commands() {
+        let flow_content = r#"
+[flow]
+name = "wave-flow"
+description = "A multi-wave flow with real commands"
+
+[[step]]
+id = "probe-1"
+title = "Read-only probe 1"
+kind = "probe"
+agent = "probe"
+verify_cmd = ["echo", "probe 1 pass"]
+
+[[step]]
+id = "probe-2"
+title = "Read-only probe 2"
+kind = "probe"
+agent = "probe"
+verify_cmd = ["echo", "probe 2 pass"]
+
+[[step]]
+id = "critic"
+title = "Critic evaluation"
+kind = "test"
+agent = "critic"
+deps = ["probe-1", "probe-2"]
+verify_cmd = ["echo", "critic pass"]
+"#;
+        let path = std::env::temp_dir().join("test-wave-flow.toml");
+        std::fs::write(&path, flow_content).unwrap();
+
+        let opts = FlowRunOptions {
+            evidence: Some("verified"),
+            show_cpm: true,
+            wave: true,
+            ..Default::default()
+        };
+        let report = harness_run_flow("slot-test", None, path.to_str().unwrap(), &opts).unwrap();
+
+        assert!(report.done);
+        assert_eq!(report.state, SessionState::Succeeded);
+        assert_eq!(report.attestations.len(), 3);
+        assert!(report.wave_plan.is_some());
+        assert!(report.cpm_schedule.is_some());
 
         let _ = std::fs::remove_file(path);
     }
