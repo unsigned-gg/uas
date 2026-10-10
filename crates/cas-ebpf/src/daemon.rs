@@ -578,6 +578,16 @@ fn dispatch<H: ProbeHandle>(shared: &Shared<H>, request: Request, peer: Peer) ->
             }
             let mut ledger = lock(&shared.ledger);
             drain(&shared.handle, &mut ledger, &shared.events);
+            // A pid held by another uid's window is never merged into this uid's tree,
+            // and its window is never replaced. Only that uid's forget frees it, or its
+            // disconnect (lane decision 2026-10-10, spec 0014 D14).
+            if let Some(holder) = ledger.windows.get(&pid).map(|w| w.uid) {
+                if holder != peer.uid {
+                    let reason = format!("pid {pid} is held by a receipt window of uid {holder}");
+                    tracing::warn!(uid = peer.uid, pid, %reason, "track refused");
+                    return Response::failure(reason);
+                }
+            }
             if ledger.windows.get(&pid).is_some_and(|w| !w.open) {
                 let reason = format!("pid {pid} has a closed receipt window; forget it first");
                 tracing::warn!(uid = peer.uid, pid, %reason, "track refused");
@@ -795,5 +805,114 @@ mod tests {
     fn root_group_resolves_to_zero() {
         assert_eq!(resolve_group("root").expect("root group"), 0);
         assert!(resolve_group("no-such-group-cas-ebpf").is_err());
+    }
+
+    /// A daemon state with no windows and a fake handle, for dispatch-level tests.
+    fn test_shared() -> Shared<crate::handle::FakeProbeHandle> {
+        let (events, _) = broadcast::channel(STREAM_BACKLOG);
+        Shared {
+            handle: Arc::new(Mutex::new(
+                crate::handle::FakeProbeHandle::new().expect("fake"),
+            )),
+            ledger: Mutex::new(Ledger::default()),
+            events,
+            track_quota: DEFAULT_TRACK_QUOTA,
+            pid_namespace: [0, 0],
+            next_conn: AtomicU64::new(1),
+        }
+    }
+
+    /// A window of `uid` rooted at `root`, with extra member pids.
+    fn window(root: u32, uid: u32, members: &[u32]) -> (u32, Window) {
+        let mut window = Window::open(root, uid, 0);
+        window.members.extend(members.iter().copied());
+        (root, window)
+    }
+
+    fn event_at(ppid: u32, ns_pid: u32, uid: u32) -> ExecEvent {
+        let mut event = ExecEvent::new(5, 900, ppid, uid, "x", "/x");
+        event.ns_pid = ns_pid;
+        event
+    }
+
+    #[test]
+    fn a_foreign_uid_cannot_read_or_forget_another_uids_window() {
+        let shared = test_shared();
+        let root = Peer { uid: 0, pid: None, conn: 1 };
+        let foreign = Peer { uid: 4242, pid: None, conn: 2 };
+        assert!(matches!(
+            dispatch(&shared, Request::Track { pid: 77, ppid: 1 }, root),
+            Response::Ack { .. }
+        ));
+        let read = dispatch(&shared, Request::Receipt { pid: 77 }, foreign);
+        assert!(matches!(read, Response::Failure { .. }), "{read:?}");
+        let forgot = dispatch(&shared, Request::Forget { pid: 77 }, foreign);
+        assert!(matches!(forgot, Response::Failure { .. }), "{forgot:?}");
+        // Positive control: the root peer still reads the window the foreign peer could not touch.
+        assert!(matches!(
+            dispatch(&shared, Request::Receipt { pid: 77 }, root),
+            Response::Receipt { .. }
+        ));
+    }
+
+    #[test]
+    fn a_pid_held_by_another_uids_window_is_refused_until_it_is_forgotten() {
+        let uid = rustix::process::getuid().as_raw();
+        if uid == 0 {
+            eprintln!("skipped: running as root, the owner is root");
+            return;
+        }
+        let shared = test_shared();
+        let me = std::process::id();
+        let root = Peer { uid: 0, pid: None, conn: 1 };
+        let owner = Peer { uid, pid: None, conn: 2 };
+        assert!(matches!(
+            dispatch(&shared, Request::Track { pid: me, ppid: 1 }, root),
+            Response::Ack { .. }
+        ));
+        let refused = dispatch(&shared, Request::Track { pid: me, ppid: 1 }, owner);
+        assert!(
+            matches!(&refused, Response::Failure { error, .. } if error.contains("held by")),
+            "{refused:?}"
+        );
+        assert!(matches!(
+            dispatch(&shared, Request::Forget { pid: me }, root),
+            Response::Ack { .. }
+        ));
+        assert!(matches!(
+            dispatch(&shared, Request::Track { pid: me, ppid: 1 }, owner),
+            Response::Ack { .. }
+        ));
+    }
+
+    #[test]
+    fn a_record_whose_ppid_and_ns_pid_name_different_windows_goes_by_ppid() {
+        let mut ledger = Ledger::default();
+        ledger.windows.extend([window(100, 7, &[101]), window(200, 7, &[201])]);
+        ledger.place(&event_at(101, 201, 7));
+        assert_eq!(ledger.windows[&100].transcript.events(), 1, "ppid window");
+        assert_eq!(ledger.windows[&200].transcript.events(), 0, "ns_pid window");
+    }
+
+    #[test]
+    fn a_record_whose_ppid_names_two_windows_is_unplaced() {
+        // The rule (D14): a ppid that matches more than one window leaves the record
+        // unplaced. It does not fall through to ns_pid, and it does not take the first match.
+        let mut ledger = Ledger::default();
+        ledger.windows.extend([window(100, 7, &[300]), window(200, 7, &[300])]);
+        ledger.place(&event_at(300, 0, 7));
+        for root in [100, 200] {
+            assert_eq!(ledger.windows[&root].transcript.events(), 0, "root {root}");
+            assert_eq!(ledger.windows[&root].transcript.dropped_events(), 1, "root {root}");
+        }
+    }
+
+    #[test]
+    fn a_stray_record_from_another_uid_is_not_charged_to_this_window() {
+        let mut ledger = Ledger::default();
+        ledger.windows.extend([window(100, 7, &[100])]);
+        ledger.place(&event_at(401, 400, 8));
+        assert_eq!(ledger.windows[&100].transcript.events(), 0);
+        assert_eq!(ledger.windows[&100].transcript.dropped_events(), 0, "uid 7 window");
     }
 }
