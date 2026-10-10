@@ -1,8 +1,8 @@
 //! Canonical prompt prefix serialization and hashing (spec 0017 D1, D2).
 //!
-//! The canonical form is `SYS:<system parts joined by \n>|TOOLS:<name:json joined by |>`,
-//! with tools sorted by name, then by json bytes. The hash is the first 16 bytes of its
-//! SHA-256. The hash is stable across Rust releases, so sticky routing holds across hosts.
+//! The canonical form is length-prefixed (spec 0017 D1, amended 2026-10-10), with tools
+//! sorted by name, then by json bytes. The hash is the first 16 bytes of its SHA-256.
+//! The hash is stable across Rust releases, so sticky routing holds across hosts.
 
 use sha2::{Digest, Sha256};
 
@@ -37,16 +37,26 @@ impl PrefixInput {
         PrefixHash(first)
     }
 
-    /// The canonical UTF-8 string that is hashed.
+    /// The canonical UTF-8 string that is hashed (spec 0017 D1, amended 2026-10-10).
+    ///
+    /// Every field is length-prefixed with its byte length in decimal, so no separator
+    /// inside a part can imitate another separator:
+    /// `SYS:<len>:<part>,...|TOOLS:<len>:<name><len>:<json>,...`, tools sorted by name,
+    /// then by json bytes.
     fn canonical(&self) -> String {
         let mut tools: Vec<&ToolDef> = self.tools.iter().collect();
         tools.sort_by(|a, b| a.name.cmp(&b.name).then_with(|| a.json.cmp(&b.json)));
-        let system = self.system.join("\n");
+        let system = self
+            .system
+            .iter()
+            .map(|part| format!("{}:{part}", part.len()))
+            .collect::<Vec<_>>()
+            .join(",");
         let tools = tools
             .iter()
-            .map(|t| format!("{}:{}", t.name, t.json))
+            .map(|t| format!("{}:{}{}:{}", t.name.len(), t.name, t.json.len(), t.json))
             .collect::<Vec<_>>()
-            .join("|");
+            .join(",");
         format!("SYS:{system}|TOOLS:{tools}")
     }
 }
@@ -75,7 +85,7 @@ mod tests {
                 tool("read", r#"{"type":"function"}"#),
             ],
         };
-        assert_eq!(hex(&input.hash()), "0cd0bd32e200ee0cb8655991dd25da9d");
+        assert_eq!(hex(&input.hash()), "7f8091d619689020318e8e928b216c76");
     }
 
     #[test]
@@ -90,13 +100,13 @@ mod tests {
         };
         assert_eq!(
             with_tools.canonical(),
-            "SYS:a\nb|TOOLS:read:{\"x\":1}|read:{}|write:{}"
+            "SYS:1:a,1:b|TOOLS:4:read7:{\"x\":1},4:read2:{},5:write2:{}"
         );
         let none = PrefixInput {
             system: vec!["s".to_string()],
             tools: vec![],
         };
-        assert_eq!(none.canonical(), "SYS:s|TOOLS:");
+        assert_eq!(none.canonical(), "SYS:1:s|TOOLS:");
     }
 
     #[test]
@@ -125,6 +135,47 @@ mod tests {
                 tools: order.iter().map(|&i| tools[i].clone()).collect(),
             };
             assert_eq!(permuted.hash(), first, "order {order:?}");
+        }
+    }
+
+    #[test]
+    fn prefix_hash_has_no_separator_collisions() {
+        // Pairs that collided under the unescaped form (spec 0017 D1, amended 2026-10-10).
+        let pairs = [
+            (
+                PrefixInput {
+                    system: vec!["a\nb".to_string()],
+                    tools: vec![],
+                },
+                PrefixInput {
+                    system: vec!["a".to_string(), "b".to_string()],
+                    tools: vec![],
+                },
+            ),
+            (
+                PrefixInput {
+                    system: vec![],
+                    tools: vec![tool("a", "x|b:y")],
+                },
+                PrefixInput {
+                    system: vec![],
+                    tools: vec![tool("a", "x"), tool("b", "y")],
+                },
+            ),
+            (
+                PrefixInput {
+                    system: vec!["a|TOOLS:b".to_string()],
+                    tools: vec![],
+                },
+                PrefixInput {
+                    system: vec!["a".to_string()],
+                    tools: vec![tool("b|TOOLS", "")],
+                },
+            ),
+        ];
+        for (i, (x, y)) in pairs.iter().enumerate() {
+            assert_ne!(x.canonical(), y.canonical(), "pair {i} canonical forms");
+            assert_ne!(x.hash(), y.hash(), "pair {i} hashes");
         }
     }
 

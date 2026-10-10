@@ -4,6 +4,7 @@
 //! `SHA-256(replica_id bytes ++ prefix hash bytes)`. The highest weight wins. On equal
 //! weight the smaller replica id wins. Only healthy replicas are candidates.
 
+use std::cmp::Ordering;
 use std::collections::BTreeMap;
 
 use sha2::{Digest, Sha256};
@@ -54,6 +55,11 @@ fn weight(id: &ReplicaId, hash: &PrefixHash) -> u64 {
     u64::from_be_bytes(first)
 }
 
+/// Ranking order: higher weight first; on equal weight, the smaller replica id first.
+fn by_weight_then_id(a: &(u64, &ReplicaId), b: &(u64, &ReplicaId)) -> Ordering {
+    b.0.cmp(&a.0).then_with(|| a.1.cmp(b.1))
+}
+
 /// The set of replicas and their health flags.
 #[derive(Debug, Clone, Default)]
 pub struct AffinityTable {
@@ -91,7 +97,7 @@ impl AffinityTable {
             .filter(|(_, healthy)| **healthy)
             .map(|(id, _)| (weight(id, hash), id))
             .collect();
-        scored.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| a.1.cmp(b.1)));
+        scored.sort_by(by_weight_then_id);
         scored.into_iter().map(|(_, id)| id.clone()).collect()
     }
 
@@ -221,20 +227,31 @@ mod tests {
 
     #[test]
     fn ranking_matches_independent_known_answer() {
-        // Oracle: Python hashlib. Weight = first 8 bytes big-endian of sha256(id ++ prefix16).
-        // replica-1 6493884492111094911 > replica-3 4308187541821512825 > replica-2 2262335715905945375 > replica-0 2002318359003538410
+        // Oracle: Python hashlib. Weight = first 8 bytes big-endian of sha256(id ++ prefix16),
+        // prefix from sha256("SYS:18:You are a builder.|TOOLS:") after the 2026-10-10 D1 amendment.
+        // replica-0 17628686350455170347 > replica-3 9131027170909936301
+        //   > replica-1 5087872496897775711 > replica-2 2118516450390433603
         let k = PrefixInput {
             system: vec!["You are a builder.".to_string()],
             tools: vec![],
         }
         .hash();
         let hex: String = k.0.iter().map(|b| format!("{b:02x}")).collect();
-        assert_eq!(hex, "78490c0cbcb6b0e4b6ef27291c31b171");
+        assert_eq!(hex, "51e05212264af2b92ebb193e57101068");
         let order: Vec<String> = table(4)
             .ranked(&k)
             .iter()
             .map(|r| r.as_str().to_string())
             .collect();
-        assert_eq!(order, ["replica-1", "replica-3", "replica-2", "replica-0"]);
+        assert_eq!(order, ["replica-0", "replica-3", "replica-1", "replica-2"]);
+    }
+
+    #[test]
+    fn ranking_breaks_equal_weight_by_smaller_id() {
+        let (r0, r1, r9) = (rid(0), rid(1), rid(9));
+        let mut scored = [(5u64, &r1), (7u64, &r9), (5u64, &r0)];
+        scored.sort_by(by_weight_then_id);
+        let order: Vec<&str> = scored.iter().map(|(_, id)| id.as_str()).collect();
+        assert_eq!(order, ["replica-9", "replica-0", "replica-1"]);
     }
 }
