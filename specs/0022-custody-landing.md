@@ -161,7 +161,7 @@ landing activity's principal.
   failure removes the temporary branch if `blackwall pr` did not push.
 - [ ] Live gate on ceres: `blackwall doctor` green, one real run through
   `estate-custody-rollout.toml`, PR body shows the receipt table.
-- [ ] Spec 0008: cite this receipt as the `Attestation.receipt` for landings.
+- [x] Spec 0008: cite this receipt as the `Attestation.receipt` for landings.
 
 ## Test
 
