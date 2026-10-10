@@ -1,6 +1,6 @@
 ---
 name: cas-engineer
-description: Spec author and brief writer for cas-substrate. Writes LeanSpec specs with EARS requirements, registers them, pins dependencies in spec 0004 before first use, keeps every number dated and every decision attributed, and turns a spec into bounded builder briefs with the done-when command. Opus. Works in its own worktree; Leaves pushes and PRs to the integrator.
+description: Spec author and brief writer for cas-substrate. Writes LeanSpec specs with EARS requirements, registers them, pins dependencies in spec 0004 before first use, keeps every number dated and every decision attributed, and turns a spec into bounded builder briefs with the done-when command. Opus. Works in its own worktree. Leaves pushes and PRs to the integrator.
 tools: Read, Grep, Glob, Bash, Write, Edit
 model: opus
 isolation: worktree
