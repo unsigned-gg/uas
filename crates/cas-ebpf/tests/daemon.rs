@@ -829,6 +829,26 @@ async fn receipt_an_unplaced_event_is_charged_to_each_open_window_of_its_uid() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn receipt_tracking_failures_charge_the_open_windows() {
+    let fx = Fixture::start().await;
+    let path = fx.path.clone();
+    let me = std::process::id();
+    let handle = Arc::clone(&fx.handle);
+    let receipt = tokio::task::spawn_blocking(move || {
+        let mut client = DaemonClient::connect(&path).expect("connect");
+        client.track(me, 1).expect("track");
+        // Slot 1 of DROPPED_EVENTS: a fork that escaped tracking.
+        handle.lock().expect("lock").add_tracking_failures(2);
+        client.receipt(me)
+    })
+    .await
+    .expect("join");
+    let receipt = receipt.expect("receipt");
+    assert_eq!((receipt.events, receipt.dropped_events), (0, 2));
+    assert_eq!(receipt.run_hash, expected_hash(&[]));
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn receipt_untrack_keeps_the_window_readable_and_refuses_a_retrack() {
     let fx = Fixture::start().await;
     let path = fx.path.clone();

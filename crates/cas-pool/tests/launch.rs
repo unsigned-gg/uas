@@ -211,6 +211,19 @@ async fn launch_dropped_events_unattest_the_run() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn launch_tracking_failure_unattests_a_clean_receipt() {
+    let fx = Fixture::start().await;
+    let cfg = fx.config();
+    let worker = blocking(move || spawn_blocking_worker(1, cfg)).await;
+    // A child that escaped tracking shows on slot 1, not on the receipt's events.
+    fx.handle.lock().expect("lock").add_tracking_failures(1);
+    let (status, audit) = blocking(move || worker.finish().expect("finish")).await;
+    assert!(status.success());
+    assert_eq!(audit.audit, AuditStatus::Unattested { dropped_events: 1 });
+    assert_eq!(audit.run_hash.as_deref(), Some(EMPTY_SHA256));
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn launch_attested_needs_tracking_and_a_clean_receipt() {
     let fx = Fixture::start().await;
     let cfg = fx.config();

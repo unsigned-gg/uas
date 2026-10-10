@@ -131,8 +131,10 @@ struct Ledger {
     tracked: BTreeMap<u32, u32>,
     /// Receipt windows, keyed by root pid.
     windows: BTreeMap<u32, Window>,
-    /// The last dropped total applied to the windows.
+    /// The last dropped total (slot 0) applied to the windows.
     last_dropped: u64,
+    /// The last tracking-failure total (slot 1) applied to the windows.
+    last_tracking: u64,
 }
 
 impl Ledger {
@@ -354,13 +356,13 @@ fn drain<H: ProbeHandle>(
     ledger: &mut Ledger,
     events: &broadcast::Sender<StreamLine>,
 ) {
-    let (batch, dropped) = {
+    let (batch, dropped, tracking) = {
         let mut handle = lock(handle);
         let mut batch: Vec<ExecEvent> = Vec::new();
         while let Some(event) = handle.next_event() {
             batch.push(event);
         }
-        (batch, handle.dropped_events())
+        (batch, handle.dropped_events(), handle.tracking_failures())
     };
     for event in batch {
         // A setuid binary runs with an effective uid that differs from the real
@@ -381,17 +383,29 @@ fn drain<H: ProbeHandle>(
         // No receivers is normal: nobody is streaming.
         let _ = events.send(StreamLine::Event(event.record()));
     }
+    // Both DROPPED_EVENTS slots grow every open window (spec 0014 D14).
+    let mut grown = 0;
     match dropped {
         Ok(total) if total > ledger.last_dropped => {
-            let delta = total - ledger.last_dropped;
+            grown += total - ledger.last_dropped;
             ledger.last_dropped = total;
-            for window in ledger.windows.values_mut().filter(|w| w.open) {
-                window.transcript.record_dropped(delta);
-            }
             let _ = events.send(StreamLine::Dropped(total));
         }
         Ok(_) => {}
         Err(e) => tracing::debug!(error = %e, "dropped counter unreadable"),
+    }
+    match tracking {
+        Ok(total) if total > ledger.last_tracking => {
+            grown += total - ledger.last_tracking;
+            ledger.last_tracking = total;
+        }
+        Ok(_) => {}
+        Err(e) => tracing::debug!(error = %e, "tracking-failure counter unreadable"),
+    }
+    if grown > 0 {
+        for window in ledger.windows.values_mut().filter(|w| w.open) {
+            window.transcript.record_dropped(grown);
+        }
     }
 }
 
