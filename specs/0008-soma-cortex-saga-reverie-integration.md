@@ -66,6 +66,7 @@ CAS Substrate (cas-domain, cas-engine, cas-cli)
 - HTTP client connecting to `http://127.0.0.1:7437`:
   - `query_context(project, query)`: Retrieves semantic context prior to activity execution (`GET /search?q=...` or `/context/smart`).
   - `record_attestation(session_id, attestation)`: Persists execution receipts and verified evidence into memory.
+    - For a landing, `Attestation.receipt` holds the serialized `LandingReceipt` of spec 0022; the signer is the landing activity's principal (`specs/0022-custody-landing.md`).
 
 #### Cortex Mesh & Settle Edge
 - Publishes signed attestation events to the Cortex mesh using `cortex-msg` or edge JSON payloads.
@@ -100,5 +101,6 @@ Pass criteria: `make spec-check` exits 0 with no broken links, and domain and en
 References:
 - `specs/0001-cas-architecture-and-crate-layout.md`
 - `specs/0006-cas-engine-and-harness-dogfood.md`
+- `specs/0022-custody-landing.md`
 - `cerebral-work/research@4068134:SYNTHESIS-ESTATE-AND-SUBSTRATE.md`
 - `~/.agents/sops/blackwall-custody-process.md`

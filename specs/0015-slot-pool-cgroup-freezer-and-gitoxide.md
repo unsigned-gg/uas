@@ -16,9 +16,9 @@ CPU starvation. Spec 0001 invariant 4.2 and Global Config mandate strict host
 throttling (`-j 2`).
 
 This spec defines the worker slot manager in `cas-pool` (Phase 3, CER-2682):
-- **CER-2722**: Slot allocation, lease tracking, and concurrency limits.
-- **CER-2723**: Warm worktree forks with in-process gitoxide (`gix`).
-- **CER-2724**: Worker suspend and resume using the Linux cgroup v2 freezer.
+- **CER-2723**: Slot allocation, lease tracking, and concurrency limits.
+- **CER-2724**: Warm worktree forks with in-process gitoxide (`gix`).
+- **CER-2722**: Worker suspend and resume using the Linux cgroup v2 freezer.
 - **eBPF Clamping & Audit Hooks**: Process priority clamping (`nice 19`) via
   `cas_ebpf::clamp::enter_clamped_group` and kernel execution audit via
   `cas_ebpf::client::DaemonClient` (spec 0014).
@@ -121,9 +121,9 @@ pub enum PoolError {
 ## Plan
 
 - [ ] Add `gix = "0.88.0"`, `rustix = "1.1.5"`, and internal `cas-ebpf` dependency to `crates/cas-pool/Cargo.toml`.
-- [ ] Implement `cas_pool::slot::Slot` state machine and `SlotPool` allocation queue (CER-2722).
-- [ ] Implement `cas_pool::worktree::WarmWorktree` using in-process `gix` checkouts and resets (CER-2723).
-- [ ] Implement `cas_pool::freezer::CgroupFreezer` with `SIGSTOP` fallback (CER-2724).
+- [ ] Implement `cas_pool::slot::Slot` state machine and `SlotPool` allocation queue (CER-2723).
+- [ ] Implement `cas_pool::worktree::WarmWorktree` using in-process `gix` checkouts and resets (CER-2724).
+- [ ] Implement `cas_pool::freezer::CgroupFreezer` with `SIGSTOP` fallback (CER-2722).
 - [ ] Wire `cas_ebpf` hooks: `enter_clamped_group` in worker `pre_exec`, `DaemonClient::track` post-spawn, and `EventStream` audit capture into `AuditReceipt`.
 - [ ] Implement unprivileged fallback returning `unattested` audit receipt when `cas-ebpfd` is unavailable.
 - [ ] Write integration test `tests/slot_lifecycle.rs` verifying:

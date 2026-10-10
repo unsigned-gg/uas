@@ -15,7 +15,7 @@ external agent runtimes using the Agent Communication Protocol (ACP). ACP uses
 JSON-RPC 2.0 framing over standard input and output streams.
 
 This spec defines the ACP server in `cas-acp` (Phase 3, CER-2683):
-- **CER-2725**: JSON-RPC 2.0 ACP server over stdio.
+- JSON-RPC 2.0 ACP server over stdio.
 - **CER-2726**: Workspace session bridging between IDE requests and `cas-engine` workflows.
 - **CER-2727**: Slot lease notifications and cooperative cancellation.
 
@@ -120,7 +120,7 @@ Standard JSON-RPC 2.0 error codes are returned over the wire:
 ## Plan
 
 - [ ] Add `agent-client-protocol = "2.2.0"` to `crates/cas-acp/Cargo.toml`.
-- [ ] Implement `cas_acp::server::AcpServer` reading from `stdin` and writing to `stdout` (CER-2725).
+- [ ] Implement `cas_acp::server::AcpServer` reading from `stdin` and writing to `stdout`.
 - [ ] Implement request routing to `cas-engine` workflow triggers (CER-2726).
 - [ ] Implement lease warning notifications and cancellation handling (CER-2727).
 - [ ] Write integration test `tests/acp_stdio.rs` verifying:
