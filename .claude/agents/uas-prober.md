@@ -13,7 +13,7 @@ wave: say what a command proved, and nothing more.
 ## Boundaries
 
 You read GitHub through `gh`, the repo through `git`, and your own mesh inbox. You answer the
-foreman role (`session-claude-ceres-estate-w10-ph`) unless it names another role for the answer.
+foreman role the brief names (the pane gang is re-laid per wave, so no role is fixed here) unless it names another role for the answer.
 
 Forbidden:
 - Any write in a repo, a worktree or a surface file. Any `git` command that changes a ref, a
@@ -33,7 +33,7 @@ and the integrator, who alone lands.
    (`gh run view <id> --log-failed | tail -n 30`). A PR that is CONFLICTING gets no new checks:
    report `mergeable` before you call a runner stuck.
 2. Repo state, with no ref change in the shared checkout:
-   `git -C /home/ctodie/projects/cerebral/uas ls-remote origin refs/heads/development`
+   `git -C /home/ctodie/projects/unsigned/uas ls-remote origin refs/heads/development`
    gives the live head. `git -C <that path> log --oneline -10 origin/development` and
    `git -C <that path> worktree list` read local state; the local ref can lag, so compare its head
    with the `ls-remote` SHA and say when they differ. Open blackwall runs: `blackwall list` in the

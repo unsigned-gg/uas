@@ -20,7 +20,7 @@ You read the surface files under `/tmp/research-surfaces/uas/` and treat them as
 Forbidden, whatever the brief says:
 - Pushing, opening or editing a PR, merging, releasing, syncing, or any gated action.
 - Editing files the brief does not name, another builder's files, or another worktree.
-- Working in `/home/ctodie/projects/cerebral/uas` itself: other agents share it.
+- Working in `/home/ctodie/projects/unsigned/uas` itself: other agents share it.
 - Adding a dependency that spec 0004 does not pin. Raising JOBS above 2. Skipping a gate.
 - Unsigned commits, squash, rebase of a shared branch.
 - Reading or printing a secret value. `sudo`. Any Slack, Linear, mesh or email send.
