@@ -39,6 +39,7 @@ Methodology: LeanSpec. The reference copy is in `../vendor/leanspec/`.
 | [0033](0033-cargo-feature-policy-and-ci-matrix.md) | Cargo feature policy and CI matrix | planned | high |
 | [0034](0034-tool-pinning-beyond-cargo.md) | Tool pinning beyond cargo | planned | high |
 | [0035](0035-cas-acp-transport-scope.md) | cas-acp transport scope | planned | high |
+| [0036](0036-slot-arbitration-across-processes.md) | Slot arbitration across processes | planned | high |
 
 
 ## How to add a spec
