@@ -145,6 +145,7 @@ Facts, 2026-10-10. Source facts from `unsigned-gg/blackwall@3d98dc1` are
 | not ready | `git rev-parse HEAD` differs from `init-head` | exit 2 |
 | not ready | a dependency that is not MainSession has no `Passed` record | exit 2 |
 | not ready | a Builder step whose deps' closure holds an unmerged Builder (D7). A Critic never waits on a merge: its own Builder's PR opens only after it passes. | exit 2 |
+| not ready | the step's own `Passed` record names another base than the current `init-head`, or no base: the record is stale, so the step prints why and exits 2 with no new record (lane decision w25:p1, 2026-10-10; Christian may override) | exit 2 |
 | halt | `start` prints no `(ok)` run line (F3) | `BuilderRunFailed` |
 | halt | `start` prints no `changeset:` line (F3) | `BuilderRunFailed` |
 | halt | reconcile does not return `Reconciled` | `VerifyFailed`, `NoVerifyGate` or `StaleBase` |
@@ -154,7 +155,7 @@ Facts, 2026-10-10. Source facts from `unsigned-gg/blackwall@3d98dc1` are
 | halt | a Probe exits non-zero | `ProbeFailed` |
 | halt | WHERE `open_prs` (D16), `open_pr` returns Err after a Critic pass. D4 applies to the branch: pushed stays, unpushed is deleted | `PrFailed` |
 | halt | a `Halted` record appears after the step started | `WaveHalted` |
-| halt | the executor itself fails before an outcome (a missing tool on PATH, an I/O or record error). The step writes a `Halted` record so siblings and later waves stop (F17), prints the reason on stderr, and `cas wave step` exits 3. It runs no compensation: the fault is in the environment, not the work, and the operator re-runs the step once it is fixed (lane decision w25:p1, 2026-10-10; Christian may override) | `ExecutorError` |
+| halt | the executor itself fails before an outcome (a missing tool on PATH, an I/O or record error). The step writes a `Halted` record so siblings and later waves stop (F17), prints the reason on stderr, and `cas wave step` exits 3. It runs no compensation: the fault is in the environment, not the work, and the operator re-runs the step once it is fixed. WHERE the state records themselves cannot be read or written, the step exits 3 with the reason only and no record: the halt writer reads the same directory (lane decisions w25:p1, 2026-10-10; Christian may override) | `ExecutorError` |
 
 ### Dispatch by role
 
@@ -197,7 +198,7 @@ wave, `cas-cpm-wave-w<i>.toml`. A literal `verify_cmd` cannot carry a wave
 parameter (F9, F16). Each flow holds:
 
 - one step per `WaveStep` of the wave: impl (Builder), review (Critic) or test
-  (Probe). Its `verify_cmd` is the literal argv `["cas", "wave", "step",
+  (Probe). Its `verify_cmd` is the literal argv (plus `--max-concurrency N` WHERE the plan was generated with N != 0, so the flow regenerates as written) `["cas", "wave", "step",
   "--flow", "<source>", "--step", "<id>"]`. It has no `agent`, so saga
   auto-classifies (F15). The prompt tells that agent to do nothing else (D2).
 - a gate step (`heimdal:approval`) for each MainSession step with a direct
@@ -252,8 +253,7 @@ exit 1 and run nothing. Only a person removes one.
   parse, the host lock, `WorkflowEvent::WaveStep` and `WaveCompensator`. Tests use fake
   `blackwall`, `git` and `claude` scripts, red first. It starts after P5b and P5c (spec 0022
   D7, D9 to D11) land: all three edit `landing.rs`.
-- [ ] P9b, `cas-cli`, `cas-builder` haiku. It adds `cas wave flow` and
-  `cas wave step` with the state directory, and the source plan
+- [ ] P9b, `cas-cli`, `cas-builder` haiku. It adds `cas wave flow` and `cas wave step` with the state directory, and the source plan
   `.saga/plans/cas-wave-smoke.toml`. It generates `.saga/flows/cas-cpm-wave-w*.toml`
   and adds `tasks/wave-smoke-build/`. Tests: a round-trip and a drift test.
 - [ ] P9c, integrator on ceres, once D14 is ruled: `blackwall doctor`,
