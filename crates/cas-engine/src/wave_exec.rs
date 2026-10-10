@@ -309,6 +309,15 @@ struct StepRecord {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     receipt: Option<LandingReceipt>,
     at: u64,
+    /// Monotonic per state dir: the pass or halt order. Compensation runs newest first on it.
+    #[serde(default)]
+    seq: u64,
+}
+
+/// What the Critic lock section found: a halt record, or the Critic's output.
+enum Session {
+    Halted,
+    Ran(Option<Output>),
 }
 
 /// Runs the steps of one wave plan on the custody chain.
@@ -373,6 +382,7 @@ impl WaveExecutor {
 
     /// Run one step by id. A step that is not ready writes no record and no event.
     pub fn run_step(&self, id: &str, now: u64) -> Result<StepResult, WaveError> {
+        self.admit()?;
         let (wave, ws) = self
             .find(id)
             .ok_or_else(|| WaveError::UnknownStep(id.to_owned()))?;
@@ -611,33 +621,47 @@ impl WaveExecutor {
         let id = ws.step.id.as_str();
         let repo = self.config.repo_dir.clone();
         let mut last = Facts {
-            base: Some(base.clone()),
+            base: Some(base),
             ..Facts::default()
         };
         for builder in self.builder_deps(ws) {
             let Some(mut brec) = self.load(&builder)? else {
                 return self.halt(ws, wave, HaltReason::CriticUnparsed, last, None, true, now);
             };
-            let (Some(head), Some(receipt)) = (brec.facts.head.clone(), brec.receipt.clone())
-            else {
+            let (Some(head), Some(receipt), Some(cbase)) = (
+                brec.facts.head.clone(),
+                brec.receipt.clone(),
+                brec.facts.base.clone(),
+            ) else {
                 return self.halt(ws, wave, HaltReason::CriticUnparsed, last, None, true, now);
             };
             last = brec.facts.clone();
-            let prompt = self.critic_prompt(id, &builder, &base, &brec.facts, &receipt)?;
+            // The Critic reads the rules at the base its Builder ran on (spec 0025 D17).
+            let prompt = self.critic_prompt(id, &builder, &cbase, &brec.facts, &receipt)?;
             let tree = self.config.scratch_dir.join(format!("{id}-{builder}"));
             let session = {
                 let _lock = self.lock()?;
-                let result = self.critic_session(&tree, &head, &base, &prompt);
-                let tree_arg = tree.to_string_lossy().into_owned();
-                let _ = self.run(
-                    &repo,
-                    "git",
-                    &["worktree", "remove", "--force", &tree_arg],
-                    None,
-                );
-                result?
+                if self.any_halted()? {
+                    Session::Halted
+                } else {
+                    let result = self.critic_session(&tree, &head, &cbase, &prompt);
+                    let tree_arg = tree.to_string_lossy().into_owned();
+                    let _ = self.run(
+                        &repo,
+                        "git",
+                        &["worktree", "remove", "--force", &tree_arg],
+                        None,
+                    );
+                    Session::Ran(result?)
+                }
             };
-            let verdict = match session {
+            let out = match session {
+                Session::Halted => {
+                    return self.halt(ws, wave, HaltReason::WaveHalted, last, None, false, now)
+                }
+                Session::Ran(out) => out,
+            };
+            let verdict = match out {
                 None => CriticVerdict::Unparsed,
                 Some(out) => {
                     parse_critic_verdict(&String::from_utf8_lossy(&out.stdout), out.status.code())
@@ -653,9 +677,13 @@ impl WaveExecutor {
                 CriticVerdict::NoDefects => {}
             }
             if self.config.open_prs {
+                if self.any_halted()? {
+                    return self.halt(ws, wave, HaltReason::WaveHalted, last, None, false, now);
+                }
                 match self.landing().open_pr(&receipt) {
                     Ok(opened) => {
                         brec.facts.pr = opened.facts().pr_number;
+                        brec.receipt = Some(opened);
                         self.save(&brec)?;
                         last = brec.facts.clone();
                     }
@@ -840,6 +868,7 @@ impl WaveExecutor {
             facts: facts.clone(),
             receipt: receipt.clone(),
             at: now,
+            seq: self.next_seq()?,
         };
         self.save(&rec)?;
         Ok(StepResult {
@@ -872,6 +901,7 @@ impl WaveExecutor {
             facts: facts.clone(),
             receipt: receipt.clone(),
             at: now,
+            seq: self.next_seq()?,
         };
         self.save(&rec)?;
         let compensation = if compensate {
@@ -897,7 +927,7 @@ impl WaveExecutor {
             .into_iter()
             .filter(|r| r.outcome == WaveOutcome::Passed)
             .collect();
-        passed.sort_by(|a, b| (b.at, &b.step).cmp(&(a.at, &a.step)));
+        passed.sort_by(|a, b| b.seq.cmp(&a.seq));
         let compensator = WaveCompensator {
             config: self.config.clone(),
             records: passed.clone(),
@@ -1150,6 +1180,16 @@ impl WaveExecutor {
             }
         }
         Ok(out)
+    }
+
+    /// One past the largest sequence in the state dir.
+    fn next_seq(&self) -> Result<u64, WaveError> {
+        Ok(self
+            .records()?
+            .iter()
+            .map(|r| r.seq)
+            .max()
+            .map_or(0, |m| m + 1))
     }
 
     fn any_halted(&self) -> Result<bool, WaveError> {
