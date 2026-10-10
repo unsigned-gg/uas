@@ -2,8 +2,12 @@
 //!
 //! The layout is `#[repr(C)]` and little-endian. Offsets are fixed by the spec:
 //! `timestamp_ns` 0, `pid` 8, `ppid` 12, `uid` 16, `comm` 20, `filename` 36,
-//! `_pad` 164. The kernel program in `ebpf/src/main.rs` declares the same
+//! `ns_pid` 164. The kernel program in `ebpf/src/main.rs` declares the same
 //! struct. Both sides assert the size at compile time.
+//!
+//! Pids: `pid` is the global tgid the kernel knows; `ns_pid` and `ppid` are
+//! pids of the daemon's pid namespace (spec 0014 T13). Without a namespace
+//! shift the two are equal.
 //!
 //! Records are parsed field by field, never transmuted, so a short or garbled
 //! ring-buffer item is rejected instead of read as memory.
@@ -23,9 +27,9 @@ pub const FILENAME_LEN: usize = 128;
 pub struct ExecEvent {
     /// Monotonic kernel timestamp (`bpf_ktime_get_ns`).
     pub timestamp_ns: u64,
-    /// Process id (tgid) that executed.
+    /// Global process id (tgid) that executed, as the kernel knows it.
     pub pid: u32,
-    /// Parent process id, as recorded in `TRACKED_PIDS` at fork or track time.
+    /// Parent process id in the daemon's pid namespace, as recorded at fork or track time.
     pub ppid: u32,
     /// Real user id of the executing task.
     pub uid: u32,
@@ -33,8 +37,9 @@ pub struct ExecEvent {
     pub comm: [u8; COMM_LEN],
     /// Executed path, NUL padded, truncated at 127 bytes plus NUL.
     pub filename: [u8; FILENAME_LEN],
-    /// Explicit padding to an 8-byte boundary. Always zero.
-    pub _pad: u32,
+    /// The executing process id in the daemon's pid namespace. Equals `pid`
+    /// when there is no namespace shift.
+    pub ns_pid: u32,
 }
 
 const _: () = assert!(core::mem::size_of::<ExecEvent>() == EXEC_EVENT_SIZE);
@@ -69,7 +74,7 @@ impl ExecEvent {
             uid: u32_at(16),
             comm,
             filename,
-            _pad: u32_at(164),
+            ns_pid: u32_at(164),
         })
     }
 
@@ -83,7 +88,7 @@ impl ExecEvent {
         out[16..20].copy_from_slice(&self.uid.to_le_bytes());
         out[20..20 + COMM_LEN].copy_from_slice(&self.comm);
         out[36..36 + FILENAME_LEN].copy_from_slice(&self.filename);
-        out[164..168].copy_from_slice(&self._pad.to_le_bytes());
+        out[164..168].copy_from_slice(&self.ns_pid.to_le_bytes());
         out
     }
 
@@ -102,6 +107,7 @@ impl ExecEvent {
         ExecRecord {
             timestamp_ns: self.timestamp_ns,
             pid: self.pid,
+            ns_pid: self.ns_pid,
             ppid: self.ppid,
             uid: self.uid,
             comm: self.comm_str(),
@@ -110,7 +116,8 @@ impl ExecEvent {
     }
 
     /// Builds a record from parts, truncating `comm` and `filename` to fit and
-    /// keeping a trailing NUL. Used by tests and fakes.
+    /// keeping a trailing NUL, with `ns_pid == pid` (no namespace shift). Used
+    /// by tests and fakes.
     pub fn new(
         timestamp_ns: u64,
         pid: u32,
@@ -130,7 +137,7 @@ impl ExecEvent {
             uid,
             comm: comm_bytes,
             filename: filename_bytes,
-            _pad: 0,
+            ns_pid: pid,
         }
     }
 }
@@ -142,6 +149,8 @@ pub struct ExecRecord {
     pub timestamp_ns: u64,
     /// See [`ExecEvent::pid`].
     pub pid: u32,
+    /// See [`ExecEvent::ns_pid`].
+    pub ns_pid: u32,
     /// See [`ExecEvent::ppid`].
     pub ppid: u32,
     /// See [`ExecEvent::uid`].
@@ -175,7 +184,7 @@ mod tests {
         assert_eq!(core::mem::offset_of!(ExecEvent, uid), 16);
         assert_eq!(core::mem::offset_of!(ExecEvent, comm), 20);
         assert_eq!(core::mem::offset_of!(ExecEvent, filename), 36);
-        assert_eq!(core::mem::offset_of!(ExecEvent, _pad), 164);
+        assert_eq!(core::mem::offset_of!(ExecEvent, ns_pid), 164);
     }
 
     #[test]

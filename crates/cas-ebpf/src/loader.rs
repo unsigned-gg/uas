@@ -2,19 +2,29 @@
 //!
 //! Needs `CAP_BPF` and `CAP_PERFMON`. [`Probes::load`] runs the host probe first
 //! and returns a typed error instead of a raw `EPERM` when the host cannot load.
+//!
+//! Pid namespaces (spec 0014 T13): every pid this API takes or returns is a pid
+//! of this process's pid namespace. The kernel program keys its tracked map by
+//! global task id and translates through `PIDNS_CONFIG`, which `load` fills
+//! with the `(dev, ino)` of `/proc/self/ns/pid`. A `track` call is a request
+//! that the kernel honours at that process's next fork or exec.
 
 use std::os::fd::{AsFd, BorrowedFd};
 
 use aya::{
-    maps::{HashMap, MapData, MapError, PerCpuArray, RingBuf},
+    maps::{Array, HashMap, MapData, MapError, PerCpuArray, RingBuf},
     programs::TracePoint,
     Ebpf,
 };
 
 use crate::{
     error::EbpfError, handle::ProbeHandle, probe, wire::ExecEvent, AUDIT_EVENTS_MAP, BPF_OBJECT,
-    DROPPED_EVENTS_MAP, DROPPED_RING_SLOT, DROPPED_TRACK_SLOT, TRACEPOINTS, TRACKED_PIDS_MAP,
+    DROPPED_EVENTS_MAP, DROPPED_RING_SLOT, DROPPED_TRACK_SLOT, NS_TO_GLOBAL_MAP, PIDNS_CONFIG_MAP,
+    TRACEPOINTS, TRACKED_PIDS_MAP, TRACK_REQUESTS_MAP,
 };
+
+/// The pid namespace file the kernel helper matches against.
+const PIDNS_PATH: &str = "/proc/self/ns/pid";
 
 /// The loaded kernel program and its maps (spec 0014 D3, D9).
 ///
@@ -22,13 +32,17 @@ use crate::{
 pub struct Probes {
     // Held so the programs and their links stay attached.
     _ebpf: Ebpf,
+    requests: HashMap<MapData, u32, u32>,
     tracked: HashMap<MapData, u32, u32>,
+    ns_to_global: HashMap<MapData, u32, u32>,
     events: RingBuf<MapData>,
     dropped: PerCpuArray<MapData, u64>,
+    pidns: [u64; 2],
 }
 
 impl Probes {
-    /// Loads the committed object, attaches the three sched tracepoints and opens the maps.
+    /// Loads the committed object, attaches the three sched tracepoints, opens
+    /// the maps and records this process's pid namespace in the kernel.
     ///
     /// # Errors
     ///
@@ -64,8 +78,20 @@ impl Probes {
             })?;
         }
 
+        let mut config: Array<MapData, [u64; 2]> =
+            Array::try_from(take(&mut ebpf, PIDNS_CONFIG_MAP)?)
+                .map_err(|source| map_err(PIDNS_CONFIG_MAP, source))?;
+        let pidns = pid_namespace()?;
+        config
+            .set(0, pidns, 0)
+            .map_err(|source| map_err(PIDNS_CONFIG_MAP, source))?;
+
+        let requests = HashMap::try_from(take(&mut ebpf, TRACK_REQUESTS_MAP)?)
+            .map_err(|source| map_err(TRACK_REQUESTS_MAP, source))?;
         let tracked = HashMap::try_from(take(&mut ebpf, TRACKED_PIDS_MAP)?)
             .map_err(|source| map_err(TRACKED_PIDS_MAP, source))?;
+        let ns_to_global = HashMap::try_from(take(&mut ebpf, NS_TO_GLOBAL_MAP)?)
+            .map_err(|source| map_err(NS_TO_GLOBAL_MAP, source))?;
         let events = RingBuf::try_from(take(&mut ebpf, AUDIT_EVENTS_MAP)?)
             .map_err(|source| map_err(AUDIT_EVENTS_MAP, source))?;
         let dropped = PerCpuArray::try_from(take(&mut ebpf, DROPPED_EVENTS_MAP)?)
@@ -73,14 +99,30 @@ impl Probes {
 
         Ok(Self {
             _ebpf: ebpf,
+            requests,
             tracked,
+            ns_to_global,
             events,
             dropped,
+            pidns,
         })
     }
-}
 
-impl Probes {
+    /// The `[dev, ino]` of this process's pid namespace, as written to the kernel.
+    pub fn pid_namespace(&self) -> [u64; 2] {
+        self.pidns
+    }
+
+    /// The global task id the kernel knows `ns_pid` by, once the task has
+    /// exec'd or forked under tracking. `None` before that, or when untracked.
+    pub fn global_pid(&self, ns_pid: u32) -> Result<Option<u32>, EbpfError> {
+        match self.ns_to_global.get(&ns_pid, 0) {
+            Ok(global) => Ok(Some(global)),
+            Err(MapError::KeyNotFound) => Ok(None),
+            Err(e) => Err(map_err(NS_TO_GLOBAL_MAP, e)),
+        }
+    }
+
     /// Fork inserts the kernel refused because `TRACKED_PIDS` was full, summed over cpus.
     /// A non-zero value means some child of a tracked worker escaped tracking.
     pub fn tracking_failures(&self) -> Result<u64, EbpfError> {
@@ -98,8 +140,16 @@ impl Probes {
 
 impl std::fmt::Debug for Probes {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Probes").finish_non_exhaustive()
+        f.debug_struct("Probes")
+            .field("pidns", &self.pidns)
+            .finish_non_exhaustive()
     }
+}
+
+/// `[dev, ino]` of `/proc/self/ns/pid`: what `bpf_get_ns_current_pid_tgid` matches.
+fn pid_namespace() -> Result<[u64; 2], EbpfError> {
+    let st = rustix::fs::stat(PIDNS_PATH).map_err(std::io::Error::from)?;
+    Ok([st.st_dev, st.st_ino])
 }
 
 fn take(ebpf: &mut Ebpf, name: &'static str) -> Result<aya::maps::Map, EbpfError> {
@@ -112,21 +162,39 @@ fn map_err(name: &'static str, source: MapError) -> EbpfError {
 
 impl ProbeHandle for Probes {
     fn track(&mut self, pid: u32, ppid: u32) -> Result<(), EbpfError> {
-        self.tracked
+        self.requests
             .insert(pid, ppid, 0)
-            .map_err(|e| map_err(TRACKED_PIDS_MAP, e))
+            .map_err(|e| map_err(TRACK_REQUESTS_MAP, e))
     }
 
     fn untrack(&mut self, pid: u32) -> Result<(), EbpfError> {
-        match self.tracked.remove(&pid) {
-            // An absent pid is already untracked.
-            Ok(()) | Err(MapError::KeyNotFound) => Ok(()),
-            Err(e) => Err(map_err(TRACKED_PIDS_MAP, e)),
+        match self.requests.remove(&pid) {
+            Ok(()) | Err(MapError::KeyNotFound) => {}
+            Err(e) => return Err(map_err(TRACK_REQUESTS_MAP, e)),
         }
+        if let Some(global) = self.global_pid(pid)? {
+            match self.tracked.remove(&global) {
+                Ok(()) | Err(MapError::KeyNotFound) => {}
+                Err(e) => return Err(map_err(TRACKED_PIDS_MAP, e)),
+            }
+            match self.ns_to_global.remove(&pid) {
+                Ok(()) | Err(MapError::KeyNotFound) => {}
+                Err(e) => return Err(map_err(NS_TO_GLOBAL_MAP, e)),
+            }
+        }
+        Ok(())
     }
 
     fn is_tracked(&self, pid: u32) -> Result<bool, EbpfError> {
-        match self.tracked.get(&pid, 0) {
+        match self.requests.get(&pid, 0) {
+            Ok(_) => return Ok(true),
+            Err(MapError::KeyNotFound) => {}
+            Err(e) => return Err(map_err(TRACK_REQUESTS_MAP, e)),
+        }
+        let Some(global) = self.global_pid(pid)? else {
+            return Ok(false);
+        };
+        match self.tracked.get(&global, 0) {
             Ok(_) => Ok(true),
             Err(MapError::KeyNotFound) => Ok(false),
             Err(e) => Err(map_err(TRACKED_PIDS_MAP, e)),

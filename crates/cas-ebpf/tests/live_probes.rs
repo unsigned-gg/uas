@@ -67,7 +67,7 @@ fn exec_of_a_tracked_child_is_reported() -> TestResult {
     let events = collect(&mut probes, Duration::from_secs(3));
     let event = events
         .iter()
-        .find(|e| e.pid == child_pid)
+        .find(|e| e.ns_pid == child_pid)
         .ok_or("no exec event for the tracked child")?;
     assert!(
         event.filename_str().ends_with("/true"),
@@ -97,7 +97,7 @@ fn fork_propagates_tracking() -> TestResult {
     child.wait()?;
     let events = collect(&mut probes, Duration::from_secs(3));
     assert!(
-        events.iter().any(|e| e.pid == sh_pid),
+        events.iter().any(|e| e.ns_pid == sh_pid),
         "no exec event for the shell"
     );
     assert!(
@@ -122,7 +122,7 @@ fn untracked_processes_are_silent() -> TestResult {
     child.wait()?;
     let events = collect(&mut probes, Duration::from_millis(300));
     assert!(
-        events.iter().all(|e| e.pid != silent_pid),
+        events.iter().all(|e| e.ns_pid != silent_pid),
         "untracked exec reported"
     );
     // Positive control in the same test: once tracked, the next child is reported.
@@ -132,7 +132,7 @@ fn untracked_processes_are_silent() -> TestResult {
     child.wait()?;
     let events = collect(&mut probes, Duration::from_secs(3));
     assert!(
-        events.iter().any(|e| e.pid == loud_pid),
+        events.iter().any(|e| e.ns_pid == loud_pid),
         "control: tracked exec missing"
     );
     probes.untrack(me)?;
