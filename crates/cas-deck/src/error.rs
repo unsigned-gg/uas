@@ -20,4 +20,8 @@ pub enum DeckError {
     /// text is kept for a later log line and is never rendered.
     #[error("settle queue unavailable: {0}")]
     CortexUnavailable(String),
+    /// The settle queue answered, but the body does not match the contract. The
+    /// page shows the same notice; the text is kept for a log line and never rendered.
+    #[error("settle contract mismatch: {0}")]
+    SettleContract(String),
 }
