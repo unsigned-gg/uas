@@ -95,9 +95,9 @@ flowchart TD
 #### 1. Prefix Canonicalizer & Hasher (`prefix.rs`)
 - Parses incoming JSON request payloads for `/v1/chat/completions`.
 - Extracts `messages` where role is `system` or developer instructions.
-- Extracts `tools` definitions. Sorts tools by function `name`.
-- Serializes canonical UTF-8 representation:
-  `SYS:<system_content>|TOOLS:<tool1_name>:<tool1_json>|...`
+- Extracts `tools` definitions. Sorts tools by function `name`, then by json bytes.
+- Serializes the canonical UTF-8 form of D1, every field length-prefixed with its
+  byte length in decimal: `SYS:<len>:<part>,...|TOOLS:<len>:<name><len>:<json>,...`
 - Computes SHA-256 digest via `sha2::Sha256`.
 - Emits `PrefixHash([u8; 16])`.
 
