@@ -15,7 +15,7 @@ use std::{
 
 use crate::{
     error::EbpfError,
-    protocol::{Request, Response, StreamLine, MAX_LINE},
+    protocol::{ReceiptFrame, Request, Response, StreamLine, MAX_LINE},
 };
 
 /// A connection to the daemon. One request at a time.
@@ -56,8 +56,27 @@ impl DaemonClient {
                 ..
             } => Ok((tracked, dropped_events)),
             Response::Failure { error, .. } => Err(EbpfError::Protocol(error)),
-            Response::Ack { .. } => Err(EbpfError::Protocol("status reply had no counts".into())),
+            Response::Ack { .. } | Response::Receipt { .. } => {
+                Err(EbpfError::Protocol("status reply had no counts".into()))
+            }
         }
+    }
+
+    /// Reads the receipt window of `pid`: the totals since its `track` (spec 0014 D14).
+    ///
+    /// The window stays open. A window is owned by this connection: when the
+    /// connection closes, the daemon discards it.
+    pub fn receipt(&mut self, pid: u32) -> Result<ReceiptFrame, EbpfError> {
+        match self.round_trip(&Request::Receipt { pid })? {
+            Response::Receipt { receipt } => Ok(receipt),
+            Response::Failure { error, .. } => Err(EbpfError::Protocol(error)),
+            _ => Err(EbpfError::Protocol("receipt reply had no receipt".into())),
+        }
+    }
+
+    /// Discards the receipt window of `pid`. Kernel tracking is unchanged (spec 0014 D14).
+    pub fn forget(&mut self, pid: u32) -> Result<(), EbpfError> {
+        self.expect_ack(&Request::Forget { pid })
     }
 
     /// Switches this connection to the event stream.

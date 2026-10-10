@@ -33,6 +33,31 @@ pub enum Request {
     Status,
     /// Switch the connection to an event stream.
     Stream,
+    /// Read the receipt window opened by a `track` of `pid` (spec 0014 D14).
+    Receipt {
+        /// The root pid whose window to read.
+        pid: u32,
+    },
+    /// Discard the receipt window of `pid` (spec 0014 D14).
+    Forget {
+        /// The root pid whose window to discard.
+        pid: u32,
+    },
+}
+
+/// The totals of one root's receipt window (spec 0014 D14).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ReceiptFrame {
+    /// Hex SHA-256 of the window's transcript, in delivery order.
+    pub run_hash: String,
+    /// Records absorbed into the window.
+    pub events: u64,
+    /// Records that may be missing from `run_hash` (spec 0014 D14).
+    pub dropped_events: u64,
+    /// Timestamp of the first absorbed record, 0 when there is none.
+    pub first_ns: u64,
+    /// Timestamp of the last absorbed record, 0 when there is none.
+    pub last_ns: u64,
 }
 
 /// A response frame to one request.
@@ -42,6 +67,11 @@ pub enum Request {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum Response {
+    /// `{"receipt":{...}}`: the totals of one root's window (spec 0014 D14).
+    Receipt {
+        /// The window totals.
+        receipt: ReceiptFrame,
+    },
     /// `{"ok":true,"tracked":K,"dropped_events":D}`.
     Status {
         /// Always `true`.
@@ -125,6 +155,8 @@ mod tests {
             (Request::Untrack { pid: 7 }, r#"{"op":"untrack","pid":7}"#),
             (Request::Status, r#"{"op":"status"}"#),
             (Request::Stream, r#"{"op":"stream"}"#),
+            (Request::Receipt { pid: 7 }, r#"{"op":"receipt","pid":7}"#),
+            (Request::Forget { pid: 7 }, r#"{"op":"forget","pid":7}"#),
         ];
         for (request, text) in cases {
             assert_eq!(serde_json::to_string(&request).expect("ser"), text);
@@ -149,6 +181,7 @@ mod tests {
             r#"{"op":"track","pid":-1,"ppid":1}"#,
             r#"{"pid":1}"#,
             r#"["track"]"#,
+            r#"{"op":"receipt"}"#,
             "not json",
             "",
         ] {
@@ -168,6 +201,18 @@ mod tests {
                 r#"{"ok":true,"tracked":2,"dropped_events":5}"#,
             ),
             (Response::failure("nope"), r#"{"ok":false,"error":"nope"}"#),
+            (
+                Response::Receipt {
+                    receipt: ReceiptFrame {
+                        run_hash: "ab".into(),
+                        events: 2,
+                        dropped_events: 1,
+                        first_ns: 3,
+                        last_ns: 4,
+                    },
+                },
+                r#"{"receipt":{"run_hash":"ab","events":2,"dropped_events":1,"first_ns":3,"last_ns":4}}"#,
+            ),
         ];
         for (response, text) in cases {
             assert_eq!(serde_json::to_string(&response).expect("ser"), text);
