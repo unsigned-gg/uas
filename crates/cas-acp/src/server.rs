@@ -195,6 +195,10 @@ impl<P: PoolPort> AcpServer<P> {
     fn reply_to(&mut self, frame: Frame) -> Option<String> {
         self.expire_due();
         match frame {
+            Frame::Line(text) if text.len() > MAX_FRAME_BYTES => error_frame(
+                RequestId::Null,
+                &AcpError::InvalidRequest(format!("frame exceeds {MAX_FRAME_BYTES} bytes")),
+            ),
             Frame::Line(text) => self.handle_text(&text),
             Frame::TooLong => error_frame(
                 RequestId::Null,
