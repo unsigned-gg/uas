@@ -8,9 +8,9 @@
 
 use std::ffi::OsString;
 use std::fs;
-use std::io;
+use std::io::{self, Write};
 use std::path::{Path, PathBuf};
-use std::process::{Command, Output};
+use std::process::{Command, Output, Stdio};
 
 use cas_domain::{
     AuditStatus, CostSource, LandingFacts, LandingReceipt, LandingReceiptError, SlotId,
@@ -74,7 +74,7 @@ pub enum LandingOutcome {
     /// The pull request was opened. The tier is `verified` only when reconcile exited zero
     /// and no evaluator file changed.
     Opened(LandingReceipt),
-    /// `blackwall reconcile` exited non-zero. No pull request was opened.
+    /// `blackwall reconcile` exited 3, the verify gate failed. No pull request was opened.
     VerifyFailed(LandingReceipt),
     /// `blackwall.toml` has no `[verify]` command. Nothing was reconciled and no pull
     /// request was opened.
@@ -110,6 +110,18 @@ pub enum LandingError {
         /// The trimmed standard error of the step.
         stderr: String,
     },
+    /// The standard input of a step could not be written.
+    #[error("could not write stdin of {program}: {source}")]
+    Stdin {
+        /// The program whose standard input failed.
+        program: &'static str,
+        /// The operating system error.
+        #[source]
+        source: io::Error,
+    },
+    /// The landing receipt could not be serialized for the pull request body.
+    #[error("could not serialize the landing receipt: {0}")]
+    Serialize(#[from] serde_json::Error),
     /// The receipt rule refused the receipt that the landing built.
     #[error("landing receipt refused: {0}")]
     Receipt(#[from] LandingReceiptError),
@@ -186,21 +198,40 @@ impl LandingActivity {
             "blackwall",
             &["reconcile", run, "--base", base, "--branch", &branch],
         )?;
-        let reconcile_exit = match reconcile.status.code() {
-            Some(code) => code,
-            None => return Err(unexpected("reconcile", None, &reconcile)),
-        };
-        if reconcile_exit != 0 {
-            let parts = ReceiptParts {
-                verify_exit: Some(reconcile_exit),
-                ..ReceiptParts::default()
-            };
-            let receipt = self.receipt(input, verify_cmd, parts)?;
-            return Ok(LandingOutcome::VerifyFailed(receipt));
+        match reconcile.status.code() {
+            Some(0) => {}
+            // blackwall exits 3 when the verify gate fails (spec 0022 D7, F14).
+            Some(3) => {
+                let parts = ReceiptParts {
+                    verify_exit: Some(3),
+                    ..ReceiptParts::default()
+                };
+                let receipt = self.receipt(input, verify_cmd, parts)?;
+                return Ok(LandingOutcome::VerifyFailed(receipt));
+            }
+            code => return Err(unexpected("reconcile", code, &reconcile)),
         }
 
+        // The PR does not exist yet, so the body receipt has no PR number (spec 0022 D11).
+        let body_receipt = self.receipt(
+            input,
+            verify_cmd.clone(),
+            ReceiptParts {
+                verify_exit: Some(0),
+                branch: Some(branch.clone()),
+                ..ReceiptParts::default()
+            },
+        )?;
+        let body = format!(
+            "```json\n{}\n```\n",
+            serde_json::to_string_pretty(&body_receipt)?
+        );
         let pr_base = self.config.pr_base.as_str();
-        let pr = self.run("blackwall", &["pr", run, "--base", pr_base])?;
+        let pr = self.run_with_stdin(
+            "blackwall",
+            &["pr", run, "--base", pr_base, "--body", "-"],
+            body.as_bytes(),
+        )?;
         if pr.status.code() != Some(0) {
             return Err(unexpected("pr", pr.status.code(), &pr));
         }
@@ -259,6 +290,39 @@ impl LandingActivity {
             cmd.env("PATH", path);
         }
         cmd.output()
+            .map_err(|source| LandingError::Spawn { program, source })
+    }
+
+    /// Run a step and write `stdin` to it. A child that exits before it reads all of
+    /// `stdin` is not an error here: its exit code decides (`BrokenPipe` is ignored).
+    fn run_with_stdin(
+        &self,
+        program: &'static str,
+        args: &[&str],
+        stdin: &[u8],
+    ) -> Result<Output, LandingError> {
+        let mut cmd = Command::new(program);
+        cmd.args(args)
+            .current_dir(&self.config.repo_dir)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
+        if let Some(path) = &self.config.path_env {
+            cmd.env("PATH", path);
+        }
+        let mut child = cmd
+            .spawn()
+            .map_err(|source| LandingError::Spawn { program, source })?;
+        if let Some(mut handle) = child.stdin.take() {
+            match handle.write_all(stdin) {
+                Ok(()) => {}
+                Err(err) if err.kind() == io::ErrorKind::BrokenPipe => {}
+                Err(source) => return Err(LandingError::Stdin { program, source }),
+            }
+            drop(handle);
+        }
+        child
+            .wait_with_output()
             .map_err(|source| LandingError::Spawn { program, source })
     }
 }
