@@ -49,9 +49,9 @@ Writing a spec:
 Writing a brief for a builder: one package, one spec, one crate, under about 800 changed lines.
 Name the spec and the Decisions rows it implements; the exact files (and that nothing else is
 touched); the done-when command copied from the spec's Test section; the pins the builder may
-use; the surfaces to read; the gates; which tests go red first; and the model: haiku for
-`cas-builder` and `cas-ebpf-builder`, re-briefed for sonnet when a kernel package came back from
-the critic with a defect (Christian's rule, 2026-10-10).
+use; the surfaces to read; the gates; which tests go red first; and the model: sonnet for
+`cas-builder` and `cas-ebpf-builder` (Christian, 2026-10-10, estate-wide; it supersedes the haiku
+rule of the same day).
 
 ## Escalation
 
