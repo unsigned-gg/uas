@@ -208,7 +208,8 @@ fn pid_offset(text: &str, field: &'static str) -> Result<u32, FormatError> {
 /// Offset of a literal `__data_loc` field of size 4. `__rel_loc` is refused.
 fn data_loc_offset(text: &str, field: &'static str) -> Result<u32, FormatError> {
     let f = find(text, field)?;
-    if !f.ty.starts_with("__data_loc") {
+    // The first whitespace token must be exactly `__data_loc`, so `__data_locx` is refused.
+    if f.ty.split_whitespace().next() != Some("__data_loc") {
         return Err(FormatError::WrongType { field, found: f.ty });
     }
     bounds(field, &f)
@@ -411,6 +412,59 @@ print fmt: "comm=%s pid=%d prio=%d", REC->comm, REC->pid, REC->prio
                 },
             })
         ));
+    }
+
+    #[test]
+    fn offset_252_with_size_4_is_accepted() -> Result<(), FormatFailure> {
+        let exit = EXIT_618.replace("pid_t pid;\toffset:24;", "pid_t pid;\toffset:252;");
+        assert_eq!(parse(EXEC_618, FORK_618, &exit)?.exit_pid, 252);
+        Ok(())
+    }
+
+    #[test]
+    fn offset_253_with_size_4_is_refused() {
+        let exit = EXIT_618.replace("pid_t pid;\toffset:24;", "pid_t pid;\toffset:253;");
+        assert!(matches!(
+            parse(EXEC_618, FORK_618, &exit),
+            Err(FormatFailure {
+                tracepoint: EXIT,
+                source: FormatError::OffsetOutOfRange {
+                    field: "pid",
+                    offset: 253,
+                    size: 4
+                },
+            })
+        ));
+    }
+
+    #[test]
+    fn int_pid_is_refused() {
+        let exec = EXEC_618.replace("pid_t pid;\toffset:12;", "int pid;\toffset:12;");
+        assert!(matches!(
+            parse(&exec, FORK_618, EXIT_618),
+            Err(FormatFailure {
+                tracepoint: EXEC,
+                source: FormatError::WrongType { field: "pid", .. },
+            })
+        ));
+    }
+
+    #[test]
+    fn data_locx_filename_is_refused() -> Result<(), FormatFailure> {
+        let exec = EXEC_618.replace("__data_loc char[] filename", "__data_locx char[] filename");
+        assert!(matches!(
+            parse(&exec, FORK_618, EXIT_618),
+            Err(FormatFailure {
+                tracepoint: EXEC,
+                source: FormatError::WrongType {
+                    field: "filename",
+                    ..
+                },
+            })
+        ));
+        // The real line still parses.
+        parse(EXEC_618, FORK_618, EXIT_618)?;
+        Ok(())
     }
 
     #[test]
