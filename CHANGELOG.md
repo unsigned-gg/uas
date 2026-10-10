@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Workspace `rust-version` raised to 1.89: the pinned `agent-client-protocol` 2.2.0 (via uuid 1.28) needs it, and aya already needed 1.87 (spec 0004, lane decision 2026-10-10).
 
 ### Added
+- cas-domain: the `NotAudited` landing receipt state and the spec 0023 D4/D6 evaluator path lists; cas-engine: the landing activity split into `reconcile` and `open_pr`, and the `WaveStep` workflow event with its replay arm (spec 0025 P9a, slice 1).
 - `cas-acp` releases a session's slot when its lease expires, checked on each frame and in `tick()`, and when the input ends or a transport call fails (spec 0016 D6, CER-2683). An ended session answers nothing to a later `session/cancel`.
 - `cas-deck` read-only operator page (spec 0018 slice 1, CER-2733): `GET /` shows the session table with evidence badges and the settle queue; `GET /settle` shows pending cards, or a disconnected notice with HTTP 200 when the queue fails. No actions yet.
 - `cas-deck` settle queue maps Cortex's `GET /v1/settle/pending` body to one card shape through a fetch seam (spec 0018 A1, D7, D9, D10, slice 2). A fetch or parse error shows the disconnected notice, and a count notice shows when Cortex's total differs. No actions yet.
