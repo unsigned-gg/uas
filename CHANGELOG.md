@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- The wave readiness pre-read runs `timeout -k 5 30 gh pr view`, so a hung `gh` cannot block a step. Exit 124 or 137 records nothing; exit 125, 126 or 127 from `timeout` is an executor error (spec 0025 D15).
+
 ### Changed
 - Wave Builders run on sonnet: the `WaveExecConfig` default model and the `wave-smoke-build` task, per spec 0025 D6.
 - Gang personas follow the 2026-10-10 rulings: builders on sonnet, team `cas-estate`, mesh-only addressing, and a ruling Christian types in a pane counts; new `cas-architect` and `cas-prober` personas, named in the `cas-estate` team; the engineer and critic reply to gang roles and the integrator over the mesh.
