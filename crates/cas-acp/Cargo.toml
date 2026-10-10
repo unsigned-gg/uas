@@ -10,6 +10,13 @@ authors.workspace = true
 repository.workspace = true
 
 [dependencies]
+agent-client-protocol = { workspace = true }
+cas-domain = { path = "../cas-domain" }
+cas-engine = { path = "../cas-engine" }
+cas-pool = { path = "../cas-pool" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
 
 [lints]
 workspace = true
