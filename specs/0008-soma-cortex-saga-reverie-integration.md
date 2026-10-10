@@ -10,8 +10,8 @@ depends_on: [0001-cas-architecture-and-crate-layout, 0006-cas-engine-and-harness
 
 ## Overview
 
-This spec defines the service edge integration architecture for the Cerebral Agent Substrate (CAS).
-Per `specs/0001-cas-architecture-and-crate-layout.md` section 3, CAS integrates with four external
+This spec defines the service edge integration architecture for the Unsigned Agent Substrate (UAS).
+Per `specs/0001-cas-architecture-and-crate-layout.md` section 3, UAS integrates with four external
 estate pillars through typed service edges without vendoring them:
 
 1. **Soma**: The reflex gateway classifying incoming tasks into policy tiers.
@@ -19,7 +19,7 @@ estate pillars through typed service edges without vendoring them:
 3. **Cortex**: The inter-agent communication mesh and operator settle queue (`/v1/settle/pending`).
 4. **Reverie**: The persistent memory daemon (`127.0.0.1:7437`) storing context and attestations.
 
-Why now: `cas-domain` and `cas-engine` provide the pure domain primitives and event-sourced session
+Why now: `uas-domain` and `uas-engine` provide the pure domain primitives and event-sourced session
 replay. To host autonomous builder agents on host `ceres`, the harness must classify policy with Soma,
 execute under Saga flows, broadcast attestations to Cortex, and query/record memory with Reverie.
 
@@ -41,10 +41,10 @@ The lifecycle follows the estate boundary contract:
 Soma (Policy Gateway)
        │ (classify policy tier: Tier0 / Tier1 / Tier2)
        ▼
-Saga Workflow (.saga/flows/cas-builder.toml)
+Saga Workflow (.saga/flows/uas-builder.toml)
        │ (dispatches harness steps into leased slot)
        ▼
-CAS Substrate (cas-domain, cas-engine, cas-cli)
+UAS Substrate (uas-domain, uas-engine, uas-cli)
        │
        ├──► Reverie Client (via the spec 0032 socket proxy from a slot; 127.0.0.1:7437 outside one) — pre-fetch context, write attestations
        │
@@ -74,27 +74,27 @@ CAS Substrate (cas-domain, cas-engine, cas-cli)
 #### Cortex Mesh & Settle Edge
 - Publishes signed attestation events to the Cortex mesh using `cortex-msg` or edge JSON payloads.
 - Defines `SettleRequest` and pending settlement queue schema matching `/v1/settle/pending`:
-  - When an activity reaches a `Tier2` gate (e.g. `operator-gate`), CAS registers an approval card.
-  - The operator reviews diffs and receipts in `cas-deck` or Cortex before releasing the gate.
+  - When an activity reaches a `Tier2` gate (e.g. `operator-gate`), UAS registers an approval card.
+  - The operator reviews diffs and receipts in `uas-deck` or Cortex before releasing the gate.
 
 #### Saga Orchestration Edge
-- `.saga/flows/cas-builder.toml` acts as the macro-orchestrator.
+- `.saga/flows/uas-builder.toml` acts as the macro-orchestrator.
 - Activities emit structured JSON execution receipts (`HarnessReport`).
-- If an activity returns a non-zero exit code or fails a verification gate, `cas-engine` executes registered `Compensator`s in reverse order.
+- If an activity returns a non-zero exit code or fails a verification gate, `uas-engine` executes registered `Compensator`s in reverse order.
 
 ## Plan
 
 - [x] Create spec 0008 and record in `specs/README.md`.
-- [x] Implement `PolicyTier` and classification in `crates/cas-domain` and `crates/cas-engine`.
-- [x] Implement Reverie client adapter in `crates/cas-engine` (or `cas-cli`).
-- [x] Implement Cortex mesh notification and Settle approval schema in `crates/cas-engine` and `crates/cas-deck`.
-- [x] Wire Saga execution flow in `cas harness run` to integrate policy classification, memory queries, and compensations.
+- [x] Implement `PolicyTier` and classification in `crates/uas-domain` and `crates/uas-engine`.
+- [x] Implement Reverie client adapter in `crates/uas-engine` (or `uas-cli`).
+- [x] Implement Cortex mesh notification and Settle approval schema in `crates/uas-engine` and `crates/uas-deck`.
+- [x] Wire Saga execution flow in `uas harness run` to integrate policy classification, memory queries, and compensations.
 - [x] Validate with unit tests and workspace verification gates (`make spec-check`, `make check`, `make smoke`).
 
 ## Test
 
 ```bash
-make spec-check && cargo test -p cas-domain -p cas-engine -j 2
+make spec-check && cargo test -p uas-domain -p uas-engine -j 2
 ```
 
 Pass criteria: `make spec-check` exits 0 with no broken links, and domain and engine unit tests pass with `-j 2`.
