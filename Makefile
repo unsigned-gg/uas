@@ -207,7 +207,9 @@ template-check: ## Run check, spec-check, smoke, then prove the rename in a temp
 	cargo fmt --all --check
 	cargo build --workspace -j $(JOBS)
 	$(MAKE) -f Makefile spec-check
-	if grep -rIn -E '\bskel\b|\bcas_|\bCAS_|\bcas\b' --exclude-dir={target,.git,vendor,specs} . | grep -v '^\./\.agents/skills/new-repo/'; then
+	# Spec file names keep their cas- (spec 0037 D4), and the Makefile's own
+	# rename rules carry the token by necessity; neither is a leftover.
+	if grep -rIn -E '\bskel\b|\bcas_|\bCAS_|\bcas\b' --exclude-dir={target,.git,vendor,specs} --exclude=Makefile . | grep -vE '^\./\.agents/skills/new-repo/|[0-9]{4}-cas-'; then
 		echo "template-check: leftover 'cas' after rename" >&2
 		exit 1
 	fi
