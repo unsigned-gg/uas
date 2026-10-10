@@ -164,7 +164,7 @@ most `ttl + 1` seconds after `now`.
 |---|---|---|
 | D1 | CAS owns the pool-member adapter. The spec lands. The `tonic` 0.14 and `prost` 0.14 pins go into spec 0004. The first build package is the transport and the lease handling, behind a feature flag, off by default. | **Ruled:** Christian, in session, lane w25:p1 interview, 2026-10-10 [reported, relayed by the integrator, mesh 74f407df]. He named `tonic` and `prost`; the other 0004 rows are lane pins (D3). |
 | D2 | All adapter code compiles only under the feature `cortex-grpc`, off by default (D1). Inside it, the port traits (`PoolWork`, `TaskRunner`), the lease bridge and the classifier use no tonic type, so fakes test them. The tonic client implements `PoolWork`. No layer break: `cas-engine` sits above `cas-domain` (spec 0001). | Architect w10:pP proposal (mesh 7ec5bb4d); cas-engineer, 2026-10-10; the feature scope follows D1 (Christian may override) |
-| D3 | Pins: the versions cortex@c7fdb85 uses (F6), so both ends share one codegen. Newer `protox` 0.10.0 exists and is not taken. `tokio` is not new here: its 0004 row says 1.53.1, but the root `Cargo.toml` requirement is the caret `1.53.1`, so `Cargo.lock` has resolved 1.53.2 since 6ec6011 [verified, at 2c6a557]. That drift is a separate item, not fixed here. Spec 0004 records them under "Cortex pool-member transport", with the licences read and the deny check (F8). | cas-engineer, 2026-10-10 (Christian may override) |
+| D3 | Pins: the versions cortex@c7fdb85 uses (F6), so both ends share one codegen. Newer `protox` 0.10.0 exists and is not taken. `tokio` is not new here: its 0004 row says 1.53.1, but the root `Cargo.toml` requirement is the caret `1.53.1`, so `Cargo.lock` has resolved 1.53.2 since 6ec6011 [verified, at 2c6a557]. That drift is a separate item, not fixed here. Spec 0004 records them under "Cortex pool-member transport", with the licences read and the deny check (F8). | cas-engineer, 2026-10-10 (Christian may override) Pin tonic and prost with `=`: the tokio caret pin already drifted (CER-2798). |
 | D4 | The lease bridge issues for `ttl + 1` and renews up to `now + ttl + 1`, never by a fixed step. The extra second covers the whole-second clock (`now >= expires_at` is expired). Renew adds to the old expiry (F3). A fixed `ttl` step every `lease_ms / 3` grows the CAS lease about three times faster than time. A crashed adapter would then hold the slot after Cortex redelivers. | cas-engineer, 2026-10-10 (Christian may override) |
 | D5 | The backend dead-letters at `max_deliver` (F2), so the adapter keeps no retry count. `Nack` uses `delay_ms = min(1000 * 2^(a - 1), 60000)` in saturating arithmetic, with `a = max(1, delivery_attempt)`. | cas-engineer, 2026-10-10 (Christian may override) |
 | D6 | On shutdown the adapter stops `Recv`, Nacks each running unit with `delay_ms = 0`, releases the slots and drains them. `drain` happens only at shutdown, because `Draining` is final (F4). | cas-engineer, 2026-10-10 (Christian may override) |
@@ -192,8 +192,8 @@ most `ttl + 1` seconds after `now`.
 
 ```bash
 make spec-check
-cargo tree -p cas-engine -e normal,build --prefix none > /tmp/cas-engine-tree.txt
-! grep -E '^(tonic|prost)' /tmp/cas-engine-tree.txt
+cargo tree -p cas-engine -e normal,build --prefix none > $(mktemp)
+! grep -E '^(tonic|prost)' $(mktemp)
 cargo tree -p cas-engine -e normal,build --prefix none --features cortex-grpc | grep -E '^tonic '
 cargo nextest run -p cas-engine --build-jobs 2 --features cortex-grpc cortex_pool
 cargo deny check
