@@ -219,12 +219,15 @@ local cargo registry, 2026-10-10. MSRV of the tonic crates is 1.88, under D2's 1
 | `tonic` | 0.14.6 | MIT | cas-engine, feature `cortex-grpc` | default-features off; `channel`, `codegen`; `server` in dev-dependencies only |
 | `tonic-prost` | 0.14.6 | MIT | cas-engine, feature `cortex-grpc` | runtime glue for the generated code |
 | `prost` | 0.14.4 | Apache-2.0 | cas-engine, feature `cortex-grpc` | none |
-| `tonic-prost-build` | 0.14.6 | MIT | cas-engine `build.rs` | default-features off; build-dependency only |
-| `protox` | 0.9.1 | MIT OR Apache-2.0 | cas-engine `build.rs` | build-dependency only; no system `protoc`; 0.10.0 not taken (0026 D3) |
+| `prost-types` | 0.14.4 | Apache-2.0 | cas-engine, feature `cortex-grpc` | `Struct` and `Timestamp` in `lane.proto` and `peer.proto`; MSRV 1.85 |
+| `tonic-prost-build` | 0.14.6 | MIT | cas-engine `build.rs` | default-features off; optional build-dependency, enabled by `cortex-grpc` |
+| `protox` | 0.9.1 | MIT OR Apache-2.0 | cas-engine `build.rs` | optional build-dependency, enabled by `cortex-grpc`; no system `protoc`; 0.10.0 not taken (0026 D3) |
 
-Check [verified, 2026-10-10T16:16Z]: a throwaway project with these pins and `tokio`
-1.53.1 (features as its row) ran `cargo deny check` with this repo's `deny.toml`:
-"advisories ok, bans ok, licenses ok, sources ok", 105 packages, 106 with `server`.
+`build.rs` does nothing unless `CARGO_FEATURE_CORTEX_GRPC` is set, so a build
+without the feature pulls none of these crates. Check [verified, 2026-10-10T16:26Z]:
+a throwaway project with these pins, `tokio` 1.53.1 (features as its row) and tonic
+`server` in dev ran `cargo deny check` with this repo's `deny.toml`: "advisories ok,
+bans ok, licenses ok, sources ok", 106 packages.
 Warnings: duplicate `hashbrown`, `logos` (3 crates) and `syn`, all through `protox`.
 
 ### CI tools
