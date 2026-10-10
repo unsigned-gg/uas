@@ -1562,6 +1562,44 @@ fn wave_halt_queued_during_critic_session_stops_open_pr() {
     assert_eq!(bad, 0, "a PR opened after a Halted record was written");
 }
 
+/// `report.receipts` follows the fixed record order: oldest first. Six Builders make a
+/// directory-order read differ from the record order, and a newest-first read fails too.
+#[test]
+fn wave_report_receipts_follow_the_record_order() {
+    let env = Env::new("wave_report_receipts_follow_the_record_order");
+    let (_, steps) = many_builders(&env, 6);
+    let starts: Vec<(String, Vec<u8>)> = (0..6)
+        .map(|i| {
+            let text = format!(
+                "\u{2713} run haiku (ok): hash bwrun00000{i}0 (new)\n\u{2713} changeset: chg00000000{i} (1 entries)\n"
+            );
+            (format!("start --task build-{i} *"), text.into_bytes())
+        })
+        .collect();
+    let starts: Vec<(&'static str, &'static [u8], String)> = starts
+        .into_iter()
+        .map(|(pat, text)| {
+            let pat: &'static str = Box::leak(pat.into_boxed_str());
+            let err = String::from_utf8(text).unwrap();
+            (pat, &[][..], err)
+        })
+        .collect();
+    let rules = starts
+        .into_iter()
+        .map(|(pat, out, err)| r(pat, out, Box::leak(err.into_boxed_str()), 0))
+        .collect();
+    env.tool("blackwall", rules);
+    let report = executor(&env, &steps).run_local(1).unwrap();
+    assert_eq!(report.halted, None);
+    let got: Vec<&str> = report
+        .receipts
+        .iter()
+        .map(|r| r.facts().blackwall_run.as_str())
+        .collect();
+    let want: Vec<String> = (0..6).map(|i| format!("bwrun00000{i}0")).collect();
+    assert_eq!(got, want);
+}
+
 /// The live run of spec 0025 P9c. It runs only with `CAS_WAVE_LIVE=1` and panics when an input
 /// is missing: `CAS_WAVE_REPO` (the custody checkout) and `CAS_WAVE_PLAN` (a saga flow TOML).
 #[test]
