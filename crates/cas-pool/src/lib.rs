@@ -1,5 +1,18 @@
-//! Worker slot manager: warm worktree pool (gitoxide), cgroup v2 suspend and resume.
+//! Worker slot manager: warm worktree pool, cgroup v2 suspend and resume.
 //!
-//! Placeholder crate. It has no code yet. See `README.md` in this crate and
-//! `specs/0001-cas-architecture-and-crate-layout.md`.
+//! Spec 0015 (CER-2722, CER-2723, CER-2724):
+//! - [`freezer`]: cgroup v2 freezer and process suspension controller (CER-2722).
+//! - [`slot`]: worker slot lifecycle manager and bounded capacity pool (CER-2723).
+//! - [`error`]: error types for pool and freezer operations.
 #![deny(unsafe_code)]
+
+pub mod error;
+pub mod freezer;
+pub mod slot;
+
+pub use error::{FreezerError, PoolError};
+pub use freezer::{
+    current_process_cgroup_path, CgroupFreezer, Freezer, FreezerState, ResourceLimits,
+    SignalFreezer,
+};
+pub use slot::{ManagedSlot, PoolConfig, SlotPool, SweepReport};
