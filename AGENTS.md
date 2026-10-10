@@ -8,38 +8,26 @@ This file is the canonical rule set for people and agents. Every rule is stated 
 `cerebral-work/cas-substrate` is the Cerebral Agent Substrate (CAS). It is a Rust-native,
 pooled runtime for agent harnesses. Status: scaffold and domain; no runtime yet.
 The design is a draft in `cerebral-work/research@4068134`. Read
-`specs/0001-cas-architecture-and-crate-layout.md` before you change any crate.
-The repo was made from the estate Rust monorepo template. The Go repo `unsigned-gg/substrate`
-is a different system.
+`specs/0001-cas-architecture-and-crate-layout.md` before you change any crate: it holds each
+crate's role and its phase. The repo was made from the estate Rust monorepo template. The Go
+repo `unsigned-gg/substrate` is a different system.
 
 ## Layout
-
-| Path | Content |
-|---|---|
-| `crates/cas-domain` | Slots, leases, envelopes, attestations. Zero I/O. Phase 1. |
-| `crates/cas-engine` | Durable workflows and saga compensators. Placeholder. Phase 1. |
-| `crates/cas-sandbox` | Landlock and namespace isolation. Placeholder. Phase 2. |
-| `crates/cas-ebpf` | eBPF priority clamping and audit probes. Placeholder. Phase 2. |
-| `crates/cas-pool` | Worker slots, warm worktrees, cgroup suspend. Placeholder. Phase 3. |
-| `crates/cas-acp` | JSON-RPC server for IDEs. Placeholder. Phase 3. |
-| `crates/cas-router` | Prefix-hash routing for model calls. Placeholder. Phase 4. |
-| `crates/cas-deck` | Operator dashboard. Placeholder. Phase 5. |
-| `crates/cas-storage` | Storage clients. Placeholder. No phase yet. |
-| `crates/cas-cli` | Binary `cas`. Parses arguments and calls the domain. |
-| `xtask/` | Repo tasks in Rust: `spec-check`, `toolchain-check` and `pin-check`. The package name stays `xtask`. |
-| `specs/` | LeanSpec specs and the registry `specs/README.md`. |
-| `vendor/leanspec/` | Vendored LeanSpec method (MIT). Do not edit. |
-| `vendor/soma/` | Vendored Soma OS containment and dispatch JSON schemas. |
-| `vendor/cortex/` | Vendored Cortex Mesh v1 Protocol Buffer definitions. |
-| `vendor/saga/` | Vendored Saga workflow templates and domain contracts. |
-| `.agents/skills/` | Skills for agents. |
-| `.claude/` | Claude Code settings and hooks. `.claude/agents/` holds the repo's subagents (builder, eBPF builder, critic, engineer, foreman); see `.claude/agents/README.md`. |
-| `docs/`, `engineering/` | Docs for people. Engineering notes. |
 
 Layering: from the top layer down, `deck > acp > engine > pool > sandbox, ebpf > router > domain`.
 A crate depends only on crates in lower layers. Add a Cargo dependency only when real code needs it.
 `cas-domain` depends on no other crate in the workspace. It has zero I/O: it must not use `std::net`,
 `std::fs`, `std::process` or `tokio`. `make smoke` checks this.
+
+| Path | Content |
+|---|---|
+| `crates/` | The `cas-*` crates. `cas-cli` is the binary `cas`; it parses arguments and calls the domain. |
+| `xtask/` | Repo tasks in Rust: `spec-check`, `toolchain-check` and `pin-check`. The package name stays `xtask`. |
+| `specs/` | LeanSpec specs and the registry `specs/README.md`. |
+| `vendor/` | Vendored and never edited: `leanspec/` (the method, MIT), `soma/` (containment and dispatch JSON schemas), `cortex/` (Mesh v1 protobufs), `saga/` (workflow templates and domain contracts). |
+| `.agents/skills/` | Skills for agents, surfaced to Claude Code through `.claude/skills/`. |
+| `.claude/` | Claude Code settings and hooks. `.claude/agents/` holds the repo's subagents; see `.claude/agents/README.md`. |
+| `docs/`, `engineering/` | Docs for people. Engineering notes. |
 
 ## Rules that bind
 
@@ -49,49 +37,36 @@ A crate depends only on crates in lower layers. Add a Cargo dependency only when
 4. **Branch model.** Work happens on feature branches cut from `development`. A PR into `development` merges on green CI. `main` is the release branch. Spec 0003 has the details.
 5. **Sign every commit.** Never skip signing.
 6. **Use Conventional Commits.** Do not put a ticket ID in the subject. Put `Part of CER-N` in the PR body.
-7. **Merge with merge commits only.** Never squash.
+7. **Merge with merge commits only.** Never squash. Enforced: squash and rebase merging are off on the GitHub repo (checked 2026-10-10).
 8. **Write the changelog.** Add one line under `## [Unreleased]` in `CHANGELOG.md` for each user-visible PR. Never edit a released section.
 9. **Merge the promotion PR on green.** The promotion PR carries `development` to `main`. A lane merges it when CI is green, with a merge commit pinned to the head SHA. Agents never approve it. Then check that `main` matches `development` and that the `release` run is green. Spec 0003 has the operator ruling.
-10. **Never push to `main`.** The hook `guard-main-push.sh` blocks it.
-11. **No secrets in the repo.** `make` and lefthook run gitleaks.
-12. **Pin every external dependency** and record it in spec 0004 before first use. Copyleft licences are denied by `deny.toml`.
+10. **Never push to `main`.** Enforced by the hook `guard-main-push.sh`.
+11. **No secrets in the repo.** Enforced: `make` and lefthook run gitleaks.
+12. **Pin every external dependency** and record it in spec 0004 before first use. Enforced: copyleft licences are denied by `deny.toml`, and `make pin-check` binds the spec 0004 tables to the lockfiles.
 13. **Write prose in short sentences.** Use active voice. Use ASCII only in files.
 14. **Keep `unsafe` out, except where syscalls need it.** The workspace forbids `unsafe`. `cas-sandbox`, `cas-pool` and `cas-ebpf` deny it instead: a block opts in with `#[allow(unsafe_code)]` and a `// SAFETY:` comment, and clippy rejects an unsafe block with no SAFETY comment. Spec 0001 records the ruling.
 
 ## Commands
 
-Run `make help` for the full list. These targets are the contract.
+`make help` lists every target. These are the contract.
 
 | Target | What it does |
 |---|---|
-| `make build` | Build the workspace. |
-| `make fmt` / `make fmt-check` | Format, or check formatting. |
-| `make clippy` | Clippy with warnings denied. |
-| `make test` | Run tests with nextest. |
-| `make doc-test` | Run doc tests. |
-| `make deny` | Check licences, advisories and sources. |
 | `make check` | `fmt-check`, `clippy`, `test`, `doc-test`, `deny`. Run before you push. |
-| `make ci` | What the CI `rust` job runs. |
 | `make hygiene` | `typos`, `machete`, `spec-check`, `toolchain-check`, `pin-check`. |
-| `make spec-check` | Validate `specs/`. |
-| `make toolchain-check` | Compare `rust-toolchain.toml` with the installed Rust. |
+| `make ci` | What the CI `rust` job runs. |
 | `make smoke` | Build the CLI, run `cas --version`, check the domain has no I/O. |
+| `make spec-check` | Validate `specs/`. |
 | `make release-notes VERSION=x.y.z` | Roll `[Unreleased]` into a version heading. |
 | `make custody-check` | Check the blackwall custody setup (`blackwall doctor`). See the `custody-run` skill. |
-| `make new-repo NAME=<name>` | Rename the template into a new repo. |
-| `make template-check` | Check that the template and a renamed copy both build. |
 
 ## Skills
 
-Skills are in `.agents/skills/<name>/SKILL.md`. Read the skill before you start that kind of work.
-
-| Skill | Use it when | Path |
-|---|---|---|
-| `spec-driven-dev` | You add a concept, change the architecture, or start a feature. | `.agents/skills/spec-driven-dev/SKILL.md` |
-| `release` | You cut a version. | `.agents/skills/release/SKILL.md` |
-| `ci-triage` | A CI run is red. | `.agents/skills/ci-triage/SKILL.md` |
-| `new-repo` | You make a repo from this template. | `.agents/skills/new-repo/SKILL.md` |
-| `custody-run` | You run agent work under blackwall custody. | `.agents/skills/custody-run/SKILL.md` |
+Skills live in `.agents/skills/<name>/SKILL.md` and reach Claude Code through symlinks in
+`.claude/skills/`. Run `/skills` to list them, and read the skill before you start that kind of
+work: `spec-driven-dev` (a new concept, an architecture change, a feature), `release` (cutting a
+version), `ci-triage` (a red CI run), `new-repo` (making a repo from this template), `custody-run`
+(agent work under blackwall custody).
 
 ## Approval routes
 

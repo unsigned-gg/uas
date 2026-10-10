@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- AGENTS.md drops the per-crate layout table and the derivable command rows, names the hook, Makefile or repo setting that enforces each rule, and points at spec 0001 for crate roles and phases.
+- Repo skills are reachable from Claude Code: `.claude/skills/` holds one symlink per skill in `.agents/skills/`.
+
 ### Fixed
 - The cas-ebpf clamp test measures against its own nice value, so a niced parent no longer fails the control, and it fails when it runs at nice 19.
 - The wave readiness pre-read runs `timeout -k 5 30 gh pr view`, so a hung `gh` cannot block a step. Exit 124 or 137 records nothing; exit 125, 126 or 127 from `timeout` is an executor error (spec 0025 D15).

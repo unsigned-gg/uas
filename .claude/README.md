@@ -4,6 +4,10 @@ The rules for this repo live in [AGENTS.md](../AGENTS.md). This directory holds 
 
 `settings.json` is shared and committed. `settings.local.json` is per user and gitignored.
 
+## Skills
+
+`skills/` holds one symlink per repo skill, pointing into `../../.agents/skills/`. Claude Code only discovers skills under `.claude/skills/`, so a new skill needs its symlink here as well. Run `/skills` to list them.
+
 ## Hooks
 
 | Hook | Event | Purpose | Bypass |
