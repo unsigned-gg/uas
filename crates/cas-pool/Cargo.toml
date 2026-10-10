@@ -11,6 +11,7 @@ repository.workspace = true
 
 [dependencies]
 cas-domain = { path = "../cas-domain" }
+cas-ebpf = { path = "../cas-ebpf" }
 gix = { workspace = true }
 rustix = { workspace = true }
 serde = { workspace = true }
@@ -18,6 +19,7 @@ thiserror = { workspace = true }
 tracing = { workspace = true }
 
 [dev-dependencies]
+tokio = { workspace = true }
 criterion = { version = "0.8.2", default-features = false, features = ["cargo_bench_support"] }
 
 [[bench]]
