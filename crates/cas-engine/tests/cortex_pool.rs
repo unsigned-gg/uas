@@ -336,6 +336,59 @@ fn cortex_pool_lease_budget_is_task_cap() {
 }
 
 #[test]
+fn cortex_pool_filled_stream_dropped_when_slot_frees() {
+    // A filled stream (2 asked, 2 delivered) must not stall the pool: when t1 finishes, a second
+    // Recv carries the new free count of 1.
+    let mut rig = rig(2, vec![delivery("t1", 3000, 1), delivery("t2", 3000, 1)]);
+    rig.run_to(200);
+    rig.runner
+        .status
+        .borrow_mut()
+        .insert("t1".into(), TaskStatus::Succeeded);
+    rig.adapter.step().unwrap();
+    let calls = rig.calls();
+    let recvs: Vec<&Call> = calls
+        .iter()
+        .filter(|c| matches!(c, Call::Recv(_)))
+        .collect();
+    assert_eq!(recvs, [&Call::Recv(2), &Call::Recv(1)], "{calls:?}");
+    let ack = calls
+        .iter()
+        .position(|c| matches!(c, Call::Ack(_)))
+        .unwrap();
+    let second = calls
+        .iter()
+        .rposition(|c| matches!(c, Call::Recv(_)))
+        .unwrap();
+    assert!(ack < second, "the slot frees before the new ask");
+}
+
+#[test]
+fn cortex_pool_filled_stream_end_no_backoff() {
+    // A stream that delivered all it was asked for may End: no backoff, so the next Recv comes
+    // as soon as a slot frees.
+    let mut filled = rig(1, vec![delivery("t1", 3000, 1), RecvEvent::End]);
+    filled.run_to(200);
+    filled
+        .runner
+        .status
+        .borrow_mut()
+        .insert("t1".into(), TaskStatus::Succeeded);
+    filled.adapter.step().unwrap();
+    let times = filled.times(|c| matches!(c, Call::Recv(_)));
+    assert_eq!(times.len(), 2, "{:?}", filled.calls());
+    assert!(
+        times[1] < 1000,
+        "no backoff after a filled stream: {times:?}"
+    );
+    // A stream that ends before it delivered the free count backs off 1 s.
+    let mut unfilled = rig(2, vec![delivery("t1", 3000, 1), RecvEvent::End]);
+    unfilled.run_to(1500);
+    let times = unfilled.times(|c| matches!(c, Call::Recv(_)));
+    assert_eq!(times, [0, 1000]);
+}
+
+#[test]
 fn cortex_pool_term_on_bad_payload() {
     let mut rig = rig(1, vec![delivery("t1", 3000, 1)]);
     *rig.runner.start_error.borrow_mut() = Some(TaskError::Payload("not json".into()));
