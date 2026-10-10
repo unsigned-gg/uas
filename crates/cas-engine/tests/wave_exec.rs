@@ -1,0 +1,976 @@
+//! Wave executor tests. Every test puts fake `git`, `blackwall`, `claude` and `make` scripts
+//! first on the child `PATH`. The scripts log their argv and return canned output, so no real
+//! repository, Blackwall run, saga flow or model is touched. Each test's temp dir is removed when
+//! its `Env` guard drops, also on panic.
+
+use std::ffi::OsString;
+use std::fs;
+use std::path::PathBuf;
+
+use cas_domain::{AuditStatus, EvidenceTier, LandingReceipt};
+use cas_engine::{
+    parse_critic_verdict, ActivityKind, AdmitError, CriticVerdict, HaltReason, NotReady, SagaStep,
+    StepOutcome, WaveError, WaveExecConfig, WaveExecutor, WaveOutcome, WavePlan, WorkflowEvent,
+};
+
+const BASE: &str = "056d7c7abcdef";
+const HEAD: &str = "f00dfeed0001";
+const RUN_A: &str = "bwrun0000001";
+const CHG_A: &str = "chg000000001";
+const START_A: &str = "\u{2713} run haiku (ok): hash bwrun0000001 (new)\n\u{2713} changeset: chg000000001 (1 entries)\n";
+const START_B: &str = "\u{2713} run haiku (ok): hash bwrun0000002 (new)\n\u{2713} changeset: chg000000002 (1 entries)\n";
+const PR_OUT: &[u8] = b"opened https://github.com/cerebral-work/cas-substrate/pull/57\n";
+
+/// One canned answer. The first rule whose pattern matches `$*` wins.
+struct Rule {
+    pat: &'static str,
+    out: &'static [u8],
+    err: &'static str,
+    code: i32,
+}
+
+fn r(pat: &'static str, out: &'static [u8], err: &'static str, code: i32) -> Rule {
+    Rule {
+        pat,
+        out,
+        err,
+        code,
+    }
+}
+
+/// The default answers of one fake tool. A test puts its own rules before these.
+fn defaults(name: &str) -> Vec<Rule> {
+    match name {
+        "git" => vec![
+            r("rev-parse HEAD", b"056d7c7abcdef\n", "", 0),
+            r("rev-parse blackwall/*", b"f00dfeed0001\n", "", 0),
+            r("merge-base *", b"", "", 0),
+            r("diff --name-only *", b"", "", 0),
+            r("ls-remote *", b"", "", 2),
+            r("branch -D *", b"", "", 0),
+            r("*", b"", "", 0),
+        ],
+        "blackwall" => vec![
+            r("start --task build-a *", b"", START_A, 0),
+            r("start --task build-b *", b"", START_B, 0),
+            r("settle *", b"", "", 0),
+            r("reconcile *", b"", "", 0),
+            r("pr *", PR_OUT, "", 0),
+            r("*", b"", "", 0),
+        ],
+        "claude" => vec![r("*", b"VERDICT: NO DEFECTS\nreviewed\n", "", 0)],
+        _ => vec![r("*", b"", "", 0)],
+    }
+}
+
+/// A `case` pattern: each literal part in single quotes, each `*` a glob.
+fn shell_pattern(pat: &str) -> String {
+    pat.split('*')
+        .map(|part| format!("'{part}'"))
+        .collect::<Vec<_>>()
+        .join("*")
+}
+
+/// A temp dir with a repo checkout, a state dir, a scratch dir and fake tools. Removed on drop.
+struct Env {
+    root: PathBuf,
+    bin: PathBuf,
+    log: PathBuf,
+    repo: PathBuf,
+    state: PathBuf,
+    wt: PathBuf,
+    lock: PathBuf,
+}
+
+impl Env {
+    fn new(test: &str) -> Self {
+        let root = std::env::temp_dir().join(format!("cas-wave-{}-{test}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        let env = Self {
+            bin: root.join("bin"),
+            log: root.join("argv.log"),
+            repo: root.join("repo"),
+            state: root.join("state"),
+            wt: root.join("wt"),
+            lock: root.join("lock").join("wave.lock"),
+            root,
+        };
+        fs::create_dir_all(&env.bin).unwrap();
+        fs::create_dir_all(env.repo.join(".blackwall")).unwrap();
+        fs::write(env.repo.join(".blackwall/init-head"), format!("{BASE}\n")).unwrap();
+        fs::write(
+            env.repo.join("blackwall.toml"),
+            "[verify]\ncommand = \"make check JOBS=2\"\n",
+        )
+        .unwrap();
+        for id in ["build-a", "build-b"] {
+            env.task(id, Some("haiku"));
+        }
+        for name in ["git", "blackwall", "claude", "make"] {
+            env.tool(name, Vec::new());
+        }
+        env
+    }
+
+    /// Write `tasks/<id>/prompt.md` and a `task.toml` with `model`, or none when `None`.
+    fn task(&self, id: &str, model: Option<&str>) {
+        let dir = self.repo.join("tasks").join(id);
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(dir.join("prompt.md"), format!("Build {id}.\n")).unwrap();
+        let toml = match model {
+            Some(m) => format!("model = \"{m}\"\n"),
+            None => "budget = 1\n".to_owned(),
+        };
+        fs::write(dir.join("task.toml"), toml).unwrap();
+    }
+
+    fn remove(&self, rel: &str) {
+        let path = self.repo.join(rel);
+        let _ = fs::remove_file(path);
+    }
+
+    /// Rewrite one fake tool. `custom` rules go first, then the defaults.
+    fn tool(&self, name: &str, custom: Vec<Rule>) {
+        let mut rules = custom;
+        rules.extend(defaults(name));
+        let mut body = format!(
+            "#!/bin/sh\necho \"{name} $*\" >> \"{}\"\n",
+            self.log.display()
+        );
+        if name == "claude" {
+            body += &format!("cat > \"{}/claude.stdin\"\n", self.bin.display());
+        }
+        body += &format!(
+            "case \"$*\" in *\"--body -\"*) cat > \"{}/{name}.body\" ;; esac\n",
+            self.bin.display()
+        );
+        if name == "git" {
+            body += "if [ \"$1\" = worktree ] && [ \"$2\" = add ]; then mkdir -p \"$4\"; fi\n";
+        }
+        body += "case \"$*\" in\n";
+        for (i, rule) in rules.iter().enumerate() {
+            let out = self.bin.join(format!("{name}.{i}.out"));
+            let err = self.bin.join(format!("{name}.{i}.err"));
+            fs::write(&out, rule.out).unwrap();
+            fs::write(&err, rule.err).unwrap();
+            body += &format!(
+                "  {pat}) cat \"{out}\"; cat \"{err}\" >&2; exit {code} ;;\n",
+                pat = shell_pattern(rule.pat),
+                out = out.display(),
+                err = err.display(),
+                code = rule.code
+            );
+        }
+        body += "  *) exit 0 ;;\nesac\n";
+        let path = self.bin.join(name);
+        fs::write(&path, body).unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(&path, fs::Permissions::from_mode(0o755)).unwrap();
+        }
+    }
+
+    fn config(&self) -> WaveExecConfig {
+        let mut path = OsString::from(&self.bin);
+        path.push(":");
+        path.push(std::env::var_os("PATH").unwrap_or_default());
+        WaveExecConfig {
+            path_env: Some(path),
+            ..WaveExecConfig::new(&self.repo, &self.state, &self.wt, &self.lock)
+        }
+    }
+
+    fn argv(&self) -> Vec<String> {
+        fs::read_to_string(&self.log)
+            .unwrap_or_default()
+            .lines()
+            .map(str::to_owned)
+            .collect()
+    }
+}
+
+impl Drop for Env {
+    fn drop(&mut self) {
+        let _ = fs::remove_dir_all(&self.root);
+    }
+}
+
+fn step(
+    id: &str,
+    agent: Option<&str>,
+    kind: ActivityKind,
+    deps: &[&str],
+    verify: &[&str],
+) -> SagaStep {
+    SagaStep {
+        id: id.into(),
+        title: id.into(),
+        kind,
+        deps: deps.iter().map(|d| (*d).to_owned()).collect(),
+        verify_cmd: verify.iter().map(|v| (*v).to_owned()).collect(),
+        gate: None,
+        agent: agent.map(str::to_owned),
+        duration: None,
+    }
+}
+
+fn builder(id: &str) -> SagaStep {
+    step(id, Some("builder"), ActivityKind::Impl, &[], &[])
+}
+
+fn critic(id: &str, on: &str) -> SagaStep {
+    step(id, Some("critic"), ActivityKind::Verify, &[on], &[])
+}
+
+fn probe(id: &str) -> SagaStep {
+    step(
+        id,
+        Some("probe"),
+        ActivityKind::Verify,
+        &[],
+        &["make", "check"],
+    )
+}
+
+fn executor(env: &Env, steps: &[SagaStep]) -> WaveExecutor {
+    WaveExecutor::new(env.config(), WavePlan::plan(steps, 2).unwrap())
+}
+
+fn with_open_prs(env: &Env, steps: &[SagaStep]) -> WaveExecutor {
+    let mut config = env.config();
+    config.open_prs = true;
+    WaveExecutor::new(config, WavePlan::plan(steps, 2).unwrap())
+}
+
+fn has_line(argv: &[String], line: &str) -> bool {
+    argv.iter().any(|l| l == line)
+}
+
+// Admission.
+
+#[test]
+fn wave_admit_refuses_builder_without_critic() {
+    let env = Env::new("wave_admit_refuses_builder_without_critic");
+    let steps = [builder("build-a")];
+    assert_eq!(
+        executor(&env, &steps).admit(),
+        Err(AdmitError::BuilderCriticCount {
+            step: "build-a".into(),
+            critics: 0
+        })
+    );
+}
+
+#[test]
+fn wave_admit_refuses_builder_with_two_critics() {
+    let env = Env::new("wave_admit_refuses_builder_with_two_critics");
+    let steps = [
+        builder("build-a"),
+        critic("review-a", "build-a"),
+        critic("review-b", "build-a"),
+    ];
+    assert_eq!(
+        executor(&env, &steps).admit(),
+        Err(AdmitError::BuilderCriticCount {
+            step: "build-a".into(),
+            critics: 2
+        })
+    );
+}
+
+#[test]
+fn wave_admit_refuses_missing_task_prompt() {
+    let env = Env::new("wave_admit_refuses_missing_task_prompt");
+    env.remove("tasks/build-a/prompt.md");
+    let steps = [builder("build-a"), critic("review-a", "build-a")];
+    assert_eq!(
+        executor(&env, &steps).admit(),
+        Err(AdmitError::MissingTaskPrompt("build-a".into()))
+    );
+}
+
+#[test]
+fn wave_admit_refuses_task_model_absent() {
+    let env = Env::new("wave_admit_refuses_task_model_absent");
+    env.task("build-a", None);
+    let steps = [builder("build-a"), critic("review-a", "build-a")];
+    assert_eq!(
+        executor(&env, &steps).admit(),
+        Err(AdmitError::TaskModelAbsent("build-a".into()))
+    );
+}
+
+#[test]
+fn wave_admit_refuses_task_model_mismatch() {
+    let env = Env::new("wave_admit_refuses_task_model_mismatch");
+    env.task("build-a", Some("sonnet"));
+    let steps = [builder("build-a"), critic("review-a", "build-a")];
+    assert_eq!(
+        executor(&env, &steps).admit(),
+        Err(AdmitError::TaskModelMismatch {
+            step: "build-a".into(),
+            found: "sonnet".into()
+        })
+    );
+}
+
+#[test]
+fn wave_admit_refuses_probe_without_verify_cmd() {
+    let env = Env::new("wave_admit_refuses_probe_without_verify_cmd");
+    let steps = [step(
+        "probe-x",
+        Some("probe"),
+        ActivityKind::Verify,
+        &[],
+        &[],
+    )];
+    assert_eq!(
+        executor(&env, &steps).admit(),
+        Err(AdmitError::ProbeWithoutVerifyCmd("probe-x".into()))
+    );
+}
+
+#[test]
+fn wave_admit_refuses_probe_after_builder() {
+    let env = Env::new("wave_admit_refuses_probe_after_builder");
+    let steps = [
+        builder("build-a"),
+        critic("review-a", "build-a"),
+        step(
+            "probe-x",
+            Some("probe"),
+            ActivityKind::Verify,
+            &["build-a"],
+            &["make", "check"],
+        ),
+    ];
+    assert_eq!(
+        executor(&env, &steps).admit(),
+        Err(AdmitError::ProbeAfterBuilder("probe-x".into()))
+    );
+}
+
+#[test]
+fn wave_admit_refuses_bad_slot_id() {
+    let env = Env::new("wave_admit_refuses_bad_slot_id");
+    let steps = [builder("bad id"), critic("review-a", "bad id")];
+    assert_eq!(
+        executor(&env, &steps).admit(),
+        Err(AdmitError::BadSlotId("bad id".into()))
+    );
+}
+
+#[test]
+fn wave_admit_refuses_before_any_subprocess() {
+    let env = Env::new("wave_admit_refuses_before_any_subprocess");
+    let steps = [builder("build-a")];
+    let err = executor(&env, &steps).run_local(1).unwrap_err();
+    assert!(
+        matches!(err, WaveError::Admit(AdmitError::BuilderCriticCount { .. })),
+        "{err}"
+    );
+    assert!(env.argv().is_empty(), "{:?}", env.argv());
+}
+
+// Readiness.
+
+#[test]
+fn wave_not_ready_no_init_head() {
+    let env = Env::new("wave_not_ready_no_init_head");
+    env.remove(".blackwall/init-head");
+    let steps = [builder("build-a"), critic("review-a", "build-a")];
+    let got = executor(&env, &steps).run_step("build-a", 1).unwrap();
+    assert_eq!(got.outcome, StepOutcome::NotReady(NotReady::NoInitHead));
+    assert!(got.event.is_none());
+    assert!(env.argv().is_empty(), "{:?}", env.argv());
+    assert!(!env.state.exists(), "a not-ready step wrote a record");
+}
+
+#[test]
+fn wave_not_ready_head_differs() {
+    let env = Env::new("wave_not_ready_head_differs");
+    env.tool("git", vec![r("rev-parse HEAD", b"0000000000001\n", "", 0)]);
+    let steps = [builder("build-a"), critic("review-a", "build-a")];
+    let got = executor(&env, &steps).run_step("build-a", 1).unwrap();
+    assert_eq!(got.outcome, StepOutcome::NotReady(NotReady::HeadDiffers));
+    assert!(!env.argv().iter().any(|l| l.starts_with("blackwall start")));
+}
+
+#[test]
+fn wave_not_ready_dep_record_missing() {
+    let env = Env::new("wave_not_ready_dep_record_missing");
+    let steps = [builder("build-a"), critic("review-a", "build-a")];
+    let got = executor(&env, &steps).run_step("review-a", 1).unwrap();
+    assert_eq!(
+        got.outcome,
+        StepOutcome::NotReady(NotReady::DepRecordMissing("build-a".into()))
+    );
+}
+
+#[test]
+fn wave_not_ready_upstream_not_merged() {
+    let env = Env::new("wave_not_ready_upstream_not_merged");
+    // The upstream head is not an ancestor of development. The base check still passes.
+    env.tool(
+        "git",
+        vec![r("merge-base --is-ancestor f00dfeed0001 *", b"", "", 1)],
+    );
+    let steps = [
+        builder("build-a"),
+        critic("review-a", "build-a"),
+        step(
+            "build-b",
+            Some("builder"),
+            ActivityKind::Impl,
+            &["build-a"],
+            &[],
+        ),
+        critic("review-b", "build-b"),
+    ];
+    let exec = executor(&env, &steps);
+    assert_eq!(
+        exec.run_step("build-a", 1).unwrap().outcome,
+        StepOutcome::Passed
+    );
+    // Case 1: a Builder whose upstream Builder is unmerged is not ready.
+    assert_eq!(
+        exec.run_step("build-b", 1).unwrap().outcome,
+        StepOutcome::NotReady(NotReady::UpstreamNotMerged("build-a".into()))
+    );
+    // Case 2: a Critic whose own Builder passed but is unmerged is ready: claude runs.
+    assert_eq!(
+        exec.run_step("review-a", 1).unwrap().outcome,
+        StepOutcome::Passed
+    );
+    assert!(env.argv().iter().any(|l| l.starts_with("claude -p")));
+}
+
+// Builder.
+
+#[test]
+fn wave_builder_argv_exact() {
+    let env = Env::new("wave_builder_argv_exact");
+    let steps = [builder("build-a"), critic("review-a", "build-a")];
+    let got = executor(&env, &steps).run_step("build-a", 1).unwrap();
+    assert_eq!(got.outcome, StepOutcome::Passed);
+    let argv = env.argv();
+    assert!(
+        has_line(
+            &argv,
+            "blackwall start --task build-a --provider claude --model haiku"
+        ),
+        "{argv:?}"
+    );
+    assert!(
+        has_line(&argv, "blackwall settle bwrun0000001 select"),
+        "{argv:?}"
+    );
+    assert!(
+        has_line(
+            &argv,
+            &format!("git diff --name-only -z --no-renames {BASE} {HEAD}")
+        ),
+        "{argv:?}"
+    );
+    assert!(
+        !argv.iter().any(|l| l.starts_with("blackwall pr")),
+        "{argv:?}"
+    );
+}
+
+#[test]
+fn wave_builder_fails_without_ok_line() {
+    let env = Env::new("wave_builder_fails_without_ok_line");
+    env.tool(
+        "blackwall",
+        vec![r(
+            "start --task build-a *",
+            b"",
+            "\u{2713} run haiku (err): hash bwrun0000001 (new)\n",
+            0,
+        )],
+    );
+    let steps = [builder("build-a"), critic("review-a", "build-a")];
+    let got = executor(&env, &steps).run_step("build-a", 1).unwrap();
+    assert_eq!(
+        got.outcome,
+        StepOutcome::Halted(HaltReason::BuilderRunFailed)
+    );
+}
+
+#[test]
+fn wave_verify_failed_halts() {
+    let env = Env::new("wave_verify_failed_halts");
+    env.tool("blackwall", vec![r("reconcile *", b"", "", 3)]);
+    let steps = [builder("build-a"), critic("review-a", "build-a")];
+    let got = executor(&env, &steps).run_step("build-a", 1).unwrap();
+    assert_eq!(got.outcome, StepOutcome::Halted(HaltReason::VerifyFailed));
+    assert!(!env.argv().iter().any(|l| l.starts_with("claude")));
+}
+
+#[test]
+fn wave_evaluator_touched_halts_before_critic() {
+    let cases = [
+        "Makefile",
+        ".claude/agents/x.md",
+        "CLAUDE.md",
+        "crates/x/AGENTS.md",
+        ".cargo/config.toml",
+        ".mcp.json",
+        "crates/x/Cargo.toml",
+        "crates/cas-ebpf/build.rs",
+        "crates/cas-ebpf/ebpf/cas-ebpf.o",
+        "typos.toml",
+    ];
+    for (i, path) in cases.iter().enumerate() {
+        let env = Env::new(&format!("wave_evaluator_touched_halts_before_critic_{i}"));
+        let stdout: &'static [u8] = Box::leak(format!("{path}\0").into_bytes().into_boxed_slice());
+        env.tool("git", vec![r("diff --name-only *", stdout, "", 0)]);
+        let steps = [builder("build-a"), critic("review-a", "build-a")];
+        let got = executor(&env, &steps).run_step("build-a", 1).unwrap();
+        assert_eq!(
+            got.outcome,
+            StepOutcome::Halted(HaltReason::EvaluatorTouched),
+            "{path}"
+        );
+        assert!(
+            !env.argv().iter().any(|l| l.starts_with("claude")),
+            "{path}"
+        );
+        let receipt = got.receipt.expect("the halt carries the tiered receipt");
+        assert_eq!(receipt.evidence(), EvidenceTier::Reported, "{path}");
+        assert!(receipt.facts().evaluator_touched, "{path}");
+    }
+}
+
+#[test]
+fn wave_evaluator_diff_non_ascii_add_halts() {
+    // The path as git 2.43 prints it with -z: raw bytes, no C-quoting.
+    let env = Env::new("wave_evaluator_diff_non_ascii_add_halts");
+    env.tool(
+        "git",
+        vec![r(
+            "diff --name-only *",
+            b".github/workflows/c\xc3\xa9.yml\0",
+            "",
+            0,
+        )],
+    );
+    let steps = [builder("build-a"), critic("review-a", "build-a")];
+    let got = executor(&env, &steps).run_step("build-a", 1).unwrap();
+    assert_eq!(
+        got.outcome,
+        StepOutcome::Halted(HaltReason::EvaluatorTouched)
+    );
+
+    // A second entry before the evaluator path: a split on newline reads it as one name.
+    let env2 = Env::new("wave_evaluator_diff_non_ascii_add_halts_second");
+    env2.tool(
+        "git",
+        vec![r(
+            "diff --name-only *",
+            b"README.md\0.github/workflows/c\xc3\xa9.yml\0",
+            "",
+            0,
+        )],
+    );
+    let steps = [builder("build-a"), critic("review-a", "build-a")];
+    let got = executor(&env2, &steps).run_step("build-a", 1).unwrap();
+    assert_eq!(
+        got.outcome,
+        StepOutcome::Halted(HaltReason::EvaluatorTouched)
+    );
+}
+
+#[test]
+fn wave_evaluator_diff_rename_out_halts() {
+    // `--no-renames` lists the removed Makefile as well as the new build.mk.
+    let env = Env::new("wave_evaluator_diff_rename_out_halts");
+    env.tool(
+        "git",
+        vec![r("diff --name-only *", b"Makefile\0build.mk\0", "", 0)],
+    );
+    let steps = [builder("build-a"), critic("review-a", "build-a")];
+    let got = executor(&env, &steps).run_step("build-a", 1).unwrap();
+    assert_eq!(
+        got.outcome,
+        StepOutcome::Halted(HaltReason::EvaluatorTouched)
+    );
+}
+
+// Critic.
+
+#[test]
+fn wave_critic_prompt_on_stdin() {
+    let env = Env::new("wave_critic_prompt_on_stdin");
+    let steps = [builder("build-a"), critic("review-a", "build-a")];
+    let exec = executor(&env, &steps);
+    exec.run_step("build-a", 1).unwrap();
+    assert_eq!(
+        exec.run_step("review-a", 1).unwrap().outcome,
+        StepOutcome::Passed
+    );
+    let argv = env.argv();
+    let claude = argv
+        .iter()
+        .find(|l| l.starts_with("claude "))
+        .expect("claude ran");
+    assert!(!claude.contains("Review the Builder step"), "{claude}");
+    let stdin = fs::read_to_string(env.bin.join("claude.stdin")).unwrap();
+    assert!(
+        stdin.contains("Review the Builder step build-a as the critic step review-a"),
+        "{stdin}"
+    );
+}
+
+#[test]
+fn wave_critic_no_defects_opens_pr() {
+    let env = Env::new("wave_critic_no_defects_opens_pr");
+    let steps = [builder("build-a"), critic("review-a", "build-a")];
+    let exec = with_open_prs(&env, &steps);
+    exec.run_step("build-a", 1).unwrap();
+    assert_eq!(
+        exec.run_step("review-a", 1).unwrap().outcome,
+        StepOutcome::Passed
+    );
+    let argv = env.argv();
+    let claude = argv
+        .iter()
+        .find(|l| l.starts_with("claude "))
+        .expect("claude ran");
+    assert!(claude.contains("--strict-mcp-config"), "{claude}");
+    assert!(claude.contains("--agent cas-critic"), "{claude}");
+    assert!(!claude.contains("--model"), "{claude}");
+    assert!(
+        has_line(
+            &argv,
+            &format!("git checkout --no-overlay {BASE} -- .claude")
+        ),
+        "{argv:?}"
+    );
+    assert!(
+        argv.iter()
+            .any(|l| l.starts_with("git worktree remove --force")),
+        "{argv:?}"
+    );
+    assert!(
+        has_line(
+            &argv,
+            "blackwall pr bwrun0000001 --base development --body -"
+        ),
+        "{argv:?}"
+    );
+
+    let body = fs::read_to_string(env.bin.join("blackwall.body")).unwrap();
+    let json = body
+        .split("```json\n")
+        .nth(1)
+        .and_then(|s| s.split("\n```").next())
+        .expect("fenced JSON");
+    let receipt: LandingReceipt = serde_json::from_str(json).unwrap();
+    assert_eq!(receipt.facts().audit, AuditStatus::NotAudited);
+    assert_eq!(
+        receipt.facts().branch.as_deref(),
+        Some("blackwall/bwrun0000001")
+    );
+    assert_eq!(receipt.facts().pr_number, None);
+}
+
+#[test]
+fn wave_critic_pass_no_pr_when_off() {
+    let env = Env::new("wave_critic_pass_no_pr_when_off");
+    let steps = [builder("build-a"), critic("review-a", "build-a")];
+    let exec = executor(&env, &steps);
+    exec.run_step("build-a", 1).unwrap();
+    assert_eq!(
+        exec.run_step("review-a", 1).unwrap().outcome,
+        StepOutcome::Passed
+    );
+    assert!(!env.argv().iter().any(|l| l.starts_with("blackwall pr")));
+    assert!(!env.bin.join("blackwall.body").exists());
+}
+
+#[test]
+fn wave_critic_defects_halts_and_keeps_run() {
+    let env = Env::new("wave_critic_defects_halts_and_keeps_run");
+    env.tool(
+        "claude",
+        vec![r("*", b"VERDICT: DEFECTS\nthe test is missing\n", "", 0)],
+    );
+    let steps = [builder("build-a"), critic("review-a", "build-a")];
+    let exec = with_open_prs(&env, &steps);
+    exec.run_step("build-a", 1).unwrap();
+    let got = exec.run_step("review-a", 1).unwrap();
+    assert_eq!(got.outcome, StepOutcome::Halted(HaltReason::CriticDefects));
+    let argv = env.argv();
+    assert!(
+        !argv.iter().any(|l| l.starts_with("blackwall pr")),
+        "{argv:?}"
+    );
+    // The run stays for inspection: no discard, release or settle other than select.
+    assert!(
+        !argv
+            .iter()
+            .any(|l| l.contains("discard") || l.contains("release")),
+        "{argv:?}"
+    );
+    // The halt compensates the passed Builder: its unpushed branch is deleted.
+    assert_eq!(got.compensation.len(), 1);
+    assert!(got.compensation[0].success);
+}
+
+#[test]
+fn wave_critic_unparsed_halts() {
+    let env = Env::new("wave_critic_unparsed_halts");
+    let mut text = String::from("no verdict on this line\n");
+    for i in 0..15 {
+        text.push_str(&format!("line {i}\n"));
+    }
+    let out: &'static [u8] = Box::leak(text.into_bytes().into_boxed_slice());
+    env.tool("claude", vec![r("*", out, "", 0)]);
+    let steps = [builder("build-a"), critic("review-a", "build-a")];
+    let exec = executor(&env, &steps);
+    exec.run_step("build-a", 1).unwrap();
+    assert_eq!(
+        exec.run_step("review-a", 1).unwrap().outcome,
+        StepOutcome::Halted(HaltReason::CriticUnparsed)
+    );
+}
+
+#[test]
+fn wave_critic_verdict_parses_only_the_first_line() {
+    assert_eq!(
+        parse_critic_verdict("VERDICT: NO DEFECTS\nok\n", Some(0)),
+        CriticVerdict::NoDefects
+    );
+    assert_eq!(
+        parse_critic_verdict("VERDICT: DEFECTS\nbad\n", Some(0)),
+        CriticVerdict::Defects
+    );
+    assert_eq!(
+        parse_critic_verdict("VERDICT: NO DEFECTS\n", Some(1)),
+        CriticVerdict::Unparsed
+    );
+    assert_eq!(
+        parse_critic_verdict("ok\nVERDICT: NO DEFECTS\n", Some(0)),
+        CriticVerdict::Unparsed
+    );
+    assert_eq!(
+        parse_critic_verdict("VERDICT: NO DEFECTS\n", None),
+        CriticVerdict::Unparsed
+    );
+}
+
+// Halt record and compensation.
+
+#[test]
+fn wave_halted_record_blocks_every_step() {
+    let env = Env::new("wave_halted_record_blocks_every_step");
+    env.tool("blackwall", vec![r("reconcile *", b"", "", 3)]);
+    let steps = [
+        builder("build-a"),
+        critic("review-a", "build-a"),
+        builder("build-b"),
+    ];
+    let exec = executor(&env, &steps);
+    assert_eq!(
+        exec.run_step("build-a", 1).unwrap().outcome,
+        StepOutcome::Halted(HaltReason::VerifyFailed)
+    );
+    let before = env.argv().len();
+    for id in ["build-a", "review-a", "build-b"] {
+        assert_eq!(
+            exec.run_step(id, 2).unwrap().outcome,
+            StepOutcome::Halted(HaltReason::WaveHalted),
+            "{id}"
+        );
+    }
+    assert_eq!(env.argv().len(), before, "a blocked step ran a subprocess");
+}
+
+/// A plan that passes one Builder and its Critic, then halts on a failing Probe.
+fn halting_plan() -> Vec<SagaStep> {
+    vec![
+        builder("build-a"),
+        critic("review-a", "build-a"),
+        probe("probe-x"),
+    ]
+}
+
+#[test]
+fn wave_compensate_deletes_unpushed() {
+    let env = Env::new("wave_compensate_deletes_unpushed");
+    env.tool("make", vec![r("*", b"", "check failed\n", 1)]);
+    let report = executor(&env, &halting_plan()).run_local(1).unwrap();
+    assert_eq!(report.halted, Some(HaltReason::ProbeFailed));
+    assert_eq!(report.compensation.len(), 1);
+    assert!(
+        report.compensation[0].success,
+        "{:?}",
+        report.compensation[0]
+    );
+    assert!(
+        has_line(&env.argv(), "git branch -D blackwall/bwrun0000001"),
+        "{:?}",
+        env.argv()
+    );
+}
+
+#[test]
+fn wave_compensate_keeps_pushed_without_pr() {
+    let env = Env::new("wave_compensate_keeps_pushed_without_pr");
+    env.tool("make", vec![r("*", b"", "", 1)]);
+    env.tool("git", vec![r("ls-remote *", b"", "", 0)]);
+    let report = executor(&env, &halting_plan()).run_local(1).unwrap();
+    assert_eq!(report.compensation.len(), 1);
+    assert!(report.compensation[0].success);
+    assert!(!env.argv().iter().any(|l| l.starts_with("git branch -D")));
+}
+
+#[test]
+fn wave_compensate_keeps_on_ls_remote_error() {
+    let env = Env::new("wave_compensate_keeps_on_ls_remote_error");
+    env.tool("make", vec![r("*", b"", "", 1)]);
+    env.tool(
+        "git",
+        vec![r("ls-remote *", b"", "fatal: no remote\n", 128)],
+    );
+    let report = executor(&env, &halting_plan()).run_local(1).unwrap();
+    assert_eq!(report.compensation.len(), 1);
+    assert!(
+        !report.compensation[0].success,
+        "{:?}",
+        report.compensation[0]
+    );
+    assert!(!env.argv().iter().any(|l| l.starts_with("git branch -D")));
+}
+
+#[test]
+fn wave_compensate_continues_after_failure() {
+    let env = Env::new("wave_compensate_continues_after_failure");
+    env.tool("make", vec![r("*", b"", "", 1)]);
+    env.tool(
+        "git",
+        vec![r("branch -D blackwall/bwrun0000002", b"", "locked\n", 1)],
+    );
+    let steps = [
+        builder("build-a"),
+        critic("review-a", "build-a"),
+        builder("build-b"),
+        critic("review-b", "build-b"),
+        probe("probe-x"),
+    ];
+    let report = executor(&env, &steps).run_local(1).unwrap();
+    assert_eq!(report.halted, Some(HaltReason::ProbeFailed));
+    // Newest first: build-b, then build-a. The failure on build-b does not stop build-a.
+    assert_eq!(report.compensation.len(), 2, "{:?}", report.compensation);
+    assert!(!report.compensation[0].success);
+    assert!(report.compensation[0].details.contains("locked"));
+    assert!(report.compensation[1].success);
+    assert!(
+        has_line(&env.argv(), "git branch -D blackwall/bwrun0000001"),
+        "{:?}",
+        env.argv()
+    );
+}
+
+// Probe and gate.
+
+#[test]
+fn wave_main_session_awaits_gate() {
+    let env = Env::new("wave_main_session_awaits_gate");
+    let mut gate = step("gate-x", None, ActivityKind::Gate, &["review-a"], &[]);
+    gate.gate = Some("heimdal:approval".into());
+    let steps = [builder("build-a"), critic("review-a", "build-a"), gate];
+    let report = executor(&env, &steps).run_local(1).unwrap();
+    assert_eq!(report.awaiting_gate.as_deref(), Some("gate-x"));
+    assert!(report.halted.is_none());
+    assert!(!env.argv().iter().any(|l| l.contains("saga")));
+}
+
+// Events.
+
+#[test]
+fn wave_events_carry_custody_facts() {
+    let env = Env::new("wave_events_carry_custody_facts");
+    let steps = [builder("build-a"), critic("review-a", "build-a")];
+    let report = executor(&env, &steps).run_local(7).unwrap();
+    assert_eq!(report.events.len(), 2, "{:?}", report.events);
+    match &report.events[0] {
+        WorkflowEvent::WaveStep {
+            sequence,
+            step,
+            role,
+            persona,
+            outcome,
+            run,
+            changeset,
+            base,
+            branch,
+            head,
+            timestamp,
+            ..
+        } => {
+            assert_eq!(*sequence, 0);
+            assert_eq!(step, "build-a");
+            assert_eq!(*role, cas_engine::AgentRole::Builder);
+            assert_eq!(persona.as_deref(), Some("cas-builder"));
+            assert_eq!(*outcome, WaveOutcome::Passed);
+            assert_eq!(run.as_deref(), Some(RUN_A));
+            assert_eq!(changeset.as_deref(), Some(CHG_A));
+            assert_eq!(base.as_deref(), Some(BASE));
+            assert_eq!(branch.as_deref(), Some("blackwall/bwrun0000001"));
+            assert_eq!(head.as_deref(), Some(HEAD));
+            assert_eq!(*timestamp, 7);
+        }
+        other => panic!("not a wave step: {other:?}"),
+    }
+    match &report.events[1] {
+        WorkflowEvent::WaveStep {
+            sequence, persona, ..
+        } => {
+            assert_eq!(*sequence, 1);
+            assert_eq!(persona.as_deref(), Some("cas-critic"));
+        }
+        other => panic!("not a wave step: {other:?}"),
+    }
+    // The step records carry the reconciled receipt, which the wave report also returns.
+    assert_eq!(report.receipts.len(), 1);
+    assert_eq!(
+        report.receipts[0].facts().branch.as_deref(),
+        Some("blackwall/bwrun0000001")
+    );
+}
+
+/// The live run of spec 0025 P9c. It runs only with `CAS_WAVE_LIVE=1` and panics when an input
+/// is missing: `CAS_WAVE_REPO` (the custody checkout) and `CAS_WAVE_PLAN` (a saga flow TOML).
+#[test]
+#[ignore = "live: needs CAS_WAVE_LIVE=1, CAS_WAVE_REPO and CAS_WAVE_PLAN"]
+fn live_smoke() {
+    assert_eq!(
+        std::env::var("CAS_WAVE_LIVE").as_deref(),
+        Ok("1"),
+        "CAS_WAVE_LIVE=1 is required"
+    );
+    let repo = std::env::var("CAS_WAVE_REPO").expect("CAS_WAVE_REPO is required");
+    let plan_path = std::env::var("CAS_WAVE_PLAN").expect("CAS_WAVE_PLAN is required");
+    let flow = fs::read_to_string(&plan_path).expect("CAS_WAVE_PLAN is readable");
+    let def = cas_engine::SagaFlowDef::from_toml(&flow).expect("CAS_WAVE_PLAN parses");
+    let plan = WavePlan::plan(&def.to_steps(), 2).expect("the plan is acyclic");
+    let scratch = std::env::temp_dir().join(format!("cas-wave-live-{}", std::process::id()));
+    let config = WaveExecConfig {
+        open_prs: std::env::var("CAS_WAVE_LIVE_PR").as_deref() == Ok("1"),
+        ..WaveExecConfig::new(
+            PathBuf::from(repo),
+            scratch.join("state"),
+            scratch.join("wt"),
+            scratch.join("wave.lock"),
+        )
+    };
+    let report = WaveExecutor::new(config, plan)
+        .run_local(0)
+        .expect("the run finishes");
+    println!("{report:#?}");
+    let _ = fs::remove_dir_all(&scratch);
+}
