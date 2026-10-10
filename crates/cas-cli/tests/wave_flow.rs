@@ -1397,7 +1397,7 @@ fn wave_merge_gate_refuses_armed_toml() {
 }
 
 #[test]
-fn wave_merge_gate_refuses_unparseable_toml() {
+fn wave_merge_gate_refuses_unparsable_toml() {
     let g = gate_case("gate-bad-toml", "G\\n", 0);
     write(
         &g.repo.join("blackwall.toml"),
