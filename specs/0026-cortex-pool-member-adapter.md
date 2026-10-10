@@ -99,6 +99,9 @@ Facts, 2026-10-10:
   call `Nack` with the D5 delay and release the slot.
 - **Unwanted behavior:** IF a payload does not parse or breaks policy, THEN the
   adapter shall call `Term` with a reason and release the slot.
+- **Ubiquitous:** The adapter shall bound each `Extend` call by the shortest
+  `lease_ms / 4` among its running units. A call that runs past the bound is a
+  failed `Extend` (D12).
 - **Unwanted behavior:** IF `Extend` fails twice in a row, or a CAS renew fails,
   THEN the adapter shall stop the task and release the slot. It sends no `Ack`, so
   Cortex redelivers after `lease_ms`.
@@ -183,6 +186,7 @@ most `ttl + 1` seconds after `now`.
 | D9 | The minimum `lease_ms` is 300, so the `Extend` tick is at least 100 ms. A smaller value, 0 included (the proto3 default), is a wire or backend fault, not a work fault. The adapter Nacks the unit with the D5 delay and stops `Recv` with an error that names `lease_ms` and its value. The stop is final until a restart: a reconnect would Nack again until `max_deliver`, and the backend would dead-letter the backlog. It never Terms it: on a dropped proto3 field, `Term` would dead-letter the whole backlog. | Integrator ruling w25:p1, 2026-10-10, mesh 4653a43a (lane decision, the operator may override); the 300 floor: cas-engineer, critic round 1 |
 | D10 | The lease `Budget` is the host's task cap, set in the adapter config. The adapter never derives it from `ttl`, and renewals move `expires_at` only. `max_wall_secs` is the task's wall-clock cap. Spec 0023 plans to freeze a slot whose budget runs out, so a budget of `ttl + 1` would freeze any task longer than one lease window. Nothing reads `max_wall_secs` today [verified, `git grep max_wall_secs` at 3009f8d]. | cas-engineer, 2026-10-10, P1 Part A critic (the operator may override) |
 | D11 | Two paths the first build added, kept: (a) a delivery with no `Warm` slot gets `Nack` with the D5 delay, because the server sent more than `free_slots` (F1) and that is not a work fault; (b) the `Recv` reconnect backoff has D5's shape, 1 s doubling to 60 s, and resets after a delivery; (c) a `Recv` stream that ends after it delivered `free_slots` units is the normal end, not a fault, so it costs no backoff, and the adapter reads a filled stream until it ends or a slot frees, so a surplus unit gets the (a) `Nack`; when a slot frees first, it drops that stream and calls `Recv` with the free count, with no backoff, so a server that keeps a filled stream open cannot stall new work. | cas-engineer, 2026-10-10, P1 Part A departures 3 and 9; (c) P1 Part A critic item 2 (the operator may override) |
+| D12 | The adapter bounds each `Extend` call by the shortest `lease_ms / 4` among its running units, and the port call carries that bound. A fixed bound breaks D4: with 2 s and `lease_ms` 3000, two failed calls take about 4 s, so the release comes after Cortex redelivers and the unit runs twice; and a hung call on a long-lease unit costs a short-lease unit its tick. A quarter, not a third: two cut calls then end at `lease_ms * 11 / 12` at the latest, before the Cortex lease, and a cut call never runs into the next tick. At the D9 floor the bound is 75 ms. The gRPC channel keeps a 5 s connect timeout and a 2 s request timeout as caps for the other RPCs. | cas-engineer, 2026-10-10, P1 Part B critic item B1 (the operator may override) |
 
 ## Plan
 
@@ -230,6 +234,9 @@ Red-first tests. P1 uses a fake port and a fake clock:
   1000, 2000, 60000 and 60000 ms (D5).
 - `cortex_pool_term_on_bad_payload`: a payload that does not parse sends `Term`.
 - `cortex_pool_extend_fails_twice_releases`: no `Ack`, the slot is `Warm`.
+- `cortex_pool_extend_bounded_by_shortest_tick`: units with `lease_ms` 30000 and 3000;
+  a fake `Extend` that hangs is cut at 750 ms, and the 3000 ms unit keeps its 1000 ms
+  tick. Two hung calls release that unit by 2750 ms, before its lease ends (D12).
 - `cortex_pool_shutdown_nacks_then_drains`: `Nack` with 0, then `Draining`.
 - `cortex_pool_task_error_nacks_and_releases`: a recoverable error sends `Nack` with
   the D5 delay; the slot is `Warm`.
