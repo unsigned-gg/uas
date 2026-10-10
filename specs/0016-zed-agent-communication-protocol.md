@@ -53,6 +53,33 @@ Facts, read 2026-10-10 on ceres. `$REG` is
 - **A1-F7 [verified]:** extension method names must start with `_`
   (`src/v1/ext.rs:27-28`).
 
+### Amendment A2 (2026-10-10): slot release on session end
+
+The landed server releases a slot only on `session/cancel`. A client that
+disconnects, or a session whose lease expires, keeps its slot. A2 adds D6.
+Facts, read 2026-10-10 on ceres with `grep -n` and `sed -n`, at
+`origin/development` 23b81d4. `$REG` is as in A1.
+
+- **A2-F1 [verified]:** `crates/cas-acp/src/server.rs:156` is
+  `Frame::End => break`. `serve` returns at the end of input and keeps every
+  session. Only `session_cancel` (`server.rs:293-313`) calls release.
+- **A2-F2 [verified]:** `SlotPool::sweep` (`crates/cas-pool/src/slot.rs:410-443`)
+  lists expired leases and changes nothing. `acquire_lease` refuses a slot that
+  holds an unexpired lease, or that is not `Warm` (`slot.rs:181-197`). An
+  expired lease that nobody releases blocks its slot.
+- **A2-F3 [verified]:** `release_lease` (`slot.rs:332-362`) checks the token,
+  not the expiry. The holder can release an expired lease. It stops no worker.
+- **A2-F4 [verified]:** `Lease::is_expired` (`crates/cas-domain/src/lease.rs:275-277`)
+  is `now >= expires_at`.
+- **A2-F5 [verified]:** `session/close` is a request, not a notification
+  (`CloseSessionRequest`, `$REG/agent-client-protocol-schema-1.9.1/src/v1/agent.rs:1443-1470`;
+  its dispatch arm at `:5002` has no `cfg` gate). A client sends it only when
+  the agent advertises `sessionCapabilities.close` (`:4090-4097`).
+  `InitializeResponse::new` sets `AgentCapabilities::default()` (`:170-177`), so
+  `cas-acp` does not advertise it. A `session/close` gets -32601 today.
+- **A2-F6 [verified]:** `cas_engine::SessionState` has no expired state
+  (`crates/cas-engine/src/session.rs:49-60`). "Expired" is a `cas-acp` end mark.
+
 ## Design
 
 ### Requirements (EARS)
@@ -64,6 +91,11 @@ Facts, read 2026-10-10 on ceres. `$REG` is
 - **State-driven:** WHILE a prompt turn runs, `cas-acp` shall translate engine activity events into `session/update` notifications.
 - **Unwanted behavior:** IF a client sends a `session/cancel` notification, THEN `cas-acp` shall freeze the slot, release it, send no response frame for the notification, and answer any open `session/prompt` with stop reason `cancelled`.
 - **Unwanted behavior:** IF the pool has no free slot, THEN `session/new` shall fail with error code -32001.
+- **Event-driven (D6a):** WHEN `cas-acp` reads a frame, or its caller calls `tick`, `cas-acp` shall read the clock once and, before it handles the frame, end every session whose lease is expired at that time (A2-F4): suspend the slot, release it, and mark the session `Expired`.
+- **Event-driven (D6b):** WHEN the input ends, or a read or a write on the transport fails, `cas-acp` shall suspend and release the slot of every live session, mark each one `Disconnected`, and then return.
+- **State-driven (D6c):** WHILE a session has no prompt turn in flight, `cas-acp` shall keep its slot leased until the lease expires, a `session/cancel` arrives, or the input ends.
+- **Unwanted behavior:** IF a `session/cancel` names a session that has ended, THEN `cas-acp` shall make no pool call and send no frame.
+- **Unwanted behavior:** IF a suspend or a release fails while a session ends by expiry or by end of input, THEN `cas-acp` shall write the error to stderr, still end the session, and go on to the next one.
 - **Optional feature:** WHERE the crate gains lease methods, or the lane rules on extension methods, `cas-acp` shall send a lease notice before a slot lease expires (Notes, N1).
 
 ### Decisions
@@ -75,6 +107,7 @@ Facts, read 2026-10-10 on ceres. `$REG` is
 | D3 | Workflow bridging: an ACP "execute" is two calls. `session/new` acquires a slot (spec 0015) and starts the `cas-engine` workflow (spec 0006). `session/prompt` runs one turn in that slot and returns a `stopReason`. | Amended A1: CAS lane w25:p1, 2026-10-10. Was: CAS lane, 2026-10-09 |
 | D4 | Lease notices are deferred. Schema 1.9.1 has no lease or heartbeat method (A1-F4). See Notes, N1. | Amended A1: CAS lane w25:p1, 2026-10-10. Was: `session/leaseUpdate`, CAS lane, 2026-10-09 |
 | D5 | Cooperative cancellation: `session/cancel` is a notification and gets no response frame. It suspends the slot with the cgroup freezer (spec 0015), then releases it. An open `session/prompt` answers `stopReason: cancelled` (A1-F6). Saga compensation (spec 0009) joins when `cas-engine` has a cancel API (CER-2727). | CAS lane, 2026-10-09; amended A1, CAS lane w25:p1, 2026-10-10 |
+| D6 | Slot release on session end (A2). (a) Lease expiry: the server checks every live lease once per frame read, before it handles the frame, and in `tick()`, which the caller drives. The clock is `AcpConfig.clock`. An expired session is suspended, released and marked `Expired`. (b) End of input, or a read or write error: every live session is suspended, released and marked `Disconnected`, best effort, errors to stderr. In (a) and (b) a failed release still ends the session: a retry on every frame repeats the error, and the pool refuses to lease a slot it still holds (A2-F2). (c) The end of a prompt turn is idle, not close. No custom method. `session/close` is a request behind a capability `cas-acp` does not advertise (A2-F5); serving it is out of scope here. D5 is unchanged. | CAS lane w25:p1, 2026-10-10, land on green (the operator can override) |
 
 ### Architecture and Flow
 
@@ -108,6 +141,11 @@ sequenceDiagram
     else Turn completes
         Engine->>ACP: workflow completed
         ACP-->>Zed: PromptResponse(stopReason end_turn)
+    end
+
+    opt Lease expires, or input ends (D6)
+        ACP->>Pool: suspend_slot(slot)
+        ACP->>Pool: release_lease(slot, token)
     end
 ```
 
@@ -168,6 +206,8 @@ Standard JSON-RPC 2.0 error codes are returned over the wire:
   - `session/cancel` suspends, then releases the slot, and sends no frame for the notification.
   - An unknown method gets -32601; malformed JSON gets -32700.
 - [ ] Lease notices: wait on N1.
+- [ ] D6: expiry per frame and in `tick()`, release on end of input and on a
+  transport error, `SessionEnd` marks, and a public `handle_frame` (brief P2b).
 - [ ] Update `specs/README.md` and `CHANGELOG.md`.
 
 ## Test
@@ -177,6 +217,26 @@ Run integration and unit tests for `cas-acp`:
 ```bash
 cargo test -p cas-acp -j 2
 ```
+
+Test rows for D6, in `crates/cas-acp/tests/acp_stdio.rs`. The clock reads a
+thread-local cell. Leases run from t=1000 for 600 s.
+
+- `lease_expiry_boundary_releases_on_next_frame`: one slot. At t=1599 a second
+  `session/new` gets -32001 (the control). At t=1600 it succeeds. The pool log
+  is acquire, suspend, release, acquire. The first session is `Expired`.
+- `tick_expires_without_a_frame`: at t=1600, `tick()` returns the session id and
+  releases its slot. A second `tick()` returns nothing and calls no pool method.
+- `eof_releases_every_session`: two slots, two sessions. The end of input
+  suspends and releases both, and marks both `Disconnected`.
+- `transport_error_releases_every_session`: input `session/new`, a writer that
+  fails. `serve` returns `Err`. The log is acquire, suspend, release.
+- `eof_release_failure_still_ends_the_session`: the mock release fails. Both
+  sessions still end, and the log has two release calls.
+- `cancel_freezes_then_releases` (kept): through `handle_frame`, the log is
+  exactly acquire, suspend, release. The session is `Cancelled`. No frame.
+- `expired_session_cancel_is_a_noop`: a frame at t=1600 expires the session.
+  Take the log, then send the cancel: no new pool call, no frame, and the mark
+  stays `Expired`.
 
 ## Notes
 
@@ -189,5 +249,17 @@ cargo test -p cas-acp -j 2
   open `session/prompt` still gets a `PromptResponse` with `stopReason:
   cancelled`. A test that sends a cancel with no prompt in flight sees no
   frame at all.
+- **N2, the tick and a blocking read (D6a):** `serve` holds the server and
+  blocks in `read`. Under `serve_stdio`, an idle session's slot returns at the
+  next frame or at the end of input, not at its expiry second. Only a caller
+  that owns its loop (`handle_frame` and `tick`) expires on time. A timer
+  thread or an async reader is a later decision.
+- **N3, no renewal:** no ACP method renews a lease (N1). A busy session also
+  ends at `lease_secs`. Revisit when `session/prompt` lands.
+- **N4, end marks:** the server keeps one `SessionEnd` mark per ended session
+  for its life. A later `session/prompt` can then tell an expired session from
+  an unknown one.
+- **N5, workers:** release returns the slot to `Warm` and stops no worker
+  (A2-F3). Reaping belongs to the spec 0015 reclaim row.
 - **Zed compatibility:** follows the Zed external agent protocol.
 - **No unsafe code:** the workspace forbids `unsafe` (AGENTS.md rule 14).
