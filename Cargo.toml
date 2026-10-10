@@ -53,6 +53,20 @@ agent-client-protocol = "2.2.0"
 # Axum web service for the operator deck (spec 0018, CER-2733). `serve` needs http1 and tokio;
 # `ws` waits for the WebSocket slice (D2). Madstack pin, spec 0004.
 axum = { version = "0.8.9", default-features = false, features = ["http1", "tokio"] }
+# Cortex pool-member transport in cas-engine, feature cortex-grpc (spec 0026 D3, spec 0004): the
+# versions cortex@c7fdb85 uses, each pinned with `=`.
+# gRPC client for the PoolWork service; `server` is a dev-dependency feature for the fake server.
+tonic = { version = "=0.14.6", default-features = false, features = ["channel", "codegen"] }
+# prost codec glue for the generated tonic code.
+tonic-prost = "=0.14.6"
+# Protobuf runtime for the generated messages.
+prost = "=0.14.4"
+# Struct and Timestamp of lane.proto and peer.proto.
+prost-types = "=0.14.4"
+# Generates the tonic client and server stubs in build.rs.
+tonic-prost-build = { version = "=0.14.6", default-features = false }
+# Compiles the vendored protos in build.rs with no system protoc.
+protox = "=0.9.1"
 # Compile-time HTML templates for the deck (spec 0018 D1). The `axum` feature gives Markup a response type.
 maud = { version = "0.27.0", features = ["axum"] }
 
