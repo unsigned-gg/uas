@@ -21,7 +21,7 @@ use crate::prefix::PrefixHash;
 #[derive(Debug, Error, PartialEq, Eq)]
 pub enum RouterError {
     /// The table holds no replica. An all-unhealthy table falls back (D5).
-    #[error("no healthy replicas")]
+    #[error("no replicas registered")]
     NoHealthyReplicas,
     /// A replica id was empty.
     #[error("invalid replica id: must not be empty")]
@@ -247,6 +247,13 @@ mod tests {
         // 0x51e05212264af2b9 % 4 == 1 and % 3 == 2 (python3, 2026-10-10).
         assert_eq!(four.choose(&k), Ok(ReplicaChoice::Fallback(rid(1))));
         assert_eq!(three.choose(&k), Ok(ReplicaChoice::Fallback(rid(2))));
+        // n = 7 pins the byte order: big-endian gives 2, little-endian would give 5
+        // (python3, 2026-10-10). The n = 3 and n = 4 cases agree under both.
+        let mut seven = table(7);
+        for i in 0..7 {
+            seven.set_healthy(&rid(i), false);
+        }
+        assert_eq!(seven.choose(&k), Ok(ReplicaChoice::Fallback(rid(2))));
     }
 
     #[test]
