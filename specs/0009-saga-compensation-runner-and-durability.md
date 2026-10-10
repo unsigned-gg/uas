@@ -11,16 +11,16 @@ depends_on: [0001-cas-architecture-and-crate-layout, 0006-cas-engine-and-harness
 ## Overview
 
 This spec defines the execution runner, cleanup compensation handlers, and deterministic
-crash recovery verification for Phase 1 of the Cerebral Agent Substrate (CAS).
+crash recovery verification for Phase 1 of the Unsigned Agent Substrate (UAS).
 
-Why now: `cas-domain` provides slot, lease, attestation, and policy primitives. `cas-engine`
+Why now: `uas-domain` provides slot, lease, attestation, and policy primitives. `uas-engine`
 provides event-sourced session models and basic coordinators. To complete Phase 1 and dogfood
 autonomous builder agents on host `ceres`, the substrate requires:
 
 1. **Saga Compensation Handlers (CER-2677):** Modular handlers for worktree removal,
    branch pruning, and lease return, executed in reverse dependency order upon step failure,
    producing structured `CompensationReceipt` records.
-2. **Headless Flow Runner (CER-2678):** Parsing `.saga/flows/*.toml` definitions in `cas-cli`,
+2. **Headless Flow Runner (CER-2678):** Parsing `.saga/flows/*.toml` definitions in `uas-cli`,
    dispatching step activities across dependency DAGs, and emitting structured JSON execution receipts.
 3. **Deterministic Replay & Crash Recovery (CER-2679):** Proving that interrupted sessions
    reconstruct their full state strictly from the recorded event log without re-executing
@@ -77,7 +77,7 @@ agent = "auto"
 verify_cmd = ["make", "fmt-check"]
 ```
 
-`cas harness run --flow <PATH>`:
+`uas harness run --flow <PATH>`:
 - Parses the flow TOML file.
 - Builds a `SagaFlowCoordinator` with dependency tracking.
 - Dispatches runnable steps in topological order.
@@ -96,19 +96,19 @@ A crashed or interrupted workflow must be recoverable from any point in its even
 
 - [x] Create spec 0009 and register in `specs/README.md`.
 - [x] Add `toml` dependency to workspace and document in spec 0004.
-- [x] Implement compensation handlers and `CompensationReceipt` in `cas-engine`.
-- [x] Add `SagaFlow` TOML deserializer and runner in `cas-engine` and `cas-cli`.
-- [x] Implement `crates/cas-engine/tests/saga.rs` integration tests.
-- [x] Implement `crates/cas-engine/tests/replay.rs` deterministic replay tests.
+- [x] Implement compensation handlers and `CompensationReceipt` in `uas-engine`.
+- [x] Add `SagaFlow` TOML deserializer and runner in `uas-engine` and `uas-cli`.
+- [x] Implement `crates/uas-engine/tests/saga.rs` integration tests.
+- [x] Implement `crates/uas-engine/tests/replay.rs` deterministic replay tests.
 - [x] Verify gates with `make spec-check && make check && make smoke`.
 
 ## Test
 
 ```bash
 make spec-check
-cargo test -p cas-engine -j 2 --test saga
-cargo test -p cas-engine -j 2 --test replay
-cargo run -p cas-cli -j 2 -- harness run --help
+cargo test -p uas-engine -j 2 --test saga
+cargo test -p uas-engine -j 2 --test replay
+cargo run -p uas-cli -j 2 -- harness run --help
 ```
 
 Pass criteria: exit code 0 across all test suites under mandatory `-j 2` host throttling.
