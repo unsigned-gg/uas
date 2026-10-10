@@ -41,6 +41,17 @@ pub struct AcpConfig {
     pub clock: fn() -> u64,
 }
 
+/// How an open session ended. Spec 0016 D6.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SessionEnd {
+    /// A `session/cancel` released the slot.
+    Cancelled,
+    /// The lease expired and the server released the slot.
+    Expired,
+    /// The input ended, or the transport failed, and the server released the slot.
+    Disconnected,
+}
+
 /// What the server keeps for one open session.
 struct ActiveSession {
     slot: SlotId,
@@ -53,6 +64,8 @@ pub struct AcpServer<P: PoolPort> {
     pool: P,
     config: AcpConfig,
     sessions: BTreeMap<String, ActiveSession>,
+    /// How each ended session ended. Kept for the server's life (spec 0016 N4).
+    ends: BTreeMap<String, SessionEnd>,
     next_seq: u64,
 }
 
@@ -141,36 +154,67 @@ impl<P: PoolPort> AcpServer<P> {
             pool,
             config,
             sessions: BTreeMap::new(),
+            ends: BTreeMap::new(),
             next_seq: 0,
         }
     }
 
     /// Read frames from `reader` until it ends. Write one response line per request.
+    /// When the input ends, or a read or write fails, every live session ends as
+    /// `Disconnected` (spec 0016 D6b). The error, if any, is then returned.
     pub fn serve<R: BufRead, W: Write>(
         &mut self,
         mut reader: R,
         mut writer: W,
     ) -> std::io::Result<()> {
+        let result = self.serve_frames(&mut reader, &mut writer);
+        self.end_all(SessionEnd::Disconnected);
+        result
+    }
+
+    /// The read and write loop of `serve`. Returns at the end of input, or on the first
+    /// transport error.
+    fn serve_frames<R: BufRead, W: Write>(
+        &mut self,
+        reader: &mut R,
+        writer: &mut W,
+    ) -> std::io::Result<()> {
         loop {
-            let reply = match read_frame(&mut reader)? {
-                Frame::End => break,
-                Frame::TooLong => error_frame(
-                    RequestId::Null,
-                    &AcpError::InvalidRequest(format!("frame exceeds {MAX_FRAME_BYTES} bytes")),
-                ),
-                Frame::Malformed => error_frame(
-                    RequestId::Null,
-                    &AcpError::Parse("frame is not UTF-8".into()),
-                ),
-                Frame::Line(text) if text.trim().is_empty() => None,
-                Frame::Line(text) => self.handle_line(&text),
-            };
-            if let Some(line) = reply {
+            let frame = read_frame(reader)?;
+            if matches!(frame, Frame::End) {
+                return Ok(());
+            }
+            if let Some(line) = self.reply_to(frame) {
                 writeln!(writer, "{line}")?;
                 writer.flush()?;
             }
         }
-        Ok(())
+    }
+
+    /// The reply to one frame read from the input, after the expiry check (spec 0016 D6a).
+    fn reply_to(&mut self, frame: Frame) -> Option<String> {
+        self.expire_due();
+        match frame {
+            Frame::Line(text) => self.handle_text(&text),
+            Frame::TooLong => error_frame(
+                RequestId::Null,
+                &AcpError::InvalidRequest(format!("frame exceeds {MAX_FRAME_BYTES} bytes")),
+            ),
+            Frame::Malformed => error_frame(
+                RequestId::Null,
+                &AcpError::Parse("frame is not UTF-8".into()),
+            ),
+            Frame::End => None,
+        }
+    }
+
+    /// A line of text: a blank line gets no reply, anything else is handled.
+    fn handle_text(&mut self, text: &str) -> Option<String> {
+        if text.trim().is_empty() {
+            None
+        } else {
+            self.handle_line(text)
+        }
     }
 
     /// Serve the process's standard input and output.
@@ -306,15 +350,74 @@ impl<P: PoolPort> AcpServer<P> {
         match self.pool.release(&slot, &token) {
             Ok(()) => {
                 self.sessions.remove(&key);
+                self.ends.insert(key, SessionEnd::Cancelled);
             }
             Err(err) => eprintln!("cas-acp: release {}: {err}", slot.as_str()),
         }
         Ok(())
     }
 
+    /// Handle one frame at the current clock: the expiry check, then the frame. Returns
+    /// the response line, if any. A caller that owns its loop uses this instead of `serve`.
+    pub fn handle_frame(&mut self, line: &str) -> Option<String> {
+        self.reply_to(Frame::Line(line.to_string()))
+    }
+
+    /// End every session whose lease is expired at the current clock. Returns the ended
+    /// session ids, in ascending order. A caller that owns its loop calls this when no
+    /// frame arrives (spec 0016 D6a).
+    pub fn tick(&mut self) -> Vec<String> {
+        self.expire_due()
+    }
+
+    /// How an ended session ended. `None` if the session is open or was never opened.
+    pub fn session_end(&self, session_id: &str) -> Option<SessionEnd> {
+        self.ends.get(session_id).copied()
+    }
+
     /// The engine state of an open session, or `None` if no such session is open.
     pub fn workflow_state(&self, session_id: &str) -> Option<SessionState> {
         self.sessions.get(session_id).map(|s| s.workflow.state())
+    }
+
+    /// Read the clock once. End every session whose lease is expired at that time.
+    /// Returns the ended ids, ascending.
+    fn expire_due(&mut self) -> Vec<String> {
+        let now = (self.config.clock)();
+        let due: Vec<String> = self
+            .sessions
+            .iter()
+            .filter(|(_, active)| active.lease.is_expired(now))
+            .map(|(key, _)| key.clone())
+            .collect();
+        for key in &due {
+            self.end_session(key, SessionEnd::Expired);
+        }
+        due
+    }
+
+    /// End every live session with `end`.
+    fn end_all(&mut self, end: SessionEnd) {
+        let live: Vec<String> = self.sessions.keys().cloned().collect();
+        for key in &live {
+            self.end_session(key, end);
+        }
+    }
+
+    /// Suspend, then release, the slot of one session. The session ends whatever the
+    /// result, so a retry on every frame cannot repeat the error (spec 0016 D6).
+    /// Errors go to stderr; stdout carries frames only.
+    fn end_session(&mut self, key: &str, end: SessionEnd) {
+        let Some(active) = self.sessions.remove(key) else {
+            return;
+        };
+        if let Err(err) = self.pool.suspend(&active.slot) {
+            eprintln!("cas-acp: suspend {}: {err}", active.slot.as_str());
+        }
+        if let Err(err) = self.pool.release(&active.slot, &active.lease.token) {
+            eprintln!("cas-acp: release {}: {err}", active.slot.as_str());
+        }
+        self.ends.insert(key.to_string(), end);
     }
 
     /// The first configured slot that no open session holds.
