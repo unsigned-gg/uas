@@ -13,6 +13,7 @@ use serde_json::Value;
 struct MockPool {
     log: Rc<RefCell<Vec<String>>>,
     full: bool,
+    suspend_fails: bool,
 }
 
 impl MockPool {
@@ -36,6 +37,9 @@ impl PoolPort for MockPool {
         self.log
             .borrow_mut()
             .push(format!("suspend:{}", slot.as_str()));
+        if self.suspend_fails {
+            return Err(PoolError::NoActiveLease(slot.clone()));
+        }
         Ok(())
     }
 
@@ -166,4 +170,37 @@ fn bad_json_is_32700() {
     assert_eq!(frames.len(), 1);
     assert_eq!(frames[0]["id"], Value::Null);
     assert_eq!(frames[0]["error"]["code"], -32700);
+}
+
+#[test]
+fn suspend_failure_still_releases() {
+    let pool = MockPool {
+        suspend_fails: true,
+        ..MockPool::default()
+    };
+    let mut server = AcpServer::new(pool.clone(), config());
+    let opened = serve(&mut server, &format!("{SESSION_NEW}\n"));
+    let session_id = opened[0]["result"]["sessionId"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    let cancel = format!(
+        r#"{{"jsonrpc":"2.0","method":"session/cancel","params":{{"sessionId":"{session_id}"}}}}"#
+    );
+    let frames = serve(&mut server, &format!("{cancel}\n"));
+
+    assert!(
+        frames.is_empty(),
+        "a notification must get no response frame"
+    );
+    let calls = pool.calls();
+    assert!(
+        calls.iter().any(|c| c.starts_with("release:slot-1:")),
+        "calls: {calls:?}"
+    );
+    assert!(
+        server.workflow_state(&session_id).is_none(),
+        "released session is closed"
+    );
 }

@@ -218,9 +218,17 @@ impl<P: PoolPort> AcpServer<P> {
         };
         let slot = active.slot.clone();
         let token = active.lease.token.clone();
-        self.pool.suspend(&slot)?;
-        self.pool.release(&slot, &token)?;
-        self.sessions.remove(&key);
+        // A failed freeze must not keep the slot leased: release anyway. The pool's
+        // release thaws a frozen slot first. Errors go to stderr; stdout carries frames only.
+        if let Err(err) = self.pool.suspend(&slot) {
+            eprintln!("cas-acp: suspend {}: {err}", slot.as_str());
+        }
+        match self.pool.release(&slot, &token) {
+            Ok(()) => {
+                self.sessions.remove(&key);
+            }
+            Err(err) => eprintln!("cas-acp: release {}: {err}", slot.as_str()),
+        }
         Ok(())
     }
 
