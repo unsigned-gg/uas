@@ -262,7 +262,43 @@ fn landing_missing_verify_is_reported() {
         "no verify gate must not open a PR: {log:?}"
     );
     assert!(
-        !log.iter().any(|line| line.starts_with("blackwall reconcile")),
+        !log.iter()
+            .any(|line| line.starts_with("blackwall reconcile")),
         "no verify gate must not reconcile either (it would create a branch): {log:?}"
+    );
+    // The gate sits after the base check and before any blackwall call: the only
+    // process the activity ran is merge-base.
+    assert_eq!(
+        log.iter()
+            .map(|line| line
+                .split_whitespace()
+                .take(2)
+                .collect::<Vec<_>>()
+                .join(" "))
+            .collect::<Vec<_>>(),
+        vec!["git merge-base".to_string()],
+        "exactly one merge-base call and nothing else: {log:?}"
+    );
+}
+
+#[test]
+fn landing_stale_base_wins_over_missing_verify() {
+    // A stale base is refused before the verify gate is consulted, so the outcome
+    // names the stale base, not the missing gate.
+    let scratch = Scratch::new("landing_stale_base_wins_over_missing_verify");
+    let dir = scratch.path();
+    write_blackwall_toml_without_verify(dir);
+    canned(dir, "git-merge-base", Some(1), "");
+    canned(dir, "git-rev-parse", None, "ffeedd0011\n");
+    let outcome = run_landing(dir, false);
+    let LandingOutcome::StaleBase { receipt, .. } = outcome else {
+        panic!("expected StaleBase, got {outcome:?}");
+    };
+    assert!(receipt.facts().stale_base);
+    assert_eq!(receipt.facts().verify_cmd, None);
+    let log = argv_log(dir);
+    assert!(
+        !log.iter().any(|line| line.starts_with("blackwall")),
+        "a stale base must not reach blackwall: {log:?}"
     );
 }
