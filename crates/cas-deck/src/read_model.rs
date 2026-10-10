@@ -73,6 +73,8 @@ impl SessionRow {
             WorkflowEvent::SessionFinished { final_state, .. } => {
                 self.state = *final_state;
             }
+            // The deck ignores wave steps in this slice. A later deck slice renders them (spec 0025).
+            WorkflowEvent::WaveStep { .. } => {}
             WorkflowEvent::SessionStarted { .. } => {}
         }
     }

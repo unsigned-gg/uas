@@ -76,8 +76,10 @@ pub use compensator::{
 pub use cortex::{CortexMeshEvent, MeshIntent, SettleCard, SettleQueue, SettleStatus};
 pub use cpm::{CpmSchedule, CpmStepSchedule};
 pub use error::EngineError;
-pub use event::{EventStore, InMemoryEventStore, WorkflowEvent};
-pub use landing::{LandingActivity, LandingConfig, LandingError, LandingInput, LandingOutcome};
+pub use event::{EventStore, InMemoryEventStore, WaveOutcome, WorkflowEvent};
+pub use landing::{
+    LandingActivity, LandingConfig, LandingError, LandingInput, LandingOutcome, ReconcileOutcome,
+};
 pub use reverie::{InMemoryReverieClient, ReverieClient, ReverieContextQuery, ReverieMemoryRecord};
 pub use saga::{FlowMetadata, SagaFlowCoordinator, SagaFlowDef, SagaStep};
 pub use session::{SessionId, SessionState};

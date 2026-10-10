@@ -3,7 +3,7 @@
 use cas_domain::{LeaseId, SlotId};
 use serde::{Deserialize, Serialize};
 
-use crate::{Activity, ActivityResult, EngineError, SessionId, SessionState};
+use crate::{Activity, ActivityResult, AgentRole, EngineError, SessionId, SessionState};
 
 /// Event recorded in an append-only workflow log.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -60,6 +60,36 @@ pub enum WorkflowEvent {
         /// Epoch timestamp in seconds.
         timestamp: u64,
     },
+    /// One wave step ran on the custody chain (spec 0025 D5). A fact is `None` when the
+    /// step did not reach it.
+    WaveStep {
+        /// Sequence number.
+        sequence: u64,
+        /// The step id from the wave plan.
+        step: String,
+        /// The wave index in the plan.
+        wave: u32,
+        /// The role that ran the step.
+        role: AgentRole,
+        /// The persona that ran the step, when a model ran it (spec 0025 D6).
+        persona: Option<String>,
+        /// How the step ended.
+        outcome: WaveOutcome,
+        /// The 12-character Blackwall run prefix (spec 0025 D12).
+        run: Option<String>,
+        /// The 12-character changeset prefix (spec 0025 D12).
+        changeset: Option<String>,
+        /// The wave base commit.
+        base: Option<String>,
+        /// The landing branch, `blackwall/<run>`.
+        branch: Option<String>,
+        /// The reconciled head commit.
+        head: Option<String>,
+        /// The pull request number, when one was opened.
+        pr: Option<u64>,
+        /// Epoch timestamp in seconds.
+        timestamp: u64,
+    },
     /// Session concluded in a terminal state.
     SessionFinished {
         /// Sequence number.
@@ -68,6 +98,21 @@ pub enum WorkflowEvent {
         final_state: SessionState,
         /// Epoch timestamp in seconds.
         timestamp: u64,
+    },
+}
+
+/// How one wave step ended. A step that is not ready writes no event (spec 0025 D5).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "result", rename_all = "snake_case")]
+pub enum WaveOutcome {
+    /// The step passed. A Builder has a reconciled head; a Critic has a no-defects verdict.
+    Passed,
+    /// The step is a MainSession gate. The saga gate holds it until a person approves.
+    AwaitingGate,
+    /// The step halted with a reason from the spec 0025 admission and halt table.
+    Halted {
+        /// The halt reason, for example `EvaluatorTouched`.
+        reason: String,
     },
 }
 
@@ -81,6 +126,7 @@ impl WorkflowEvent {
             Self::ActivityFailed { sequence, .. } => *sequence,
             Self::Compensating { sequence, .. } => *sequence,
             Self::SessionFinished { sequence, .. } => *sequence,
+            Self::WaveStep { sequence, .. } => *sequence,
         }
     }
 
@@ -93,6 +139,7 @@ impl WorkflowEvent {
             Self::ActivityFailed { timestamp, .. } => *timestamp,
             Self::Compensating { timestamp, .. } => *timestamp,
             Self::SessionFinished { timestamp, .. } => *timestamp,
+            Self::WaveStep { timestamp, .. } => *timestamp,
         }
     }
 }
@@ -150,6 +197,34 @@ impl EventStore for InMemoryEventStore {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn wave_step_event_carries_custody_facts() {
+        let ev = WorkflowEvent::WaveStep {
+            sequence: 0,
+            step: "build-a".into(),
+            wave: 1,
+            role: AgentRole::Builder,
+            persona: Some("cas-builder".into()),
+            outcome: WaveOutcome::Halted {
+                reason: "EvaluatorTouched".into(),
+            },
+            run: Some("bw-0123456789".into()),
+            changeset: Some("blake3-abcd".into()),
+            base: Some("056d7c7abcdef".into()),
+            branch: Some("blackwall/bw-0123456789".into()),
+            head: None,
+            pr: None,
+            timestamp: 42,
+        };
+        let json = serde_json::to_string(&ev).unwrap();
+        assert!(json.contains("\"type\":\"wave_step\""), "{json}");
+        assert!(json.contains("\"result\":\"halted\""), "{json}");
+        let back: WorkflowEvent = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, ev);
+        assert_eq!(back.sequence(), 0);
+        assert_eq!(back.timestamp(), 42);
+    }
 
     #[test]
     fn event_store_appends_sequentially() {

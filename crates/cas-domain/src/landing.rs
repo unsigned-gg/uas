@@ -21,6 +21,8 @@ pub enum AuditStatus {
         /// How many exec events were dropped.
         dropped_events: u64,
     },
+    /// No slot audit ran. A wave Builder has no slot (spec 0025 D9).
+    NotAudited,
 }
 
 /// Where the cost figures of a landing came from (spec 0023 D2).
@@ -370,6 +372,22 @@ mod tests {
             back.facts().audit,
             AuditStatus::Unattested { dropped_events: 3 }
         );
+    }
+
+    #[test]
+    fn landing_receipt_not_audited_roundtrip() {
+        // A wave run has no slot, so no audit ran at all (spec 0025 D9).
+        let mut f = facts(Some(0), false);
+        f.audit = AuditStatus::NotAudited;
+        f.run_hash = String::new();
+        let receipt = LandingReceipt::new(f).unwrap();
+        let json = serde_json::to_string(&receipt).unwrap();
+        assert!(
+            json.contains("\"audit\":{\"status\":\"not_audited\"}"),
+            "{json}"
+        );
+        let back: LandingReceipt = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.facts().audit, AuditStatus::NotAudited);
     }
 
     fn raise(who: &str) -> HumanRaise {

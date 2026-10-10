@@ -26,6 +26,7 @@
 mod attestation;
 mod envelope;
 mod error;
+mod evaluator;
 mod ident;
 mod landing;
 mod lease;
@@ -35,6 +36,7 @@ mod slot;
 pub use attestation::{Attestation, EvidenceTier};
 pub use envelope::Envelope;
 pub use error::DomainError;
+pub use evaluator::{is_critic_input_path, is_evaluator_path, CRITIC_INPUT_PATHS, EVALUATOR_PATHS};
 pub use landing::{
     AuditStatus, CostSource, HumanRaise, LandingFacts, LandingReceipt, LandingReceiptError,
 };

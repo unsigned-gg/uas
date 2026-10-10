@@ -91,6 +91,15 @@ impl WorkflowSession<InMemoryEventStore> {
                     session.state = SessionState::Compensating;
                     session.store.append(event.clone())?;
                 }
+                WorkflowEvent::WaveStep { sequence, .. } => {
+                    if *sequence != session.store.len() as u64 {
+                        return Err(EngineError::ReplayFailed {
+                            sequence: *sequence,
+                            reason: "non-sequential sequence number".into(),
+                        });
+                    }
+                    session.store.append(event.clone())?;
+                }
                 WorkflowEvent::SessionFinished {
                     sequence,
                     final_state,
