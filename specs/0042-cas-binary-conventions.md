@@ -63,7 +63,7 @@ Measured 2026-10-10 on ceres at development `bd31291`, debug build.
 - [ ] `uas-ebpfd`: add `version = VERSION` to the command, set `.with_writer(std::io::stderr)`, default filter `info`.
 - [ ] `uas`: default filter `warn` when `RUST_LOG` is unset; `UAS_LOG_FORMAT` switch.
 - [ ] Workspace: move the stamp from `crates/uas-cli/build.rs` to a shared `build-rev` helper used by every binary crate.
-- [ ] Workspace `Cargo.toml`: add `env` to the `clap` features (line 33 has `derive` only), then `env = "UAS_WAVE_..."` on the three wave arguments, so `--help` lists them.
+- [ ] Workspace `Cargo.toml`: add `env` to the `clap` features (line 33 has `derive` only), then `env = "UAS_WAVE_REPO"` on `--repo`, `env = "UAS_WAVE_STATE_DIR"` on `--state-dir`, and a new `--open-prs` flag with `env = "UAS_WAVE_OPEN_PRS"` on `wave step`, since that variable has no argument today (plan 0042 finding 3; ruled by the integrating lane 2026-10-10 as within REQ-0042-02, not a new decision).
 - [ ] `make release-notes`: refuse a `-dirty` rev.
 - [ ] Spec 0038: `uas-operator` cites this spec for its flags, logging and exit codes.
 
@@ -74,6 +74,7 @@ Measured 2026-10-10 on ceres at development `bd31291`, debug build.
 | REQ-0042-03, 06 | `timeout 1 ./target/debug/uas-ebpfd --socket /tmp/uas-0042.sock >/tmp/uas-0042.out 2>/dev/null; test ! -s /tmp/uas-0042.out`. The daemon may exit early with an error; stdout must still be empty. Expected red today, because `uas-ebpfd` sets no writer (F3). |
 | REQ-0042-07 | `uas nonsense` exits 2; `uas wave step` in a repo with no `.blackwall/init-head` exits 2 (spec 0025 line 139); `uas harness verify --receipt /dev/null` exits 1. Goes red if any code changes. |
 | REQ-0042-08 | `uas --version` and `uas-ebpfd --version` both match `^[a-z-]+ [0-9]+\.[0-9]+\.[0-9]+ \((unknown|[0-9a-f]{7,}(-dirty)?|v[^ ]+)\)$`. Goes red today for `uas-ebpfd` (F2). |
+| REQ-0042-09 | In a throwaway worktree, modify a tracked file and run `make release-notes VERSION=9.9.9`: exit 1 with `release-notes: refusing a dirty tree`, and `Cargo.toml` unchanged. Goes red against the Makefile before plan 0042 P7, which exits 0 and rewrites `Cargo.toml`. |
 | REQ-0042-10 | `grep -rnE 'opentelemetry\|otlp\|prometheus' crates/*/src` prints nothing. Goes red when an exporter crate is added without a spec. |
 
 ```bash
@@ -87,4 +88,5 @@ cargo nextest run -p uas-cli conventions -j 2
 - Spec 0025 chose exit 2 for a not-ready step before this spec existed; D4 keeps it and gives it the general meaning, so no landed spec changes.
 - The `uas demo` command prints no lease token (`main.rs` line 172); D3 keeps that, since a token is not a result.
 - Clap's `env` attribute needs the `env` feature of `clap`; the workspace manifest enables `derive` only, and the Plan adds `env`. Spec 0004 has no `clap` row to amend.
+- Plan 0042 (PR #127) found that `UAS_WAVE_OPEN_PRS` is read with no clap argument and that REQ-0042-09 had no Test row; both are fixed in this amendment, 2026-10-10.
 - Out of scope: the content of log records and any redaction rule. Spec 0013 D5 covers the one secret the substrate handles.
