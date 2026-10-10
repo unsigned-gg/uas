@@ -11,6 +11,7 @@ use cas_ebpf::clamp::{enter_clamped_group, nice_of, pgid_of, WORKER_NICE};
 
 #[test]
 fn child_spawned_with_enter_clamped_group_runs_at_nice_19_in_its_own_group() {
+    base_nice();
     let mut command = Command::new("sleep");
     command
         .arg("30")
