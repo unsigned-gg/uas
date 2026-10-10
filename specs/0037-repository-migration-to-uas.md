@@ -48,8 +48,14 @@ Facts, measured 2026-10-10 on `origin/development` at `ab8112a`:
   with "the same secret names as cerebral-work/reverie". With no repository
   secrets (F3), those names resolve to organisation secrets of `cerebral-work`,
   which do not travel with a transfer. Command: `grep -n sccache .github/workflows/_rust.yml`.
-- **F5 [verified]:** `unsigned-gg/uas` does not exist. Command:
-  `gh api repos/unsigned-gg/uas`, HTTP 404.
+- **F5 [verified, 2026-10-10 21:36Z]:** Neither `unsigned-gg/uas` nor
+  `unsigned-gg/cas-substrate` exists, and `cerebral-work/cas-substrate` is still
+  present and private. Commands: `gh api repos/unsigned-gg/uas` and
+  `gh api repos/unsigned-gg/cas-substrate`, both HTTP 404;
+  `gh api repos/cerebral-work/cas-substrate`, `private=true`. Christian said in
+  session at about 21:35Z "we're now an unsigned-gg repo" [reported]; the API
+  did not show a transfer one minute later. The two statements are recorded
+  side by side until one of them changes; this lane performs no transfer.
 - **F6 [verified]:** The crates.io name `uas` was published at version 0.1.0 on
   2026-10-10T20:46Z as "Unsigned Agent Substrate (UAS) core primitives", owned by
   the user `todie`. Command: `curl https://crates.io/api/v1/crates/uas` and
@@ -85,6 +91,7 @@ Facts, measured 2026-10-10 on `origin/development` at `ab8112a`:
 | D9 | Linear stays as it is. The 52 `CER-` references in specs remain valid identifiers; the Linear project is renamed if Christian wants, which is his act. | F9; CAS lane w25:p1, 2026-10-10 |
 | D10 | Other lanes' checkouts (F8) are not touched by this lane. After the transfer, GitHub redirects the old remote, so an existing checkout keeps working until its owner updates `origin`. The cutover notice tells each owner to run `git remote set-url origin` and to move the directory under `~/projects/unsigned/` when they choose. | post-merge-branch-hygiene SOP, concurrency; CAS lane w25:p1, 2026-10-10 |
 | D12 | Facts F1 to F9 are the **transfer impact list** for `uas` that the implementation plan's step 7 waits on, and they are published as `docs/migration/uas-impact-list.md` in the preparation phase, so the `vespertin` lane and Christian read one file rather than this spec [reported: research lane w1X:p22 confirmed the list is "exactly what is needed", 2026-10-10 about 21:5xZ]. | CAS lane w25:p1, 2026-10-10 |
+| D13 | **Publication.** Christian ruled, in his own session in lane w25:p1 at about 21:38Z on 2026-10-10, that the `uas` crate on crates.io, which he published and owns (F6), is the vehicle for publishing substrate work. This amends, for this repository only, spec 0004's standing `publish = false` for estate crates. crates.io has no namespaces: `uas` is one crate name, and any `uas-*` sub-crate is a separate name that is unreserved until published, with a 24-hour lock after any deletion (as `vesperan` and `zerodays` showed today). Which crates publish, under which names, and who presses publish, are spec 0039's to record; publishing itself stays Christian's act. | Christian, 2026-10-10 about 21:38Z, in session [reported: this lane heard it] |
 | D11 | The estate brief, the agentic context package, memory files and the `.saga` team files name this repo. Those outside this repository are not this spec's to edit; the cutover notice lists them for their owners. Those inside, `.saga/teams.toml` and `.saga/topologies.toml`, are part of the post-cutover PR. | CAS lane w25:p1, 2026-10-10 |
 
 ### Requirements (EARS)
