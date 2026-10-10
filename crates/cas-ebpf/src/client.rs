@@ -37,6 +37,20 @@ impl DaemonClient {
         })
     }
 
+    /// Connects like [`DaemonClient::connect`], and gives every request on the
+    /// connection a read and write timeout. A daemon that stops answering then
+    /// fails the request with an I/O timeout instead of blocking the caller.
+    pub fn connect_with_timeout(
+        path: impl AsRef<Path>,
+        timeout: std::time::Duration,
+    ) -> Result<Self, EbpfError> {
+        let client = Self::connect(path)?;
+        let stream = client.reader.get_ref();
+        stream.set_read_timeout(Some(timeout))?;
+        stream.set_write_timeout(Some(timeout))?;
+        Ok(client)
+    }
+
     /// Tracks `pid` with parent `ppid`.
     pub fn track(&mut self, pid: u32, ppid: u32) -> Result<(), EbpfError> {
         self.expect_ack(&Request::Track { pid, ppid })

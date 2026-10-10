@@ -77,6 +77,7 @@ impl Fixture {
     fn config(&self) -> LaunchConfig {
         LaunchConfig {
             daemon_socket: Some(self.path.clone()),
+            ..LaunchConfig::default()
         }
     }
 }
@@ -133,6 +134,7 @@ async fn launch_absent_socket_degrades_to_unavailable() {
     let _ = std::fs::remove_file(&missing);
     let cfg = LaunchConfig {
         daemon_socket: Some(missing),
+        ..LaunchConfig::default()
     };
     let (status, audit) =
         blocking(move || spawn_blocking_worker(0, cfg).finish().expect("finish")).await;
@@ -208,6 +210,39 @@ async fn launch_dropped_events_unattest_the_run() {
     assert!(status.success());
     assert_eq!(audit.audit, AuditStatus::Unattested { dropped_events: 3 });
     assert_eq!(audit.run_hash.as_deref(), Some(EMPTY_SHA256));
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn launch_silent_daemon_degrades_to_unavailable_without_hanging() {
+    // A daemon that accepts and never answers. The launch must come back unattested.
+    let path = std::env::temp_dir().join(format!("cas-pool-silent-{}.sock", std::process::id()));
+    let _ = std::fs::remove_file(&path);
+    let listener = std::os::unix::net::UnixListener::bind(&path).expect("bind");
+    let holder = std::thread::spawn(move || {
+        let accepted = listener.accept();
+        std::thread::sleep(Duration::from_secs(3));
+        drop(accepted);
+    });
+    let cfg = LaunchConfig {
+        daemon_socket: Some(path.clone()),
+        daemon_timeout: Duration::from_millis(200),
+    };
+    let launched = tokio::time::timeout(
+        Duration::from_secs(8),
+        blocking(move || spawn_blocking_worker(0, cfg).finish().expect("finish")),
+    )
+    .await
+    .expect("the launch must not hang on a silent daemon");
+    let (status, audit) = launched;
+    assert!(status.success());
+    assert_eq!(audit.audit, AuditStatus::Unattested { dropped_events: 0 });
+    assert!(
+        matches!(audit.degradation, Some(AuditDegradation::Unavailable(_))),
+        "{:?}",
+        audit.degradation
+    );
+    let _ = std::fs::remove_file(&path);
+    let _ = holder.join();
 }
 
 #[tokio::test(flavor = "multi_thread")]
