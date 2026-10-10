@@ -85,7 +85,7 @@ Facts, 2026-10-10. Source facts from `unsigned-gg/blackwall@3d98dc1` are
   `git merge-base --is-ancestor 35ee74a HEAD` exits 1] the saga checkout at d0d6b9e lacks
   35ee74a. [verified, `ls -l`] the installed `saga` links to its `target/release/saga`,
   built two minutes after d0d6b9e. That the binary holds d0d6b9e is an inference [heuristic].
-- **F19 [verified, read `crates/cas-engine/src/compensator.rs`, `wave.rs`]:**
+- **F19 [verified, read `crates/cas-engine/src/compensator.rs`, `wave.rs`]:** Fixed by CER-2783 (PR fix/compensation-continue-on-failure, 2026-10-10): compensation continues past a failed compensator and spec 0009 names the field `details`.
   `Compensator::compensate` returns receipts in a `Result`. The field is `details`, not
   0009's `reason`. `CompositeCompensator` and `WaveCoordinator::rollback` stop at the first
   `Err`, against spec 0009. `BranchPruneCompensator` runs no git. F20 [verified,
