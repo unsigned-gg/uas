@@ -46,7 +46,7 @@ Facts, measured and recorded 2026-10-09:
 
 | # | Decision | Who, when |
 |---|---|---|
-| D1 | Canonical prefix serialization: Sort tool schemas alphabetically by name. Normalize system instructions to deterministic UTF-8 bytes before hashing. | CAS lane, 2026-10-09 |
+| D1 | Canonical prefix serialization: Sort tool schemas alphabetically by name, then by json bytes. Normalize system instructions to deterministic UTF-8 bytes before hashing. Every field is length-prefixed with its byte length in decimal: `SYS:<len>:<part>,...\|TOOLS:<len>:<name><len>:<json>,...`. Length prefixes stop a separator inside a part from imitating another separator. | CAS lane, 2026-10-09. Amended 2026-10-10, lane w25:p1, the operator may override (the unescaped `\|`-joined form collided). |
 | D2 | SHA-256 prefix hash: Hash the invariant prefix with `sha2` 0.11.0. Use the first 16 bytes as the affinity routing key. | CAS lane, 2026-10-09 |
 | D3 | Rendezvous routing: Use Highest Random Weight (HRW) rendezvous hashing across active replica nodes. Achieve deterministic sticky routing without centralized state. | CAS lane, 2026-10-09 |
 | D4 | Dual-stream token multiplexer: Intercept streaming SSE chunks. Parse and strip `<think>` blocks. Route thought traces to telemetry and clean completions to client. | CAS lane, 2026-10-09 |
@@ -95,9 +95,9 @@ flowchart TD
 #### 1. Prefix Canonicalizer & Hasher (`prefix.rs`)
 - Parses incoming JSON request payloads for `/v1/chat/completions`.
 - Extracts `messages` where role is `system` or developer instructions.
-- Extracts `tools` definitions. Sorts tools by function `name`.
-- Serializes canonical UTF-8 representation:
-  `SYS:<system_content>|TOOLS:<tool1_name>:<tool1_json>|...`
+- Extracts `tools` definitions. Sorts tools by function `name`, then by json bytes.
+- Serializes the canonical UTF-8 form of D1, every field length-prefixed with its
+  byte length in decimal: `SYS:<len>:<part>,...|TOOLS:<len>:<name><len>:<json>,...`
 - Computes SHA-256 digest via `sha2::Sha256`.
 - Emits `PrefixHash([u8; 16])`.
 
@@ -162,3 +162,4 @@ cargo test -p cas-router -j 2
   Consistent routing ensures agent sessions reuse KV cache blocks across turns.
 - **LiteLLM Compatibility:** Request and response framing complies with OpenAI
   v1 Chat Completions specification.
+- **Invariant 2 deferral (2026-10-10):** the round-robin fallback for an all-unhealthy replica set is deferred to the D5 package. Today `AffinityTable::choose` returns `NoHealthyReplicas` in that case.
