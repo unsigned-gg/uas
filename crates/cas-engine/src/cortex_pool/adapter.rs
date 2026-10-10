@@ -3,18 +3,19 @@
 
 use cas_domain::{Budget, DomainError, Lease, LeaseId, LeaseToken, PrincipalRef, Slot, SlotState};
 
-use super::bridge::{issue, nack_delay_ms, renew, ttl_secs, MIN_LEASE_MS};
+use super::bridge::{issue, nack_delay_ms, renew, MIN_LEASE_MS};
 use super::port::{
     Clock, PoolDelivery, PoolWork, PortError, RecvEvent, TaskError, TaskRunner, TaskStatus,
 };
 
 /// What the adapter needs besides its ports.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct PoolConfig {
+pub struct AdapterConfig {
     /// This member's `peer_id`. It is also the lease holder.
     pub peer_id: String,
-    /// The token budget of each CAS lease.
-    pub max_tokens: u64,
+    /// The `Budget` of each CAS lease: the host's task cap (spec 0026 D10). The adapter never
+    /// derives it from the Cortex lease, and renewals move `expires_at` only.
+    pub task_budget: Budget,
     /// The longest wait of one `next_event`, in milliseconds.
     pub poll_ms: u64,
 }
@@ -58,7 +59,7 @@ pub struct PoolAdapter<P, R, C> {
     port: P,
     runner: R,
     clock: C,
-    cfg: PoolConfig,
+    cfg: AdapterConfig,
     slots: Vec<Slot>,
     units: Vec<Unit>,
     epoch_ms: Option<u64>,
@@ -71,7 +72,7 @@ pub struct PoolAdapter<P, R, C> {
 
 impl<P: PoolWork, R: TaskRunner, C: Clock> PoolAdapter<P, R, C> {
     /// Build an adapter over `slots`, which must be `Warm`.
-    pub fn new(cfg: PoolConfig, port: P, runner: R, clock: C, slots: Vec<Slot>) -> Self {
+    pub fn new(cfg: AdapterConfig, port: P, runner: R, clock: C, slots: Vec<Slot>) -> Self {
         Self {
             port,
             runner,
@@ -88,6 +89,11 @@ impl<P: PoolWork, R: TaskRunner, C: Clock> PoolAdapter<P, R, C> {
         }
     }
 
+    /// The CAS leases of the running units.
+    pub fn leases(&self) -> impl Iterator<Item = &Lease> {
+        self.units.iter().map(|u| &u.lease)
+    }
+
     /// The slots, in order.
     pub fn slots(&self) -> &[Slot] {
         &self.slots
@@ -99,6 +105,11 @@ impl<P: PoolWork, R: TaskRunner, C: Clock> PoolAdapter<P, R, C> {
         self.service_units()?;
         let now = self.clock.now_ms();
         let free = self.free();
+        // A stream that delivered all it was asked for stays open and is still read, so a unit
+        // beyond the ask is seen and Nacked. It closes when a slot frees and a new Recv is due.
+        if free > 0 && self.stream.as_ref().is_some_and(|s| s.got >= s.asked) {
+            self.stream = None;
+        }
         if self.stream.is_none() && !self.stopped && free > 0 && now >= self.reconnect_at_ms {
             match self.port.recv(free) {
                 Ok(()) => {
@@ -118,13 +129,15 @@ impl<P: PoolWork, R: TaskRunner, C: Clock> PoolAdapter<P, R, C> {
         match self.port.next_event(wait) {
             Ok(RecvEvent::Delivery(delivery)) => {
                 stream.got += 1;
-                if stream.got >= stream.asked {
-                    self.stream = None;
-                }
                 self.stream_failures = 0;
                 self.on_delivery(delivery)
             }
             Ok(RecvEvent::Idle) => Ok(()),
+            Ok(RecvEvent::End) if stream.got >= stream.asked => {
+                // The server finished a stream it had filled: no backoff.
+                self.stream = None;
+                Ok(())
+            }
             Ok(RecvEvent::End) => {
                 self.stream_lost(now, &PortError("stream ended".into()));
                 Ok(())
@@ -225,7 +238,7 @@ impl<P: PoolWork, R: TaskRunner, C: Clock> PoolAdapter<P, R, C> {
             self.slots[idx].id().clone(),
             PrincipalRef::new(self.cfg.peer_id.clone())?,
             LeaseToken::new(format!("{}-{n}", self.cfg.peer_id))?,
-            Budget::new(self.cfg.max_tokens, ttl_secs(d.lease_ms) + 1)?,
+            self.cfg.task_budget,
             now_s,
             d.lease_ms,
         )?;

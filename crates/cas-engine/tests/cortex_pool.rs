@@ -10,8 +10,8 @@ use cas_domain::{
     Budget, Lease, LeaseId, LeaseToken, PrincipalRef, Slot, SlotId, SlotState, WorktreeRef,
 };
 use cas_engine::cortex_pool::{
-    issue, nack_delay_ms, renew, ttl_secs, Clock, PoolAdapter, PoolConfig, PoolDelivery, PoolError,
-    PoolWork, PortError, RecvEvent, TaskError, TaskRunner, TaskStatus,
+    issue, nack_delay_ms, renew, ttl_secs, AdapterConfig, Clock, PoolAdapter, PoolDelivery,
+    PoolError, PoolWork, PortError, RecvEvent, TaskError, TaskRunner, TaskStatus,
 };
 
 #[derive(Clone, Default)]
@@ -89,10 +89,12 @@ struct Runner {
     start_error: Rc<RefCell<Option<TaskError>>>,
     status: Rc<RefCell<HashMap<String, TaskStatus>>>,
     cancelled: Rc<RefCell<Vec<String>>>,
+    started: Rc<Cell<u32>>,
 }
 
 impl TaskRunner for Runner {
     fn start(&mut self, _d: &PoolDelivery) -> Result<(), TaskError> {
+        self.started.set(self.started.get() + 1);
         self.start_error.borrow().clone().map_or(Ok(()), Err)
     }
     fn poll(&mut self, token: &str) -> TaskStatus {
@@ -141,9 +143,9 @@ fn rig(slots: usize, events: Vec<RecvEvent>) -> Rig {
                 .unwrap()
         })
         .collect();
-    let cfg = PoolConfig {
+    let cfg = AdapterConfig {
         peer_id: "peer-1".into(),
-        max_tokens: 1000,
+        task_budget: Budget::new(1000, 3600).unwrap(),
         poll_ms: 100,
     };
     let adapter = PoolAdapter::new(cfg, port.clone(), runner.clone(), clock.clone(), warm);
@@ -293,6 +295,44 @@ fn cortex_pool_nack_delay_grows() {
         .map(|a| nack_delay_ms(*a))
         .collect();
     assert_eq!(got, [1000, 1000, 2000, 60000, 60000]);
+}
+
+#[test]
+fn cortex_pool_nack_when_no_warm_slot() {
+    // The fake sends one unit more than the 3 asked for. The extra finds no Warm slot.
+    let events = (1..=4)
+        .map(|i| delivery(&format!("t{i}"), 3000, 2))
+        .collect();
+    let mut rig = rig(3, events);
+    rig.run_to(200);
+    let calls = rig.calls();
+    assert_eq!(calls[0], Call::Recv(3));
+    assert!(calls.contains(&Call::Nack("t4".into(), 2000)), "{calls:?}");
+    assert_eq!(
+        rig.states(),
+        [SlotState::Leased; 3],
+        "no slot took the extra"
+    );
+    assert_eq!(
+        rig.runner.started.get(),
+        3,
+        "the runner never saw the extra"
+    );
+    assert_eq!(
+        calls.iter().filter(|c| matches!(c, Call::Recv(_))).count(),
+        1
+    );
+}
+
+#[test]
+fn cortex_pool_lease_budget_is_task_cap() {
+    let mut rig = rig(1, vec![delivery("t1", 3000, 1)]);
+    // The task runs 20 s, far past ttl + 1 = 4 s. Every renewal keeps the host's budget.
+    rig.run_to(20_000);
+    let leases: Vec<_> = rig.adapter.leases().collect();
+    assert_eq!(leases.len(), 1, "still running");
+    assert_eq!(leases[0].budget, Budget::new(1000, 3600).unwrap());
+    assert!(leases[0].expires_at >= 20, "renewed with wall time");
 }
 
 #[test]
