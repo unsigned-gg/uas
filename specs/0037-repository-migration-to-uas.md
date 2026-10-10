@@ -55,8 +55,8 @@ Facts, measured 2026-10-10 on `origin/development` at `ab8112a`:
   `gh api repos/unsigned-gg/cas-substrate`, both HTTP 404;
   `gh api repos/cerebral-work/cas-substrate`, `private=true`. the operator said in
   session at about 21:35Z "we're now an unsigned-gg repo" [reported]; the API
-  did not show a transfer one minute later. The two statements are recorded
-  side by side until one of them changes; this lane performs no transfer.
+  did not show a transfer one minute later. At about 22:45Z, asked again with
+  the same probe result, he directed this lane to perform the transfer (D1, amended).
 - **F6 [verified]:** The crates.io name `uas` was published at version 0.1.0 on
   2026-10-10T20:46Z as "Unsigned Agent Substrate (UAS) core primitives", owned by
   the user `todie`. Command: `curl https://crates.io/api/v1/crates/uas` and
@@ -81,7 +81,7 @@ Facts, measured 2026-10-10 on `origin/development` at `ab8112a`:
 
 | | Decision | Source |
 |---|---|---|
-| D1 | The transfer of the repository to `unsigned-gg`, the rename to `uas`, and any change of visibility from private to public are **the operator's acts**, performed by him. No lane performs them. Every estate SOP already lists org transfers and visibility changes as operator-gated. | revenant-bridge-authority SOP, the floor; CAS lane w25:p1, 2026-10-10 |
+| D1 | The transfer of the repository to `unsigned-gg`, the rename to `uas`, and any change of visibility from private to public are **the operator's acts**. Amended 2026-10-10 about 22:45Z: the operator, in lane w25:p1, directed the lane to perform the transfer and the rename itself and to dispatch workers for the rename; the lane performs those two steps on that instruction and records the API call it made. Visibility and crates.io publication stay his own acts. Every estate SOP already lists org transfers and visibility changes as operator-gated; his instruction is the gate's sign-off. | revenant-bridge-authority SOP, the floor; CAS lane w25:p1, 2026-10-10; the operator's instruction in lane w25:p1, 2026-10-10 about 22:45Z |
 | D2 | The move is one cutover, not a drift. Before it: the hold stands, every lane commits and parks (F8), and the preparation PRs of this spec land on `development`. Then the operator transfers and renames. Then one post-cutover PR fixes what only the new name can fix. Development resumes only when he lifts the hold. **Proposed, not ruled:** where this cutover sits relative to the `soma` to `vespertin` move is undecided and is the operator's call [reported: research lane w1X:p22, 2026-10-10 about 21:5xZ, "not decided yet"]. | CAS lane w25:p1, 2026-10-10 |
 | D3 | The crate prefix changes from `cas-` to `uas-` and the binary from `cas` to `uas`, in the same cutover, by `make new-repo NAME=uas ORG=unsigned-gg`. That target must first be fixed to rename every `cas-*` crate directory (F2, CER-2813), and `make template-check` must pass on `development` before the cutover is attempted. A rename tool that is proven broken is not used on the real repository. | spec 0001; CER-2813; CAS lane w25:p1, 2026-10-10 |
 | D4 | Spec numbers, spec file names and their `REQ-NNNN-NN` ids do not change. A spec's prose that says `cas-pool` becomes `uas-pool` in the post-cutover PR; a requirement id is a stable reference and stays. The registry keeps its order. | CAS lane w25:p1, 2026-10-10 |
@@ -108,7 +108,7 @@ Facts, measured 2026-10-10 on `origin/development` at `ab8112a`:
 - **[REQ-0037-09]** (Unwanted): IF `make template-check` fails on `development`, THEN the cutover shall not begin.
 - **[REQ-0037-10]** (Unwanted): IF CI is red on the first push after the transfer, THEN the lane shall stop and report, and shall not merge around it.
 - **[REQ-0037-11]** (Unwanted): IF a post-cutover setting differs from its exported file, THEN the difference shall be reported before any further pull request merges.
-- **[REQ-0037-12]** (Unwanted): IF any step would change the repository's visibility, transfer it between organisations, publish to crates.io, or rewrite history, THEN a lane shall stop and leave that step to the operator.
+- **[REQ-0037-12]** (Unwanted): IF any step would change the repository's visibility, publish to crates.io, or rewrite history, THEN a lane shall stop and leave that step to the operator; the transfer and rename run only on his recorded instruction (D1, amended).
 - **[REQ-0037-13]** (Optional): WHERE GitHub's redirect from the old repository name is in place, a lane's existing checkout shall keep working until its owner updates the remote, and no lane shall update another lane's checkout.
 
 ## Plan
