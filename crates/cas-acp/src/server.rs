@@ -217,7 +217,8 @@ impl<P: PoolPort> AcpServer<P> {
         let outcome = match request.method.as_ref() {
             METHOD_INITIALIZE => self.initialize(request.params),
             METHOD_SESSION_NEW => self.session_new(request.params),
-            METHOD_SESSION_CANCEL => Err(AcpError::InvalidRequest(
+            // The crate's decoder answers a cancel that carries an id with method-not-found.
+            METHOD_SESSION_CANCEL => Err(AcpError::MethodNotFound(
                 "session/cancel is a notification and must not carry an id".into(),
             )),
             other => Err(AcpError::MethodNotFound(other.to_string())),
@@ -244,10 +245,12 @@ impl<P: PoolPort> AcpServer<P> {
                 }
                 None
             }
-            method @ (METHOD_INITIALIZE | METHOD_SESSION_NEW) => error_frame(
-                RequestId::Null,
-                &AcpError::InvalidRequest(format!("{method} is a request and needs an id")),
-            ),
+            method @ (METHOD_INITIALIZE | METHOD_SESSION_NEW) => {
+                // JSON-RPC 2.0 section 4.1: a request without an id is a notification
+                // and the server must not reply. Nothing is dispatched either.
+                eprintln!("cas-acp: {method} without an id is a notification; ignored");
+                None
+            }
             _ => None,
         }
     }
@@ -263,9 +266,10 @@ impl<P: PoolPort> AcpServer<P> {
         let _request: NewSessionRequest = parse_params(params)?;
         let slot = self.free_slot()?;
         let lease = self.new_lease(slot)?;
-        let slot_id = self.pool.acquire(lease.clone())?;
+        // Build the session id before acquiring, so an id error cannot leak the slot.
         let key = format!("acp-session-{}", self.bump());
         let session_id = SessionId::new(key.clone()).map_err(internal)?;
+        let slot_id = self.pool.acquire(lease.clone())?;
         let mut workflow = WorkflowSession::new(session_id);
         let now = (self.config.clock)();
         if let Err(err) = workflow.start(slot_id.clone(), lease.id.clone(), now) {
