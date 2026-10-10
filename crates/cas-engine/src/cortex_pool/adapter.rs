@@ -18,6 +18,10 @@ pub struct AdapterConfig {
     pub task_budget: Budget,
     /// The longest wait of one `next_event`, in milliseconds.
     pub poll_ms: u64,
+    /// The longest one `Ack`, `Nack`, `Term` or `Recv` open may take, in milliseconds. A call is
+    /// bounded by the smaller of this and the time left to the earliest pending `Extend`
+    /// deadline (spec 0026 D12).
+    pub call_cap_ms: u64,
 }
 
 /// A failure the adapter surfaces to its caller.
@@ -46,6 +50,15 @@ struct Unit {
     lease: Lease,
     due_ms: u64,
     extend_failures: u32,
+    last: Last,
+}
+
+/// How a unit's last `Extend` went. A round calls skipped units first, then cut ones (D12).
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+enum Last {
+    Skipped,
+    Cut,
+    Landed,
 }
 
 /// An open `Recv` stream: it asked for `asked` units and has seen `got`.
@@ -68,6 +81,7 @@ pub struct PoolAdapter<P, R, C> {
     stopped: bool,
     stream_failures: u32,
     reconnect_at_ms: u64,
+    releases: Vec<(u64, usize)>,
 }
 
 impl<P: PoolWork, R: TaskRunner, C: Clock> PoolAdapter<P, R, C> {
@@ -86,12 +100,18 @@ impl<P: PoolWork, R: TaskRunner, C: Clock> PoolAdapter<P, R, C> {
             stopped: false,
             stream_failures: 0,
             reconnect_at_ms: 0,
+            releases: Vec::new(),
         }
     }
 
     /// The CAS leases of the running units.
     pub fn leases(&self) -> impl Iterator<Item = &Lease> {
         self.units.iter().map(|u| &u.lease)
+    }
+
+    /// The releases so far: the clock reading and the slot index of each.
+    pub fn releases(&self) -> &[(u64, usize)] {
+        &self.releases
     }
 
     /// The slots, in order.
@@ -111,7 +131,8 @@ impl<P: PoolWork, R: TaskRunner, C: Clock> PoolAdapter<P, R, C> {
             self.stream = None;
         }
         if self.stream.is_none() && !self.stopped && free > 0 && now >= self.reconnect_at_ms {
-            match self.port.recv(free) {
+            let within = self.bound();
+            match self.port.recv(free, within) {
                 Ok(()) => {
                     self.stream = Some(Stream {
                         asked: free,
@@ -155,7 +176,7 @@ impl<P: PoolWork, R: TaskRunner, C: Clock> PoolAdapter<P, R, C> {
         self.stream = None;
         for unit in std::mem::take(&mut self.units) {
             self.runner.cancel(&unit.token);
-            let result = self.port.nack(&unit.token, 0);
+            let result = self.port.nack(&unit.token, 0, self.cfg.call_cap_ms);
             Self::note("Nack", &unit.token, result);
             self.slots[unit.slot] = self.slots[unit.slot].clone().release()?;
         }
@@ -208,11 +229,12 @@ impl<P: PoolWork, R: TaskRunner, C: Clock> PoolAdapter<P, R, C> {
     }
 
     fn on_delivery(&mut self, d: PoolDelivery) -> Result<(), PoolError> {
+        let within = self.bound();
         // D9 first: before any slot check, lease or runner start.
         if d.lease_ms < MIN_LEASE_MS {
-            let result = self
-                .port
-                .nack(&d.delivery_token, nack_delay_ms(d.delivery_attempt));
+            let result =
+                self.port
+                    .nack(&d.delivery_token, nack_delay_ms(d.delivery_attempt), within);
             Self::note("Nack", &d.delivery_token, result);
             self.stopped = true;
             self.stream = None;
@@ -222,9 +244,9 @@ impl<P: PoolWork, R: TaskRunner, C: Clock> PoolAdapter<P, R, C> {
         }
         let now_ms = self.clock.now_ms();
         let Some(idx) = self.slots.iter().position(|s| s.state() == SlotState::Warm) else {
-            let result = self
-                .port
-                .nack(&d.delivery_token, nack_delay_ms(d.delivery_attempt));
+            let result =
+                self.port
+                    .nack(&d.delivery_token, nack_delay_ms(d.delivery_attempt), within);
             Self::note("Nack", &d.delivery_token, result);
             return Ok(());
         };
@@ -249,7 +271,7 @@ impl<P: PoolWork, R: TaskRunner, C: Clock> PoolAdapter<P, R, C> {
                 Self::note(
                     "Term",
                     &d.delivery_token,
-                    self.port.term(&d.delivery_token, &reason),
+                    self.port.term(&d.delivery_token, &reason, within),
                 );
                 Some(())
             }
@@ -258,7 +280,7 @@ impl<P: PoolWork, R: TaskRunner, C: Clock> PoolAdapter<P, R, C> {
                 Self::note(
                     "Nack",
                     &d.delivery_token,
-                    self.port.nack(&d.delivery_token, delay),
+                    self.port.nack(&d.delivery_token, delay, within),
                 );
                 Some(())
             }
@@ -275,54 +297,96 @@ impl<P: PoolWork, R: TaskRunner, C: Clock> PoolAdapter<P, R, C> {
             lease,
             due_ms: now_ms + d.lease_ms / 3,
             extend_failures: 0,
+            last: Last::Landed,
         });
         Ok(())
     }
 
-    /// Poll each unit's task, and run the Extend that is due.
+    /// Poll each unit's task, then run the Extend round.
     fn service_units(&mut self) -> Result<(), PoolError> {
         let mut i = 0;
         while i < self.units.len() {
             let token = self.units[i].token.clone();
+            let within = self.bound();
             match self.runner.poll(&token) {
                 TaskStatus::Succeeded => {
-                    Self::note("Ack", &token, self.port.ack(std::slice::from_ref(&token)));
+                    let result = self.port.ack(std::slice::from_ref(&token), within);
+                    Self::note("Ack", &token, result);
                     self.finish(i)?;
-                    continue;
                 }
                 TaskStatus::Failed(_) => {
                     let delay = nack_delay_ms(self.units[i].attempt);
-                    Self::note("Nack", &token, self.port.nack(&token, delay));
+                    Self::note("Nack", &token, self.port.nack(&token, delay, within));
                     self.finish(i)?;
-                    continue;
                 }
-                TaskStatus::Running => {}
+                TaskStatus::Running => i += 1,
             }
-            let now_ms = self.clock.now_ms();
-            if now_ms >= self.units[i].due_ms {
-                let step = (self.units[i].lease_ms / 3).max(1);
-                self.units[i].due_ms += step;
-                let extended = self.port.extend(&token).is_ok();
-                let now_s = self.now_s(now_ms);
-                let unit = &mut self.units[i];
-                // The CAS lease follows the Cortex lease: a failed Extend does not renew.
-                let kept = if extended {
-                    unit.extend_failures = 0;
-                    renew(&unit.lease, now_s, unit.lease_ms)
-                        .map(|l| unit.lease = l)
-                        .is_ok()
-                } else {
-                    unit.extend_failures += 1;
-                    unit.extend_failures < 2
-                };
-                if !kept {
-                    // No Ack: Cortex redelivers after `lease_ms`.
-                    self.runner.cancel(&token);
-                    self.finish(i)?;
-                    continue;
-                }
+        }
+        self.extend_round()
+    }
+
+    /// The bound of a call that is not an `Extend`: the smaller of the cap and the time left to
+    /// the earliest pending `Extend` deadline. Pending means the next deadline of every running
+    /// unit, due or not (spec 0026 D12).
+    fn bound(&self) -> u64 {
+        let now = self.clock.now_ms();
+        let quarter = self.quarter();
+        let earliest = self.units.iter().map(|u| u.due_ms + quarter).min();
+        earliest.map_or(self.cfg.call_cap_ms, |at| {
+            self.cfg.call_cap_ms.min(at.saturating_sub(now))
+        })
+    }
+
+    /// The shortest `lease_ms / 4` among the running units.
+    fn quarter(&self) -> u64 {
+        self.units.iter().map(|u| u.lease_ms / 4).min().unwrap_or(0)
+    }
+
+    /// One pass over the units whose `Extend` is due (spec 0026 D12). Each has the deadline
+    /// "due time + quarter", fixed at the start of the pass, and its call is bounded by the time
+    /// left. A unit whose deadline passed before its turn fails with no call. The order is: last
+    /// skipped, then last cut, then the rest, ties by slot. Two failures in a row stop a unit.
+    fn extend_round(&mut self) -> Result<(), PoolError> {
+        let start = self.clock.now_ms();
+        let quarter = self.quarter();
+        let mut due: Vec<(Last, usize, String, u64)> = self
+            .units
+            .iter()
+            .filter(|u| u.due_ms <= start)
+            .map(|u| (u.last, u.slot, u.token.clone(), u.due_ms + quarter))
+            .collect();
+        due.sort();
+        for (_, _, token, deadline) in due {
+            let now = self.clock.now_ms();
+            let Some(i) = self.units.iter().position(|u| u.token == token) else {
+                continue;
+            };
+            let outcome = if now >= deadline {
+                Last::Skipped
+            } else if self.port.extend(&token, deadline - now).is_ok() {
+                Last::Landed
+            } else {
+                Last::Cut
+            };
+            let now_s = self.now_s(self.clock.now_ms());
+            let unit = &mut self.units[i];
+            unit.due_ms += (unit.lease_ms / 3).max(1);
+            unit.last = outcome;
+            // The CAS lease follows the Cortex lease: only a landed Extend renews it.
+            let kept = if outcome == Last::Landed {
+                unit.extend_failures = 0;
+                renew(&unit.lease, now_s, unit.lease_ms)
+                    .map(|l| unit.lease = l)
+                    .is_ok()
+            } else {
+                unit.extend_failures += 1;
+                unit.extend_failures < 2
+            };
+            if !kept {
+                // No Ack: Cortex redelivers after `lease_ms`.
+                self.runner.cancel(&token);
+                self.finish(i)?;
             }
-            i += 1;
         }
         Ok(())
     }
@@ -330,6 +394,7 @@ impl<P: PoolWork, R: TaskRunner, C: Clock> PoolAdapter<P, R, C> {
     /// Drop unit `i` and release its slot. Dropping the unit drops its lease from R1's view.
     fn finish(&mut self, i: usize) -> Result<(), PoolError> {
         let unit = self.units.remove(i);
+        self.releases.push((self.clock.now_ms(), unit.slot));
         self.slots[unit.slot] = self.slots[unit.slot].clone().release()?;
         Ok(())
     }

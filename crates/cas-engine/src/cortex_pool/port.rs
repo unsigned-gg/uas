@@ -37,19 +37,26 @@ pub struct PortError(pub String);
 /// The five `PoolWork` RPCs (spec 0026, Wire contract). The member's `peer_id` belongs to the
 /// implementation, and no call carries a pool name.
 pub trait PoolWork {
-    /// Open a `Recv` stream for at most `free_slots` units.
-    fn recv(&mut self, free_slots: u32) -> Result<(), PortError>;
+    /// Open a `Recv` stream for at most `free_slots` units. Every call below takes `within_ms`:
+    /// it must fail by then (spec 0026 D12), so a hung RPC cannot hold the adapter thread.
+    fn recv(&mut self, free_slots: u32, within_ms: u64) -> Result<(), PortError>;
     /// Wait up to `wait_ms` for the next event of the open stream. An implementation spends
     /// the wait itself: the adapter does not sleep after `Idle`.
     fn next_event(&mut self, wait_ms: u64) -> Result<RecvEvent, PortError>;
     /// The units are done.
-    fn ack(&mut self, delivery_tokens: &[String]) -> Result<(), PortError>;
+    fn ack(&mut self, delivery_tokens: &[String], within_ms: u64) -> Result<(), PortError>;
     /// Keep the Cortex lease of a unit alive.
-    fn extend(&mut self, delivery_token: &str) -> Result<(), PortError>;
+    fn extend(&mut self, delivery_token: &str, within_ms: u64) -> Result<(), PortError>;
     /// Redeliver after `delay_ms`.
-    fn nack(&mut self, delivery_token: &str, delay_ms: u64) -> Result<(), PortError>;
+    fn nack(
+        &mut self,
+        delivery_token: &str,
+        delay_ms: u64,
+        within_ms: u64,
+    ) -> Result<(), PortError>;
     /// Dead-letter now, with a reason.
-    fn term(&mut self, delivery_token: &str, reason: &str) -> Result<(), PortError>;
+    fn term(&mut self, delivery_token: &str, reason: &str, within_ms: u64)
+        -> Result<(), PortError>;
 }
 
 /// Why a task cannot start.
