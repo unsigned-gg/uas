@@ -47,6 +47,7 @@ Methodology: LeanSpec. The reference copy is in `../vendor/leanspec/`.
 | [0041](0041-slot-memory-pids-and-disk-limits.md) | Slot memory, pids and disk limits | planned | high |
 | [0042](0042-cas-binary-conventions.md) | uas binary conventions | planned | high |
 | [0043](0043-seccomp-syscall-filter-for-slot-workers.md) | seccomp syscall filter for slot workers | planned | high |
+| [0044](0044-reverie-client-degradation.md) | Reverie client degradation | planned | high |
 
 
 ## How to add a spec
