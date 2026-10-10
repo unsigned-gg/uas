@@ -66,6 +66,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `cas-ebpf` tracefs load refuses a `filename` field typed `__data_locx`. The check matches the exact `__data_loc` token (spec 0014 D13).
 - Rollback runs every compensator. A failed compensator leaves a failed receipt, the rest still run, and rollback then returns `CompensationIncomplete` with all receipts (spec 0009, spec 0024).
 - A workflow compensator that returns `Err` no longer leaves the session at `Compensating`. `fail_activity` keeps its receipt, ends the log with `SessionFinished` in `Failed`, and returns `CompensationIncomplete` (spec 0009, CER-2785).
+- `cas wave flow` writes no empty flow for a wave whose only step moved, names `--out-dir` in its header, and sets `agent = "auto"` on each shim step (spec 0025 P9b).
 
 ## [0.1.0] - 2026-10-08
 

@@ -170,6 +170,26 @@ deps = ["approve"]
 verify_cmd = ["true"]
 "#;
 
+/// A probe, then a MainSession gate that no step depends on. The gate stays in its own wave.
+const TERMINAL_GATE: &str = r#"
+[flow]
+name = "fixture"
+
+[[step]]
+id = "probe-a"
+title = "A"
+kind = "verify"
+agent = "probe"
+verify_cmd = ["true"]
+
+[[step]]
+id = "approve"
+title = "Approve"
+kind = "gate"
+gate = "heimdal:approval"
+deps = ["probe-a"]
+"#;
+
 /// One probe, for the `cas wave step` tests.
 const ONE_PROBE: &str = r#"
 [flow]
@@ -281,18 +301,59 @@ fn wave_flow_no_gate_between_waves() {
     }
 }
 
+/// A wave whose only step is a gate that moved to its dependent's wave writes no file. The other
+/// waves keep their plan indices, so the names skip wave 1 and do not renumber wave 2.
+/// A terminal gate keeps its own wave: wave 1 holds the gate and no step, and names no agent.
+#[test]
+fn wave_flow_terminal_gate_keeps_its_own_wave() {
+    let files = generate(&plan("terminal-gate", TERMINAL_GATE), None);
+    let names: Vec<&str> = files.iter().map(|(n, _)| n.as_str()).collect();
+    assert_eq!(
+        names,
+        ["cas-cpm-wave-w0.toml", "cas-cpm-wave-w1.toml"],
+        "the terminal gate writes its own wave file"
+    );
+    let w1 = &files[1].1;
+    let view = steps(w1);
+    assert_eq!(view.len(), 1, "wave 1 holds only the gate");
+    assert_eq!(view[0].0, "approve");
+    assert_eq!(view[0].1, "gate");
+    assert_eq!(view[0].3.as_deref(), Some("heimdal:approval"));
+    let def = SagaFlowDef::from_toml(w1).unwrap();
+    assert_eq!(def.steps[0].agent, None, "a gate names no agent");
+}
+
+#[test]
+fn wave_flow_skips_a_wave_whose_only_step_moved() {
+    let files = generate(&plan("empty-wave", WITH_GATE), None);
+    let names: Vec<&str> = files.iter().map(|(n, _)| n.as_str()).collect();
+    assert_eq!(
+        names,
+        ["cas-cpm-wave-w0.toml", "cas-cpm-wave-w2.toml"],
+        "no file for the emptied wave 1, and wave 2 keeps its name"
+    );
+    for (name, text) in &files {
+        assert!(!steps(text).is_empty(), "{name} holds no steps");
+        assert!(
+            !text.contains("step = []"),
+            "{name} holds an empty step list"
+        );
+    }
+}
+
 #[test]
 fn wave_flow_main_session_gate_in_dependent_wave() {
     let files = generate(&plan("gate-dep", WITH_GATE), None);
-    assert_eq!(files.len(), 3, "one file per wave, gate or not");
+    let names: Vec<&str> = files.iter().map(|(n, _)| n.as_str()).collect();
+    assert_eq!(
+        names,
+        ["cas-cpm-wave-w0.toml", "cas-cpm-wave-w2.toml"],
+        "wave 1 holds only the gate, which moved to wave 2, so it writes no file"
+    );
     let by_name = |n: &str| files.iter().find(|(f, _)| f == n).unwrap().1.clone();
     assert!(
         !by_name("cas-cpm-wave-w0.toml").contains("approve"),
         "the gate is not in its own wave when it has a dependent elsewhere"
-    );
-    assert!(
-        !by_name("cas-cpm-wave-w1.toml").contains("approve"),
-        "the gate is not in a wave that holds no dependent"
     );
     let w2 = steps(&by_name("cas-cpm-wave-w2.toml"));
     let gate = w2
@@ -339,18 +400,35 @@ fn wave_flow_deps_stay_in_file() {
     );
 }
 
+/// Every shim step names `agent = "auto"`, as the shipped flows do. A gate names no agent, as
+/// `.saga/flows/gates.toml` does. Saga fails a step with no agent as "unassigned agent".
 #[test]
-fn wave_flow_has_no_agent_field() {
-    for (name, text) in read_waves(&root().join(FLOW_DIR))
-        .into_iter()
-        .chain(generate(&plan("no-agent", WITH_GATE), None))
-    {
-        for line in text.lines() {
-            assert!(
-                !line.trim_start().starts_with("agent"),
-                "{name} has an agent field: {line}"
-            );
+fn wave_flow_every_shim_step_names_agent_auto() {
+    let files = generate(&plan("agent-auto", WITH_GATE), None);
+    assert!(!files.is_empty());
+    for (name, text) in &files {
+        let def = SagaFlowDef::from_toml(text).unwrap_or_else(|e| panic!("{name}: {e}"));
+        for step in &def.steps {
+            if step.kind == "gate" {
+                assert_eq!(step.agent, None, "{name}: gate {} names an agent", step.id);
+            } else {
+                assert_eq!(
+                    step.agent.as_deref(),
+                    Some("auto"),
+                    "{name}: step {} has no agent auto",
+                    step.id
+                );
+            }
         }
+    }
+    for (name, text) in read_waves(&root().join(FLOW_DIR)) {
+        let def = SagaFlowDef::from_toml(&text).unwrap_or_else(|e| panic!("{name}: {e}"));
+        assert!(
+            def.steps
+                .iter()
+                .all(|s| s.kind == "gate" || s.agent.as_deref() == Some("auto")),
+            "{name}: a checked-in step has no agent auto"
+        );
     }
 }
 
@@ -406,7 +484,12 @@ fn wave_flow_checked_in_matches_generator() {
             .output()
             .unwrap();
         assert!(out.status.success(), "generator failed: {}", stderr(&out));
+        // The header names the out dir as given. The checked-in flows name `.saga/flows`.
+        let dir = out_dir.display().to_string();
         read_waves(&out_dir)
+            .into_iter()
+            .map(|(name, text)| (name, text.replace(&dir, FLOW_DIR)))
+            .collect::<Vec<_>>()
     };
     let checked_in = read_waves(&root().join(FLOW_DIR));
     let names = |v: &[(String, String)]| v.iter().map(|(n, _)| n.clone()).collect::<Vec<_>>();
@@ -422,6 +505,88 @@ fn wave_flow_checked_in_matches_generator() {
             "{name} differs from the generator; regenerate, do not edit"
         );
     }
+}
+
+/// Split a line into shell words: bare words, single-quoted spans, and `\'` outside quotes.
+fn shell_words(line: &str) -> Vec<String> {
+    let mut words = Vec::new();
+    let mut cur = String::new();
+    let mut has = false;
+    let mut chars = line.chars();
+    while let Some(c) = chars.next() {
+        match c {
+            ' ' => {
+                if has {
+                    words.push(std::mem::take(&mut cur));
+                    has = false;
+                }
+            }
+            '\'' => {
+                has = true;
+                loop {
+                    match chars.next() {
+                        Some('\'') => break,
+                        Some(x) => cur.push(x),
+                        None => panic!("unterminated quote in {line}"),
+                    }
+                }
+            }
+            '\\' => {
+                has = true;
+                if let Some(x) = chars.next() {
+                    cur.push(x);
+                }
+            }
+            x => {
+                has = true;
+                cur.push(x);
+            }
+        }
+    }
+    if has {
+        words.push(cur);
+    }
+    words
+}
+
+#[test]
+fn wave_flow_header_command_parses_with_cli() {
+    let source = plan("header with space", CHAIN);
+    let out_dir = scratch("header out's dir");
+    let out = cas(&root(), &out_dir)
+        .args(["wave", "flow", "--from"])
+        .arg(&source)
+        .args(["--max-concurrency", "2", "--out-dir"])
+        .arg(&out_dir)
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "generator failed: {}", stderr(&out));
+    let files = read_waves(&out_dir);
+    let first = files.first().expect("the chain has waves");
+    let header = first.1.lines().next().unwrap();
+    let line = header
+        .strip_prefix("# Generated by: ")
+        .expect("the header names the command");
+    let argv = shell_words(line);
+    assert_eq!(argv[0], "cas");
+    let out_str = out_dir.to_str().unwrap();
+    assert!(
+        argv.windows(2)
+            .any(|w| w[0] == "--out-dir" && w[1] == out_str),
+        "the header names the out dir as given: {line}"
+    );
+    // The header's own command line, split with shell rules, parses with the CLI and writes the same flows.
+    let rerun = cas(&root(), &out_dir).args(&argv[1..]).output().unwrap();
+    assert!(
+        rerun.status.success(),
+        "header command failed: {}",
+        stderr(&rerun)
+    );
+    assert_eq!(
+        read_waves(&out_dir),
+        files,
+        "the header command rewrites the same flows"
+    );
 }
 
 // ---------------------------------------------------------------- cas wave step
