@@ -57,6 +57,12 @@ enum Command {
     },
 }
 
+/// `--open-prs` and `UAS_WAVE_OPEN_PRS`: only the value `1` is true (spec 0025 D16).
+#[allow(clippy::unnecessary_wraps)]
+fn open_prs_value(raw: &str) -> Result<bool, String> {
+    Ok(raw == "1")
+}
+
 #[derive(Debug, Subcommand)]
 enum WaveCommand {
     /// Write one saga flow per wave from a plan.
@@ -88,6 +94,18 @@ enum WaveCommand {
         /// The most steps in flight, as given to `wave flow`. 0 means the default of 3.
         #[arg(long, default_value_t = 0)]
         max_concurrency: usize,
+        /// Open a pull request per Builder (spec 0025 D16). `UAS_WAVE_OPEN_PRS=1` does the same;
+        /// the flag wins.
+        #[arg(
+            long,
+            env = "UAS_WAVE_OPEN_PRS",
+            num_args = 0..=1,
+            require_equals = true,
+            default_missing_value = "1",
+            default_value = "0",
+            value_parser = open_prs_value,
+        )]
+        open_prs: bool,
     },
     /// Resolve a Builder's PR and run `blackwall merge-gate` on it. Saga calls this as the
     /// `verify_cmd` of a generated merge step.
@@ -1108,6 +1126,7 @@ fn main() -> Result<()> {
                 repo,
                 state_dir,
                 max_concurrency,
+                open_prs,
             } => {
                 let args = wave_flow::StepArgs {
                     flow,
@@ -1117,7 +1136,8 @@ fn main() -> Result<()> {
                     max_concurrency,
                 };
                 let cwd = std::env::current_dir()?;
-                let code = wave_flow::run_step(&args, &wave_flow::WaveEnv::from_process(), &cwd);
+                let env = wave_flow::WaveEnv::from_process().with_open_prs_flag(open_prs);
+                let code = wave_flow::run_step(&args, &env, &cwd);
                 std::process::exit(code);
             }
             WaveCommand::MergeGate {
