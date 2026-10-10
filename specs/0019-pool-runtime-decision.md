@@ -46,6 +46,11 @@ Facts, measured 2026-10-10 on ceres unless stated:
 - **F8 [verified]:** the pool has one hard concurrency ceiling already: the host
   throttling invariant, `-j 2` on shared workstations (AGENTS.md rule 2). Slot
   count is small by design; it is not thousands of actors.
+- **F9 [reported]:** the research lane (mesh reply 1b8213f2, 2026-10-10) confirms
+  the fork is open, that no benchmark has measured `cas-pool`, and recommends
+  keeping `cas-domain` runtime-neutral until criterion benchmarks measure the pool.
+  Approval of the design itself follows the same benchmarks (research `AGENTS.md`,
+  the operator by deck merge).
 
 ## Design
 
@@ -78,7 +83,7 @@ Facts, measured 2026-10-10 on ceres unless stated:
 | D1 | Recommendation of this spec: **Option A** for the pool's slot lifecycle and control loop, as spec 0015 D5 already states; **Option B** only where a crate serves a socket or HTTP endpoint (router, ebpfd, acp, deck). No heph. | CAS lane w25:p1, 2026-10-10, pending the operator |
 | D2 | The runtime for `cas-pool`: A, B or C. | **the operator to rule** |
 | D3 | If D2 is A or B, spec 0001 gap 1 and Plan item 3 close, and 0015 D5 gains the citation "ruled in spec 0019". If D2 is C, spec 0004 gets the `heph` pin and licence row first, and a measurement plan precedes code. | Follows D2 |
-| D4 | Any later runtime change needs a measurement recorded in a new spec (the Unwanted-behavior requirement above). | CAS lane, 2026-10-10 |
+| D4 | Any later runtime change needs a measurement recorded in a new spec (the Unwanted-behavior requirement above). A criterion benchmark of the slot lifecycle (lease, launch, freeze, thaw, reclaim) under Option A is the first such measurement, and it is the evidence a move to C would need (F9). | CAS lane, 2026-10-10 |
 
 ### What does not change with the ruling
 
