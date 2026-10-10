@@ -3,7 +3,9 @@
 //! Commands:
 //! - `spec-check`: validate `specs/` (see `spec_check.rs`).
 //! - `toolchain-check`: verify the active Rust matches `rust-toolchain.toml`.
+//! - `pin-check`: verify the spec 0004 pin tables against the lockfiles (see `pin_check.rs`).
 
+mod pin_check;
 mod spec_check;
 mod toolchain;
 
@@ -23,11 +25,12 @@ fn main() -> ExitCode {
     match arg.as_deref() {
         Some("spec-check") => spec_check::run(&root),
         Some("toolchain-check") => toolchain::run(&root),
+        Some("pin-check") => pin_check::run(&root),
         other => {
             if let Some(name) = other {
                 eprintln!("xtask: unknown command {name:?}");
             }
-            eprintln!("usage: cargo xtask <spec-check|toolchain-check>");
+            eprintln!("usage: cargo xtask <spec-check|toolchain-check|pin-check>");
             ExitCode::from(2)
         }
     }
