@@ -65,7 +65,9 @@ showed it as `main` on 2026-10-10.
   `github`. The other sources are `email`, `calendar`, `linear` and `session`.
 - **A1-F5 [reported, `cortex@a91ffd8:crates/cortex-api/src/routes.rs:144-157,208-342`
   and `settle.rs:99-103`]:** a store error on the pending route is HTTP 503, never
-  an empty queue. The pending route reads no auth header. Cortex rewrites
+  an empty queue. The pending handler takes no auth header, and the binary adds
+  only a CORS layer (`bin/cortex-api.rs:215,319`). Auth at the network edge was
+  not checked. Cortex rewrites
   `settle_url` at read time to `{base}/v1/settle/{job_id}`: an absolute URL when a
   base is set. A decision is `POST /v1/settle/{job_id}` with `{action, peer_id}`
   and a registered mesh peer bearer token. With no verifier it fails closed (503).
@@ -112,6 +114,7 @@ showed it as `main` on 2026-10-10.
 | D8 | Actions: Approve sends `select`. Reject sends `discard`. Hold sends nothing: the card stays pending in Cortex, and the deck marks it held in memory. Request-Info is dropped: Cortex has no such verb, and a settle click must not become a channel into a session (A1-F5). The deck never sends `apply` (422). A `fleet:*` card gets no Approve. No action ships before Invariant 2 is ruled. | lane w25:p1, 2026-10-10 (the operator may override) |
 | D9 | Source seam: the `SettleSource` trait stays, and the in-process `SettleQueue` stays the default. A Cortex source parses the JSON body that a fetch trait returns. The fetch trait is sync. The HTTP slice adds a task that polls Cortex and keeps the last body or error; the fetch reads that snapshot, so the trait does not change again. That slice needs `reqwest` 0.13.5 (spec 0004; `rustls`, `json`), not yet in the workspace. Tests read fixture files and open no socket to Cortex. | lane w25:p1, 2026-10-10 (the operator may override) |
 | D10 | Contract parsing: each optional field reads absent and `null` as none (A1-F3). Unknown fields are ignored. `source` stays a string, shown as sent, so a new source (or `git_hub`, A1-F4) cannot fail the queue. `created_at` stays text and the card shows `age_secs`; no time crate. Cards are `by_source` in key order, then each plan's `active_step`. When `total` differs from the card count, the deck shows a count notice. Any fetch or parse error shows the disconnected notice and no card. | lane w25:p1, 2026-10-10 (the operator may override) |
+| D11 | Two decks (A1-F7): `cas-deck` replaces the Cortex web deck, or sits next to it and takes the `{deck}/#settle/{job_id}` links. The read slices proceed either way; D8 waits on this and Invariant 2. | the operator to rule |
 
 ### Architecture and Flow
 
@@ -243,8 +246,7 @@ fixture tests of D10. No test opens a socket to Cortex.
   Templates have zero runtime parsing overhead and complete compile-time type safety.
 - **htmx Integration:** Minimal client footprint (<15KB compressed) provides SPA-like
   responsiveness while server maintains all state.
-- **Two decks (A1-F7):** Cortex has its own web deck, and its settle links point
-  at `{deck}/#settle/{job_id}`. Whether `cas-deck` replaces that deck, or only
-  sits next to it, is open for the cortex lane and the operator.
+- **Two decks (A1-F7, D11):** Cortex has its own web deck, and its settle links
+  point at `{deck}/#settle/{job_id}`. D11 waits for the operator.
 - **Engine doc (A1-F6):** the `SettleCard` doc claims the Cortex contract. A
   later `cas-engine` package corrects the doc. This amendment does not touch code.
