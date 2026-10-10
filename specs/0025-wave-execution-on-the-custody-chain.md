@@ -244,14 +244,14 @@ exit 1 and run nothing. Only a person removes one.
 
 ## Plan
 
-- [ ] P9a, `cas-engine` (plus `cas-domain`), `cas-builder` haiku. It adds `AuditStatus::NotAudited`,
+- [x] P9a, `cas-engine` (plus `cas-domain`), `cas-builder`, briefed on haiku; landed in PRs #75 and #77. It adds `AuditStatus::NotAudited`,
   and `EVALUATOR_PATHS` with `is_evaluator_path` (the spec 0023 plan item). It splits
   `LandingActivity` into `reconcile` and `open_pr`, with `land` unchanged. `open_pr` reuses
   P5c's `--body -` code. `WaveExecutor` gets admission, dispatch, the D17 diff, the verdict
   parse, the host lock, `WorkflowEvent::WaveStep` and `WaveCompensator`. Tests use fake
   `blackwall`, `git` and `claude` scripts, red first. It starts after P5b and P5c (spec 0022
   D7, D9 to D11) land: all three edit `landing.rs`.
-- [ ] P9b, `cas-cli`, `cas-builder` haiku. It adds `cas wave flow` and `cas wave step` with the state directory, and the source plan
+- [x] P9b, `cas-cli`, `cas-builder`, briefed on haiku; landed in PR #78. It adds `cas wave flow` and `cas wave step` with the state directory, and the source plan
   `.saga/plans/cas-wave-smoke.toml`. It generates `.saga/flows/cas-cpm-wave-w*.toml`
   and adds `tasks/wave-smoke-build/`. Tests: a round-trip and a drift test.
 - [x] P9c, integrator on ceres, once D14 is ruled: `blackwall doctor`,
