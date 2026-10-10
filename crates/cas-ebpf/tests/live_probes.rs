@@ -240,6 +240,20 @@ fn nested_pid_namespace_exec_is_audited() -> TestResult {
             .any(|e| e.pid != 0 && e.filename_str().ends_with("/true")),
         "no nested exec event for true: {nested:?}"
     );
+    // Fork tracking from a nested parent: `true` runs in a child the nested
+    // shell forked, so its global pid differs from the shell's. (dash forks
+    // both commands; bash would exec the last one in place.)
+    let sh_pid = nested
+        .iter()
+        .find(|e| e.filename_str().ends_with("/sh"))
+        .map(|e| e.pid)
+        .ok_or("nested sh event vanished")?;
+    assert!(
+        nested
+            .iter()
+            .any(|e| e.filename_str().ends_with("/true") && e.pid != sh_pid),
+        "no forked nested child distinct from sh (pid {sh_pid}): {nested:?}"
+    );
 
     // Exit eviction works by global pid for tasks the helper could not name.
     let deadline = Instant::now() + Duration::from_secs(3);
