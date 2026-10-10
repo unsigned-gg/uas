@@ -29,7 +29,7 @@ Known from the repo contract (2026-10-08):
 
 Not probed yet: live runner capacity, cache hit rates, the R2 sccache bucket.
 
-## Where the CAS design lives
+## Where the UAS design lives
 
 Measured 2026-10-08. All paths are in `cerebral-work/research@4068134`. The design is a draft.
 
@@ -40,7 +40,7 @@ Measured 2026-10-08. All paths are in `cerebral-work/research@4068134`. The desi
 | Estate topology and invariants | `SYNTHESIS-ESTATE-AND-SUBSTRATE.md` |
 | Per-project evaluations | `repos/{gitoxide,heph,autumn-harvest,neutral-engineering,zerostack,madstack}.md` |
 
-Signals CAS will need once it runs, each not probed yet: the cortex settle queue
+Signals UAS will need once it runs, each not probed yet: the cortex settle queue
 (`/v1/settle/pending`), the saga evidence store, the reverie memory daemon and the
 Autumn-Harvest event log. This repo holds no data for any of them.
 

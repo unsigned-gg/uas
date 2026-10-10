@@ -1,6 +1,6 @@
 # Documentation
 
-This is the docs index for cas-substrate (the Cerebral Agent Substrate).
+This is the docs index for uas (the Unsigned Agent Substrate).
 
 | Section | Content |
 |---|---|

@@ -13,7 +13,7 @@ LeanSpec files record functional and non-functional requirements under `## Desig
 ### 1. Ubiquitous Requirements
 Active at all times. No trigger or operational state condition.
 - **Pattern**: `The <system name> shall <system response>.`
-- **Example**: `The cas-domain crate shall have zero external I/O dependencies.`
+- **Example**: `The uas-domain crate shall have zero external I/O dependencies.`
 
 ### 2. Event-Driven Requirements
 Triggered when a specific event occurs.
@@ -33,7 +33,7 @@ Triggered upon errors, invalid inputs, boundary violations, or failures.
 ### 5. Optional Feature Requirements
 Active only when a specific optional feature, hardware capability, or configuration is present.
 - **Pattern**: `WHERE <feature is applicable>, the <system name> shall <system response>.`
-- **Example**: `WHERE eBPF is supported by the kernel, cas-ebpfd shall attach sched_process_exec tracepoint probes.`
+- **Example**: `WHERE eBPF is supported by the kernel, uas-ebpfd shall attach sched_process_exec tracepoint probes.`
 
 ### 6. Complex / Compound Requirements
 Combines an operational state or optional feature with a trigger or exception condition.

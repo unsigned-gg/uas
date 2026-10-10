@@ -58,7 +58,7 @@ while IFS= read -r f; do
   case "$f" in
     crates/*/*)
       # The workspace crate is always crates/<name>. A nested package below it
-      # (crates/cas-ebpf/ebpf, the kernel program, built outside the workspace)
+      # (crates/uas-ebpf/ebpf, the kernel program, built outside the workspace)
       # maps to its parent crate, whose build.rs checks the committed object.
       d=$(cut -d/ -f1-2 <<<"$f")
       [ -f "$d/Cargo.toml" ] || continue

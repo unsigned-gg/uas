@@ -1,7 +1,7 @@
-# Agent teams for cas-substrate, read by bifrost::yggdrasil when saga runs from this repo.
+# Agent teams for uas, read by bifrost::yggdrasil when saga runs from this repo.
 # Overlay on saga's built-in catalog; the estate-cockpit topology is in .saga/topologies.toml.
 #
-# cas-estate is the pane gang for multi-package waves (the operator, 2026-10-10, in session, lane
+# uas-estate is the pane gang for multi-package waves (the operator, 2026-10-10, in session, lane
 # w25:p1 interview): architect on fable (mimir, this lane's persona), agy as spec designer
 # (mimir on the agy harness), engineer on opus (sindri, effort high), foreman on sonnet
 # (brokkr, effort medium), three builders on sonnet (sindri, effort medium; the 2026-10-10
@@ -9,20 +9,20 @@
 # effort high), prober on haiku (thjalfi, effort low). Personas are the files in .claude/agents/.
 # Effort selects the model tier (low haiku, medium sonnet, high opus, max fable).
 #
-# Apply: cd <repo> && saga yggdrasil team apply cas-estate --cwd <repo>   (splits panes only)
-# Show:  cd <repo> && saga yggdrasil team show cas-estate
+# Apply: cd <repo> && saga yggdrasil team apply uas-estate --cwd <repo>   (splits panes only)
+# Show:  cd <repo> && saga yggdrasil team show uas-estate
 # Then start each agent with `herdr agent start <name> --kind <harness> --pane <id> -- --model <tier>`.
 
-[teams.cas-estate]
+[teams.uas-estate]
 topology = "estate-cockpit"
 members = [
-  { slot = 0, role = "brokkr",  effort = "medium", persona = "cas-foreman" },
+  { slot = 0, role = "brokkr",  effort = "medium", persona = "uas-foreman" },
   { slot = 1, role = "mimir",   harness = "agy" },
-  { slot = 2, role = "mimir",   effort = "max",    persona = "cas-architect" },
-  { slot = 3, role = "sindri",  effort = "medium", persona = "cas-builder" },
-  { slot = 4, role = "sindri",  effort = "medium", persona = "cas-builder" },
-  { slot = 5, role = "sindri",  effort = "medium", persona = "cas-ebpf-builder" },
-  { slot = 6, role = "sindri",  effort = "high",   persona = "cas-engineer" },
-  { slot = 7, role = "loki",    effort = "high",   persona = "cas-critic" },
-  { slot = 8, role = "thjalfi", effort = "low",    persona = "cas-prober" },
+  { slot = 2, role = "mimir",   effort = "max",    persona = "uas-architect" },
+  { slot = 3, role = "sindri",  effort = "medium", persona = "uas-builder" },
+  { slot = 4, role = "sindri",  effort = "medium", persona = "uas-builder" },
+  { slot = 5, role = "sindri",  effort = "medium", persona = "uas-ebpf-builder" },
+  { slot = 6, role = "sindri",  effort = "high",   persona = "uas-engineer" },
+  { slot = 7, role = "loki",    effort = "high",   persona = "uas-critic" },
+  { slot = 8, role = "thjalfi", effort = "low",    persona = "uas-prober" },
 ]
