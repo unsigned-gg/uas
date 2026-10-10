@@ -200,7 +200,7 @@ impl LandingActivity {
         )?;
         match reconcile.status.code() {
             Some(0) => {}
-            // blackwall exits 3 when the verify gate fails (spec 0022 D7, F14).
+            // blackwall exits 3 when the verify gate fails (spec 0022 D7; F14 is reported, soma lane).
             Some(3) => {
                 let parts = ReceiptParts {
                     verify_exit: Some(3),
@@ -317,7 +317,12 @@ impl LandingActivity {
             match handle.write_all(stdin) {
                 Ok(()) => {}
                 Err(err) if err.kind() == io::ErrorKind::BrokenPipe => {}
-                Err(source) => return Err(LandingError::Stdin { program, source }),
+                Err(source) => {
+                    // Reap the child so it does not stay a zombie (the error path has no receipt).
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    return Err(LandingError::Stdin { program, source });
+                }
             }
             drop(handle);
         }
