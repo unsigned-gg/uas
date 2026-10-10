@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Specs 0028 to 0031, with 47 EARS requirements, for four architectural invariants that no spec owned: branchless CRDT worktrees, agent identity and on-behalf-of delegation, A2A multi-agent interop, and the MCP security baseline. All four are status planned. Spec 0029's identity rules need Allen's ratification under his identity veto.
+
 ### Changed
 - AGENTS.md drops the per-crate layout table and the derivable command rows, names the hook, Makefile or repo setting that enforces each rule, and points at spec 0001 for crate roles and phases.
 - Repo skills are reachable from Claude Code: `.claude/skills/` holds one symlink per skill in `.agents/skills/`.
