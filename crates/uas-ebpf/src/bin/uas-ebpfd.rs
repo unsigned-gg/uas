@@ -9,9 +9,12 @@ use std::process::ExitCode;
 
 use clap::Parser;
 
+/// Version text: crate version plus the git revision stamped by `build.rs`.
+const VERSION: &str = concat!(env!("CARGO_PKG_VERSION"), " (", env!("UAS_BUILD_REV"), ")");
+
 /// Command line of `uas-ebpfd`.
 #[derive(Debug, Parser)]
-#[command(name = "uas-ebpfd", about = "UAS eBPF clamping and audit daemon")]
+#[command(name = "uas-ebpfd", version = VERSION, about = "UAS eBPF clamping and audit daemon")]
 struct Args {
     /// Unix socket to serve `uas-pool` on.
     #[arg(long, default_value = "/run/uas/ebpf.sock")]
@@ -22,15 +25,27 @@ struct Args {
 }
 
 fn main() -> ExitCode {
-    tracing_subscriber::fmt()
-        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
-        .init();
+    init_logging();
     match run(Args::parse()) {
         Ok(code) => code,
         Err(e) => {
             eprintln!("uas-ebpfd: {e:#}");
             ExitCode::FAILURE
         }
+    }
+}
+
+/// Log to stderr, `info` by default, JSON when `UAS_LOG_FORMAT=json`.
+fn init_logging() {
+    let filter = tracing_subscriber::EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info"));
+    let builder = tracing_subscriber::fmt()
+        .with_env_filter(filter)
+        .with_writer(std::io::stderr);
+    if std::env::var("UAS_LOG_FORMAT").is_ok_and(|v| v == "json") {
+        builder.json().init();
+    } else {
+        builder.init();
     }
 }
 
