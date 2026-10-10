@@ -446,6 +446,8 @@ dependencies = [
  "cas-domain",
  "cas-engine",
  "maud",
+ "serde",
+ "serde_json",
  "thiserror",
  "tokio",
 ]

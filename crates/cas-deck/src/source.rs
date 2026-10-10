@@ -2,9 +2,9 @@
 
 use std::sync::Arc;
 
-use cas_engine::{EventStore, InMemoryEventStore, SettleCard, SettleQueue, WorkflowEvent};
+use cas_engine::{EventStore, InMemoryEventStore, SettleQueue, WorkflowEvent};
 
-use crate::DeckError;
+use crate::{DeckCard, DeckError, PendingCards};
 
 /// Read-only access to workflow session logs.
 pub trait SessionSource: Send + Sync {
@@ -21,12 +21,14 @@ impl SessionSource for Vec<InMemoryEventStore> {
 /// Read-only access to the settle queue.
 pub trait SettleSource: Send + Sync {
     /// Cards that still wait for an operator decision.
-    fn pending_cards(&self) -> Result<Vec<SettleCard>, DeckError>;
+    fn pending_cards(&self) -> Result<PendingCards, DeckError>;
 }
 
 impl SettleSource for SettleQueue {
-    fn pending_cards(&self) -> Result<Vec<SettleCard>, DeckError> {
-        Ok(self.pending())
+    fn pending_cards(&self) -> Result<PendingCards, DeckError> {
+        let cards: Vec<DeckCard> = self.pending().into_iter().map(DeckCard::from).collect();
+        let total = cards.len();
+        Ok(PendingCards { cards, total })
     }
 }
 
