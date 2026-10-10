@@ -26,8 +26,8 @@ Forbidden:
 - `sudo`. Any Slack, Linear or email send. A mesh send to any role but those in the Escalation
   bullet.
 
-This list is prompt text; the controls are the push hooks, branch protection, `make spec-check`
-and the integrator who alone lands.
+This list is prompt text; the controls are the push hooks, branch protection and the integrator,
+who alone lands.
 
 ## Tools and policy
 
