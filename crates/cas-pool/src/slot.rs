@@ -11,7 +11,7 @@ use std::time::{Duration, Instant};
 use cas_domain::{DomainError, Lease, LeaseToken, Slot, SlotId, SlotState, WorktreeRef};
 
 use crate::error::PoolError;
-use crate::freezer::{CgroupFreezer, Freezer, SignalFreezer};
+use crate::freezer::{CgroupFreezer, CpuCap, Freezer, ResourceLimits, SignalFreezer};
 
 /// Configuration options for the worker slot pool.
 #[derive(Debug, Clone)]
@@ -81,6 +81,14 @@ impl ManagedSlot {
     /// Mutable reference to the assigned freezer, if present.
     pub fn freezer_mut(&mut self) -> Option<&mut Box<dyn Freezer>> {
         self.freezer.as_mut()
+    }
+
+    /// Returns the CPU cap recorded by the assigned freezer, or [`CpuCap::Uncapped`] if none.
+    pub fn cpu_cap(&self) -> CpuCap {
+        self.freezer
+            .as_ref()
+            .map(|f| f.cpu_cap())
+            .unwrap_or(CpuCap::Uncapped)
     }
 }
 
@@ -432,5 +440,32 @@ impl SlotPool {
         }
 
         Ok(report)
+    }
+
+    /// Returns the CPU cap status recorded for a slot.
+    pub fn slot_cpu_cap(&self, id: &SlotId) -> Result<CpuCap, PoolError> {
+        let guard = self.slots.lock().unwrap_or_else(|p| p.into_inner());
+        let managed = guard
+            .get(id)
+            .ok_or_else(|| PoolError::SlotNotFound(id.clone()))?;
+        Ok(managed.cpu_cap())
+    }
+
+    /// Configures resource constraints (CPU/memory) for a slot.
+    pub fn configure_slot_limits(
+        &self,
+        id: &SlotId,
+        limits: &ResourceLimits,
+    ) -> Result<CpuCap, PoolError> {
+        let guard = self.slots.lock().unwrap_or_else(|p| p.into_inner());
+        let managed = guard
+            .get(id)
+            .ok_or_else(|| PoolError::SlotNotFound(id.clone()))?;
+        if let Some(ref freezer) = managed.freezer {
+            let cap = freezer.configure_limits(limits)?;
+            Ok(cap)
+        } else {
+            Ok(CpuCap::Uncapped)
+        }
     }
 }

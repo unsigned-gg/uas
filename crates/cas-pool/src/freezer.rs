@@ -32,8 +32,50 @@ pub enum FreezerState {
     Frozen,
 }
 
+/// Recorded CPU cap status for a worker slot (Spec 0020).
+#[derive(Debug, Clone, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CpuCap {
+    /// Enforced quota and period line, e.g. "200000 100000".
+    Capped(String),
+    /// Max quota without throttling.
+    Max,
+    /// Uncapped because controller or quota is absent.
+    #[default]
+    Uncapped,
+}
+
+impl CpuCap {
+    /// Returns the string representation suitable for receipt recording.
+    pub fn as_str(&self) -> &str {
+        match self {
+            Self::Capped(s) => s.as_str(),
+            Self::Max => "max",
+            Self::Uncapped => "uncapped",
+        }
+    }
+}
+
+impl std::fmt::Display for CpuCap {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl From<CpuCap> for String {
+    fn from(cap: CpuCap) -> Self {
+        cap.as_str().to_string()
+    }
+}
+
+impl From<&CpuCap> for String {
+    fn from(cap: &CpuCap) -> Self {
+        cap.as_str().to_string()
+    }
+}
+
 /// Resource constraints configured on child cgroups.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ResourceLimits {
     /// CPU quota in microseconds per period (None means "max").
     pub cpu_quota_us: Option<u64>,
@@ -43,6 +85,18 @@ pub struct ResourceLimits {
     pub memory_high_bytes: Option<u64>,
     /// Memory hard ceiling in bytes (triggers OOM kill beyond this).
     pub memory_max_bytes: Option<u64>,
+}
+
+impl Default for ResourceLimits {
+    /// Default limits: 2 CPUs of quota (200,000us quota per 100,000us period, Spec 0020 D3).
+    fn default() -> Self {
+        Self {
+            cpu_quota_us: Some(200_000),
+            cpu_period_us: Some(100_000),
+            memory_high_bytes: None,
+            memory_max_bytes: None,
+        }
+    }
 }
 
 /// Common interface for process suspension backends.
@@ -61,6 +115,15 @@ pub trait Freezer: Send + Sync {
 
     /// Enumerate all process IDs assigned to this freezer.
     fn pids(&self) -> Result<Vec<u32>, FreezerError>;
+
+    /// Read the currently recorded CPU cap status.
+    fn cpu_cap(&self) -> CpuCap;
+
+    /// Configure resource constraints on this freezer if supported.
+    fn configure_limits(&self, limits: &ResourceLimits) -> Result<CpuCap, FreezerError> {
+        let _ = limits;
+        Ok(CpuCap::Uncapped)
+    }
 }
 
 /// Resolves the current process's cgroup path relative to `/sys/fs/cgroup`.
@@ -86,6 +149,7 @@ pub struct CgroupFreezer {
     base_cgroup: PathBuf,
     slot_cgroup: PathBuf,
     slot_id: SlotId,
+    cpu_cap: Mutex<CpuCap>,
 }
 
 impl CgroupFreezer {
@@ -105,11 +169,17 @@ impl CgroupFreezer {
             })?;
         }
 
-        Ok(Self {
+        let freezer = Self {
             base_cgroup,
             slot_cgroup,
             slot_id,
-        })
+            cpu_cap: Mutex::new(CpuCap::Uncapped),
+        };
+
+        // Default limits: 2 CPUs of quota per Spec 0020 D3
+        let _ = freezer.configure_limits(&ResourceLimits::default());
+
+        Ok(freezer)
     }
 
     /// Verifies that `slot_cgroup` is safe to create and freeze.
@@ -165,8 +235,18 @@ impl CgroupFreezer {
         &self.base_cgroup
     }
 
+    /// Read the currently recorded CPU cap status.
+    pub fn cpu_cap(&self) -> CpuCap {
+        self.cpu_cap
+            .lock()
+            .map(|c| c.clone())
+            .unwrap_or(CpuCap::Uncapped)
+    }
+
     /// Configures CPU and memory constraints in the child cgroup.
-    pub fn configure_limits(&self, limits: &ResourceLimits) -> Result<(), FreezerError> {
+    pub fn configure_limits(&self, limits: &ResourceLimits) -> Result<CpuCap, FreezerError> {
+        let mut recorded_cap = CpuCap::Uncapped;
+
         if limits.cpu_quota_us.is_some() || limits.cpu_period_us.is_some() {
             let period = limits.cpu_period_us.unwrap_or(100_000);
             let quota_str = limits
@@ -181,6 +261,18 @@ impl CgroupFreezer {
                     path: cpu_max_path,
                     source: e,
                 })?;
+                recorded_cap = if quota_str == "max" {
+                    CpuCap::Max
+                } else {
+                    CpuCap::Capped(format!("{quota_str} {period}"))
+                };
+            } else {
+                tracing::warn!(
+                    slot_id = %self.slot_id,
+                    path = ?cpu_max_path,
+                    "cgroup cpu.max controller not available; slot remains uncapped"
+                );
+                recorded_cap = CpuCap::Uncapped;
             }
         }
 
@@ -206,7 +298,11 @@ impl CgroupFreezer {
             }
         }
 
-        Ok(())
+        if let Ok(mut lock) = self.cpu_cap.lock() {
+            *lock = recorded_cap.clone();
+        }
+
+        Ok(recorded_cap)
     }
 
     /// Poll `cgroup.events` until `frozen` matches `expected_val`, or timeout expires.
@@ -367,6 +463,14 @@ impl Freezer for CgroupFreezer {
 
         Ok(res)
     }
+
+    fn cpu_cap(&self) -> CpuCap {
+        self.cpu_cap()
+    }
+
+    fn configure_limits(&self, limits: &ResourceLimits) -> Result<CpuCap, FreezerError> {
+        self.configure_limits(limits)
+    }
 }
 
 /// Fallback freezer implementing process suspension via POSIX signals (SIGSTOP / SIGCONT).
@@ -395,6 +499,11 @@ impl SignalFreezer {
     /// The slot id managed by this freezer.
     pub fn slot_id(&self) -> &SlotId {
         &self.slot_id
+    }
+
+    /// Read the currently recorded CPU cap status (always uncapped for signal freezer).
+    pub fn cpu_cap(&self) -> CpuCap {
+        CpuCap::Uncapped
     }
 }
 
@@ -463,5 +572,13 @@ impl Freezer for SignalFreezer {
             .lock()
             .map_err(|_| FreezerError::Signal("lock poisoned".to_string()))?;
         Ok(pids.clone())
+    }
+
+    fn cpu_cap(&self) -> CpuCap {
+        CpuCap::Uncapped
+    }
+
+    fn configure_limits(&self, _limits: &ResourceLimits) -> Result<CpuCap, FreezerError> {
+        Ok(CpuCap::Uncapped)
     }
 }

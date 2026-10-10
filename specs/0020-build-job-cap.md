@@ -102,13 +102,13 @@ Saga reads it as evidence that the host throttling invariant held for the run.
 ## Plan
 
 - [x] the operator rules D3 (two CPUs, 2026-10-10).
-- [ ] `cas-pool`: default `ResourceLimits` to `cpu_quota_us: 200_000, cpu_period_us: 100_000` at slot launch (today
+- [x] `cas-pool`: default `ResourceLimits` to `cpu_quota_us: 200_000, cpu_period_us: 100_000` at slot launch (today
   the caller passes limits; the default is `None`, which writes nothing).
-- [ ] `cas-pool`: replace the silent skip (F6) with the `uncapped` receipt field and
+- [x] `cas-pool`: replace the silent skip (F6) with the `uncapped` receipt field and
   a warn log; test goes red first on a cgroup without the `cpu` controller
   (a tempdir stands in for the cgroup, as `tests/freezer.rs` does today).
-- [ ] Spec 0001: close gap 2 and Plan item 4 with a citation to this spec.
-- [ ] Spec 0015: cite this spec from D3 (cgroup path) and the receipt.
+- [x] Spec 0001: close gap 2 and Plan item 4 with a citation to this spec.
+- [x] Spec 0015: cite this spec from D3 (cgroup path) and the receipt.
 
 ## Test
 

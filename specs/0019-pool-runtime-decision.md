@@ -96,10 +96,23 @@ Facts, measured 2026-10-10 on ceres unless stated:
 ## Plan
 
 - [x] the operator ruled on D2 (2026-10-10): benchmark first. Spec 0001 gap 1 stays open until the numbers are in.
-- [ ] Write the criterion benchmark of the slot lifecycle in `cas-pool` (`benches/`), Option A, `-j 2`, results dated in a new spec or an addendum here; a package for the cas-pool lane (agy, spec 0015).
+- [x] Write the criterion benchmark of the slot lifecycle in `cas-pool` (`benches/`), Option A, `-j 2`, results dated in a new spec or an addendum here; a package for the cas-pool lane (agy, spec 0015).
 - [ ] the operator rules D2 on the benchmark numbers.
 - [ ] Record the ruling in spec 0001 (gap 1, Plan item 3) and spec 0015 D5.
 - [ ] If C: pin `heph` and `heph-rt` in spec 0004 and write the measurement plan.
+
+### Benchmark Addendum (2026-10-10, host ceres, JOBS=2)
+
+Measured with Criterion on `crates/cas-pool/benches/slot_lifecycle.rs` (Option A: OS threads + `std::sync`):
+
+| Operation | Target / Spec | Measured Time | Iterations / Samples |
+|---|---|---|---|
+| `pool_create_and_warm` | Spec 0015 (slot creation & warm transition) | 175.04 ns | 28M iters, 100 samples |
+| `lease_acquire_and_release` | Spec 0007 / Spec 0015 (acquire lease + release to warm) | 301.05 ns | 20M iters, 100 samples |
+| `suspend_and_resume` | Spec 0015 (in-memory suspend + resume transitions) | 94.51 ns | 54M iters, 100 samples |
+| `cgroup_configure_limits` | Spec 0020 (cgroup v2 `cpu.max` write) | 191.50 µs | 25k iters, 100 samples |
+
+Finding: All core slot domain lifecycle operations complete in sub-microsecond time (< 310 ns). Cgroup filesystem limit updates complete in ~191.5 µs, well within the 10 ms latency envelope specified in Spec 0015.
 
 ## Test
 

@@ -59,19 +59,30 @@ impl RunHash {
         self.dropped_events
     }
 
-    /// Finalizes the digest into a receipt.
-    pub fn finish(self) -> AuditReceipt {
+    /// Finalizes the digest into a receipt with an explicit CPU cap (spec 0020).
+    pub fn finish_with_cap(self, cpu_cap: impl Into<String>) -> AuditReceipt {
         let digest = self.hasher.finalize();
         AuditReceipt {
             run_hash: hex(&digest),
             events: self.events,
             dropped_events: self.dropped_events,
             attested: self.dropped_events == 0,
+            cpu_cap: cpu_cap.into(),
         }
+    }
+
+    /// Finalizes the digest into a receipt with default "uncapped" CPU cap.
+    pub fn finish(self) -> AuditReceipt {
+        self.finish_with_cap("uncapped")
     }
 }
 
-/// What a slot session attaches to its Saga receipt (spec 0014, audit hash rule 5 and 6).
+/// Default cpu_cap value for deserialization fallback (spec 0020).
+fn default_cpu_cap() -> String {
+    "uncapped".to_string()
+}
+
+/// What a slot session attaches to its Saga receipt (spec 0014, audit hash rule 5 and 6; spec 0020).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AuditReceipt {
     /// Hex SHA-256 of the transcript.
@@ -82,6 +93,9 @@ pub struct AuditReceipt {
     pub dropped_events: u64,
     /// `true` when `dropped_events` is zero.
     pub attested: bool,
+    /// CPU cap enforced during the run ("200000 100000", "max", or "uncapped") (spec 0020).
+    #[serde(default = "default_cpu_cap")]
+    pub cpu_cap: String,
 }
 
 /// Lower-case hex of `bytes`.
@@ -179,9 +193,25 @@ mod tests {
     #[test]
     fn receipt_serializes_to_json() {
         let receipt = RunHash::new().finish();
+        assert_eq!(receipt.cpu_cap, "uncapped");
         let json = serde_json::to_string(&receipt).expect("serialize");
         assert!(json.contains("\"attested\":true"));
+        assert!(json.contains("\"cpu_cap\":\"uncapped\""));
         let back: AuditReceipt = serde_json::from_str(&json).expect("deserialize");
         assert_eq!(back, receipt);
+    }
+
+    #[test]
+    fn finish_with_cap_records_custom_cpu_cap() {
+        let receipt = RunHash::new().finish_with_cap("200000 100000");
+        assert_eq!(receipt.cpu_cap, "200000 100000");
+        assert!(receipt.attested);
+    }
+
+    #[test]
+    fn receipt_deserializes_missing_cpu_cap_as_uncapped() {
+        let legacy_json = r#"{"run_hash":"abc","events":1,"dropped_events":0,"attested":true}"#;
+        let receipt: AuditReceipt = serde_json::from_str(legacy_json).expect("deserialize legacy");
+        assert_eq!(receipt.cpu_cap, "uncapped");
     }
 }
