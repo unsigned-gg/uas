@@ -132,6 +132,11 @@ new-repo: ## Rename the template (NAME=<kebab> [ORG=cerebral-work])
 		[ -d "$$d" ] || continue
 		git mv "$$d" "crates/$$name-$${d#crates/cas-}"
 	done
+	# Files whose own name carries the prefix move too, or a manifest path
+	# rewritten below points at a file that no longer exists.
+	git ls-files -z | grep -zE '(^|/)cas[^/]*$$' | grep -zvE '^(vendor/|specs/|\.agents/skills/new-repo/)' | while IFS= read -r -d '' f; do
+		git mv "$$f" "$$(dirname "$$f")/$$name$${f##*/cas}"
+	done
 	git ls-files -z | while IFS= read -r -d '' f; do
 		# vendor/ is upstream text; the new-repo skill stays verbatim as the
 		# record of how this repo was made from the template; specs/ keeps its
@@ -143,14 +148,22 @@ new-repo: ## Rename the template (NAME=<kebab> [ORG=cerebral-work])
 		# The repo name first, then the bare token on word boundaries, so that
 		# `case`, `broadcast` and `replicas` are never rewritten. `\b` sits
 		# between `s` and `-`, so `cas-pool` still becomes `<name>-pool`.
+		# Hyphenated forms are names, never identifiers, so they take the kebab
+		# name everywhere. A bare `cas` inside Rust source is an identifier and
+		# takes the snake form, except inside a string literal or the Cargo
+		# binary env var, where it names the binary and takes the kebab form.
 		sed -i \
 			-e "s#cerebral-work/cas-substrate#$$org/$$name#g" \
 			-e "s/\bcas-substrate\b/$$name/g" \
+			-e "s/\bcas-/$$name-/g" \
 			-e "s/\bCAS_/$${upper}_/g" \
 			-e "s/\bcas_/$${snake}_/g" \
-			-e "s/\bcas\b/$$name/g" \
 			-e "s/\bskel\b/$$name/g" \
 			"$$f"
+		case "$$f" in
+			*.rs) sed -i -e "s/\"cas\"/\"$$name\"/g" -e "s/CARGO_BIN_EXE_cas\b/CARGO_BIN_EXE_$$name/g" -e "s/\bcas\b/$$snake/g" "$$f" ;;
+			*)    sed -i -e "s/\bcas\b/$$name/g" "$$f" ;;
+		esac
 	done
 	git rm -q -f --ignore-unmatch .github/workflows/template-check.yml
 	cargo update -w --offline 2>/dev/null || cargo update -w

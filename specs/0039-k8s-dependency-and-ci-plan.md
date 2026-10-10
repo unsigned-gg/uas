@@ -1,14 +1,9 @@
 ---
 status: planned
 created: 2026-10-10
-tags:
-  - k8s
+tags: [k8s, kube-rs, dependencies, pins, ci, k3d, publish]
 priority: high
-depends_on:
-  - 0004-dependency-and-licence-policy
-  - 0005-ci-cache-and-runners
-  - 0033-cargo-feature-policy-and-ci-matrix
-  - 0034-tool-pinning-beyond-cargo
+depends_on: [0004-dependency-and-licence-policy, 0005-ci-cache-and-runners, 0033-cargo-feature-policy-and-ci-matrix, 0034-tool-pinning-beyond-cargo, 0037-repository-migration-to-uas, 0038-uas-operator-and-crds]
 ---
 
 # 0039-k8s-dependency-and-ci-plan
@@ -17,58 +12,131 @@ depends_on:
 
 ## Overview
 
-The Kube-rs Integration Plan introduces a new Kubernetes dependency set to the `cas-substrate` (UAS) open compute stack. This spec defines the candidate versions, licenses, and CI test plan for `kube`, `k8s-openapi`, `schemars`, and two unpublished internal crates (`unsigned-k8s-core`, `unsigned-k8s-api`). It also defines the provisioning of `k3d` and `kubectl` for end-to-end tests, abiding by the dependency and tool pinning rules set in 0004, 0005, 0033, and 0034.
+The Kube-rs Integration Plan v5 gives this repository a dependency set it has
+never had: `kube`, `k8s-openapi`, `schemars`, and two estate crates that do not
+exist on crates.io yet, `unsigned-k8s-core` and `unsigned-k8s-api` [reported: the
+plan, at `/tmp/research-surfaces/cas-ears/kube-rs-plan.md`]. AGENTS.md rule 12
+says every external dependency is pinned and recorded in spec 0004 before first
+use. This spec says what is pinned, at which versions and why, what the licence
+check finds, how the two unpublished crates are reached before publication, how
+the end-to-end job runs in CI, and who publishes what. It picks no code.
 
-### Facts
-- **F1** [verified 2026-10-10]: The candidate versions `kube` v4.2.0 (requires `1.89.0`) and `k8s-openapi` v0.28.0 (no strict MSRV) are compatible with workspace `rust-version = 1.89`. Command run in throwaway crate: `cargo metadata --format-version 1 | grep -o '"name":"kube","version":"4.2.0"[^}]*"rust_version":"1.89.0"'` returned a match.
-- **F2** [verified 2026-10-10]: The `webpki-root-certs` crate transitively included by `kube` has a license `CDLA-Permissive-2.0` that fails the default policy. Command: `cargo deny check licenses` inside throwaway crate (with repo's `deny.toml`) outputted: `rejected: license is not explicitly allowed`.
-- **F3** [asserted 2026-10-10]: The `v1_32` feature for `k8s-openapi` matches the target Kubernetes cluster version used in Cygnus.
-- **F4** [reported 2026-10-10]: Crates namespaces `cerebral-work`, `cerebral-k8s`, and `uas` are held by `todie`. `vesperan` and `zerodays` are pending republish at ~20:56Z on 2026-10-11.
+Facts, measured 2026-10-10 in a throwaway crate outside the worktree, with this
+repository's `deny.toml` copied in:
+
+- **F1 [verified]:** `kube` 4.2.0 is the newest release and declares
+  `rust_version = 1.89.0`, which equals the workspace `rust-version = "1.89"`
+  exactly, with no headroom. Command: `cargo metadata --format-version 1` on the
+  throwaway crate; `grep rust-version Cargo.toml` in the workspace.
+- **F2 [verified]:** `k8s-openapi` 0.28.0 is the newest release (published
+  2026-06-15), declares no `rust_version`, and offers the Kubernetes version
+  features `v1_32` through `v1_36`. No release offers `v1_37`. Commands:
+  `cargo metadata` as above; `curl https://crates.io/api/v1/crates/k8s-openapi`.
+- **F3 [verified]:** The Cygnus cluster runs Kubernetes **1.37.0**, client and
+  server. Command: `KUBECONFIG=~/.kube/cygnus kubectl version`. An earlier draft
+  of this spec chose `v1_32` without reading the cluster; that choice is withdrawn.
+- **F4 [verified]:** `schemars` 1.2.2 declares `rust_version = 1.74` and licence
+  `MIT`. `kube` and `k8s-openapi` are `Apache-2.0`. Command: `cargo metadata`.
+- **F5 [verified]:** With this repository's `deny.toml`, the set fails the
+  licence gate on one transitive crate: `webpki-root-certs`, licence
+  `CDLA-Permissive-2.0`, "rejected: license is not explicitly allowed".
+  Advisories, bans and sources pass. Command: `cargo deny check` and
+  `cargo deny check licenses` in the throwaway crate.
+- **F6 [reported]:** The two estate crates are path dependencies into
+  `~/projects/unsigned/paas` first, where they are scaffolded, and are published
+  later; `kube 4.2.0` and `k8s-openapi 0.28.0` were chosen there to match the
+  `vespertin` operator and were not checked against this repository before F1
+  to F5 [research lane w1X:p22, mesh reply 2026-10-10 about 21:5xZ].
+- **F7 [reported]:** The crates.io names `uas`, `cerebral-work` and
+  `cerebral-k8s` are held by `todie`. `vesperan` and `zerodays` hit the 24-hour
+  lock after a deletion and are due for republish at about 20:56Z on 2026-10-11
+  [research lane w1X:p22, same reply]. `uas` 0.1.0 is also verified in spec 0037
+  F6. `unsigned-k8s-core` and `unsigned-k8s-api` are held by nobody.
+- **F8 [reported]:** Christian ruled in his own session at about 21:38Z on
+  2026-10-10 that the `uas` crate is the vehicle for publishing substrate work
+  [this lane, w25:p1, heard it; spec 0037 D13 records it].
 
 ## Design
 
 ### Decisions
 
-| ID | Decision | Source |
+| | Decision | Source |
 |---|---|---|
-| D1 | Pin `kube` v4.2.0, `k8s-openapi` v0.28.0 (v1_32), `schemars` v1.2.2. | lane w10:pN, 2026-10-10 |
-| D2 | Spec 0004 gains an allow entry for `CDLA-Permissive-2.0` in `deny.toml` due to `webpki-root-certs`. | lane w10:pN, 2026-10-10 |
-| D3 | Pin `unsigned-k8s-core` and `unsigned-k8s-api` by path (`~/projects/unsigned/paas`) until publication, then by version recorded in spec 0004. | lane w10:pN, 2026-10-10 |
-| D4 | The `k8s-e2e` job runs on the existing self-hosted runner group `ent-default` with the `ci-rust` image, which must gain `k3d` and `kubectl`. (Note spec 0037 F7: runner group organization may need re-homing post-transfer). | lane w10:pN, 2026-10-10 |
-| D5 | Pin `k3d` and `kubectl` as external tools per 0034. | lane w10:pN, 2026-10-10 |
-| D6 | Christian publishes the `unsigned-k8s-*` crates. | lane w10:pN, 2026-10-10 |
+| D1 | Pin `kube` 4.2.0 with features `runtime` and `derive`, `k8s-openapi` 0.28.0 with feature `v1_36`, and `schemars` 1.2.2. `v1_36` is the newest feature any release offers and sits one minor behind the 1.37 cluster, which is the skew `k8s-openapi` supports; it is revisited when a release carries `v1_37`. | F1 to F4; integrating lane w25:p1, 2026-10-10, taking over from lane w10:pN, whose pane ended before round two |
+| D2 | `kube`'s MSRV equals the workspace floor exactly. The floor is not raised for it, and any bump of `kube` that raises its MSRV above 1.89 is a decision for spec 0004, not an incidental update. | F1; integrating lane w25:p1, 2026-10-10 |
+| D3 | Spec 0004 gains an allow entry for `CDLA-Permissive-2.0`, scoped by crate to `webpki-root-certs`, because F5 proves the set cannot pass without it. Spec 0004 line 205 already allows that licence for a wasm32 path; this is the Linux path, and the entry says so. | F5; integrating lane w25:p1, 2026-10-10 |
+| D4 | The two estate crates are path dependencies into `~/projects/unsigned/paas` on a workstation and nowhere else: a CI runner and any other checkout have no such path, and `deny.toml` allows only crates.io and one git source. So the `k8s` feature stays off in CI until the crates are published and pinned by version in spec 0004. Spec 0038 D6 keeps the CRD types in-tree for the same window; the two specs agree. | F6; spec 0038 D6; integrating lane w25:p1, 2026-10-10 |
+| D5 | The `k8s-e2e` job runs on the existing self-hosted runner group `ent-default` with the `ci-rust` image, which gains `k3d` and `kubectl`. No GitHub-hosted runner: spec 0005 has none, and one would change cost, secrets reach and the self-hosted assumption. Spec 0037 F7 notes the group's organisation could not be read, so the job may be re-homed after the transfer. | spec 0005; integrating lane w25:p1, 2026-10-10 |
+| D6 | Every Kubernetes-facing piece sits behind the cargo feature `k8s`, declared per spec 0033 in each crate that owns gated code, off by default. | spec 0033; integrating lane w25:p1, 2026-10-10 |
+| D7 | `k3d` and `kubectl` are pinned as tools beyond cargo under spec 0034, in spec 0004's CI tools table. | spec 0034; integrating lane w25:p1, 2026-10-10 |
+| D8 | **Publishing.** The `uas` crate is the publication vehicle for substrate work (F8). crates.io has no namespaces: `uas` is one name, and every `uas-*` sub-crate is a separate name, unreserved until published. Which workspace crates publish and under which names is decided when the first publish is prepared, in a spec that amends 0004's `publish = false`. Publishing, and reserving any further name, is Christian's act; no lane presses publish. | F7, F8; spec 0037 D13; integrating lane w25:p1, 2026-10-10 |
 
 ### Requirements (EARS)
 
-- **[REQ-0039-01]** (Ubiquitous): The workspace shall depend on `kube` (features: `runtime`, `derive`), `k8s-openapi` (feature: `v1_32`), and `schemars`.
-- **[REQ-0039-02]** (Ubiquitous): The `deny.toml` shall explicitly allow the `CDLA-Permissive-2.0` license to permit the `webpki-root-certs` dependency, amending spec 0004.
-- **[REQ-0039-03]** (Ubiquitous): The `unsigned-k8s-core` and `unsigned-k8s-api` crates shall be pinned by path into `paas` until publication, then by version recorded in spec 0004.
-- **[REQ-0039-04]** (Ubiquitous): The CI pipeline shall include a `k8s-e2e` job on the `ent-default` runner group using the `ci-rust` image, which shall be provisioned with `k3d` and `kubectl`.
-- **[REQ-0039-05]** (Ubiquitous): The Kubernetes components shall sit behind a `k8s` cargo feature flag, in compliance with spec 0033.
-- **[REQ-0039-06]** (Ubiquitous): The `k3d` and `kubectl` tools shall be explicitly pinned as external tools according to spec 0034.
-- **[REQ-0039-07]** (Ubiquitous): The `Christian` identity shall be the sole publisher of the `unsigned-k8s-core` and `unsigned-k8s-api` crates to their reserved `crates.io` namespaces.
+- **[REQ-0039-01]** (Ubiquitous): The workspace shall depend on `kube` 4.2.0 with features `runtime` and `derive`, `k8s-openapi` 0.28.0 with feature `v1_36`, and `schemars` 1.2.2, each recorded in spec 0004 before the first `Cargo.toml` edit that uses it.
+- **[REQ-0039-02]** (Ubiquitous): `deny.toml` shall allow `CDLA-Permissive-2.0` for `webpki-root-certs` only, and spec 0004 shall record that entry with F5 as its reason.
+- **[REQ-0039-03]** (State-driven): WHILE `unsigned-k8s-core` and `unsigned-k8s-api` are unpublished, the workspace shall reach them by path into `~/projects/unsigned/paas`, and the `k8s` feature shall stay off in CI.
+- **[REQ-0039-04]** (Event-driven): WHEN the two estate crates are published, the workspace shall pin them by version recorded in spec 0004, and the path dependencies shall be removed in the same change.
+- **[REQ-0039-05]** (Ubiquitous): Every crate with Kubernetes-facing code shall declare the cargo feature `k8s`, off by default, per spec 0033.
+- **[REQ-0039-06]** (Event-driven): WHEN CI runs with the `k8s` feature on, the `k8s-e2e` job shall run on the `ent-default` runner group with the `ci-rust` image and shall provision a `k3d` cluster.
+- **[REQ-0039-07]** (Ubiquitous): `k3d` and `kubectl` shall be pinned in spec 0004's CI tools table per spec 0034 before the `ci-rust` image gains them.
+- **[REQ-0039-08]** (Unwanted): IF `make pin-check` finds a Kubernetes crate in a manifest that spec 0004 does not record, THEN it shall fail and name the crate.
+- **[REQ-0039-09]** (Unwanted): IF a release of `kube` raises its MSRV above the workspace `rust-version`, THEN the bump shall wait for a spec 0004 decision on the floor.
+- **[REQ-0039-10]** (Unwanted): IF a lane's change would publish any crate or reserve any crates.io name, THEN the lane shall stop and leave that act to Christian.
+- **[REQ-0039-11]** (Optional): WHERE a `k8s-openapi` release offers `v1_37`, the feature shall move to it and spec 0004 shall record the bump.
 
 ## Plan
 
-- [ ] Add `kube` v4.2.0, `k8s-openapi` v0.28.0, and `schemars` v1.2.2 to Cargo.toml.
-- [ ] Amend Spec 0004 and update `deny.toml` to allow `CDLA-Permissive-2.0`.
-- [ ] Add `k3d` and `kubectl` dependencies to the `ci-rust` runner image provisioning scripts.
-- [ ] Implement the `k8s-e2e` CI job on `ent-default`.
+In this order, because rule 12 records before it uses:
+
+- [ ] Amend spec 0004: rows for `kube` 4.2.0, `k8s-openapi` 0.28.0, `schemars` 1.2.2 with licence and MSRV from F1 to F4; the `CDLA-Permissive-2.0` allow for `webpki-root-certs` with F5 as reason; `k3d` and `kubectl` in the CI tools table.
+- [ ] Update `deny.toml` with the scoped allow.
+- [ ] Add the three crates to the workspace behind the `k8s` feature, in the crates spec 0038 names.
+- [ ] Add the path dependencies for the two estate crates, guarded so a build without the path still succeeds with `k8s` off.
+- [ ] Add `k3d` and `kubectl` to the `ci-rust` image provisioning, pinned.
+- [ ] Add the `k8s-e2e` job to `ci.yml` on `ent-default`, gated on the `k8s` feature being on, per spec 0033's matrix.
+- [ ] When the estate crates publish: replace the path dependencies with version pins and record them in spec 0004.
 
 ## Test
 
-| Requirement | Negative Control |
-|---|---|
-| REQ-0039-02 | `cargo deny check licenses` on the workspace with `webpki-root-certs` goes red if `CDLA-Permissive-2.0` is removed from `deny.toml`. |
-| REQ-0039-04 | The `k8s-e2e` CI job fails if `k3d` executable is not found in the `ci-rust` image. |
-| REQ-0039-06 | `make pin-check` on a fixture containing unpinned `k3d`. Goes red if the unrecorded crate fails the gate as specified by 0034. |
-
 ```bash
-cargo build --features k8s
-cargo deny check licenses
-make pin-check
+cargo deny check licenses && \
+  make pin-check JOBS=2 && \
+  cargo build -p cas-operator -j 2 --features k8s && \
+  make features JOBS=2
 ```
+
+A pass requires each of these cases to exist and to go red when its own check is
+deleted:
+
+| Case | Where | Requirement |
+|---|---|---|
+| `cargo deny check licenses` fails when the `webpki-root-certs` allow is removed from `deny.toml` | workspace | REQ-0039-02 |
+| `make pin-check` fails on a fixture manifest that adds `kube` with no spec 0004 row | xtask fixture | REQ-0039-08 |
+| the `k8s-e2e` job fails when `k3d` is absent from the image | `ci.yml`, run with the tool removed | REQ-0039-06 |
+| the default build has no `kube` in its graph: `cargo tree -e normal | grep -c kube` is 0 with the feature off | workspace | REQ-0039-05 |
+| the feature matrix of spec 0033 has a `k8s` leg once the feature is declared | `make features` | REQ-0039-05 |
+
+The control that exists today: with this repository's `deny.toml` and no allow
+entry, the licence gate fails on `webpki-root-certs` (F5). The spec is
+implemented when the same command passes with the scoped allow and fails again
+when the allow is removed.
 
 ## Notes
 
-- Note on `D4`: The `ent-default` runner group's organization could not be read per spec 0037 F7; this job may require re-homing after the transfer to `unsigned-gg`.
+- **Takeover.** This spec was drafted by the cas spec pane w10:pN. That pane's
+  workspace was re-laid before its second review round and its mesh role was
+  gone, so the integrating lane applied the critic's round-two points itself and
+  re-verified every fact above with its own commands. The pane's own measurements
+  stand where they were repeated.
+- **Why not `v1_37`.** It does not exist in any `k8s-openapi` release as of
+  2026-10-10 (F2). `v1_36` is the newest and is within the one-minor skew the
+  crate documents. REQ-0039-11 moves it when a release carries `v1_37`.
+- **Why not a GitHub-hosted runner.** Spec 0005 has none, and the first one would
+  be a cost and secrets decision, not a CI detail.
+- **The MSRV coincidence.** `kube` 4.2.0 needs exactly the floor the workspace
+  has. The next `kube` is likely to raise it, and that is a spec 0004 decision
+  (D2, REQ-0039-09), not something `cargo update` is allowed to decide.
+- Reading: spec 0004 for the pin tables and line 205 on `CDLA-Permissive-2.0`;
+  spec 0033 for the feature matrix; spec 0034 for tools beyond cargo; spec 0037
+  D13 and F6 for the `uas` crate; spec 0038 D6 for the in-tree CRD window.
