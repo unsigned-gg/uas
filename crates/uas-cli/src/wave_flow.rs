@@ -400,6 +400,18 @@ impl WaveEnv {
     }
 }
 
+impl WaveEnv {
+    /// Apply `--open-prs`: when the flag is given it turns pull requests on, whatever
+    /// `UAS_WAVE_OPEN_PRS` holds (spec 0042 D1: the flag wins). Absent, the variable stands.
+    #[must_use]
+    pub fn with_open_prs_flag(mut self, flag: bool) -> Self {
+        if flag {
+            self.open_prs = Some(OsString::from("1"));
+        }
+        self
+    }
+}
+
 /// The arguments of `uas wave step`.
 #[derive(Debug, Clone)]
 pub struct StepArgs {
@@ -816,4 +828,49 @@ fn record_halt(config: &WaveExecConfig, step: &str, role: AgentRole, now: u64) -
         .with_context(|| format!("write {}", tmp.display()))?;
     fs::rename(&tmp, &path).with_context(|| format!("rename to {}", path.display()))?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn open_prs(env: &WaveEnv) -> bool {
+        let args = StepArgs {
+            flow: "f".into(),
+            step: "s".into(),
+            repo: None,
+            state_dir: None,
+            max_concurrency: 0,
+        };
+        let merge = PlanMerge::default();
+        step_config(&args, env, "f", &merge, Path::new("/tmp")).open_prs
+    }
+
+    #[test]
+    fn open_prs_flag_overrides_env() {
+        let off = WaveEnv {
+            open_prs: Some("0".into()),
+            ..WaveEnv::default()
+        };
+        assert!(
+            !open_prs(&off.clone().with_open_prs_flag(false)),
+            "env 0 stands without the flag"
+        );
+        assert!(
+            open_prs(&off.with_open_prs_flag(true)),
+            "the flag beats env 0"
+        );
+        assert!(
+            open_prs(&WaveEnv::default().with_open_prs_flag(true)),
+            "the flag beats an unset env"
+        );
+        let on = WaveEnv {
+            open_prs: Some("1".into()),
+            ..WaveEnv::default()
+        };
+        assert!(
+            open_prs(&on.with_open_prs_flag(false)),
+            "env 1 stands without the flag"
+        );
+    }
 }
