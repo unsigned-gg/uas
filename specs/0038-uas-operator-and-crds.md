@@ -48,6 +48,9 @@ The operator reconciles two primary Custom Resource Definitions (CRDs):
 | D7 | Operator deployment to the Cygnus cluster is an operator-gated action. An agent lane never deploys or syncs to Cygnus autonomously; deploying is Christian's act. | Estate safety SOP; ~/.agents/sops/land-on-green-run-it.md; ~/.agents/sops/prod-is-dev.md; research lane w1X:p1, 2026-10-10 |
 | D8 | Operator execution topology: The physical deployment topology of `uas-operator` is marked undecided between a cluster-wide controller (using a node-agent DaemonSet with hostPath to reach the Spec 0036 mode 0700 slot directory) and a node-local DaemonSet. | Node privilege and filesystem access boundaries; Spec 0036 D2 | undecided: research lane w1X:p1, 2026-10-10; awaits Christian confirmation |
 | D9 | Feature split and CI gating: Following Spec 0039 D4/D4a, unpublished estate crates enter no tracked manifest until published (avoiding cargo resolve failures on CI runners lacking local paas paths). The operator and in-tree CRD types sit behind the `k8s` feature, which is enabled in the CI test matrix so mocked-API tests run on every PR. The future `k8s-estate` feature remains off in CI until estate crates publish to crates.io. | CI portability and feature split; Spec 0004; Spec 0039 D4, D4a; research lane w1X:p1, 2026-10-10 |
+| D10 | The `WorkerSlot` CRD schema carries `spec.limits` defining `memory_max_bytes`, `memory_high_bytes`, and `pids_max`. These limits flow into `PoolConfig` at runtime and take precedence over the `uas-pool` environment twins (`CAS_SLOT_MEMORY_MAX`, etc.). | Declarative per-slot sizing; Spec 0041 D8; research lane w1X:p1, 2026-10-10 |
+
+| D11 | Operator telemetry uses the observability abstraction defined in `unsigned-k8s-core`, as deferred to Spec 0038 by Spec 0042 D6. | Standardized estate telemetry; Spec 0042 D6; research lane w1X:p1, 2026-10-10 |
 
 ### Requirements (EARS)
 
@@ -63,11 +66,15 @@ The operator reconciles two primary Custom Resource Definitions (CRDs):
 - **[REQ-0038-10]** (Unwanted): IF a reconciliation action would bypass Spec 0022 custody landing receipts, THEN the operator shall halt reconciliation with a terminal error condition.
 - **[REQ-0038-11]** (Ubiquitous): The operator shall define CRD types in an in-tree module behind feature flag `k8s` until `unsigned-k8s-api` is pinned in Spec 0004 and published.
 - **[REQ-0038-12]** (Ubiquitous): The operator shall not autonomously deploy, mutate, or sync workloads in the Cygnus cluster without explicit human sign-off.
+- **[REQ-0038-13]** (Ubiquitous): The `WorkerSlot` CRD shall define `spec.limits` (`memory_max_bytes`, `memory_high_bytes`, `pids_max`), which the operator shall map into `PoolConfig` to override default limits per Spec 0041.
+
+- **[REQ-0038-14]** (Ubiquitous): The `uas-operator` shall export telemetry, logs, and traces using the `unsigned-k8s-core` observability abstraction.
 
 ## Plan
 
 - [ ] Scaffold `crates/uas-operator` binary crate with `kube` runtime dependencies behind `k8s` feature flag (renamed `crates/uas-operator` per Spec 0037).
 - [ ] Implement transitional CRD structs in `crates/uas-operator/src/crd.rs` for `WorkerSlot` and `AgentSandbox`.
+- [ ] Add `spec.limits` (`memory_max_bytes`, `memory_high_bytes`, `pids_max`) to `WorkerSlot` CRD schema and wire them into `PoolConfig`.
 - [ ] Implement `WorkerSlot` reconciler integrating with `uas-engine` lease paths, `uas-pool` slot allocation, Spec 0036 D2 host lock files, and cleanup finalizers.
 - [ ] Implement `AgentSandbox` reconciler generating sandbox execution specifications (Landlock path rules, netns, IPC proxy socket mounts).
 - [ ] Add unit and mocked controller tests using `kube::client::Client` mock servers verifying status condition transitions and capacity backoff with `--features k8s`.
@@ -93,6 +100,7 @@ A pass requires each of these negative control cases to exist and to go red when
 | `AgentSandbox` CR spec is translated into `uas-sandbox` ruleset request | `uas-operator` mocked K8s test | REQ-0038-06 |
 | reconciliation halts with terminal error if custody receipt bypassed | `uas-operator` mocked K8s test | REQ-0038-10 |
 | `uas-domain` has zero kube dependencies (`cargo tree -p uas-domain \| grep -c kube == 0`) | `uas-domain` dependency check | REQ-0038-02 |
+| `WorkerSlot` spec.limits take precedence over `uas-pool` environment variables | `uas-operator` mocked K8s test | REQ-0038-13 |
 
 The primary negative control: if the host slot acquisition call in the `WorkerSlot` reconciler is removed, the test asserting that `WorkerSlot` status reflects `CapacityExhausted` when the Spec 0036 slot directory is saturated must go red.
 
