@@ -74,7 +74,7 @@ pub enum LandingOutcome {
     /// The pull request was opened. The tier is `verified` only when reconcile exited zero
     /// and no evaluator file changed.
     Opened(LandingReceipt),
-    /// `blackwall reconcile` exited 3, the verify gate failed. No pull request was opened.
+    /// `blackwall reconcile` exited 3, the verify gate failed. No pull request was opened (spec 0022 F14, reported).
     VerifyFailed(LandingReceipt),
     /// `blackwall.toml` has no `[verify]` command. Nothing was reconciled and no pull
     /// request was opened.
