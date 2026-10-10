@@ -1096,6 +1096,10 @@ fn wave_critic_reads_rules_at_the_builder_base() {
             .any(|l| l.starts_with("git checkout") && l.contains("1111111111111")),
         "{argv:?}"
     );
+    // The prompt names the Builder's base, not the moved wave base.
+    let stdin = fs::read_to_string(env.bin.join("claude.stdin")).unwrap();
+    assert!(stdin.contains(&format!("Base: {BASE}")), "{stdin}");
+    assert!(!stdin.contains("1111111111111"), "{stdin}");
 }
 
 #[test]
@@ -1201,6 +1205,192 @@ fn wave_lock_probe_detects_an_unheld_lock() {
         "{:?}",
         env.argv()
     );
+}
+
+const HALT_RECORD: &str = r#"{"step":"other-step","role":"Builder","outcome":{"result":"halted","reason":"VerifyFailed"},"at":1,"seq":0}"#;
+
+fn wait_for(env: &Env, prefix: &str) {
+    for _ in 0..200 {
+        if env.argv().iter().any(|l| l.starts_with(prefix)) {
+            return;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(25));
+    }
+    panic!("{prefix} never ran: {:?}", env.argv());
+}
+
+#[test]
+fn wave_open_pr_failure_halts_and_keeps_branch() {
+    let env = Env::new("wave_open_pr_failure_halts_and_keeps_branch");
+    env.tool("blackwall", vec![r("pr *", b"", "pr failed\n", 1)]);
+    // `blackwall pr` pushed the branch before it failed: compensation must keep it.
+    env.tool("git", vec![r("ls-remote *", b"abc\trefs/heads/x\n", "", 0)]);
+    let steps = [builder("build-a"), critic("review-a", "build-a")];
+    let exec = with_open_prs(&env, &steps);
+    assert_eq!(
+        exec.run_step("build-a", 1).unwrap().outcome,
+        StepOutcome::Passed
+    );
+    let got = exec.run_step("review-a", 1).unwrap();
+    assert_eq!(got.outcome, StepOutcome::Halted(HaltReason::PrFailed));
+    let argv = env.argv();
+    assert!(
+        !argv.iter().any(|l| l.starts_with("git branch -D")),
+        "{argv:?}"
+    );
+    assert!(
+        !argv.iter().any(|l| l.starts_with("blackwall settle")
+            && (l.ends_with("discard") || l.ends_with("release"))),
+        "{argv:?}"
+    );
+}
+
+#[test]
+fn wave_builder_halt_during_lock_wait_skips_reconcile() {
+    let env = Env::new("wave_builder_halt_during_lock_wait_skips_reconcile");
+    let steps = [builder("build-a"), critic("review-a", "build-a")];
+    let exec = executor(&env, &steps);
+    fs::create_dir_all(env.lock.parent().unwrap()).unwrap();
+    let held = fs::File::create(&env.lock).unwrap();
+    held.lock().unwrap();
+    let h = std::thread::spawn(move || exec.run_step("build-a", 1).unwrap());
+    wait_for(&env, "blackwall settle");
+    std::thread::sleep(std::time::Duration::from_millis(500));
+    fs::create_dir_all(&env.state).unwrap();
+    fs::write(env.state.join("other-step.json"), HALT_RECORD).unwrap();
+    drop(held);
+    let got = h.join().unwrap();
+    assert!(
+        !env.argv()
+            .iter()
+            .any(|l| l.starts_with("blackwall reconcile")),
+        "{:?}",
+        env.argv()
+    );
+    assert_eq!(got.outcome, StepOutcome::Halted(HaltReason::WaveHalted));
+}
+
+#[test]
+fn wave_probe_halt_during_lock_wait_skips_verify() {
+    let env = Env::new("wave_probe_halt_during_lock_wait_skips_verify");
+    let steps = [probe("probe-x")];
+    let exec = executor(&env, &steps);
+    fs::create_dir_all(env.lock.parent().unwrap()).unwrap();
+    let held = fs::File::create(&env.lock).unwrap();
+    held.lock().unwrap();
+    let h = std::thread::spawn(move || exec.run_step("probe-x", 1).unwrap());
+    wait_for(&env, "git rev-parse HEAD");
+    std::thread::sleep(std::time::Duration::from_millis(500));
+    fs::create_dir_all(&env.state).unwrap();
+    fs::write(env.state.join("other-step.json"), HALT_RECORD).unwrap();
+    drop(held);
+    let got = h.join().unwrap();
+    assert!(!has_line(&env.argv(), "make check"), "{:?}", env.argv());
+    assert_eq!(got.outcome, StepOutcome::Halted(HaltReason::WaveHalted));
+}
+
+#[test]
+fn wave_critic_retry_does_not_reopen_pr() {
+    let env = Env::new("wave_critic_retry_does_not_reopen_pr");
+    let steps = [builder("build-a"), critic("review-a", "build-a")];
+    let exec = with_open_prs(&env, &steps);
+    assert_eq!(
+        exec.run_step("build-a", 1).unwrap().outcome,
+        StepOutcome::Passed
+    );
+    assert_eq!(
+        exec.run_step("review-a", 1).unwrap().outcome,
+        StepOutcome::Passed
+    );
+    let brec = fs::read_to_string(env.state.join("build-a.json")).unwrap();
+    assert!(brec.contains("\"pr\": 57"), "{brec}");
+    // A crash lost the Critic record after the Builder record got its PR number.
+    fs::remove_file(env.state.join("review-a.json")).unwrap();
+    fs::remove_file(&env.log).unwrap();
+    assert_eq!(
+        exec.run_step("review-a", 2).unwrap().outcome,
+        StepOutcome::Passed
+    );
+    let prs = env
+        .argv()
+        .iter()
+        .filter(|l| l.starts_with("blackwall pr"))
+        .count();
+    assert_eq!(prs, 0, "{:?}", env.argv());
+}
+
+#[test]
+fn wave_save_replaces_the_record_and_never_writes_in_place() {
+    let env = Env::new("wave_save_replaces_the_record_and_never_writes_in_place");
+    // A stale Passed record (other base) is rewritten. Its hard link keeps the old bytes only
+    // when the writer replaces the file instead of truncating it in place.
+    fs::create_dir_all(&env.state).unwrap();
+    let old = r#"{"step":"build-a","role":"Builder","outcome":{"result":"passed"},"base":"stale","at":1,"seq":0}"#;
+    fs::write(env.state.join("build-a.json"), old).unwrap();
+    fs::hard_link(env.state.join("build-a.json"), env.root.join("alias")).unwrap();
+    let steps = [builder("build-a"), critic("review-a", "build-a")];
+    let got = executor(&env, &steps).run_step("build-a", 2).unwrap();
+    assert_eq!(got.outcome, StepOutcome::Passed);
+    assert_eq!(fs::read_to_string(env.root.join("alias")).unwrap(), old);
+    let new = fs::read_to_string(env.state.join("build-a.json")).unwrap();
+    assert!(new.contains(BASE), "{new}");
+    // No temp file stays behind.
+    let names: Vec<_> = fs::read_dir(&env.state)
+        .unwrap()
+        .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+        .collect();
+    assert_eq!(names, ["build-a.json"], "{names:?}");
+}
+
+#[test]
+fn wave_interrupted_write_leaves_no_truncated_record() {
+    let env = Env::new("wave_interrupted_write_leaves_no_truncated_record");
+    // A crash between the temp write and the rename leaves a truncated temp file. Readers
+    // ignore it, and the next save of that step replaces it.
+    fs::create_dir_all(&env.state).unwrap();
+    fs::write(env.state.join("build-z.tmp"), b"{\"step\":\"build-z\",\"ro").unwrap();
+    fs::write(env.state.join("build-a.tmp"), b"{\"step\":\"build-a\",\"ro").unwrap();
+    let steps = [builder("build-a"), critic("review-a", "build-a")];
+    let exec = executor(&env, &steps);
+    assert_eq!(
+        exec.run_step("build-a", 1).unwrap().outcome,
+        StepOutcome::Passed
+    );
+    assert_eq!(
+        exec.run_step("review-a", 1).unwrap().outcome,
+        StepOutcome::Passed
+    );
+    let rec = fs::read_to_string(env.state.join("build-a.json")).unwrap();
+    assert!(serde_json::from_str::<serde_json::Value>(&rec).is_ok());
+    assert!(!env.state.join("build-a.tmp").exists());
+}
+
+#[test]
+fn wave_compensation_order_breaks_seq_ties_on_time() {
+    let env = Env::new("wave_compensation_order_breaks_seq_ties_on_time");
+    env.tool("make", vec![r("*", b"", "", 1)]);
+    fs::create_dir_all(&env.state).unwrap();
+    // Records with no seq field both read as seq 0: the later `at` is newer.
+    for (id, run, at) in [
+        ("build-a", "bwrun0000001", 1),
+        ("build-b", "bwrun0000002", 9),
+    ] {
+        fs::write(
+            env.state.join(format!("{id}.json")),
+            format!(
+                r#"{{"step":"{id}","role":"Builder","outcome":{{"result":"passed"}},"run":"{run}","at":{at}}}"#
+            ),
+        )
+        .unwrap();
+    }
+    let steps = [probe("probe-x")];
+    let got = executor(&env, &steps).run_step("probe-x", 10).unwrap();
+    let ids: Vec<&str> = got
+        .compensation
+        .iter()
+        .map(|c| c.activity_id.as_str())
+        .collect();
+    assert_eq!(ids, ["build-b", "build-a"]);
 }
 
 /// The live run of spec 0025 P9c. It runs only with `CAS_WAVE_LIVE=1` and panics when an input
