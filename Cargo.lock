@@ -435,131 +435,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fc652a48c352aef3ea3aed32080501cf3ef6ed5da78602a020c991775b0aff04"
 
 [[package]]
-name = "cas-acp"
-version = "0.1.0"
-dependencies = [
- "agent-client-protocol",
- "cas-domain",
- "cas-engine",
- "cas-pool",
- "serde",
- "serde_json",
- "thiserror",
-]
-
-[[package]]
-name = "cas-cli"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "cas-domain",
- "cas-engine",
- "clap",
- "serde",
- "serde_json",
- "toml",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
-name = "cas-deck"
-version = "0.1.0"
-dependencies = [
- "axum",
- "cas-domain",
- "cas-engine",
- "maud",
- "serde",
- "serde_json",
- "thiserror",
- "tokio",
-]
-
-[[package]]
-name = "cas-domain"
-version = "0.1.0"
-dependencies = [
- "serde",
- "serde_json",
- "thiserror",
-]
-
-[[package]]
-name = "cas-ebpf"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "aya",
- "clap",
- "rustix",
- "serde",
- "serde_json",
- "sha2",
- "thiserror",
- "tokio",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
-name = "cas-engine"
-version = "0.1.0"
-dependencies = [
- "cas-domain",
- "prost",
- "prost-types",
- "protox",
- "serde",
- "serde_json",
- "thiserror",
- "tokio",
- "toml",
- "tonic",
- "tonic-prost",
- "tonic-prost-build",
- "tracing",
-]
-
-[[package]]
-name = "cas-pool"
-version = "0.1.0"
-dependencies = [
- "cas-domain",
- "cas-ebpf",
- "criterion",
- "gix",
- "rustix",
- "serde",
- "thiserror",
- "tokio",
- "tracing",
-]
-
-[[package]]
-name = "cas-router"
-version = "0.1.0"
-dependencies = [
- "sha2",
- "thiserror",
- "tokio",
-]
-
-[[package]]
-name = "cas-sandbox"
-version = "0.1.0"
-dependencies = [
- "cas-router",
- "landlock",
- "rustix",
- "thiserror",
-]
-
-[[package]]
-name = "cas-storage"
-version = "0.1.0"
-
-[[package]]
 name = "cast"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3607,6 +3482,131 @@ name = "typenum"
 version = "1.20.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b6f5e870be6c3b371b77fe0ee0bafb859fa4964b4404c27de1d380043c4dda20"
+
+[[package]]
+name = "uas-acp"
+version = "0.1.0"
+dependencies = [
+ "agent-client-protocol",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "uas-domain",
+ "uas-engine",
+ "uas-pool",
+]
+
+[[package]]
+name = "uas-cli"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "serde",
+ "serde_json",
+ "toml",
+ "tracing",
+ "tracing-subscriber",
+ "uas-domain",
+ "uas-engine",
+]
+
+[[package]]
+name = "uas-deck"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "maud",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tokio",
+ "uas-domain",
+ "uas-engine",
+]
+
+[[package]]
+name = "uas-domain"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
+name = "uas-ebpf"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "aya",
+ "clap",
+ "rustix",
+ "serde",
+ "serde_json",
+ "sha2",
+ "thiserror",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
+name = "uas-engine"
+version = "0.1.0"
+dependencies = [
+ "prost",
+ "prost-types",
+ "protox",
+ "serde",
+ "serde_json",
+ "thiserror",
+ "tokio",
+ "toml",
+ "tonic",
+ "tonic-prost",
+ "tonic-prost-build",
+ "tracing",
+ "uas-domain",
+]
+
+[[package]]
+name = "uas-pool"
+version = "0.1.0"
+dependencies = [
+ "criterion",
+ "gix",
+ "rustix",
+ "serde",
+ "thiserror",
+ "tokio",
+ "tracing",
+ "uas-domain",
+ "uas-ebpf",
+]
+
+[[package]]
+name = "uas-router"
+version = "0.1.0"
+dependencies = [
+ "sha2",
+ "thiserror",
+ "tokio",
+]
+
+[[package]]
+name = "uas-sandbox"
+version = "0.1.0"
+dependencies = [
+ "landlock",
+ "rustix",
+ "thiserror",
+ "uas-router",
+]
+
+[[package]]
+name = "uas-storage"
+version = "0.1.0"
 
 [[package]]
 name = "unicode-bom"

@@ -76,7 +76,7 @@ reports as `rust / cargo`. Spec 0005 lists the jobs.
 A promotion PR merges `development` into `main`.
 
 - Land-on-green covers the promotion PR. Operator ruling: the operator
-  chose "Land-on-green covers it" in an interview in the CAS lane on
+  chose "Land-on-green covers it" in an interview in the UAS lane on
   2026-10-08. It replaces the earlier decision of the same day that only he
   merges it.
 - A lane merges the promotion PR when every required check is green on the
@@ -104,7 +104,7 @@ A promotion PR merges `development` into `main`.
 Read the protection back from the API. Do not trust the call that wrote it.
 
 ```bash
-gh api repos/cerebral-work/cas-substrate/branches/main/protection \
+gh api repos/unsigned-gg/uas/branches/main/protection \
   --jq '{force: .allow_force_pushes.enabled, del: .allow_deletions.enabled, admins: .enforce_admins.enabled, checks: .required_status_checks.contexts}'
 ```
 

@@ -1,0 +1,27 @@
+# uas-ebpfd: the UAS eBPF clamping and audit daemon (spec 0014 D8, ruling R3).
+# Install: cp to /etc/systemd/system/, then systemctl daemon-reload && systemctl enable --now uas-ebpfd.
+# The binary comes from `cargo build -p uas-ebpf --release -j 2` -> target/release/uas-ebpfd.
+[Unit]
+Description=Unsigned Agent Substrate eBPF clamping and audit daemon
+Documentation=file://<home>/projects/cerebral/uas/specs/0014-ebpf-priority-clamping-and-audit-probes.md
+After=local-fs.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/uas-ebpfd --socket /run/uas/ebpf.sock --socket-group ctodie
+Restart=on-failure
+RestartSec=2
+User=root
+Group=root
+RuntimeDirectory=uas
+RuntimeDirectoryMode=0755
+AmbientCapabilities=CAP_BPF CAP_PERFMON CAP_SYS_NICE
+CapabilityBoundingSet=CAP_BPF CAP_PERFMON CAP_SYS_NICE
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=read-only
+PrivateTmp=yes
+Environment=RUST_LOG=info
+
+[Install]
+WantedBy=multi-user.target

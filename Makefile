@@ -1,4 +1,4 @@
-# cas task runner. Run `make` to list targets.
+# uas task runner. Run `make` to list targets.
 # Shared workstations keep JOBS=2. CI passes JOBS=10 (specs/0002-verification-gates-and-evidence.md).
 SHELL := bash
 .SHELLFLAGS := -euo pipefail -c
@@ -63,29 +63,29 @@ pin-check: ## Verify the spec 0004 pin tables against the lockfiles
 	cargo xtask pin-check
 
 smoke: ## Build the CLI, run it, check the domain crate has no I/O
-	cargo build -p cas-cli --locked -j $(JOBS)
-	out="$$(cargo run -q -p cas-cli --locked -j $(JOBS) -- --version)"
+	cargo build -p uas-cli --locked -j $(JOBS)
+	out="$$(cargo run -q -p uas-cli --locked -j $(JOBS) -- --version)"
 	echo "$$out"
-	[[ "$$out" =~ ^cas\ [0-9]+\.[0-9]+\.[0-9]+\ \(.+\)$$ ]] || { echo "smoke: unexpected --version output" >&2; exit 1; }
+	[[ "$$out" =~ ^uas\ [0-9]+\.[0-9]+\.[0-9]+\ \(.+\)$$ ]] || { echo "smoke: unexpected --version output" >&2; exit 1; }
 	# grep reads all of the demo output on purpose: `grep -q` exits at the first match,
 	# the demo then dies of SIGPIPE, and pipefail reports that as a failed smoke (1 in 4 runs).
-	cargo run -q -p cas-cli --locked -j $(JOBS) -- demo | grep '"done"' >/dev/null || { echo "smoke: demo did not reach done" >&2; exit 1; }
-	if grep -rnE 'std::net|std::fs|tokio|std::process' crates/cas-domain/src; then
-		echo "smoke: cas-domain must not use I/O" >&2
+	cargo run -q -p uas-cli --locked -j $(JOBS) -- demo | grep '"done"' >/dev/null || { echo "smoke: demo did not reach done" >&2; exit 1; }
+	if grep -rnE 'std::net|std::fs|tokio|std::process' crates/uas-domain/src; then
+		echo "smoke: uas-domain must not use I/O" >&2
 		exit 1
 	fi
 	echo "smoke: ok"
 
-ebpf-build: ## Build the kernel eBPF artifact into crates/cas-ebpf/ebpf/cas-ebpf.o
+ebpf-build: ## Build the kernel eBPF artifact into crates/uas-ebpf/ebpf/uas-ebpf.o
 	PATH="$$HOME/.local/share/mise/shims:$$PATH" cargo +$(EBPF_TOOLCHAIN) build \
-		--manifest-path crates/cas-ebpf/ebpf/Cargo.toml \
+		--manifest-path crates/uas-ebpf/ebpf/Cargo.toml \
 		--target bpfel-unknown-none -Z build-std=core --release --locked -j $(JOBS)
-	cp crates/cas-ebpf/ebpf/target/bpfel-unknown-none/release/cas-ebpf-ebpf crates/cas-ebpf/ebpf/cas-ebpf.o
-	sha256sum crates/cas-ebpf/ebpf/cas-ebpf.o | cut -d' ' -f1 > crates/cas-ebpf/ebpf/cas-ebpf.o.sha256
+	cp crates/uas-ebpf/ebpf/target/bpfel-unknown-none/release/uas-ebpf-ebpf crates/uas-ebpf/ebpf/uas-ebpf.o
+	sha256sum crates/uas-ebpf/ebpf/uas-ebpf.o | cut -d' ' -f1 > crates/uas-ebpf/ebpf/uas-ebpf.o.sha256
 
 # Live eBPF probes (spec 0014 D8). Build unprivileged, then run only the test binary. SUDO defaults to sudo on a workstation; CI passes SUDO= (uid 0 in the ci-kernel pod).
 ebpf-test: ## Run the live eBPF probe tests (SUDO on a workstation, SUDO= in CI)
-	BIN=$$(cargo test -p cas-ebpf --test live_probes --no-run -j $(JOBS) --message-format=json 2>/dev/null | jq -r 'select(.reason=="compiler-artifact" and .target.name=="live_probes") | .executable' | grep -v null | tail -n1); \
+	BIN=$$(cargo test -p uas-ebpf --test live_probes --no-run -j $(JOBS) --message-format=json 2>/dev/null | jq -r 'select(.reason=="compiler-artifact" and .target.name=="live_probes") | .executable' | grep -v null | tail -n1); \
 	test -x "$$BIN" || { echo "ebpf-test: live_probes binary not found"; exit 1; }; \
 	$(SUDO) "$$BIN" --nocapture --test-threads=1
 
@@ -128,14 +128,14 @@ new-repo: ## Rename the template (NAME=<kebab> [ORG=cerebral-work])
 	snake="$${name//-/_}"
 	upper="$${snake^^}"
 	# Every crate that carries the prefix moves, not a hard-coded pair (CER-2813).
-	for d in crates/cas-*; do
+	for d in crates/uas-*; do
 		[ -d "$$d" ] || continue
-		git mv "$$d" "crates/$$name-$${d#crates/cas-}"
+		git mv "$$d" "crates/$$name-$${d#crates/uas-}"
 	done
 	# Files whose own name carries the prefix move too, or a manifest path
 	# rewritten below points at a file that no longer exists.
-	git ls-files -z | grep -zE '(^|/)cas[^/]*$$' | grep -zvE '^(vendor/|specs/|\.agents/skills/new-repo/)' | while IFS= read -r -d '' f; do
-		git mv "$$f" "$$(dirname "$$f")/$$name$${f##*/cas}"
+	git ls-files -z | grep -zE '(^|/)uas[^/]*$$' | grep -zvE '^(vendor/|specs/|\.agents/skills/new-repo/)' | while IFS= read -r -d '' f; do
+		git mv "$$f" "$$(dirname "$$f")/$$name$${f##*/uas}"
 	done
 	git ls-files -z | while IFS= read -r -d '' f; do
 		# vendor/ is upstream text; the new-repo skill stays verbatim as the
@@ -147,17 +147,17 @@ new-repo: ## Rename the template (NAME=<kebab> [ORG=cerebral-work])
 		grep -Iq . "$$f" || continue
 		# The repo name first, then the bare token on word boundaries, so that
 		# `case`, `broadcast` and `replicas` are never rewritten. `\b` sits
-		# between `s` and `-`, so `cas-pool` still becomes `<name>-pool`.
+		# between `s` and `-`, so `uas-pool` still becomes `<name>-pool`.
 		# Hyphenated forms are names, never identifiers, so they take the kebab
-		# name everywhere. A bare `cas` inside Rust source is an identifier and
+		# name everywhere. A bare `uas` inside Rust source is an identifier and
 		# takes the snake form, except inside a string literal or the Cargo
 		# binary env var, where it names the binary and takes the kebab form.
 		# Spec file names do not change (spec 0037 D4), so a reference such as
 		# specs/0001-cas-architecture-and-crate-layout.md is shielded first and
 		# restored last; without this it would dangle after the rename.
 		sed -i \
-			-e "s/\([0-9][0-9][0-9][0-9]\)-cas-/\1-@SPECCAS@-/g" \
-			-e "s#cerebral-work/cas-substrate#$$org/$$name#g" \
+			-e "s/\([0-9][0-9][0-9][0-9]\)-uas-/\1-cas-/g" \
+			-e "s#unsigned-gg/uas#$$org/$$name#g" \
 			-e "s/\bcas-substrate\b/$$name/g" \
 			-e "s/\bcas-/$$name-/g" \
 			-e "s/\bCAS_/$${upper}_/g" \
@@ -172,18 +172,18 @@ new-repo: ## Rename the template (NAME=<kebab> [ORG=cerebral-work])
 				sed -i \
 					-e ':s; s/\("[^"]*\)\bcas\b\([^"]*"\)/\1@KEBAB@\2/; ts' \
 					-e ':c; s#\(//.*\)\bcas\b#\1@KEBAB@#; tc' \
-					-e "s/CARGO_BIN_EXE_cas\b/CARGO_BIN_EXE_$$name/g" \
+					-e "s/CARGO_BIN_EXE_uas\b/CARGO_BIN_EXE_$$name/g" \
 					-e "s/\bcas\b/$$snake/g" \
 					-e "s/@KEBAB@/$$name/g" \
 					"$$f" ;;
-			*)    sed -i -e "s/CARGO_BIN_EXE_cas\b/CARGO_BIN_EXE_$$name/g" -e "s/\bcas\b/$$name/g" "$$f" ;;
+			*)    sed -i -e "s/CARGO_BIN_EXE_uas\b/CARGO_BIN_EXE_$$name/g" -e "s/\bcas\b/$$name/g" "$$f" ;;
 		esac
-		sed -i -e "s/@SPECCAS@/cas/g" "$$f"
+		sed -i -e "s/cas/uas/g" "$$f"
 	done
 	git rm -q -f --ignore-unmatch .github/workflows/template-check.yml
 	cargo update -w --offline 2>/dev/null || cargo update -w
 	# The rename changes crate names, and rustfmt sorts imports by name, so a
-	# name that sorts before `clap` (for example `cas`) leaves misordered imports.
+	# name that sorts before `clap` (for example `uas`) leaves misordered imports.
 	cargo fmt --all
 	git status --short
 
@@ -202,15 +202,15 @@ template-check: ## Run check, spec-check, smoke, then prove the rename in a temp
 	git commit -q -m probe
 	# `aaa-probe` sorts before every dependency name, so the rename moves the
 	# domain import to the top of the CLI's import block; fmt-check proves that
-	# new-repo reformats it (measured 2026-10-08: NAME=cas failed fmt-check).
+	# new-repo reformats it (measured 2026-10-08: NAME=uas failed fmt-check).
 	$(MAKE) -f Makefile new-repo NAME=aaa-probe
 	cargo fmt --all --check
 	cargo build --workspace -j $(JOBS)
 	$(MAKE) -f Makefile spec-check
-	# Spec file names keep their cas- (spec 0037 D4), and the Makefile's own
+	# Spec file names keep their uas- (spec 0037 D4), and the Makefile's own
 	# rename rules carry the token by necessity; neither is a leftover.
-	if grep -rIn -E '\bskel\b|\bcas_|\bCAS_|\bcas\b' --exclude-dir={target,.git,vendor,specs} --exclude=Makefile . | grep -vE '^\./\.agents/skills/new-repo/|[0-9]{4}-cas-'; then
-		echo "template-check: leftover 'cas' after rename" >&2
+	if grep -rIn -E '\bskel\b|\bcas_|\bCAS_|\bcas\b' --exclude-dir={target,.git,vendor,specs} --exclude=Makefile . | grep -vE '^\./\.agents/skills/new-repo/|[0-9]{4}-uas-'; then
+		echo "template-check: leftover 'uas' after rename" >&2
 		exit 1
 	fi
 	echo "template-check: ok"

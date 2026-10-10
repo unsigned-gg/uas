@@ -10,7 +10,7 @@ depends_on: [0001-cas-architecture-and-crate-layout, 0004-dependency-and-licence
 
 ## Overview
 
-`cas-sandbox` is a placeholder. Phase 2 starts here. This spec gives the crate
+`uas-sandbox` is a placeholder. Phase 2 starts here. This spec gives the crate
 its first real code. CER-2715 adds the Landlock ABI probe and the ruleset
 builder. CER-2716 adds the launcher. Parent: CER-2680.
 
@@ -32,7 +32,7 @@ Facts, measured 2026-10-09 on ceres:
   v9. It has no public ABI probe: `LandlockStatus::current()` is private and
   the status is returned only by `restrict_self()`.
 - the operator approved the spec 0004 epic dependency list on 2026-10-09 by
-  interview in the CAS lane. `landlock` 0.4.7 is the first row to enter a
+  interview in the UAS lane. `landlock` 0.4.7 is the first row to enter a
   `Cargo.toml`.
 - The CI runner kernel is not measured. The probe test prints what it finds.
 
@@ -50,14 +50,14 @@ Facts, measured 2026-10-09 on ceres:
 
 | # | Decision | Who, when |
 |---|---|---|
-| D1 | Use the `landlock` crate, not raw syscalls. The crate carries the `unsafe`; `cas-sandbox` stays free of it in this spec. | CAS lane, 2026-10-09 |
-| D2 | The ABI probe applies a minimal ruleset on a scratch thread and reads `RestrictionStatus::landlock`. Landlock restricts the calling thread only, so the process is not confined. | CAS lane, 2026-10-09 |
-| D3 | The workspace root is a parameter. `/workspace` is the pooled-runtime default, not a constant in the crate. | CAS lane, 2026-10-09 |
-| D4 | Every path is canonicalised with `std::fs::canonicalize` before it enters a rule. A path that does not exist is an error, not a silent skip. | CAS lane, 2026-10-09 |
-| D5 | ABI v1 accesses are a hard requirement. `build()` fails on a kernel that cannot enforce them. Newer accesses (refer, truncate, ioctl) are best effort. | CAS lane, 2026-10-09 |
-| D6 | Default deny. The builder lists what a worker may touch. Everything else is denied for every handled access. | CAS lane, 2026-10-09 |
-| D7 | Scratch and device paths get write without execute. Only the workspace and the system paths may execute. | CAS lane, 2026-10-09, after a critic pass |
-| D8 | The child enters the jail in `pre_exec`, between fork and exec. The parent never restricts itself. A refused jail is reported as `ENOTRECOVERABLE`, because std forwards only a raw errno from `pre_exec`. | CAS lane, 2026-10-09 |
+| D1 | Use the `landlock` crate, not raw syscalls. The crate carries the `unsafe`; `uas-sandbox` stays free of it in this spec. | UAS lane, 2026-10-09 |
+| D2 | The ABI probe applies a minimal ruleset on a scratch thread and reads `RestrictionStatus::landlock`. Landlock restricts the calling thread only, so the process is not confined. | UAS lane, 2026-10-09 |
+| D3 | The workspace root is a parameter. `/workspace` is the pooled-runtime default, not a constant in the crate. | UAS lane, 2026-10-09 |
+| D4 | Every path is canonicalised with `std::fs::canonicalize` before it enters a rule. A path that does not exist is an error, not a silent skip. | UAS lane, 2026-10-09 |
+| D5 | ABI v1 accesses are a hard requirement. `build()` fails on a kernel that cannot enforce them. Newer accesses (refer, truncate, ioctl) are best effort. | UAS lane, 2026-10-09 |
+| D6 | Default deny. The builder lists what a worker may touch. Everything else is denied for every handled access. | UAS lane, 2026-10-09 |
+| D7 | Scratch and device paths get write without execute. Only the workspace and the system paths may execute. | UAS lane, 2026-10-09, after a critic pass |
+| D8 | The child enters the jail in `pre_exec`, between fork and exec. The parent never restricts itself. A refused jail is reported as `ENOTRECOVERABLE`, because std forwards only a raw errno from `pre_exec`. | UAS lane, 2026-10-09 |
 
 the operator corrects any of these in place.
 
@@ -125,7 +125,7 @@ test proves it.
 `Ruleset` because of D5. `JailRefused` means the child could not enter the
 jail and did not run. `Spawn` wraps any other `spawn` failure.
 
-Correction, CAS lane, 2026-10-09: an earlier revision said the launcher must
+Correction, UAS lane, 2026-10-09: an earlier revision said the launcher must
 treat `PartiallyEnforced` as a failed jail. That was wrong. D5 makes newer
 accesses best effort, so a kernel at ABI v3 reports `PartiallyEnforced` for
 a ruleset that handles v5 accesses. Only `NotEnforced` fails the jail.
@@ -159,7 +159,7 @@ errno; on the CI runner the process already has `no_new_privs` set, so the
 kernel accepts the call and the child reaches the launcher's own
 `JailRefused` verdict. Both paths leave the worker unrun.
 
-Correction, CAS lane, 2026-10-09: an earlier revision said the CI runner
+Correction, UAS lane, 2026-10-09: an earlier revision said the CI runner
 holds `CAP_SYS_ADMIN`. It holds no capability at all (`CapBnd` 0, measured
 in PR #27). The verdict path was reached through `NoNewPrivs: 1`, not a
 capability.
@@ -183,8 +183,8 @@ CER-2721.
 ## Test
 
 ```bash
-cargo test -p cas-sandbox -j 2 --test landlock_probe
-cargo test -p cas-sandbox -j 2 --test launcher
+cargo test -p uas-sandbox -j 2 --test landlock_probe
+cargo test -p uas-sandbox -j 2 --test launcher
 ```
 
 Passing means exit 0 for both. Add `-- --nocapture` to see the probe line
