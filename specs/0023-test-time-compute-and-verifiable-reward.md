@@ -112,10 +112,16 @@ The agent must not be able to move the goalposts. Three lines, in order of cost:
    `blackwall.toml` may extend it.
 2. **Cap.** A touched evaluator caps the branch tier at `reported` regardless of
    the verify exit code. Only a human review (the PR) can raise it.
-3. **Pin.** The verify command itself comes from the base commit's
-   `blackwall.toml`, read by `reconcile` in its temporary worktree before the
-   changeset is applied, so a changeset cannot rewrite the command it is judged
-   by. Whether blackwall does this today is not measured; the Plan has the probe.
+3. **Pin.** The verify command cannot come from the changeset. Measured by the
+   blackwall owners (soma lane w7:p2, mesh reply 66c66bbd, 2026-10-10, at
+   `unsigned-gg/blackwall@3d98dc1`): `cmd_reconcile` loads `blackwall.toml` from
+   the host checkout (`crates/blackwall-cli/src/chain.rs:31-44`) before
+   `reconcile` creates the temporary worktree at the base
+   (`reconcile.rs:161-178`), and `reconcile_in_worktree` runs
+   `opts.verify_command` without reading the worktree's `blackwall.toml`
+   (`reconcile.rs:216-224`). So the command is host-pinned, not base-pinned: a
+   changeset cannot rewrite it, but host checkout drift can. The blackwall owners
+   accept a change to read `blackwall.toml` at `<base>`; that is their item.
 
 This is the "frozen evaluator" of F3 applied to a repo whose evaluator is files
 in the repo. It does not stop a worker from writing a test that cannot fail;
@@ -139,9 +145,9 @@ the critic and the PR review remain the line for that (spec 0002).
   is not an evaluator path).
 - [ ] Spec 0022's `LandingReceipt` gains `evaluator_touched: bool` and
   `cost_source: CostSource { Reported, None }`.
-- [ ] Probe: does `blackwall reconcile` read `[verify]` from the base commit or
-  from the applied changeset? Record the answer with the command in this spec;
-  if the latter, file the gap to the blackwall lane.
+- [x] Probe answered (2026-10-10, soma lane): `reconcile` reads `[verify]` from the
+  host checkout, never from the changeset. Base-pinning is an accepted blackwall
+  change, tracked by that lane.
 - [ ] Wire budget exhaustion to the freezer (spec 0015) with a test that freezes
   on `max_tokens` from a fake harness report and never on an estimate.
 - [ ] Cross-link: saga spec 0017 names the CAS slot as its `IsolatedWorktree`
