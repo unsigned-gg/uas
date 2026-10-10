@@ -60,6 +60,7 @@ Both branches carry the same classic protection.
 | Required check `rust / cargo` | yes | yes |
 | Required check `cargo-deny` | yes | yes |
 | Required check `hygiene` | yes | yes |
+| Required check `ebpf-live` | yes (2026-10-10, after development run 38028975897; spec 0005 D2) | no, until the next promotion |
 
 The template repo itself also requires `template-check` on both branches. A
 repo made from the template does not, because `make new-repo` deletes that

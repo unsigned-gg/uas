@@ -132,8 +132,8 @@ Refined from decision 8, the operator, interviews 2026-10-08.
 - [x] Add the sccache step and its hard stats check, skipped by `if:`.
 - [x] Run once on a PR. Confirm the four required check names (spec 0003).
 - [ ] Ask the paas lane for the R2 bucket, secrets and image changes.
-- [ ] Run `ebpf-live` green on a PR, with `9 passed` and only the nested skip line.
-- [ ] Add `ebpf-live` to the required checks and to the spec 0003 table (D2).
+- [x] Run `ebpf-live` green on a PR, with `9 passed` and only the nested skip line (PR #51 at cf78b64, run 38028859773, 2026-10-10).
+- [x] Add `ebpf-live` to the required checks and to the spec 0003 table (D2; development run 38028975897 green, 2026-10-10).
 - [ ] Retire the operator-run `make ebpf-test` gate for the 8 cases that load. The nested case waits for the OPS-1660 seccomp half.
 
 ## Test
