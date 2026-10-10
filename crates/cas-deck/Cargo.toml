@@ -1,6 +1,6 @@
 [package]
 name = "cas-deck"
-description = "Operator dashboard (Axum, Maud, htmx, Tailwind) with cortex settle integration."
+description = "Operator dashboard (Axum, Maud) with a read-only session table and cortex settle queue view."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -10,6 +10,12 @@ authors.workspace = true
 repository.workspace = true
 
 [dependencies]
+axum = { workspace = true }
+cas-domain = { path = "../cas-domain" }
+cas-engine = { path = "../cas-engine" }
+maud = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
 
 [lints]
 workspace = true
