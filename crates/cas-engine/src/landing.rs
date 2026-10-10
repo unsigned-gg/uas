@@ -307,7 +307,6 @@ impl LandingActivity {
             verify_exit: parts.verify_exit,
             branch: parts.branch,
             pr_number: parts.pr_number,
-            merge_commit: None,
             evaluator_touched: input.evaluator_touched,
             cost_source: input.cost_source,
             at: input.at,

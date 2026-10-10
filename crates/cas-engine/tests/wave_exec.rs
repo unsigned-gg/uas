@@ -6,7 +6,6 @@
 use std::ffi::OsString;
 use std::fs;
 use std::path::PathBuf;
-use std::time::Duration;
 
 use cas_domain::{AuditStatus, EvidenceTier, LandingReceipt};
 use cas_engine::{
@@ -20,7 +19,6 @@ const RUN_A: &str = "bwrun0000001";
 const CHG_A: &str = "chg000000001";
 const START_A: &str = "\u{2713} run haiku (ok): hash bwrun0000001 (new)\n\u{2713} changeset: chg000000001 (1 entries)\n";
 const START_B: &str = "\u{2713} run haiku (ok): hash bwrun0000002 (new)\n\u{2713} changeset: chg000000002 (1 entries)\n";
-const MERGE: &str = "4e7c0000000a";
 const PR_OUT: &[u8] = b"opened https://github.com/cerebral-work/cas-substrate/pull/57\n";
 
 /// One canned answer. The first rule whose pattern matches `$*` wins.
@@ -44,7 +42,6 @@ fn r(pat: &'static str, out: &'static [u8], err: &'static str, code: i32) -> Rul
 fn defaults(name: &str) -> Vec<Rule> {
     match name {
         "git" => vec![
-            r("log --format=%G? *", b"G\n", "", 0),
             r("rev-parse HEAD", b"056d7c7abcdef\n", "", 0),
             r("rev-parse blackwall/*", b"f00dfeed0001\n", "", 0),
             r("merge-base *", b"", "", 0),
@@ -62,10 +59,6 @@ fn defaults(name: &str) -> Vec<Rule> {
             r("*", b"", "", 0),
         ],
         "claude" => vec![r("*", b"VERDICT: NO DEFECTS\nreviewed\n", "", 0)],
-        "gh" => vec![
-            r("pr view * --json headRefOid *", b"f00dfeed0001\n", "", 0),
-            r("*", b"", "", 0),
-        ],
         _ => vec![r("*", b"", "", 0)],
     }
 }
@@ -162,22 +155,7 @@ impl Env {
             self.log.display()
         );
         body += &guard;
-        if name == "gh" {
-            // `pr merge` marks the PR merged. The default `mergeCommit` read prints the merge
-            // commit once it is marked and nothing before. A test `extra` runs first and may exit.
-            let merged = self.bin.join("gh.merged");
-            body += &format!(
-                "case \"$*\" in \"pr merge\"*) : > '{m}' ;; esac\n",
-                m = merged.display()
-            );
-            body += extra;
-            body += &format!(
-                "\ncase \"$*\" in *\"--json mergeCommit\"*) if [ -f '{m}' ]; then echo '{MERGE}'; fi; exit 0 ;; esac",
-                m = merged.display()
-            );
-        } else {
-            body += extra;
-        }
+        body += extra;
         body += "\n";
         if name == "claude" {
             body += &format!("cat > \"{}/claude.stdin\"\n", self.bin.display());
@@ -211,35 +189,6 @@ impl Env {
             use std::os::unix::fs::PermissionsExt;
             fs::set_permissions(&path, fs::Permissions::from_mode(0o755)).unwrap();
         }
-    }
-
-    /// Rewrite the fake `gh`. Each `pr checks` call bumps `gh.n` and prints line n of
-    /// `gh.checks` (the last line past the end), without its exit field, and exits that code.
-    /// A line is `<exit> <json>`. `extra` runs on every call before the rules.
-    fn gh_checks(&self, rounds: &[&str], extra: &str, custom: Vec<Rule>) {
-        fs::write(self.bin.join("gh.checks"), rounds.join("\n") + "\n").unwrap();
-        let counter = format!(
-            "case \"$*\" in \"pr checks\"*)\n\
-             n=$(cat '{b}/gh.n' 2>/dev/null || echo 0); n=$((n+1)); echo $n > '{b}/gh.n'\n\
-             total=$(wc -l < '{b}/gh.checks'); if [ $n -gt $total ]; then n=$total; fi\n\
-             line=$(sed -n \"${{n}}p\" '{b}/gh.checks'); code=${{line%% *}}; json=${{line#* }}\n\
-             printf '%s\\n' \"$json\"; exit $code ;;\nesac\n",
-            b = self.bin.display()
-        );
-        self.tool_pre("gh", &(extra.to_owned() + "\n" + &counter), custom);
-    }
-
-    /// A shell line for `gh_checks`: the Nth `mergeCommit` read prints `reads[N]` (the last one
-    /// past the end).
-    fn merge_reads(&self, reads: &[&str]) -> String {
-        fs::write(self.bin.join("gh.reads"), reads.join("\n") + "\n").unwrap();
-        let b = self.bin.display();
-        format!(
-            "\ncase \"$*\" in *\"--json mergeCommit\"*)\n\
-             m=$(cat '{b}/gh.m' 2>/dev/null || echo 0); m=$((m+1)); echo $m > '{b}/gh.m'\n\
-             total=$(wc -l < '{b}/gh.reads'); if [ $m -gt $total ]; then m=$total; fi\n\
-             sed -n \"${{m}}p\" '{b}/gh.reads'; exit 0 ;;\nesac\n"
-        )
     }
 
     fn config(&self) -> WaveExecConfig {
@@ -312,32 +261,6 @@ fn with_open_prs(env: &Env, steps: &[SagaStep]) -> WaveExecutor {
     let mut config = env.config();
     config.open_prs = true;
     WaveExecutor::new(config, WavePlan::plan(steps, 2).unwrap())
-}
-
-/// Open PRs and merge on green. `merge_poll` is zero, so a round costs no sleep.
-fn with_merge(env: &Env, steps: &[SagaStep], wait_secs: u64) -> WaveExecutor {
-    let mut config = env.config();
-    config.open_prs = true;
-    config.merge_on_green = true;
-    config.merge_wait = Duration::from_secs(wait_secs);
-    config.merge_poll = Duration::ZERO;
-    WaveExecutor::new(config, WavePlan::plan(steps, 2).unwrap())
-}
-
-fn gh_lines(argv: &[String]) -> Vec<&str> {
-    argv.iter()
-        .filter(|l| l.starts_with("gh "))
-        .map(String::as_str)
-        .collect()
-}
-
-fn count_prefix(argv: &[String], prefix: &str) -> usize {
-    argv.iter().filter(|l| l.starts_with(prefix)).count()
-}
-
-fn record(env: &Env, step: &str) -> serde_json::Value {
-    let bytes = fs::read(env.state.join(format!("{step}.json"))).unwrap();
-    serde_json::from_slice(&bytes).unwrap()
 }
 
 fn has_line(argv: &[String], line: &str) -> bool {
@@ -740,7 +663,7 @@ fn wave_critic_no_defects_opens_pr() {
         claude,
         "claude -p --strict-mcp-config --agent cas-critic --allowed-tools Read Grep Glob Bash(git diff *) Bash(git log *) Bash(git show *) Bash(make *) Bash(cargo *)"
     );
-    // With the flag off: no gh call and no git push; the executor never merges (spec 0025 D15).
+    // No gh call and no git push: the executor never merges or pushes (spec 0025 D15).
     assert!(!argv.iter().any(|l| l.starts_with("gh ")), "{argv:?}");
     assert!(!argv.iter().any(|l| l.starts_with("git push")), "{argv:?}");
     assert!(
@@ -1707,361 +1630,4 @@ fn live_smoke() {
         .expect("the run finishes");
     println!("{report:#?}");
     let _ = fs::remove_dir_all(&scratch);
-}
-
-// Merge on green (spec 0025 D15).
-
-const GREEN: &str = r#"0 [{"name":"a","state":"SUCCESS","bucket":"pass"},{"name":"b","state":"SUCCESS","bucket":"pass"}]"#;
-const PENDING: &str = r#"8 [{"name":"a","state":"PENDING","bucket":"pending"}]"#;
-const RED: &str = r#"1 [{"name":"a","state":"FAILURE","bucket":"fail"}]"#;
-const SKIPPED: &str = r#"0 [{"name":"a","state":"SKIPPED","bucket":"skipping"}]"#;
-const EMPTY_ERR: &str = "1 ";
-const EMPTY_OK: &str = "0 []";
-
-const MERGE_STEPS: fn() -> [SagaStep; 2] = || [builder("build-a"), critic("review-a", "build-a")];
-
-/// Run build-a, then review-a, on a merge executor.
-fn run_merge(exec: &WaveExecutor) -> cas_engine::StepResult {
-    assert_eq!(
-        exec.run_step("build-a", 1).unwrap().outcome,
-        StepOutcome::Passed
-    );
-    exec.run_step("review-a", 2).unwrap()
-}
-
-#[test]
-fn wave_merge_green_exact_argv() {
-    let env = Env::new("wave_merge_green_exact_argv");
-    env.gh_checks(&[PENDING, GREEN], "", Vec::new());
-    let exec = with_merge(&env, &MERGE_STEPS(), 3);
-    let got = run_merge(&exec);
-    assert_eq!(got.outcome, StepOutcome::Passed);
-    let argv = env.argv();
-    let sig = format!("git log --format=%G? {BASE}..{HEAD}");
-    let sig_at = argv
-        .iter()
-        .position(|l| *l == sig)
-        .expect("signature check");
-    let first_gh = argv.iter().position(|l| l.starts_with("gh ")).unwrap();
-    assert!(sig_at < first_gh, "{argv:?}");
-    assert_eq!(
-        gh_lines(&argv),
-        [
-            "gh pr view 57 --json headRefOid --jq .headRefOid",
-            "gh pr checks 57 --required --json name,state,bucket",
-            "gh pr view 57 --json headRefOid --jq .headRefOid",
-            "gh pr checks 57 --required --json name,state,bucket",
-            "gh pr view 57 --json mergeCommit --jq .mergeCommit.oid",
-            "gh pr merge 57 --merge --match-head-commit f00dfeed0001",
-            "gh pr view 57 --json mergeCommit --jq .mergeCommit.oid",
-        ]
-    );
-    let event_commit = match got.event.expect("event") {
-        WorkflowEvent::WaveStep { merge_commit, .. } => merge_commit,
-        other => panic!("not a wave step: {other:?}"),
-    };
-    assert_eq!(event_commit.as_deref(), Some(MERGE));
-    assert_eq!(record(&env, "build-a")["merge_commit"], MERGE);
-    let report_receipts = exec.run_local(3).unwrap().receipts;
-    assert_eq!(
-        report_receipts[0].facts().merge_commit.as_deref(),
-        Some(MERGE)
-    );
-    assert_eq!(report_receipts[0].facts().pr_number, Some(57));
-}
-
-#[test]
-fn wave_merge_already_merged_records_without_merging() {
-    let env = Env::new("wave_merge_already_merged_records_without_merging");
-    let reads = env.merge_reads(&[MERGE]);
-    env.gh_checks(&[GREEN], &reads, Vec::new());
-    let exec = with_merge(&env, &MERGE_STEPS(), 3);
-    let got = run_merge(&exec);
-    assert_eq!(got.outcome, StepOutcome::Passed);
-    assert_eq!(
-        count_prefix(&env.argv(), "gh pr merge"),
-        0,
-        "{:?}",
-        env.argv()
-    );
-    assert_eq!(record(&env, "build-a")["merge_commit"], MERGE);
-}
-
-#[test]
-fn wave_merge_empty_readback_rereads_once() {
-    let env = Env::new("wave_merge_empty_readback_rereads_once");
-    // Reads: the pre-read, the first read-back, the re-read.
-    let reads = env.merge_reads(&["", "", MERGE]);
-    env.gh_checks(&[GREEN], &reads, Vec::new());
-    let exec = with_merge(&env, &MERGE_STEPS(), 3);
-    assert_eq!(run_merge(&exec).outcome, StepOutcome::Passed);
-    let argv = env.argv();
-    assert_eq!(count_prefix(&argv, "gh pr merge"), 1);
-    assert_eq!(count_prefix(&argv, "gh pr view 57 --json mergeCommit"), 3);
-    assert_eq!(record(&env, "build-a")["merge_commit"], MERGE);
-}
-
-#[test]
-fn wave_merge_empty_readback_twice_fails() {
-    let env = Env::new("wave_merge_empty_readback_twice_fails");
-    let reads = env.merge_reads(&[""]);
-    env.gh_checks(&[GREEN], &reads, Vec::new());
-    let exec = with_merge(&env, &MERGE_STEPS(), 3);
-    let got = run_merge(&exec);
-    assert_eq!(got.outcome, StepOutcome::Halted(HaltReason::MergeFailed));
-    let argv = env.argv();
-    assert_eq!(count_prefix(&argv, "gh pr merge"), 1);
-    assert_eq!(count_prefix(&argv, "gh pr view 57 --json mergeCommit"), 3);
-    assert!(record(&env, "build-a")["merge_commit"].is_null());
-}
-
-#[test]
-fn wave_merge_off_makes_no_gh_call() {
-    let env = Env::new("wave_merge_off_makes_no_gh_call");
-    env.gh_checks(&[GREEN], "", Vec::new());
-    let steps = MERGE_STEPS();
-    let exec = with_open_prs(&env, &steps);
-    assert_eq!(run_merge(&exec).outcome, StepOutcome::Passed);
-    assert!(gh_lines(&env.argv()).is_empty(), "{:?}", env.argv());
-}
-
-#[test]
-fn wave_merge_admit_refuses_without_open_prs() {
-    let env = Env::new("wave_merge_admit_refuses_without_open_prs");
-    let mut config = env.config();
-    config.merge_on_green = true;
-    let exec = WaveExecutor::new(config, WavePlan::plan(&MERGE_STEPS(), 2).unwrap());
-    assert_eq!(exec.admit(), Err(AdmitError::MergeWithoutOpenPrs));
-    assert!(exec.run_step("build-a", 1).is_err());
-    assert!(env.argv().is_empty(), "{:?}", env.argv());
-}
-
-fn assert_halted_without_merge(env: &Env, got: &cas_engine::StepResult, reason: HaltReason) {
-    assert_eq!(got.outcome, StepOutcome::Halted(reason));
-    assert_eq!(
-        count_prefix(&env.argv(), "gh pr merge"),
-        0,
-        "{:?}",
-        env.argv()
-    );
-    assert!(record(env, "build-a")["merge_commit"].is_null());
-    // Every merge halt compensates (the Builder keeps its PR), except ChecksTimeout: the
-    // integrator ruled 2026-10-10 that it compensates nothing.
-    let expected = usize::from(reason != HaltReason::ChecksTimeout);
-    assert_eq!(got.compensation.len(), expected, "{:?}", got.compensation);
-}
-
-#[test]
-fn wave_merge_red_halts() {
-    let env = Env::new("wave_merge_red_halts");
-    env.gh_checks(&[RED], "", Vec::new());
-    let got = run_merge(&with_merge(&env, &MERGE_STEPS(), 3));
-    assert_halted_without_merge(&env, &got, HaltReason::ChecksRed);
-}
-
-#[test]
-fn wave_merge_skipped_is_red() {
-    let env = Env::new("wave_merge_skipped_is_red");
-    env.gh_checks(&[SKIPPED], "", Vec::new());
-    let got = run_merge(&with_merge(&env, &MERGE_STEPS(), 3));
-    assert_halted_without_merge(&env, &got, HaltReason::ChecksRed);
-}
-
-#[test]
-fn wave_merge_unparsed_checks_are_red() {
-    let env = Env::new("wave_merge_unparsed_checks_are_red");
-    env.gh_checks(&["0 not json"], "", Vec::new());
-    let got = run_merge(&with_merge(&env, &MERGE_STEPS(), 3));
-    assert_halted_without_merge(&env, &got, HaltReason::ChecksRed);
-}
-
-#[test]
-fn wave_merge_timeout_halts() {
-    let env = Env::new("wave_merge_timeout_halts");
-    env.gh_checks(&[PENDING], "", Vec::new());
-    let got = run_merge(&with_merge(&env, &MERGE_STEPS(), 3));
-    assert_halted_without_merge(&env, &got, HaltReason::ChecksTimeout);
-    assert_eq!(count_prefix(&env.argv(), "gh pr checks"), 3);
-}
-
-#[test]
-fn wave_merge_wait_below_poll_is_one_round() {
-    let env = Env::new("wave_merge_wait_below_poll_is_one_round");
-    env.gh_checks(&[PENDING], "", Vec::new());
-    let mut config = env.config();
-    config.open_prs = true;
-    config.merge_on_green = true;
-    config.merge_wait = Duration::from_secs(5);
-    config.merge_poll = Duration::from_secs(30);
-    let exec = WaveExecutor::new(config, WavePlan::plan(&MERGE_STEPS(), 2).unwrap());
-    let started = std::time::Instant::now();
-    let got = run_merge(&exec);
-    assert_halted_without_merge(&env, &got, HaltReason::ChecksTimeout);
-    assert_eq!(count_prefix(&env.argv(), "gh pr checks"), 1);
-    // No sleep after the last round.
-    assert!(started.elapsed() < Duration::from_secs(20));
-}
-
-#[test]
-fn wave_merge_empty_checks_never_green() {
-    for (name, form) in [("err", EMPTY_ERR), ("ok", EMPTY_OK)] {
-        let env = Env::new(&format!("wave_merge_empty_checks_never_green_{name}"));
-        env.gh_checks(&[form], "", Vec::new());
-        let got = run_merge(&with_merge(&env, &MERGE_STEPS(), 2));
-        assert_halted_without_merge(&env, &got, HaltReason::ChecksTimeout);
-        assert_eq!(count_prefix(&env.argv(), "gh pr checks"), 2, "{name}");
-    }
-}
-
-#[test]
-fn wave_merge_view_failure_is_a_pending_round() {
-    let env = Env::new("wave_merge_view_failure_is_a_pending_round");
-    env.gh_checks(
-        &[GREEN],
-        "",
-        vec![r("pr view * --json headRefOid *", b"", "boom", 1)],
-    );
-    let got = run_merge(&with_merge(&env, &MERGE_STEPS(), 2));
-    // Not a HeadMismatch halt: the round is pending, the rounds run out.
-    assert_halted_without_merge(&env, &got, HaltReason::ChecksTimeout);
-    assert_eq!(
-        count_prefix(&env.argv(), "gh pr view 57 --json headRefOid"),
-        2
-    );
-    assert_eq!(count_prefix(&env.argv(), "gh pr checks"), 0);
-}
-
-#[test]
-fn wave_merge_not_audited_merges_flagged() {
-    let env = Env::new("wave_merge_not_audited_merges_flagged");
-    env.gh_checks(&[GREEN], "", Vec::new());
-    let got = run_merge(&with_merge(&env, &MERGE_STEPS(), 3));
-    assert_eq!(got.outcome, StepOutcome::Passed);
-    assert_eq!(count_prefix(&env.argv(), "gh pr merge 57 --merge"), 1);
-    let body = fs::read_to_string(env.bin.join("blackwall.body")).unwrap();
-    assert!(body.contains("not_audited"), "{body}");
-}
-
-#[test]
-fn wave_merge_head_mismatch_halts() {
-    let env = Env::new("wave_merge_head_mismatch_halts");
-    env.gh_checks(
-        &[GREEN],
-        "",
-        vec![r("pr view * --json headRefOid *", b"deadbeef0002\n", "", 0)],
-    );
-    let got = run_merge(&with_merge(&env, &MERGE_STEPS(), 3));
-    assert_halted_without_merge(&env, &got, HaltReason::HeadMismatch);
-    assert_eq!(count_prefix(&env.argv(), "gh pr checks"), 0);
-}
-
-#[test]
-fn wave_merge_unsigned_halts() {
-    for (name, log) in [("n", &b"G\nN\n"[..]), ("none", &b""[..])] {
-        let env = Env::new(&format!("wave_merge_unsigned_halts_{name}"));
-        env.gh_checks(&[GREEN], "", Vec::new());
-        env.tool("git", vec![r("log --format=%G? *", log_static(log), "", 0)]);
-        let got = run_merge(&with_merge(&env, &MERGE_STEPS(), 3));
-        assert_eq!(got.outcome, StepOutcome::Halted(HaltReason::MergeUnsigned));
-        assert_eq!(got.compensation.len(), 1);
-        assert!(gh_lines(&env.argv()).is_empty(), "{name}: {:?}", env.argv());
-    }
-}
-
-fn log_static(bytes: &[u8]) -> &'static [u8] {
-    Box::leak(bytes.to_vec().into_boxed_slice())
-}
-
-#[test]
-fn wave_merge_failed_halts() {
-    let env = Env::new("wave_merge_failed_halts");
-    env.gh_checks(&[GREEN], "", vec![r("pr merge *", b"", "refused", 1)]);
-    let got = run_merge(&with_merge(&env, &MERGE_STEPS(), 3));
-    assert_eq!(got.outcome, StepOutcome::Halted(HaltReason::MergeFailed));
-    assert_eq!(got.compensation.len(), 1);
-    assert_eq!(count_prefix(&env.argv(), "gh pr merge"), 1);
-    assert!(record(&env, "build-a")["merge_commit"].is_null());
-}
-
-#[test]
-fn wave_merge_halt_record_during_wait() {
-    let env = Env::new("wave_merge_halt_record_during_wait");
-    let state = env.state.display().to_string();
-    let record_json = r#"{"step":"other-step","role":"Builder","outcome":{"result":"halted","reason":"VerifyFailed"},"at":1,"seq":0}"#;
-    let write = format!(
-        "case \"$*\" in \"pr checks\"*) mkdir -p '{state}'; printf '%s' '{record_json}' > '{state}/other-step.json' ;; esac\n"
-    );
-    env.gh_checks(&[PENDING], &write, Vec::new());
-    let got = run_merge(&with_merge(&env, &MERGE_STEPS(), 3));
-    assert_eq!(got.outcome, StepOutcome::Halted(HaltReason::WaveHalted));
-    assert_eq!(count_prefix(&env.argv(), "gh pr merge"), 0);
-    // A halt record from another step stops the wave and compensates nothing.
-    assert!(got.compensation.is_empty(), "{:?}", got.compensation);
-    assert!(!env.argv().iter().any(|l| l.starts_with("git branch -D")));
-}
-
-#[test]
-fn wave_merge_retry_merges_existing_pr() {
-    let env = Env::new("wave_merge_retry_merges_existing_pr");
-    env.gh_checks(&[GREEN], "", Vec::new());
-    let steps = MERGE_STEPS();
-    // Flag off: the Critic opens PR 57 and does not merge.
-    let off = with_open_prs(&env, &steps);
-    assert_eq!(run_merge(&off).outcome, StepOutcome::Passed);
-    assert_eq!(count_prefix(&env.argv(), "blackwall pr"), 1);
-    // The Critic record is lost; the flag is on. The retry merges and opens no second PR.
-    fs::remove_file(env.state.join("review-a.json")).unwrap();
-    let on = with_merge(&env, &steps, 3);
-    assert_eq!(
-        on.run_step("review-a", 3).unwrap().outcome,
-        StepOutcome::Passed
-    );
-    let argv = env.argv();
-    assert_eq!(count_prefix(&argv, "blackwall pr"), 1);
-    assert_eq!(count_prefix(&argv, "gh pr merge 57 --merge"), 1);
-}
-
-#[test]
-fn wave_merge_halt_record_after_green_checks_merges_nothing() {
-    let env = Env::new("wave_merge_halt_record_after_green_checks_merges_nothing");
-    let state = env.state.display().to_string();
-    let record_json = r#"{"step":"other-step","role":"Builder","outcome":{"result":"halted","reason":"VerifyFailed"},"at":1,"seq":0}"#;
-    let write = format!(
-        "case \"$*\" in \"pr checks\"*) mkdir -p '{state}'; printf '%s' '{record_json}' > '{state}/other-step.json' ;; esac\n"
-    );
-    // The halt record lands on the green round, so only the check under the lock can see it.
-    env.gh_checks(&[GREEN], &write, Vec::new());
-    let got = run_merge(&with_merge(&env, &MERGE_STEPS(), 3));
-    assert_eq!(got.outcome, StepOutcome::Halted(HaltReason::WaveHalted));
-    let argv = env.argv();
-    assert_eq!(count_prefix(&argv, "gh pr merge"), 0, "{argv:?}");
-    assert_eq!(count_prefix(&argv, "gh pr view 57 --json mergeCommit"), 0);
-    assert!(got.compensation.is_empty(), "{:?}", got.compensation);
-}
-
-#[test]
-fn wave_merge_retry_after_merge_makes_no_gh_call() {
-    let env = Env::new("wave_merge_retry_after_merge_makes_no_gh_call");
-    env.gh_checks(&[GREEN], "", Vec::new());
-    let exec = with_merge(&env, &MERGE_STEPS(), 3);
-    assert_eq!(run_merge(&exec).outcome, StepOutcome::Passed);
-    let before = gh_lines(&env.argv()).len();
-    assert_eq!(before, 5);
-    // The Critic record is lost. The Builder record holds the merge commit, so the retry
-    // passes again and calls gh no more.
-    fs::remove_file(env.state.join("review-a.json")).unwrap();
-    assert_eq!(
-        exec.run_step("review-a", 3).unwrap().outcome,
-        StepOutcome::Passed
-    );
-    assert_eq!(gh_lines(&env.argv()).len(), before, "{:?}", env.argv());
-}
-
-#[test]
-fn wave_merge_zero_wait_is_one_round() {
-    let env = Env::new("wave_merge_zero_wait_is_one_round");
-    env.gh_checks(&[PENDING], "", Vec::new());
-    let got = run_merge(&with_merge(&env, &MERGE_STEPS(), 0));
-    assert_halted_without_merge(&env, &got, HaltReason::ChecksTimeout);
-    assert_eq!(count_prefix(&env.argv(), "gh pr checks"), 1);
 }

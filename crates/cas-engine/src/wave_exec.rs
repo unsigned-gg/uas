@@ -13,8 +13,6 @@ use std::io::{self, Write};
 use std::os::unix::ffi::OsStrExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output, Stdio};
-use std::thread;
-use std::time::Duration;
 
 use cas_domain::{
     is_critic_input_path, is_evaluator_path, AuditStatus, CostSource, LandingReceipt, SlotId,
@@ -53,13 +51,6 @@ pub struct WaveExecConfig {
     pub critic_agent: String,
     /// True when a passed Critic opens the Builder's pull request (spec 0025 D16).
     pub open_prs: bool,
-    /// True when the executor merges a passed Critic's pull request on green (spec 0025 D15).
-    /// It needs `open_prs`.
-    pub merge_on_green: bool,
-    /// How long a merge waits for the required checks (spec 0025 D15).
-    pub merge_wait: Duration,
-    /// The pause between two rounds of the merge wait (spec 0025 D15).
-    pub merge_poll: Duration,
 }
 
 impl WaveExecConfig {
@@ -82,9 +73,6 @@ impl WaveExecConfig {
             builder_model: "haiku".into(),
             critic_agent: "cas-critic".into(),
             open_prs: false,
-            merge_on_green: false,
-            merge_wait: Duration::from_secs(900),
-            merge_poll: Duration::from_secs(30),
         }
     }
 }
@@ -123,9 +111,6 @@ pub enum AdmitError {
     /// The step id does not make a valid `wave-<id>` slot id.
     #[error("step id {0} does not make a valid slot id")]
     BadSlotId(String),
-    /// `merge_on_green` is set and `open_prs` is not (D15).
-    #[error("merge_on_green needs open_prs")]
-    MergeWithoutOpenPrs,
 }
 
 /// A failure of the executor itself, not a halt of the wave.
@@ -192,16 +177,6 @@ pub enum HaltReason {
     WaveHalted,
     /// `blackwall pr` failed after a Critic passed.
     PrFailed,
-    /// A commit between the base and the head is not signed (D15).
-    MergeUnsigned,
-    /// The pull request head differs from the recorded head (D15).
-    HeadMismatch,
-    /// A required check is red (D15).
-    ChecksRed,
-    /// The merge wait ran out with no green (D15).
-    ChecksTimeout,
-    /// `gh pr merge` failed, or the merge commit cannot be read back (D15).
-    MergeFailed,
     /// The executor itself failed before an outcome: a missing tool, or an I/O or record error.
     ExecutorError,
 }
@@ -220,70 +195,8 @@ impl HaltReason {
             Self::ProbeFailed => "ProbeFailed",
             Self::WaveHalted => "WaveHalted",
             Self::PrFailed => "PrFailed",
-            Self::MergeUnsigned => "MergeUnsigned",
-            Self::HeadMismatch => "HeadMismatch",
-            Self::ChecksRed => "ChecksRed",
-            Self::ChecksTimeout => "ChecksTimeout",
-            Self::MergeFailed => "MergeFailed",
             Self::ExecutorError => "ExecutorError",
         }
-    }
-}
-
-/// Whether a merge halt compensates the passed records (spec 0025 D15 and D4). A PR keeps
-/// everything, so this undoes only the branches that have no PR. `ChecksTimeout` compensates
-/// nothing (integrator ruling, 2026-10-10): the PR stays and the operator re-runs the step.
-/// `WaveHalted` is another step's halt.
-fn merge_halt_compensates(reason: HaltReason) -> bool {
-    !matches!(reason, HaltReason::ChecksTimeout | HaltReason::WaveHalted)
-}
-
-/// What the required checks of a PR say in one round.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum ChecksState {
-    Green,
-    Pending,
-    Red,
-}
-
-/// One entry of `gh pr checks --json name,state,bucket`.
-#[derive(Deserialize)]
-struct Check {
-    #[serde(default)]
-    state: String,
-    #[serde(default)]
-    bucket: String,
-}
-
-/// Classify the checks output (spec 0025 D15). Empty output and `[]` are pending: the checks
-/// have not reported yet. Output that does not parse is red.
-fn classify_checks(stdout: &[u8]) -> ChecksState {
-    let text = String::from_utf8_lossy(stdout);
-    let text = text.trim();
-    if text.is_empty() {
-        return ChecksState::Pending;
-    }
-    let Ok(checks) = serde_json::from_str::<Vec<Check>>(text) else {
-        return ChecksState::Red;
-    };
-    if checks.is_empty() {
-        return ChecksState::Pending;
-    }
-    let mut pending = false;
-    for check in &checks {
-        if check.state == "SUCCESS" {
-            continue;
-        }
-        if check.bucket == "pending" {
-            pending = true;
-        } else {
-            return ChecksState::Red;
-        }
-    }
-    if pending {
-        ChecksState::Pending
-    } else {
-        ChecksState::Green
     }
 }
 
@@ -386,8 +299,6 @@ struct Facts {
     branch: Option<String>,
     head: Option<String>,
     pr: Option<u64>,
-    #[serde(default)]
-    merge_commit: Option<String>,
 }
 
 /// One step record in the state directory. A `Halted` record blocks every step.
@@ -427,9 +338,6 @@ impl WaveExecutor {
 
     /// Check every admission row. No subprocess runs here.
     pub fn admit(&self) -> Result<(), AdmitError> {
-        if self.config.merge_on_green && !self.config.open_prs {
-            return Err(AdmitError::MergeWithoutOpenPrs);
-        }
         let steps = self.all_steps();
         for (_, ws) in &steps {
             let id = ws.step.id.as_str();
@@ -807,183 +715,8 @@ impl WaveExecutor {
                     }
                 }
             }
-            // Merge on green keys on "no merge recorded yet", not on "PR just opened", so a
-            // retried Critic still merges (spec 0025 D15).
-            if self.config.merge_on_green && brec.facts.merge_commit.is_none() {
-                match self.merge_pr(&mut brec)? {
-                    Ok(()) => last = brec.facts.clone(),
-                    Err(reason) => {
-                        let compensate = merge_halt_compensates(reason);
-                        return self.halt(ws, wave, reason, last, None, compensate, now);
-                    }
-                }
-            }
         }
         self.passed(ws, wave, last, None, now)
-    }
-
-    /// Merge the PR of a Builder record on green checks (spec 0025 D15). `Ok(Err(reason))` is a
-    /// halt of the step. On `Ok(Ok(()))` the merge commit is on the record and saved.
-    fn merge_pr(&self, brec: &mut StepRecord) -> Result<Result<(), HaltReason>, WaveError> {
-        let repo = self.config.repo_dir.clone();
-        // Unreachable by admission (`MergeWithoutOpenPrs`): a Critic pass with `open_prs` always
-        // leaves a PR number. Kept as a guard.
-        let (Some(pr), Some(head), Some(base)) = (
-            brec.facts.pr,
-            brec.facts.head.clone(),
-            brec.facts.base.clone(),
-        ) else {
-            return Ok(Err(HaltReason::MergeFailed));
-        };
-        let pr = pr.to_string();
-
-        // 1. Every commit between the base and the head is signed. A NotAudited receipt does
-        // not block the merge (D19); the PR body carries the flag.
-        let range = format!("{base}..{head}");
-        let log = self.run(&repo, "git", &["log", "--format=%G?", &range], None)?;
-        let text = String::from_utf8_lossy(&log.stdout);
-        let signed = log.status.code() == Some(0)
-            && text.lines().next().is_some()
-            && text.lines().all(|l| l == "G");
-        if !signed {
-            return Ok(Err(HaltReason::MergeUnsigned));
-        }
-
-        // 2. Rounds, with no lock held: one wait would block every build.
-        let poll = self.config.merge_poll;
-        let rounds = self
-            .config
-            .merge_wait
-            .as_secs()
-            .div_ceil(poll.as_secs().max(1))
-            .max(1);
-        let mut green = false;
-        for round in 0..rounds {
-            if self.any_halted()? {
-                return Ok(Err(HaltReason::WaveHalted));
-            }
-            let view = self.run(
-                &repo,
-                "gh",
-                &[
-                    "pr",
-                    "view",
-                    &pr,
-                    "--json",
-                    "headRefOid",
-                    "--jq",
-                    ".headRefOid",
-                ],
-                None,
-            )?;
-            // A failed view is a pending round.
-            if view.status.code() == Some(0) {
-                if String::from_utf8_lossy(&view.stdout).trim() != head {
-                    return Ok(Err(HaltReason::HeadMismatch));
-                }
-                let checks = self.run(
-                    &repo,
-                    "gh",
-                    &[
-                        "pr",
-                        "checks",
-                        &pr,
-                        "--required",
-                        "--json",
-                        "name,state,bucket",
-                    ],
-                    None,
-                )?;
-                match classify_checks(&checks.stdout) {
-                    ChecksState::Green => {
-                        green = true;
-                        break;
-                    }
-                    ChecksState::Red => return Ok(Err(HaltReason::ChecksRed)),
-                    ChecksState::Pending => {}
-                }
-            }
-            if round + 1 < rounds {
-                thread::sleep(poll);
-            }
-        }
-        if !green {
-            return Ok(Err(HaltReason::ChecksTimeout));
-        }
-
-        // 3. One lock hold: the halt check, the merge, the read-back and the record save.
-        let merged = {
-            let _lock = self.lock()?;
-            if self.any_halted()? {
-                return Ok(Err(HaltReason::WaveHalted));
-            }
-            // A PR merged by hand, or by a run that died before its save, is recorded, not
-            // merged again.
-            let mut commit = self.merge_commit_of(&repo, &pr)?;
-            if commit.is_none() {
-                let merge = self.run(
-                    &repo,
-                    "gh",
-                    &["pr", "merge", &pr, "--merge", "--match-head-commit", &head],
-                    None,
-                )?;
-                if merge.status.code() == Some(0) {
-                    commit = self.merge_commit_of(&repo, &pr)?;
-                    if commit.is_none() {
-                        commit = self.merge_commit_of(&repo, &pr)?;
-                    }
-                }
-            }
-            match commit {
-                Some(commit) => {
-                    brec.facts.merge_commit = Some(commit);
-                    if let Some(r) = &brec.receipt {
-                        let mut facts = r.facts().clone();
-                        facts.merge_commit = brec.facts.merge_commit.clone();
-                        brec.receipt = Some(
-                            LandingReceipt::with_evidence(
-                                facts,
-                                r.evidence(),
-                                r.human_raise().cloned(),
-                            )
-                            .map_err(LandingError::Receipt)?,
-                        );
-                    }
-                    self.save(brec)?;
-                    true
-                }
-                None => false,
-            }
-        };
-        Ok(if merged {
-            Ok(())
-        } else {
-            Err(HaltReason::MergeFailed)
-        })
-    }
-
-    /// The merge commit of a PR, or `None` when it has none yet or the read fails.
-    fn merge_commit_of(&self, repo: &Path, pr: &str) -> Result<Option<String>, WaveError> {
-        let out = self.run(
-            repo,
-            "gh",
-            &[
-                "pr",
-                "view",
-                pr,
-                "--json",
-                "mergeCommit",
-                "--jq",
-                ".mergeCommit.oid",
-            ],
-            None,
-        )?;
-        if out.status.code() != Some(0) {
-            return Ok(None);
-        }
-        let text = String::from_utf8_lossy(&out.stdout).trim().to_owned();
-        // `jq` prints `null` for a PR with no merge commit.
-        Ok((!text.is_empty() && text != "null").then_some(text))
     }
 
     /// Run the Critic in a transient worktree at `head`. The caller holds the lock and removes
@@ -1280,7 +1013,6 @@ impl WaveExecutor {
             branch: facts.branch.clone(),
             head: facts.head.clone(),
             pr: facts.pr,
-            merge_commit: facts.merge_commit.clone(),
             timestamp: now,
         }
     }

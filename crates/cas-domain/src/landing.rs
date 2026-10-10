@@ -71,9 +71,6 @@ pub struct LandingFacts {
     pub branch: Option<String>,
     /// The pull request number, when one was opened.
     pub pr_number: Option<u64>,
-    /// The merge commit of the pull request, when it was merged (spec 0025 D15).
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub merge_commit: Option<String>,
     /// True when the changeset touched an evaluator file (spec 0023 D3).
     pub evaluator_touched: bool,
     /// Where the cost figures came from (spec 0023 D2).
@@ -296,7 +293,6 @@ mod tests {
             verify_exit,
             branch: Some("blackwall/bw-0123456789".into()),
             pr_number: Some(57),
-            merge_commit: None,
             evaluator_touched,
             cost_source: CostSource::None,
             at: 1_000,
