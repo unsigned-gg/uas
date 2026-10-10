@@ -2020,3 +2020,48 @@ fn wave_merge_retry_merges_existing_pr() {
     assert_eq!(count_prefix(&argv, "blackwall pr"), 1);
     assert_eq!(count_prefix(&argv, "gh pr merge 57 --merge"), 1);
 }
+
+#[test]
+fn wave_merge_halt_record_after_green_checks_merges_nothing() {
+    let env = Env::new("wave_merge_halt_record_after_green_checks_merges_nothing");
+    let state = env.state.display().to_string();
+    let record_json = r#"{"step":"other-step","role":"Builder","outcome":{"result":"halted","reason":"VerifyFailed"},"at":1,"seq":0}"#;
+    let write = format!(
+        "case \"$*\" in \"pr checks\"*) mkdir -p '{state}'; printf '%s' '{record_json}' > '{state}/other-step.json' ;; esac\n"
+    );
+    // The halt record lands on the green round, so only the check under the lock can see it.
+    env.gh_checks(&[GREEN], &write, Vec::new());
+    let got = run_merge(&with_merge(&env, &MERGE_STEPS(), 3));
+    assert_eq!(got.outcome, StepOutcome::Halted(HaltReason::WaveHalted));
+    let argv = env.argv();
+    assert_eq!(count_prefix(&argv, "gh pr merge"), 0, "{argv:?}");
+    assert_eq!(count_prefix(&argv, "gh pr view 57 --json mergeCommit"), 0);
+    assert!(got.compensation.is_empty(), "{:?}", got.compensation);
+}
+
+#[test]
+fn wave_merge_retry_after_merge_makes_no_gh_call() {
+    let env = Env::new("wave_merge_retry_after_merge_makes_no_gh_call");
+    env.gh_checks(&[GREEN], "", Vec::new());
+    let exec = with_merge(&env, &MERGE_STEPS(), 3);
+    assert_eq!(run_merge(&exec).outcome, StepOutcome::Passed);
+    let before = gh_lines(&env.argv()).len();
+    assert_eq!(before, 5);
+    // The Critic record is lost. The Builder record holds the merge commit, so the retry
+    // passes again and calls gh no more.
+    fs::remove_file(env.state.join("review-a.json")).unwrap();
+    assert_eq!(
+        exec.run_step("review-a", 3).unwrap().outcome,
+        StepOutcome::Passed
+    );
+    assert_eq!(gh_lines(&env.argv()).len(), before, "{:?}", env.argv());
+}
+
+#[test]
+fn wave_merge_zero_wait_is_one_round() {
+    let env = Env::new("wave_merge_zero_wait_is_one_round");
+    env.gh_checks(&[PENDING], "", Vec::new());
+    let got = run_merge(&with_merge(&env, &MERGE_STEPS(), 0));
+    assert_halted_without_merge(&env, &got, HaltReason::ChecksTimeout);
+    assert_eq!(count_prefix(&env.argv(), "gh pr checks"), 1);
+}
