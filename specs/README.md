@@ -26,6 +26,7 @@ Methodology: LeanSpec. The reference copy is in `../vendor/leanspec/`.
 | [0019](0019-pool-runtime-decision.md) | Pool runtime decision | planned | high |
 | [0020](0020-build-job-cap.md) | Build job cap | planned | high |
 | [0021](0021-cas-storage-scope-and-phase.md) | cas-storage scope and phase | planned | medium |
+| [0022](0022-custody-landing.md) | Custody landing | planned | high |
 
 
 ## How to add a spec
