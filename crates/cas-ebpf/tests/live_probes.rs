@@ -214,7 +214,16 @@ fn nested_pid_namespace_exec_is_audited() -> TestResult {
         .iter()
         .find(|e| e.ns_pid == unshare_pid)
         .ok_or("control: no exec event for unshare with its namespace pid")?;
-    assert_eq!(unshare.pid, unshare_pid, "no namespace shift for unshare");
+    // On ceres the daemon's namespace is itself nested under the host's, so
+    // the global tgid can differ from the namespace pid (spec 0014 T13), and
+    // the exit probe has already evicted unshare's map entry by now. The
+    // control is the event itself: a real global pid and the right binary.
+    assert_ne!(unshare.pid, 0, "unshare event has no global pid");
+    assert!(
+        unshare.filename_str().ends_with("/unshare"),
+        "control event is not unshare: {}",
+        unshare.filename_str()
+    );
 
     // The nested shell and its `true` children run in a namespace the helper
     // cannot name. They are audited with `ns_pid` 0 and a real global pid.
