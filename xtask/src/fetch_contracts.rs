@@ -10,9 +10,13 @@ use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Component, Path, PathBuf};
 use std::process::{Command, ExitCode};
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use anyhow::{bail, Context, Result};
 use sha2::{Digest, Sha256};
+
+/// Distinguishes scratch repositories when several fetches run in one process.
+static SCRATCH: AtomicUsize = AtomicUsize::new(0);
 
 /// One lock line: a file at an upstream commit and the sha256 of its bytes.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -108,7 +112,12 @@ fn check_hash(entry: &Entry, bytes: &[u8]) -> Result<()> {
 }
 
 fn git(dir: &Path, args: &[&str]) -> Result<Vec<u8>> {
-    let out = Command::new("git")
+    // A hook exports GIT_DIR, GIT_INDEX_FILE and more; the child must see none of them.
+    let mut cmd = Command::new("git");
+    for (key, _) in std::env::vars_os().filter(|(k, _)| k.to_string_lossy().starts_with("GIT_")) {
+        cmd.env_remove(key);
+    }
+    let out = cmd
         .arg("-C")
         .arg(dir)
         .args(args)
@@ -125,11 +134,10 @@ fn git(dir: &Path, args: &[&str]) -> Result<Vec<u8>> {
 }
 
 /// Shallow-fetch exactly `commit` into a throwaway repository and prove FETCH_HEAD equals it.
-fn fetch_commit(scratch: &Path, repo: &str, commit: &str) -> Result<()> {
+fn fetch_commit(scratch: &Path, url: &str, repo: &str, commit: &str) -> Result<()> {
     fs::create_dir_all(scratch)?;
     git(scratch, &["init", "-q"])?;
-    let url = format!("git@github.com:{repo}.git");
-    git(scratch, &["fetch", "-q", "--depth", "1", &url, commit])
+    git(scratch, &["fetch", "-q", "--depth", "1", url, commit])
         .with_context(|| format!("commit {commit} of {repo} is unreachable"))?;
     let head = String::from_utf8(git(scratch, &["rev-parse", "FETCH_HEAD"])?)?;
     if head.trim() != commit {
@@ -139,6 +147,11 @@ fn fetch_commit(scratch: &Path, repo: &str, commit: &str) -> Result<()> {
 }
 
 fn fetch(root: &Path, args: &[String]) -> Result<String> {
+    fetch_from(root, args, &|repo| format!("git@github.com:{repo}.git"))
+}
+
+/// `fetch` with the remote URL of a repository injected, so tests can use a local repository.
+fn fetch_from(root: &Path, args: &[String], remote: &dyn Fn(&str) -> String) -> Result<String> {
     let lock = match args {
         [] => root.join("contracts.lock"),
         [flag, path] if flag == "--lock" => PathBuf::from(path),
@@ -155,10 +168,11 @@ fn fetch(root: &Path, args: &[String]) -> Result<String> {
     }
     let mut errors = Vec::new();
     let mut written = 0usize;
-    for (i, ((repo, commit), files)) in groups.iter().enumerate() {
+    for ((repo, commit), files) in &groups {
+        let n = SCRATCH.fetch_add(1, Ordering::Relaxed);
         let scratch =
-            std::env::temp_dir().join(format!("fetch-contracts-{}-{i}", std::process::id()));
-        let result = fetch_commit(&scratch, repo, commit);
+            std::env::temp_dir().join(format!("fetch-contracts-{}-{n}", std::process::id()));
+        let result = fetch_commit(&scratch, &remote(repo), repo, commit);
         match result {
             Err(err) => errors.push(format!("{err:#}")),
             Ok(()) => {
@@ -251,5 +265,55 @@ mod tests {
         ];
         let err = fetch(Path::new("/tmp"), &args).unwrap_err();
         assert!(format!("{err:#}").contains("cannot read lock"));
+    }
+
+    /// A local repository with one commit holding `p/f` = "hello", and an empty output root.
+    fn fixture(tag: &str) -> (PathBuf, PathBuf, String) {
+        let base = std::env::temp_dir().join(format!("fc-test-{}-{tag}", std::process::id()));
+        let _ = fs::remove_dir_all(&base);
+        let (up, root) = (base.join("up"), base.join("root"));
+        fs::create_dir_all(up.join("p")).unwrap();
+        fs::create_dir_all(&root).unwrap();
+        fs::write(up.join("p/f"), "hello").unwrap();
+        git(&up, &["init", "-q"]).unwrap();
+        git(&up, &["add", "p/f"]).unwrap();
+        let id = [
+            "-c",
+            "user.name=t",
+            "-c",
+            "user.email=t@t",
+            "-c",
+            "commit.gpgsign=false",
+        ];
+        let commit = [&id[..], &["commit", "-q", "-m", "x"]].concat();
+        git(&up, &commit).unwrap();
+        let sha = String::from_utf8(git(&up, &["rev-parse", "HEAD"]).unwrap()).unwrap();
+        (up, root, sha.trim().to_string())
+    }
+
+    fn run_fetch(up: &Path, root: &Path, sha256: &str, commit: &str) -> Result<String> {
+        let lock = root.join("contracts.lock");
+        fs::write(&lock, format!("{sha256} {commit} o/r p/f x/f\n")).unwrap();
+        let args = ["--lock".to_string(), lock.display().to_string()];
+        fetch_from(root, &args, &|_| format!("file://{}", up.display()))
+    }
+
+    #[test]
+    fn fetch_contracts_fetch_refuses_a_hash_mismatch() {
+        let (up, root, sha) = fixture("bad");
+        let err = run_fetch(&up, &root, &SHA.replace("2cf2", "2cf3"), &sha).unwrap_err();
+        let msg = format!("{err:#}");
+        assert!(msg.contains("x/f") && msg.contains("mismatch"), "{msg}");
+        assert!(!root.join(".contracts/x/f").exists());
+        let _ = fs::remove_dir_all(up.parent().unwrap());
+    }
+
+    #[test]
+    fn fetch_contracts_fetch_places_a_matching_file() {
+        let (up, root, sha) = fixture("good");
+        let good = hex_digest(b"hello");
+        run_fetch(&up, &root, &good, &sha).unwrap();
+        assert_eq!(fs::read(root.join(".contracts/x/f")).unwrap(), b"hello");
+        let _ = fs::remove_dir_all(up.parent().unwrap());
     }
 }
