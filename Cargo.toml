@@ -35,7 +35,7 @@ clap = { version = "4", features = ["derive", "env"] }
 tracing = "0.1"
 # Log output and RUST_LOG filtering.
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
-# TOML deserialization for Saga flows (.saga/flows/*.toml).
+# TOML deserialization for Saga flows (.saga/flows/*.toml) and xtask (advisory-check).
 toml = "1.1"
 # Landlock LSM rulesets for the worker filesystem jail (spec 0010, CER-2715).
 landlock = "0.4.7"
