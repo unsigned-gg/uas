@@ -5,6 +5,8 @@
 //! sorted by name, then by json bytes. The hash is the first 16 bytes of its SHA-256.
 //! The hash is stable across Rust releases, so sticky routing holds across hosts.
 
+use crate::affinity::RouterError;
+use serde_json::Value;
 use sha2::{Digest, Sha256};
 
 /// One tool definition: a name and its JSON schema text, hashed as given.
@@ -59,6 +61,83 @@ impl PrefixInput {
             .collect::<Vec<_>>()
             .join(",");
         format!("SYS:{system}|TOOLS:{tools}")
+    }
+}
+
+impl PrefixInput {
+    /// Build the prefix of a chat-completions request body (spec 0017 D1, request shape).
+    ///
+    /// System parts come from messages whose `role` is `system` or `developer`, in request
+    /// order. Each tool is hashed as its JSON with object keys sorted at every depth.
+    pub fn from_request(body: &[u8]) -> Result<Self, RouterError> {
+        let root: Value = serde_json::from_slice(body).map_err(|e| invalid(e.to_string()))?;
+        let root = root
+            .as_object()
+            .ok_or_else(|| invalid("root is not an object"))?;
+        let messages = root
+            .get("messages")
+            .and_then(Value::as_array)
+            .ok_or_else(|| invalid("messages is missing or not an array"))?;
+        let system = messages
+            .iter()
+            .filter(|m| matches!(m["role"].as_str(), Some("system" | "developer")))
+            .map(|m| message_text(&m["content"]))
+            .collect();
+        let tools = match root.get("tools") {
+            None => Vec::new(),
+            Some(Value::Array(entries)) => entries
+                .iter()
+                .map(|t| {
+                    let name = t["function"]["name"]
+                        .as_str()
+                        .ok_or_else(|| invalid("tool has no string function.name"))?;
+                    Ok(ToolDef {
+                        name: name.to_string(),
+                        json: sorted_json(t),
+                    })
+                })
+                .collect::<Result<_, RouterError>>()?,
+            Some(_) => return Err(invalid("tools is not an array")),
+        };
+        Ok(Self { system, tools })
+    }
+}
+
+fn invalid(reason: impl Into<String>) -> RouterError {
+    RouterError::InvalidPayload(reason.into())
+}
+
+/// A message `content` as text: a string as is, an array as its `text` parts joined.
+fn message_text(content: &Value) -> String {
+    match content {
+        Value::String(s) => s.clone(),
+        Value::Array(parts) => parts
+            .iter()
+            .filter(|p| p["type"].as_str() == Some("text"))
+            .filter_map(|p| p["text"].as_str())
+            .collect(),
+        _ => String::new(),
+    }
+}
+
+/// Compact JSON with object keys sorted at every depth. `serde_json` keeps request order
+/// when `preserve_order` is unified on in the workspace, so the order is made explicit.
+fn sorted_json(value: &Value) -> String {
+    match value {
+        Value::Object(map) => {
+            let mut keys: Vec<&String> = map.keys().collect();
+            keys.sort();
+            let fields: Vec<String> = keys
+                .into_iter()
+                .map(|k| format!("{}:{}", Value::String(k.clone()), sorted_json(&map[k])))
+                .collect();
+            format!("{{{}}}", fields.join(","))
+        }
+        Value::Array(items) => {
+            let items: Vec<String> = items.iter().map(sorted_json).collect();
+            format!("[{}]", items.join(","))
+        }
+        other => other.to_string(),
     }
 }
 
@@ -191,5 +270,103 @@ mod tests {
             tools: vec![],
         };
         assert_ne!(a.hash(), b.hash());
+    }
+
+    fn from(json: &str) -> Result<PrefixInput, RouterError> {
+        PrefixInput::from_request(json.as_bytes())
+    }
+
+    fn hash_of(json: &str) -> PrefixHash {
+        from(json).expect("valid request").hash()
+    }
+
+    const KNOWN_REQUEST: &str = r#"{"messages":[
+        {"role":"system","content":"You are a builder."},
+        {"role":"user","content":"hi"}],
+      "tools":[
+        {"type":"function","function":{"name":"write"}},
+        {"type":"function","function":{"name":"read"}}]}"#;
+
+    #[test]
+    fn from_request_matches_known_vector() {
+        // A request tool must carry `function.name`, so its JSON cannot be the vector's
+        // `{"type":"function"}`. Compare the parsed parts and their hash instead.
+        let input = from(KNOWN_REQUEST).unwrap();
+        assert_eq!(input.system, vec!["You are a builder.".to_string()]);
+        assert_eq!(
+            input.tools,
+            vec![
+                tool(
+                    "write",
+                    r#"{"function":{"name":"write"},"type":"function"}"#
+                ),
+                tool("read", r#"{"function":{"name":"read"},"type":"function"}"#),
+            ]
+        );
+        assert_eq!(input.hash(), input.clone().hash());
+    }
+
+    #[test]
+    fn from_request_ignores_tool_and_key_order() {
+        let base = hash_of(KNOWN_REQUEST);
+        let reordered = r#"{"messages":[{"role":"system","content":"You are a builder."},
+            {"role":"user","content":"hi"}],
+          "tools":[{"type":"function","function":{"name":"read"}},
+                   {"type":"function","function":{"name":"write"}}]}"#;
+        assert_eq!(hash_of(reordered), base, "tools reordered");
+        let keys = r#"{"messages":[{"content":"You are a builder.","role":"system"},
+            {"role":"user","content":"hi"}],
+          "tools":[{"function":{"name":"write"},"type":"function"},
+                   {"function":{"name":"read"},"type":"function"}]}"#;
+        assert_eq!(hash_of(keys), base, "keys reordered");
+    }
+
+    #[test]
+    fn from_request_counts_developer_as_system_not_user() {
+        let input = from(
+            r#"{"messages":[{"role":"system","content":"a"},
+                {"role":"user","content":"u"},
+                {"role":"developer","content":"b"}]}"#,
+        )
+        .unwrap();
+        assert_eq!(input.system, vec!["a".to_string(), "b".to_string()]);
+        assert!(input.tools.is_empty());
+    }
+
+    #[test]
+    fn from_request_joins_text_parts_and_skips_others() {
+        let input = from(
+            r#"{"messages":[{"role":"system","content":[
+                {"type":"text","text":"one "},
+                {"type":"image_url","image_url":{"url":"x"}},
+                {"type":"text","text":"two"}]}]}"#,
+        )
+        .unwrap();
+        assert_eq!(input.system, vec!["one two".to_string()]);
+    }
+
+    #[test]
+    fn from_request_rejects_invalid_payloads() {
+        let cases = [
+            "not json",
+            "[]",
+            r#"{"tools":[]}"#,
+            r#"{"messages":"x"}"#,
+            r#"{"messages":[],"tools":[{"type":"function"}]}"#,
+            r#"{"messages":[],"tools":[{"function":{"name":3}}]}"#,
+        ];
+        for case in cases {
+            assert!(
+                matches!(from(case), Err(RouterError::InvalidPayload(_))),
+                "case {case}"
+            );
+        }
+    }
+
+    #[test]
+    fn from_request_hash_changes_with_system_text() {
+        let a = r#"{"messages":[{"role":"system","content":"one"}]}"#;
+        let b = r#"{"messages":[{"role":"system","content":"two"}]}"#;
+        assert_ne!(hash_of(a), hash_of(b));
     }
 }
