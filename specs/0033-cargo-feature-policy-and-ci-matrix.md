@@ -67,10 +67,10 @@ This spec sets the policy. It adds no feature of its own.
 
 ### Requirements (EARS)
 
-- **[REQ-0033-01]** (Ubiquitous): Every crate whose code is gated by a feature shall declare that feature in its own `[features]` table. A capability spanning several crates declares the same name in each.
-- **[REQ-0033-02]** (Ubiquitous): Every declared feature shall be off in the default build.
-- **[REQ-0033-03]** (Ubiquitous): Every declared feature name shall be kebab-case, and one name shall denote one capability across the workspace.
-- **[REQ-0033-04]** (Ubiquitous): Each `[features]` entry shall carry a comment naming the spec that introduced it.
+- **[REQ-0033-01]** (Ubiquitous): The crate whose code is gated by a feature shall declare that feature in its own `[features]` table. A capability spanning several crates declares the same name in each.
+- **[REQ-0033-02]** (Ubiquitous): The declared feature shall be off in the default build.
+- **[REQ-0033-03]** (Ubiquitous): The declared feature name shall be kebab-case, and one name shall denote one capability across the workspace.
+- **[REQ-0033-04]** (Ubiquitous): The `[features]` entry shall carry a comment naming the spec that introduced it.
 - **[REQ-0033-05]** (Ubiquitous): The repo shall provide a `make features` target that runs `clippy` and `test` once per declared feature.
 - **[REQ-0033-06]** (Event-driven): WHEN CI runs on a pull request, the feature matrix shall run one leg per declared feature.
 - **[REQ-0033-07]** (Event-driven): WHEN a matrix leg fails, CI shall report which feature failed, and shall not mask it behind another leg's result.
@@ -133,3 +133,4 @@ and it is what this spec exists to change.
   spec 0004's to record.
 - Spec 0005 owns the CI jobs. This spec adds one job to it and does not restate
   the runner or cache rules.
+- Amended 2026-10-11: opening words of the flagged requirement bullets reworded to begin with a standard EARS keyword; no change of meaning (spec 0052 P6).

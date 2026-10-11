@@ -49,9 +49,9 @@ Facts, measured 2026-10-10 on ceres:
 
 ### Requirements (EARS)
 
-- **Ubiquitous:** `uas-storage` shall sit in layer 2 beside `uas-router`,
+- **Ubiquitous:** The `uas-storage` crate shall sit in layer 2 beside `uas-router`,
   depending only on `uas-domain` and workspace-pinned dependencies approved in spec 0004.
-- **Ubiquitous:** `uas-storage` shall provide client interfaces for three backends:
+- **Ubiquitous:** The `uas-storage` crate shall provide client interfaces for three backends:
   `RustfsClient` (S3 WORM), `MinikvClient` (Raft metadata consensus), and `AistoreClient` (GPU streaming).
 - **Event-driven:** WHEN `uas-engine` persists an execution receipt or audit log to `rustfs`,
   `uas-storage` shall commit the payload using S3 Object Lock WORM retention with a BLAKE3 checksum.
@@ -108,3 +108,4 @@ The third command confirms that `uas-storage` does not depend on higher-layer cr
 
 - AIStore Kubernetes operator (`ais-k8s`) deploys and reconciles clusters on Cygnus NVMe nodes; `uas-storage` is the client library that substrate worker sessions use to interact with those clusters.
 - Reed-Solomon erasure coding and bitrot healing are handled inside `rustfs` server daemons, not in `uas-storage` client code.
+- Amended 2026-10-11: opening words of the flagged requirement bullets reworded to begin with a standard EARS keyword; no change of meaning (spec 0052 P6).

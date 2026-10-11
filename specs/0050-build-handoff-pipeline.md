@@ -119,9 +119,9 @@ the operator may override), `proposed: <for whom>`.
 
 ### Requirements (EARS)
 
-- **[REQ-0050-01]** (Ubiquitous): Every plan file shall hold, for each package, a Persona, Files,
+- **[REQ-0050-01]** (Ubiquitous): The plan file shall hold, for each package, a Persona, Files,
   Done-when and Red-first, or the word BLOCKED with the spec line that blocks it (0050 D2, 0050 D3).
-- **[REQ-0050-02]** (Ubiquitous): A builder shall write only the files its package names, commit
+- **[REQ-0050-02]** (Ubiquitous): The builder shall write only the files its package names, commit
   signed, and return a verdict block of 15 lines or fewer (0050 D3, 0050 D12).
 - **[REQ-0050-03]** (Unwanted behavior): IF a builder pushes, opens a PR or edits `CHANGELOG.md`, THEN
   the critic shall report it as a scope defect (0050 D5, 0050 D6).
@@ -132,7 +132,7 @@ the operator may override), `proposed: <for whom>`.
 - **[REQ-0050-06]** (Event-driven): WHEN the draft PR is open, the critic shall re-read the merged
   wave branch and return numbered defects with file and line, or no defects with what it checked.
   The PR shall not be marked ready before that pass (0050 D7).
-- **[REQ-0050-07]** (Ubiquitous): Each wave PR shall carry exactly one `docs(changelog)` commit from
+- **[REQ-0050-07]** (Ubiquitous): The wave PR shall carry exactly one `docs(changelog)` commit from
   the integrating lane (0050 D6).
 - **[REQ-0050-08]** (Event-driven): WHEN all five required checks read SUCCESS on the head, the lane
   shall land the PR with a merge commit pinned to that head (0050 D9).
@@ -230,3 +230,4 @@ manual control).
   Problem, What this does and Verified only).
 - Parked: saga spec 0040 restates the machine form of this pipeline. When it passes parity (spec
   0049 D5), this spec gains a pointer to it, not a rewrite.
+- Amended 2026-10-11: opening words of the flagged requirement bullets reworded to begin with a standard EARS keyword; no change of meaning (spec 0052 P6).
