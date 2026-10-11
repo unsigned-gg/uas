@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: complete
 created: 2026-10-10
 tags: [sandbox, seccomp, syscall, landlock, escape-suite, phase-2]
 priority: high
@@ -9,7 +9,7 @@ depends_on: [0004-dependency-and-licence-policy, 0010-landlock-ruleset-and-abi-p
 
 # 0043-seccomp-syscall-filter-for-slot-workers
 
-> **Status**: in-progress, **Priority**: high, **Created**: 2026-10-10
+> **Status**: complete, **Priority**: high, **Created**: 2026-10-10
 
 ## Overview
 
@@ -74,7 +74,7 @@ to read another process, and leaves every other call untouched.
 - [x] `uas-sandbox`: `seccomp.rs` with the D2 program, `install()` for `pre_exec`, and the `JailRefused` mapping (D4). Landed in PR #139.
 - [x] `uas-sandbox`: wire `install()` into `launcher::launch` after `restrict_child` (D1). Landed in PR #141.
 - [x] Escape suite: the twelve D6 rows and the D8 timing print. Landed in PR #142.
-- [x] Spec 0012: add the rows to its matrix and this spec to its `depends_on`. Eleven rows landed in PR #136; the `x32_syscall` row lands with branch `docs/spec-amendments-2026-10-11`, not yet on `development`.
+- [x] Spec 0012: add the rows to its matrix and this spec to its `depends_on`. Eleven rows landed in PR #136; the `x32_syscall` row: Landed in PR #155.
 
 ## Test
 
