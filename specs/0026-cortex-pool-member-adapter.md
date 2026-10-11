@@ -104,7 +104,7 @@ Facts, 2026-10-10:
 - **Ubiquitous:** Every other call on the adapter thread (`Ack`, `Nack`, `Term`, the
   `Recv` open) shall be bounded by the smaller of its cap and the time left to the
   earliest pending `Extend` deadline (D12), where pending means the next deadline of every running unit, due or not (test `extend_deadline_bounds_other_rpcs`).
-- **Ubiquitous:** In each loop step the adapter shall run the due `Extend` pass before any `Ack`, `Nack`, `Term` or `Recv` open (D13).
+- **Ubiquitous:** The adapter shall, in each loop step, run the due `Extend` pass before any `Ack`, `Nack`, `Term` or `Recv` open (D13).
 - **Event-driven:** WHEN the adapter shuts down, it shall stop `Recv`, cancel every running task first, then Nack each unit with `delay_ms = 0`, bounded by the smaller of the cap and the time left on that unit's Cortex lease (the Cortex lease ends `lease_ms` after the unit's last landed `Extend`, or after its delivery), skip the `Nack` of a unit whose lease has ended, release the slots and drain them (D6).
 - **Unwanted behavior:** IF `Extend` fails twice in a row, or a UAS renew fails,
   THEN the adapter shall stop the task and release the slot. It sends no `Ack`, so
@@ -293,3 +293,4 @@ licenses ok, sources ok".
   (`src/file/google.rs`) [verified, file read]. That it resolves `empty.proto`,
   `struct.proto` and `timestamp.proto` here is not yet run [asserted].
 - Reference: revenant mesh-pool (F10).
+- Amended 2026-10-11: opening words of the flagged requirement bullets reworded to begin with a standard EARS keyword; no change of meaning (spec 0052 P6).
