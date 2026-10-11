@@ -56,7 +56,7 @@ are the integrating lane's unless marked proposed.
   files, README included), `session-notes/` (only `.gitkeep`), `suggestions.md` (an empty template, "None
   yet"), `roadmap-improvements.md` and `cluster-survey-atlas.md` (mostly "Not probed yet"). Nothing links
   to `suggestions.md`, `roadmap-improvements.md` or `session-notes`. One plan cites the atlas. All three
-  top-level files date from 25a4e81, 2026-10-10.
+  top-level files date from 3a2e2d0, 2026-10-08 (`git log --follow --format='%h %ad' --date=short -- <file>`).
 
 ## Design
 
@@ -130,11 +130,11 @@ and the operator may override), `proposed: the operator` (a decision only the op
 | D4 | The allowed `task.toml` keys are the five of the Design section. `read_paths`, `write_paths`, `[providers]` and `[cicatrix]` fail `work-check`. | F5: blackwall drops unknown keys and ignores the path keys, so only this repo can catch a typo or a false sense of confinement. | lane-decided: uas-engineer, 2026-10-11 |
 | D5 | `conventional_subject` is optional in the file and required for a task whose run opens a PR by hand. A wave step task takes its title from the executor (Notes, open). | `blackwall pr` refuses a missing subject (F5 source, `pr.rs` BadSubject); `wave-smoke-build` has none (F4). | lane-decided: uas-engineer, 2026-10-11 |
 | D6 | Routes 1 and 2 stay class 200 with land-on-green as the standing green light. The lane reports each merge and does not ask first. | AGENTS.md rule 9; 0003 promotion ruling; estate land-on-green. | ruled: the operator, 2026-10-06 and 2026-10-08, cited by 0003 |
-| D7 | Route 3 is gated. A lane never calls the protection API, not even for a check name it added. | AGENTS.md lists no such route; a setting change reaches every lane (0037 D6 exports and re-applies them). | proposed: the operator |
+| D7 | A lane changes branch protection only on the operator's per-item go. Without one it prepares the API call and stops. | Spec 0003 and plan 0051 P7 (PR #194) already reserve it; the operator gave the go for `fork-gate` on 2026-10-11 about 05:25Z. | ruled: the operator, spec 0003, and his per-item go in lane w25:p1, 2026-10-11 about 05:25Z |
 | D8 | Route 6: a lane edits only files in its brief. A change in another lane's repo is a request sent to that lane. | Estate land-on-green: "another lane's repo or service" is not moved without the operator. | lane-decided: integrating lane, 2026-10-11 |
 | D9 | CODEOWNERS pattern lines name only people listed in `MAINTAINERS.md`. A co-approver goes in a comment, and into a pattern only after that person asks and picks the paths. | The estate attention rule: no agent spends a co-approver's attention by auto-request; the timing is the operator's. | lane-decided: integrating lane, 2026-10-11, from CODEOWNERS lines 1 to 7 |
 | D10 | `require_code_owner_reviews` stays false while approvals stay 0 (0003). Turning it on is route 3. | A required code-owner review with one owner blocks every PR by that owner. | lane-decided: uas-engineer, 2026-10-11 |
-| D11 | `suggestions.md` stays until the launch checklist (0048) is ticked. It is deleted then if it has no entry. | Empty since 25a4e81, no inbound link (F8). A file with no content costs a reader. | proposed: the operator |
+| D11 | `suggestions.md` stays until the launch checklist (0048) is ticked. It is deleted then if it has no entry. | Empty since 3a2e2d0, no inbound link (F8). A file with no content costs a reader. | proposed: the operator |
 | D12 | `cluster-survey-atlas.md` and `session-notes/` are removed, unless the operator keeps them. Default until ruled: both stay. | Both are stubs with no link or reader (F8); the repo runs no service (atlas, 2026-10-08). | proposed: the operator |
 
 ### Requirements (EARS)
@@ -150,7 +150,7 @@ and the operator may override), `proposed: the operator` (a decision only the op
 - **[REQ-0057-09]** (Ubiquitous): The CODEOWNERS file shall name only paths that exist in the tree and only owners that `MAINTAINERS.md` lists.
 - **[REQ-0057-10]** (Ubiquitous): The `MAINTAINERS.md` file shall name only paths that exist, and each handle in its GitHub column shall own a CODEOWNERS pattern.
 - **[REQ-0057-11]** (State-driven): WHILE required approvals are 0 and `require_code_owner_reviews` is false, no lane shall wait on a code owner before merging (D10).
-- **[REQ-0057-12]** (Event-driven): WHEN a change needs route 3, 4, 5 or 7, the lane shall prepare it, list it under "Gated steps after merge" in the PR, and stop.
+- **[REQ-0057-12]** (Event-driven): WHEN a change needs route 3, 4 or 5, the lane shall prepare it, list it under "Gated steps after merge" in the PR, and stop. WHEN route 7 applies, there is no PR: the lane shall prepare the send, list it in its status to the operator, and send only on his go (class 240-EXT). This requirement is manual.
 - **[REQ-0057-13]** (Event-driven): WHEN a lane merges under route 1 or 2, it shall use a merge commit pinned to the head SHA, after every required check reads SUCCESS on that head.
 - **[REQ-0057-14]** (Ubiquitous): The `AGENTS.md` section "Approval routes" shall point to the route table of this spec and shall not contradict it.
 - **[REQ-0057-15]** (Ubiquitous): The tree table above shall list every top-level entry of `engineering/`, with a purpose and a retention.
@@ -160,7 +160,7 @@ and the operator may override), `proposed: the operator` (a decision only the op
 
 Order: P1 is the check. P2 and P3 are pointers and cleanup. This commit touches only the spec and the registry.
 
-- [ ] P1, `xtask/src/work_check.rs`, the `work-check` arm in `main.rs`, `make work-check`, and a non-required CI job: REQ-01, 02, 05, 06, 09, 10, 15. Red first: Test rows 1, 3, 4, 5, 6, 7.
+- [ ] P1, `xtask/src/work_check.rs`, the `work-check` arm in `main.rs`, `make work-check`, and a non-required CI job: REQ-01, 02, 05, 06, 09, 10, 15. Red first: Test rows 1, 3, 4, 5, 6, 7, 8.
 - [ ] P2, pointers: `AGENTS.md` approval routes link here (REQ-14), `CONTRIBUTING.md` links the work-item table, and the PR template `Part of` line gains "or `Part of spec NNNN`". `text-check` gets the numeric and spec-exists test (REQ-03, 04; Test row 2).
 - [ ] P3, cleanup after the operator rules D11 and D12: delete or keep, in one `docs` PR.
 - [ ] P4, read back route 3 once: `gh api repos/unsigned-gg/uas/branches/development/protection` prints approvals 0 and the required checks (F7). 0003's table still says `fork-gate` is not required (Notes, open).
@@ -190,20 +190,22 @@ tk() { for f in tasks/*/task.toml; do [ -f "$(dirname $f)/prompt.md" ] || return
 want 3 "$(tk tasks/*/task.toml && echo PASS || echo FAIL)" PASS
 cp tasks/harness-evidence/task.toml x.toml; echo 'read_paths = ["/x"]' >> x.toml;  want 4 "$(tk x.toml && echo PASS || echo FAIL)" FAIL
 cp tasks/harness-evidence/task.toml y.toml; echo 'colour = 1' >> y.toml;           want 4b "$(tk y.toml && echo PASS || echo FAIL)" FAIL
-co() { g=.github/CODEOWNERS; grep -vE '^(#|$)' $g | while read -r p o; do [ "$p" = '*' ] || [ -e "${p#/}" ] || { echo MISSING; return; }; for h in $o; do grep -q "\`${h#@}\`" MAINTAINERS.md || echo STRANGER; done; done; }
+co() { g=.github/CODEOWNERS; grep -vE '^(#|$)' $g | while read -r p o; do [ "$p" = '*' ] || [ -n "$(git ls-files -- "${p#/}")" ] || { echo MISSING; return; }; for h in $o; do grep -q "\`${h#@}\`" MAINTAINERS.md || echo STRANGER; done; done; }
 want 5 "$(co | sort -u | tr -d '\n')" ''
 cp .github/CODEOWNERS C.bak; echo '/nope/ @todie' >> .github/CODEOWNERS;            want 6 "$(co | sort -u | tr -d '\n')" MISSING
 cp C.bak .github/CODEOWNERS; echo '/docs/ @example-person' >> .github/CODEOWNERS;   want 6b "$(co | sort -u | tr -d '\n')" STRANGER
 cp C.bak .github/CODEOWNERS
 mp() { grep -o '`[a-z./_-]*/`' MAINTAINERS.md | tr -d '`' | while read -r p; do [ -e "$p" ] || echo MISSING; done; }
-want 7 "$(mp | sort -u | tr -d '\n')" ''
+hd() { grep -oE '`[a-z0-9-]+` *\|? *$' MAINTAINERS.md | tr -d '`| ' | while read -r h; do grep -vE '^(#|$)' .github/CODEOWNERS | grep -q "@$h" || echo GHOST; done; }
+want 7 "$(mp | sort -u | tr -d '\n')$(hd | sort -u | tr -d '\n')" ''
 echo '| Docs | X | `todie` |' >> MAINTAINERS.md; echo '| Area, `crates/gone/` | X | `todie` |' >> MAINTAINERS.md; want 7p "$(mp | sort -u | tr -d '\n')" MISSING
+echo '| Ghost | X | `ghost-user` |' >> MAINTAINERS.md; want 7g "$(hd | sort -u | tr -d '\n')" GHOST
 e() { for x in $(ls -A engineering); do grep -q "^| \`engineering/$x\`" specs/0057-work-items-and-approval-routes.md || echo "$x"; done | grep -v '^\.gitkeep$' | tr '\n' ' '; }
 want 8 "$(e)" ''; touch engineering/stray.md; want 8p "$(e)" 'stray.md '
 exit $r
 ```
 
-Rows 1p, 2p, 4, 4b, 6, 6b, 7p and 8p are the negative controls. Row 8 reads this spec's own tree
+Rows 1p, 2p, 4, 4b, 6, 6b, 7p, 7g and 8p are the negative controls. Row 8 reads this spec's own tree
 table, so the table and the directory cannot drift. Row 2 uses only the form and the spec-exists
 leg; the body check proper is `text-check` (0053). The tree table lists `engineering/plans`,
 `engineering/session-notes` and the three files by their repo path.
@@ -214,7 +216,7 @@ leg; the body check proper is `text-check` (0053). The tree table lists `enginee
 | 03, 04 | 2, 2p |
 | 05, 06 | 3, 4, 4b |
 | 09 | 5, 6, 6b |
-| 10 | 7, 7p |
+| 10 | 7, 7p, 7g |
 | 15 | 8, 8p |
 | 07, 08, 11 to 14, 16 | manual, reviewer; REQ-11 and REQ-13 are read back with the P4 command |
 
