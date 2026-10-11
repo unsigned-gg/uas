@@ -51,6 +51,7 @@ Methodology: LeanSpec. The reference copy is in `../vendor/leanspec/`.
 | [0045](0045-security-disclosure-and-advisory-policy.md) | Security disclosure and advisory policy | planned | high |
 | [0046](0046-saga-team-and-topology-files.md) | Saga team and topology files | planned | high |
 | [0047](0047-slot-build-cache-retention.md) | Slot build cache retention | planned | high |
+| [0049](0049-cpm-migration-to-saga.md) | CPM migration to saga | planned | high |
 
 
 ## How to add a spec
