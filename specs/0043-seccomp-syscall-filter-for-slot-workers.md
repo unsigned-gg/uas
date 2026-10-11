@@ -52,7 +52,7 @@ to read another process, and leaves every other call untouched.
 | D4 | If `seccomp(2)` or the program build fails, the launch is refused with `JailRefused`, as a Landlock failure is today. The sandbox does not run a worker without the filter. | Spec 0010 D5 makes the Landlock floor a hard requirement; the filter is the same kind of floor. | integrating lane w25:p1, 2026-10-10 |
 | D5 | The filter is installed without `SECCOMP_FILTER_FLAG_TSYNC`; the child is single-threaded in `pre_exec`. `no_new_privs` is already set by the Landlock path, so the install needs no capability. | Nothing to synchronise; one fewer flag to reason about. | integrating lane w25:p1, 2026-10-10 |
 | D6 | The escape suite (spec 0012) gains one row per denied family: `ptrace_self`, `keyctl_session`, `bpf_syscall`, `perf_open`, `mount_tmpfs`, `unshare_user` (`unshare(CLONE_NEWUSER)`), `clone_newuser` (`clone` with the flag), `raw_socket`, `io_uring`, `open_by_handle`, each expecting `EPERM`, and `clone3_enosys` expecting `ENOSYS`. The `uds_connect_out` row of F4 stays a measurement: this spec does not fix it. | A deny list without a probe per entry drifts. | integrating lane w25:p1, 2026-10-10 |
-| D7 | `seccompiler` 0.5.0 is added to spec 0004 for `uas-sandbox`, phase 2, pinned, default features. | F5. The crate builds BPF in Rust and adds no C dependency, which keeps spec 0004's "no system library" line. | integrating lane w25:p1, 2026-10-10; the row awaits the spec 0004 approval step |
+| D7 | `seccompiler` 0.5.0 is added to spec 0004 for `uas-sandbox`, phase 2, pinned, default features; the row is approved. `libc` becomes a direct dependency of `uas-sandbox` at the version `Cargo.lock` holds, 0.2.190 [verified: `grep -n 'name = "libc"' -A1 Cargo.lock`, line 2222, 2026-10-11]. The spec 0004 `libc` row moves off 0.2.169 and "NOT in the workspace", and plan 0043 R1 waives the 2026-09-25 cutoff for it. | F5. The crate builds BPF in Rust and adds no C dependency, which keeps spec 0004's "no system library" line. `seccompiler` keys its rules by raw syscall number and `rustix` exports none, so the numbers come from `libc::SYS_*` (plan 0043 finding 3). | integrating lane w25:p1, 2026-10-10; `seccompiler` approved and `libc` added per plan 0043 R1, ruled: the operator, lane w25:p1, 2026-10-11 about 00:05Z |
 | D8 | The filter's cost is measured, not promised: the `escapes` suite prints the time from `fork` to `exec` with and without the filter. A spec may cite the number once measured. | F6. | integrating lane w25:p1, 2026-10-10 |
 
 ### Requirements (EARS)
@@ -69,7 +69,7 @@ to read another process, and leaves every other call untouched.
 
 ## Plan
 
-- [ ] Spec 0004: add the `seccompiler` 0.5.0 row to both tables (D7). Run `make pin-check`.
+- [ ] Spec 0004: add the `seccompiler` 0.5.0 row to both tables and move the `libc` row to 0.2.190 for `uas-sandbox` (D7). Run `make pin-check`.
 - [ ] `uas-sandbox`: `seccomp.rs` with the D2 program, `install()` for `pre_exec`, and the `JailRefused` mapping (D4).
 - [ ] `uas-sandbox`: wire `install()` into `launcher::launch` after `restrict_child` (D1).
 - [ ] Escape suite: the eleven D6 rows and the D8 timing print.
