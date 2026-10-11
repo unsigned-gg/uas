@@ -1,0 +1,45 @@
+# Canned answers of the fake `git` for the wave smoke parity run (spec 0049 REQ-05).
+# Same rule shape as blackwall.toml.
+note = "One side effect beyond the canned output: `git worktree add --detach <path> <rev>` creates the directory <path> (the fourth argument)."
+
+[[rule]]
+pat = "rev-parse HEAD"
+out = "056d7c7abcdef\n"
+err = ""
+code = 0
+
+[[rule]]
+pat = "rev-parse blackwall/*"
+out = "f00dfeed0001\n"
+err = ""
+code = 0
+
+[[rule]]
+pat = "merge-base *"
+out = ""
+err = ""
+code = 0
+
+[[rule]]
+pat = "diff --name-only *"
+out = ""
+err = ""
+code = 0
+
+[[rule]]
+pat = "ls-remote *"
+out = ""
+err = ""
+code = 2
+
+[[rule]]
+pat = "branch -D *"
+out = ""
+err = ""
+code = 0
+
+[[rule]]
+pat = "*"
+out = ""
+err = ""
+code = 0
