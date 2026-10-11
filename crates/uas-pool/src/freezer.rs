@@ -13,14 +13,15 @@
 use std::fs::{self, OpenOptions};
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU8, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use std::sync::Mutex;
 use std::thread;
 use std::time::{Duration, Instant};
 
-use uas_domain::SlotId;
+use uas_domain::{LimitEvents, SlotId};
 
 use crate::error::FreezerError;
+use crate::limits::ResolvedLimits;
 
 /// Operational state of a freezer.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -85,6 +86,23 @@ pub struct ResourceLimits {
     pub memory_high_bytes: Option<u64>,
     /// Memory hard ceiling in bytes (triggers OOM kill beyond this).
     pub memory_max_bytes: Option<u64>,
+    /// Swap ceiling in bytes; `Some(0)` forbids swap (spec 0041 D1).
+    pub memory_swap_max_bytes: Option<u64>,
+    /// Maximum number of tasks in the slot cgroup (spec 0041 D2).
+    pub pids_max: Option<u32>,
+}
+
+impl From<&ResolvedLimits> for ResourceLimits {
+    /// Carry the resolved memory, swap and pids values; CPU keeps its default quota.
+    fn from(r: &ResolvedLimits) -> Self {
+        Self {
+            memory_high_bytes: r.memory_high_bytes,
+            memory_max_bytes: r.memory_max_bytes,
+            memory_swap_max_bytes: Some(r.memory_swap_max_bytes),
+            pids_max: Some(r.pids_max),
+            ..Self::default()
+        }
+    }
 }
 
 impl Default for ResourceLimits {
@@ -95,6 +113,8 @@ impl Default for ResourceLimits {
             cpu_period_us: Some(100_000),
             memory_high_bytes: None,
             memory_max_bytes: None,
+            memory_swap_max_bytes: Some(0),
+            pids_max: Some(crate::limits::DEFAULT_PIDS_MAX),
         }
     }
 }
@@ -123,6 +143,16 @@ pub trait Freezer: Send + Sync {
     fn configure_limits(&self, limits: &ResourceLimits) -> Result<CpuCap, FreezerError> {
         let _ = limits;
         Ok(CpuCap::Uncapped)
+    }
+
+    /// The slot cgroup directory, when this backend has one.
+    fn cgroup_path(&self) -> Option<PathBuf> {
+        None
+    }
+
+    /// The slot cgroup limit counters, when this backend has a cgroup.
+    fn limit_events(&self) -> Option<LimitEvents> {
+        None
     }
 }
 
@@ -259,6 +289,15 @@ pub struct CgroupFreezer {
     slot_cgroup: PathBuf,
     slot_id: SlotId,
     cpu_cap: Mutex<CpuCap>,
+    events_warned: AtomicBool,
+}
+
+/// Value of the line `key <n>` in a cgroup events file (`memory.events`, `pids.events`).
+pub fn parse_event_counter(text: &str, key: &str) -> Option<u64> {
+    text.lines().find_map(|line| {
+        let mut parts = line.split_whitespace();
+        (parts.next()? == key).then(|| parts.next()?.parse().ok())?
+    })
 }
 
 impl CgroupFreezer {
@@ -266,6 +305,16 @@ impl CgroupFreezer {
     ///
     /// The ephemeral child cgroup directory `slot-<id>` is created if not already present.
     pub fn new(base_cgroup: impl Into<PathBuf>, slot_id: SlotId) -> Result<Self, FreezerError> {
+        Self::with_limits(base_cgroup, slot_id, &ResourceLimits::default())
+    }
+
+    /// Like [`Self::new`], writing `limits` in the same call, before any worker exists
+    /// (spec 0041 D4).
+    pub fn with_limits(
+        base_cgroup: impl Into<PathBuf>,
+        slot_id: SlotId,
+        limits: &ResourceLimits,
+    ) -> Result<Self, FreezerError> {
         let base_cgroup = base_cgroup.into();
         let slot_cgroup = base_cgroup.join(format!("slot-{}", slot_id));
 
@@ -283,10 +332,14 @@ impl CgroupFreezer {
             slot_cgroup,
             slot_id,
             cpu_cap: Mutex::new(CpuCap::Uncapped),
+            events_warned: AtomicBool::new(false),
         };
 
         // Default limits: 2 CPUs of quota per Spec 0020 D3
-        let _ = freezer.configure_limits(&ResourceLimits::default());
+        if let Err(e) = freezer.configure_limits(limits) {
+            tracing::error!(slot_id = %freezer.slot_id, error = %e, "cgroup limit write failed; slot not created");
+            return Err(e);
+        }
 
         Ok(freezer)
     }
@@ -385,33 +438,59 @@ impl CgroupFreezer {
             }
         }
 
-        if let Some(high) = limits.memory_high_bytes {
-            let mem_high_path = self.slot_cgroup.join("memory.high");
-            if mem_high_path.exists() {
-                let line = format!("{high}\n");
-                fs::write(&mem_high_path, line.as_bytes()).map_err(|e| FreezerError::Io {
-                    path: mem_high_path,
-                    source: e,
-                })?;
-            }
-        }
-
-        if let Some(max) = limits.memory_max_bytes {
-            let mem_max_path = self.slot_cgroup.join("memory.max");
-            if mem_max_path.exists() {
-                let line = format!("{max}\n");
-                fs::write(&mem_max_path, line.as_bytes()).map_err(|e| FreezerError::Io {
-                    path: mem_max_path,
-                    source: e,
-                })?;
-            }
-        }
+        self.write_limit("memory.max", limits.memory_max_bytes)?;
+        self.write_limit("memory.high", limits.memory_high_bytes)?;
+        self.write_limit("memory.swap.max", limits.memory_swap_max_bytes)?;
+        self.write_limit("pids.max", limits.pids_max)?;
 
         if let Ok(mut lock) = self.cpu_cap.lock() {
             *lock = recorded_cap.clone();
         }
 
         Ok(recorded_cap)
+    }
+
+    /// Write one control file when `value` is set. A missing file logs at `warn` and leaves
+    /// that limit unset, as `cpu.max` does (spec 0041 D4).
+    fn write_limit(&self, name: &str, value: Option<impl ToString>) -> Result<(), FreezerError> {
+        let Some(value) = value else { return Ok(()) };
+        let path = self.slot_cgroup.join(name);
+        if !path.exists() {
+            tracing::warn!(
+                slot_id = %self.slot_id,
+                path = ?path,
+                "cgroup {name} controller not available; limit left unset"
+            );
+            return Ok(());
+        }
+        fs::write(&path, format!("{}\n", value.to_string()).as_bytes())
+            .map_err(|e| FreezerError::Io { path, source: e })
+    }
+
+    /// Read `oom_kill` from `memory.events` and `max` from `pids.events` (spec 0041 D5).
+    /// A missing or unparsable file reads as zero and is logged once per freezer.
+    pub fn read_limit_events(&self) -> LimitEvents {
+        let read = |file: &str, key: &str| {
+            let path = self.slot_cgroup.join(file);
+            if let Some(n) = fs::read_to_string(&path)
+                .ok()
+                .and_then(|t| parse_event_counter(&t, key))
+            {
+                return n;
+            }
+            if !self.events_warned.swap(true, Ordering::Relaxed) {
+                tracing::warn!(
+                    slot_id = %self.slot_id,
+                    path = ?path,
+                    "cgroup events file unreadable; counter read as zero"
+                );
+            }
+            0
+        };
+        LimitEvents {
+            oom_kill: read("memory.events", "oom_kill"),
+            pids_max_hits: read("pids.events", "max"),
+        }
     }
 
     /// Poll `cgroup.events` until `frozen` matches `expected_val`, or timeout expires.
@@ -579,6 +658,14 @@ impl Freezer for CgroupFreezer {
 
     fn configure_limits(&self, limits: &ResourceLimits) -> Result<CpuCap, FreezerError> {
         self.configure_limits(limits)
+    }
+
+    fn cgroup_path(&self) -> Option<PathBuf> {
+        Some(self.slot_cgroup.clone())
+    }
+
+    fn limit_events(&self) -> Option<LimitEvents> {
+        Some(self.read_limit_events())
     }
 }
 
