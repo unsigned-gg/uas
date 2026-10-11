@@ -78,7 +78,7 @@ FEATURE_LEGS := uas-engine:cortex-grpc
 
 # Not a prerequisite of check or ci (the contracts are fetched on demand). Needs 'make fetch-contracts' first.
 feature-leg: ## Clippy and tests for one cargo feature (CRATE=<crate> FEATURE=<feature>)
-	crate='$(CRATE)'; feature='$(FEATURE)'
+	crate="$${CRATE-}"; feature="$${FEATURE-}"
 	[[ "$$crate" =~ ^[a-z][a-z0-9-]*$$ && "$$feature" =~ ^[a-z][a-z0-9-]*$$ ]] || { echo "usage: make feature-leg CRATE=<crate> FEATURE=<feature>" >&2; exit 2; }
 	cargo clippy -p "$$crate" --features "$$feature" --all-targets --locked -j $(JOBS) -- -D warnings
 	cargo nextest run -p "$$crate" --features "$$feature" --locked --build-jobs $(JOBS) --profile $(NEXTEST_PROFILE)
