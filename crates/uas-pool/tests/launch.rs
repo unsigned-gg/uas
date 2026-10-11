@@ -299,6 +299,7 @@ fn launch_slot_spawn_requires_a_leased_slot() {
         idle_suspend_duration: None,
         cgroup_base: None,
         reconcile: None,
+        ..PoolConfig::default()
     });
     let id = SlotId::new("slot-spawn").expect("slot id");
     pool.create_slot(id.clone()).expect("create");

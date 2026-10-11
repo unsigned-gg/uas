@@ -25,5 +25,5 @@ pub use launch::{
     spawn_worker, AuditDegradation, LaunchConfig, Worker, WorkerAudit, DEFAULT_DAEMON_SOCKET,
 };
 pub use reconcile::ReconcileRoots;
-pub use slot::{ManagedSlot, PoolConfig, SlotPool, SweepReport};
+pub use slot::{HostProbe, ManagedSlot, PoolConfig, SlotPool, SweepReport};
 pub use worktree::WarmWorktree;
