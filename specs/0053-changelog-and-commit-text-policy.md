@@ -207,7 +207,7 @@ rn; sed -i '/^## \[0.1.0\]/,$ s/^- /- EDITED /' "$s/CHANGELOG.md";              
 echo x >> "$s/.claude/agents/uas-planner.md";                                    want 21 "$(verdict)" FAIL-nolog; reset
 rn; echo "// x" >> "$s/crates/uas-cli/src/main.rs";                              want 22 "$(verdict)" FAIL-nolog; reset
 body() { for h in Problem 'What this does' Verified 'Gated steps after merge' Rollback; do grep -q "^## $h" "$1" || { echo "warn: missing $h"; :; }; done; grep -qE "$pl" "$1" || { echo "warn: no Part of"; :; }; return 0; }
-printf 'nothing\n' > "$s/b1"; sed -n 1,28p .github/pull_request_template.md | sed 's/Part of CER-N/Part of CER-9/' > "$s/b2"
+printf 'nothing\n' > "$s/b1"; cat .github/pull_request_template.md | sed 's/Part of CER-N/Part of CER-9/' > "$s/b2"
 want 15 "$(body "$s/b1" | grep -c '^warn:'; body "$s/b1" >/dev/null; echo rc=$?)" $'6\nrc=0'
 want 16 "$(body "$s/b2" | grep -c '^warn:')" 0
 hd() { awk '/^### /{print $2}' | awk 'BEGIN{split("Added Changed Deprecated Removed Fixed Security",o," ");for(i in o)r[o[i]]=i} {if($1 in seen||r[$1]<=last){bad=1} seen[$1]=1;last=r[$1]} END{print bad?"FAIL":"PASS"}'; }
