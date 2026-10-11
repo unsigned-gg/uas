@@ -117,7 +117,7 @@ It calls models through the LiteLLM gateway, not vendor APIs.
 
 ### toml
 
-Decision, Christian, 2026-10-09: `toml` is pinned at 0.8 (MIT OR Apache-2.0). Amended 2026-10-11: the workspace uses 1.1.8 (root `Cargo.toml` `toml = "1.1"`, a caret; `Cargo.lock` 1.1.8+spec-1.1.0; `MIT OR Apache-2.0` read in the registry copy's `Cargo.toml`), so 0.8 was never applied and no pin-table row binds it. Christian to rule: ratify 1.1.8 or revert to 0.8.
+Decision, Christian, 2026-10-09: `toml` is pinned at 0.8 (MIT OR Apache-2.0). Superseded 2026-10-11: the workspace used 1.1.8 all along (root `Cargo.toml` `toml = "1.1"`, `Cargo.lock` 1.1.8+spec-1.1.0), and Christian ratified it: ruled: Christian, 2026-10-11, lane w25:p1 (AskUserQuestion), "Ratify 1.1.8". The pin-table row binds it.
 Used in `uas-engine` and `uas-cli` to parse `.saga/flows/*.toml` macro-orchestration definitions and workflow templates.
 
 ### Vendored estate contracts and schemas
@@ -193,6 +193,7 @@ metadata, read 2026-10-09.
 | `seccompiler` | 0.5.0 | Apache-2.0 OR BSD-3-Clause | uas-sandbox | 2 | default features; no `libseccomp` link (spec 0043 D7; ruling 2026-10-11, lane w25:p1) |
 | `libc` | 0.2.190 | MIT OR Apache-2.0 | uas-sandbox | 2 | direct dependency: seccompiler keys rules by syscall number and rustix exports none (plan 0043 R1). Locked at 0.2.190 (spec 0043 D7; ruling 2026-10-11, lane w25:p1) |
 | `serde_json` | 1.0.151 | MIT OR Apache-2.0 | uas-acp, uas-cli, uas-deck, uas-ebpf, uas-engine, uas-pool; uas-domain (dev only) | in use | root requirement `"1"`, a caret held by `pin-check` (D3). Pre-existing use found by the PR #138 critic; `uas-pool` added it in PR #138 (ruled: integrating lane w25:p1, 2026-10-11) |
+| `toml` | 1.1.8+spec-1.1.0 | MIT OR Apache-2.0 | uas-cli, uas-engine | in use | root requirement `"1.1"`, a caret held by `pin-check` (D3); the cell carries the lock's build metadata because pin-check compares strings. Ratified 2026-10-11 (ruled: Christian, 2026-10-11, lane w25:p1 (AskUserQuestion), "Ratify 1.1.8") |
 | `gix` | 0.88.0 | MIT OR Apache-2.0 | uas-pool | 3 | default-features off, minimal features; MSRV 1.88; fallback 0.87.1 |
 | `agent-client-protocol` | 2.2.0 | Apache-2.0 | uas-acp | 3 | MSRV 1.88; 3.x is under 14 days old. In use since spec 0016 (2026-10-10); transitive pull in D1 |
 | `tokio` | 1.53.1 | MIT | uas-router, uas-deck, uas-storage; uas-engine behind feature `cortex-grpc` (spec 0026; UAS lane amendment, Christian corrects it in place) | 4, 5, 6 | default-features off; `rt-multi-thread`, `macros`, `net`, `time`, `sync`. The uas-pool runtime stays open (spec 0001 gap 1). In use since spec 0013 (2026-10-09) in uas-router, plus `io-util` (a feature of the same crate, needed by `AsyncReadExt` and `AsyncWriteExt`; UAS lane amendment, Christian corrects it in place) |
@@ -309,8 +310,7 @@ make toolchain-check
 
 ## Notes
 
-Open question: does pgt get a licence or stay internal-only? The answer
-decides whether instantiated repos may publish a crate that depends on it.
+Open question: does pgt get a licence or stay internal-only? The answer decides whether instantiated repos may publish a crate that depends on it.
 
 References:
 
