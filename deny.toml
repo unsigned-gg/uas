@@ -19,8 +19,7 @@ allow = [
 confidence-threshold = 0.8
 
 [licenses.private]
-# This repo is proprietary and unpublished. Do not check its own licence.
-ignore = true
+ignore = false
 
 [advisories]
 yanked = "deny"
