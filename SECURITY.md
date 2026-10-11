@@ -14,7 +14,7 @@ You can also use the GitHub private vulnerability report for this repo, if it is
 
 ## What to expect
 
-- We acknowledge a report as soon as we can. This repo sets no fixed response time.
+- We acknowledge a report within 5 business days.
 - We tell you our plan after we reproduce the problem.
 - We credit you in the changelog if you want, after the fix ships.
 

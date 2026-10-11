@@ -15,6 +15,8 @@ use anyhow::{Context, Result};
 
 const SPEC: &str = "specs/0004-dependency-and-licence-policy.md";
 const EBPF_DIR: &str = "crates/uas-ebpf/ebpf";
+const CI_YML: &str = ".github/workflows/ci.yml";
+const LEFTHOOK_YML: &str = "lefthook.yml";
 
 /// The result of one check.
 #[derive(Debug, PartialEq, Eq)]
@@ -58,13 +60,74 @@ fn check_root(root: &Path) -> Result<Report> {
     let lock = read(&root.join("Cargo.lock"))?;
     let ebpf_manifest = read(&root.join(EBPF_DIR).join("Cargo.toml"))?;
     let ebpf_lock = read(&root.join(EBPF_DIR).join("Cargo.lock"))?;
-    Ok(check_repo(
-        &spec,
-        &manifests,
-        &lock,
-        &ebpf_manifest,
-        &ebpf_lock,
-    ))
+    let mut report = check_repo(&spec, &manifests, &lock, &ebpf_manifest, &ebpf_lock);
+    let ci_yml = read(&root.join(CI_YML))?;
+    let lefthook_yml = read(&root.join(LEFTHOOK_YML))?;
+    let gitleaks = check_gitleaks(&spec, &ci_yml, &lefthook_yml);
+    if gitleaks.is_empty() {
+        let version = parse_tool_version(&spec, "gitleaks").unwrap_or_default();
+        println!("pin-check: gitleaks ok ({version})");
+    }
+    report.misses.extend(gitleaks);
+    Ok(report)
+}
+
+/// The first `X.Y.Z` token of the version cell of the `| Tool | Version |` row whose first cell
+/// is `tool` in backticks.
+pub fn parse_tool_version(spec: &str, tool: &str) -> Option<String> {
+    let want = format!("`{tool}`");
+    let mut in_table = false;
+    for raw in spec.lines() {
+        let line = raw.trim();
+        if !line.starts_with('|') {
+            in_table = false;
+            continue;
+        }
+        let cells: Vec<&str> = line.trim_matches('|').split('|').map(str::trim).collect();
+        if cells.len() >= 2 && cells[0] == "Tool" && cells[1] == "Version" {
+            in_table = true;
+            continue;
+        }
+        if in_table && cells.len() >= 2 && cells[0] == want {
+            return first_xyz(cells[1]);
+        }
+    }
+    None
+}
+
+/// The first digits-only `X.Y.Z` token of `text`.
+fn first_xyz(text: &str) -> Option<String> {
+    text.split(|c: char| !c.is_ascii_digit() && c != '.')
+        .find(|t| is_exact_version(t))
+        .map(str::to_owned)
+}
+
+/// The version that follows `marker` in `text`, when it is an `X.Y.Z`.
+fn version_after(text: &str, marker: &str) -> Option<String> {
+    let rest = text.split_once(marker)?.1.trim_start();
+    let end = rest
+        .find(|c: char| !c.is_ascii_digit() && c != '.')
+        .unwrap_or(rest.len());
+    Some(rest[..end].to_owned()).filter(|v| is_exact_version(v))
+}
+
+/// One line per file whose gitleaks version differs from the `gitleaks` row of the CI tools
+/// table of spec 0004 (spec 0055 D14). The workstation binary is never compared.
+pub fn check_gitleaks(spec: &str, ci_yml: &str, lefthook_yml: &str) -> Vec<String> {
+    let pinned = parse_tool_version(spec, "gitleaks");
+    let want = pinned.as_deref().unwrap_or("none");
+    let files = [
+        (CI_YML, version_after(ci_yml, "GITLEAKS_VERSION:")),
+        (LEFTHOOK_YML, version_after(lefthook_yml, "install v")),
+    ];
+    files
+        .into_iter()
+        .filter(|(_, have)| pinned.is_none() || have != &pinned)
+        .map(|(file, have)| {
+            let have = have.as_deref().unwrap_or("none");
+            format!("pin-check: gitleaks pinned {want} (specs/0004 CI tools), {file} has {have}")
+        })
+        .collect()
 }
 
 /// The member directories of the root workspace: one directory level under each `dir/*` entry.
@@ -518,5 +581,85 @@ default = []
     fn skips_prerelease_pin() {
         let spec = "| Crate | Version |\n|---|---|\n| `toml` | 1.1.8-rc.1 |\n";
         assert!(parse_pins(spec).is_empty());
+    }
+
+    const TOOLS_SPEC: &str = "\
+| Tool | Version | Licence |
+|---|---|---|
+| `gh` (cli/cli) | 2.101.0, published 2026-09-15 | MIT |
+| `gitleaks` | 8.30.1, published 2026-03-21 | MIT |
+";
+    const CI_TEXT: &str = "env:\n  GITLEAKS_VERSION: 8.30.1\n  GITLEAKS_SHA256: abc\n";
+    const HOOK_TEXT: &str = "echo \"gitleaks not installed: install v8.30.1 (the version CI pins) from https://x/tag/v8.30.1\" >&2\n";
+
+    #[test]
+    fn gitleaks_agrees_across_spec_ci_and_hook() {
+        assert_eq!(
+            parse_tool_version(TOOLS_SPEC, "gitleaks").as_deref(),
+            Some("8.30.1")
+        );
+        assert!(check_gitleaks(TOOLS_SPEC, CI_TEXT, HOOK_TEXT).is_empty());
+    }
+
+    #[test]
+    fn gitleaks_ci_yml_differs() {
+        let ci = CI_TEXT.replace("8.30.1", "8.31.1");
+        assert_eq!(
+            check_gitleaks(TOOLS_SPEC, &ci, HOOK_TEXT),
+            ["pin-check: gitleaks pinned 8.30.1 (specs/0004 CI tools), .github/workflows/ci.yml has 8.31.1"]
+        );
+    }
+
+    #[test]
+    fn gitleaks_lefthook_differs() {
+        let hook = HOOK_TEXT.replace("install v8.30.1", "install v8.31.1");
+        assert_eq!(
+            check_gitleaks(TOOLS_SPEC, CI_TEXT, &hook),
+            ["pin-check: gitleaks pinned 8.30.1 (specs/0004 CI tools), lefthook.yml has 8.31.1"]
+        );
+    }
+
+    #[test]
+    fn gitleaks_row_missing_is_a_miss() {
+        let spec = "| Tool | Version |\n|---|---|\n| `gh` | 2.101.0 |\n";
+        assert_eq!(parse_tool_version(spec, "gitleaks"), None);
+        assert_eq!(
+            check_gitleaks(spec, CI_TEXT, HOOK_TEXT),
+            [
+                "pin-check: gitleaks pinned none (specs/0004 CI tools), .github/workflows/ci.yml has 8.30.1",
+                "pin-check: gitleaks pinned none (specs/0004 CI tools), lefthook.yml has 8.30.1",
+            ]
+        );
+    }
+
+    #[test]
+    fn gitleaks_row_without_version_is_a_miss() {
+        let spec = "| Tool | Version |\n|---|---|\n| `gitleaks` | latest |\n";
+        assert_eq!(parse_tool_version(spec, "gitleaks"), None);
+        assert_eq!(check_gitleaks(spec, CI_TEXT, HOOK_TEXT).len(), 2);
+    }
+
+    #[test]
+    fn gitleaks_file_without_version_says_none() {
+        assert_eq!(
+            check_gitleaks(TOOLS_SPEC, "env: {}\n", HOOK_TEXT),
+            ["pin-check: gitleaks pinned 8.30.1 (specs/0004 CI tools), .github/workflows/ci.yml has none"]
+        );
+    }
+
+    #[test]
+    fn skips_build_metadata_without_a_build_string() {
+        let spec = "| Crate | Version |\n|---|---|\n| `toml` | 1.1.8+ |\n";
+        assert!(parse_pins(spec).is_empty());
+        assert!(!is_exact_version("1.1.8+"));
+    }
+
+    #[test]
+    fn skips_build_metadata_with_a_bad_character() {
+        let spec = "| Crate | Version |\n|---|---|\n| `toml` | 1.1.8+a_b |\n";
+        assert!(parse_pins(spec).is_empty());
+        assert!(!is_exact_version("1.1.8+a_b"));
+        // Control: a valid build string is kept.
+        assert!(is_exact_version("1.1.8+a-b.1"));
     }
 }
