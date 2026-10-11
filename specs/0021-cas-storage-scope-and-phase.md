@@ -1,5 +1,5 @@
 ---
-status: planned
+status: complete
 created: 2026-10-10
 tags: [storage, rustfs, minikv, aistore, phase-6, s3]
 priority: medium

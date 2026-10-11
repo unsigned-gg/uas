@@ -14,7 +14,7 @@ SUDO ?= sudo
 
 .PHONY: help build fmt fmt-check clippy test doc-test deny check ci hygiene typos machete \
 	spec-check toolchain-check pin-check text-check oss-check spdx-check hook-test smoke audit sbom doc release-notes custody-check pgt-install new-repo template-check \
-	ebpf-build ebpf-test fetch-contracts
+	ebpf-build ebpf-test fetch-contracts pool-live-test
 
 help: ## List targets
 	awk 'BEGIN { FS = ":.*## " } /^[a-zA-Z0-9_-]+:.*## / { printf "  %-16s %s\n", $$1, $$2 }' $(MAKEFILE_LIST)
@@ -139,6 +139,31 @@ ebpf-test: ## Run the live eBPF probe tests (SUDO on a workstation, SUDO= in CI)
 	BIN=$$(cargo test -p uas-ebpf --test live_probes --no-run -j $(JOBS) --message-format=json 2>/dev/null | jq -r 'select(.reason=="compiler-artifact" and .target.name=="live_probes") | .executable' | grep -v null | tail -n1); \
 	test -x "$$BIN" || { echo "ebpf-test: live_probes binary not found"; exit 1; }; \
 	$(SUDO) "$$BIN" --nocapture --test-threads=1
+
+# Live uas-pool cgroup cases (plans 0040 P8, 0041 P8, 0015 P6). Needs a delegated cgroup v2 subtree: a uid-owned
+# user slice, run as that uid, no sudo. CI does not run it (the CI pod cannot create cgroups [asserted, plan 0041 P8; not probed]). A live case that
+# cannot run prints "skipped:" and passes, so the target reads the log and fails on any such line.
+# freezer runs under nextest. limits_live must enable controllers on its own cgroup, which fails while a runner
+# process shares it, so its binary runs directly inside a delegated systemd scope (as its header says).
+POOL_LIVE_LOG ?= target/pool-live-test.log
+
+pool-live-test: ## Run the uas-pool live cgroup tests, fail on any skip (delegated cgroup v2 subtree, no sudo)
+	mkdir -p "$$(dirname "$(POOL_LIVE_LOG)")"
+	: > "$(POOL_LIVE_LOG)"
+	rc=0
+	cargo nextest run -p uas-pool --test freezer --build-jobs $(JOBS) --locked --no-fail-fast --nocapture --color never >> "$(POOL_LIVE_LOG)" 2>&1 || rc=1
+	BIN=$$(cargo test -p uas-pool --test limits_live --no-run -j $(JOBS) --message-format=json 2>/dev/null | jq -r 'select(.reason=="compiler-artifact" and .target.name=="limits_live") | .executable' | grep -v null | tail -n1)
+	test -x "$$BIN" || { echo "pool-live-test: limits_live binary not found" >&2; exit 1; }
+	systemd-run --user --scope -q -p Delegate=yes "$$BIN" --nocapture --test-threads=1 >> "$(POOL_LIVE_LOG)" 2>&1 || rc=1
+	cat "$(POOL_LIVE_LOG)"
+	grep -Eq 'tests run: [1-9][0-9]* passed' "$(POOL_LIVE_LOG)" || { echo "pool-live-test: no freezer case ran" >&2; exit 1; }
+	grep -Eq 'test result: ok\. [1-9][0-9]* passed' "$(POOL_LIVE_LOG)" || { echo "pool-live-test: no limits_live case ran" >&2; exit 1; }
+	if grep -En 'skipped:|[1-9][0-9]* (ignored|skipped)' "$(POOL_LIVE_LOG)"; then
+		echo "pool-live-test: a live case was skipped, not run (lines above)" >&2
+		exit 1
+	fi
+	[ "$$rc" -eq 0 ] || { echo "pool-live-test: a test binary failed" >&2; exit 1; }
+	echo "pool-live-test: ok"
 
 audit: ## Check dependencies for known advisories
 	cargo audit

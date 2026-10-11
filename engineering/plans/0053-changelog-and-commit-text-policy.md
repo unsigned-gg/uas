@@ -65,28 +65,28 @@ Ordering for "the job never lands red against the tree": P2 (clean headings) bef
 
 ## Packages
 
-### P1: amend spec 0053 (wave 1)
+### P1: amend spec 0053 (wave 1) (DONE 2026-10-11, #173)
 - **Persona:** `uas-engineer` (spec amendment).
 - **Files:** `specs/0053-changelog-and-commit-text-policy.md` (exists, 239 lines; the cap is 300 for a warning, 400 for an error, so stay under 300).
 - **Change:** (a) D6: add the release-roll exemption: a PR is exempt only when all of these hold: every changed file is `Cargo.toml` (root or a crate or xtask manifest, any depth), `Cargo.lock` or `CHANGELOG.md`; head's `[Unreleased]` section has no bullet; and head's `CHANGELOG.md` has a `## [x.y.z]` heading directly after `## [Unreleased]` that base lacks (the shape `make release-notes` writes; finding 1). The D4 suffix test still runs on it. A code PR that fakes the CHANGELOG shape changes a file outside the set, so it fails (the bypass the critic named). (b) D6: say that `.claude/` and `.agents/` paths are tested first and are never exempt, even `.md` files (finding 2). (c) D5 and D4: base means the merge base of `--base` and `--head` (finding 5). (d) REQ-02/D3: the heading rule fails only when the merge base's headings were valid (finding 6). (e) New REQ-0053-17 for the roll exemption and one for the precedence, with Test rows 19 (roll PR passes), 20 (a roll that also edits a released line fails), 21 (agent `.md` only needs a line), 22 (negative: a roll-shaped CHANGELOG plus a change to a `.rs` file fails `nolog`) written in the same shell style, each runnable now. Keep the existing rows 1 to 18 unchanged. (g) D10: change "The ruling counts six required checks; `ci.yml` line 2 lists four today" to the verified seven (the five live contexts, `fork-gate` and `text-check`; finding 8). (f) Add facts F13 (the roll PR fails) and F14 (the `.md` precedence clash) to the Facts list, each with the command that shows it.
 - **Done-when:** `make spec-check JOBS=2 && bash <(awk '/^```bash/{c++; if(c==1){p=1;next}} /^```/{p=0} p' specs/0053-changelog-and-commit-text-policy.md)` exits 0, and `grep -c 'REQ-0053-1[78]' specs/0053-changelog-and-commit-text-policy.md` prints at least 2. The second command extracts and runs the Test block (finding 3 shows it runs green today), so the new rows 19 to 22 must print `ok`.
 - **Red-first:** before the edit the `grep -c` prints 0. After green, change row 19's expected word from `PASS` to `FAIL-nolog` in a scratch copy and watch the block exit 1 with `row 19: RED`; restore. Row 22 is red against an exemption that ignores the file set: drop the file-set test in the shell and it prints `RED`. Row 19 itself must fail against the old D6 logic: run the old `verdict` on a rolled scratch tree and see `FAIL-nolog` (finding 1) before you write the exemption into the shell.
 
-### P2: clean the eight `[Unreleased]` headings (wave 1)
+### P2: clean the eight `[Unreleased]` headings (wave 1) (DONE 2026-10-11, #173)
 - **Persona:** `uas-engineer` (text edit). One commit, `docs(changelog): merge duplicate Unreleased headings`; nothing else in the PR (spec P4).
 - **Files:** `CHANGELOG.md` (exists). No other file. Line numbers are at `10e1a63`; re-measure with the awk command before editing.
 - **Exact edits:** keep the first `### Added` (line 10), `### Changed` (line 48) and `### Fixed` (line 57) and the single `### Deprecated` (line 45). Delete the four later heading lines (61, 69, 109, 117) and move their bullets, in their present order, to the end of the matching first block. Move the Deprecated block (lines 45 to 47) to sit after the merged Changed block and before Fixed. Result: Added = lines 10 to 44 then 69 to 108 (33 + 38 = 71); Changed = lines 48 to 56, then 61 to 68, then 109 to 116 (7 + 6 + 6 = 19); Deprecated = 1; Fixed = lines 57 to 60, then 117 to 126 (2 + 8 = 10). Total 101. One blank line between a block and the next heading, none inside a block. Add no bullet, remove no bullet, reword none. Order is Added, Changed, Deprecated, Fixed, the D3 order. Future Deprecated lines go under that one heading, between Changed and Fixed; create it there if a release roll has emptied the section.
 - **Done-when:** `test "$(awk '/^## \[0/{exit} /^## \[Unreleased\]/{u=1} u&&/^### /{print $2}' CHANGELOG.md | tr '\n' ' ')" = 'Added Changed Deprecated Fixed ' && test "$(awk '/^## \[0/{exit} /^## \[Unreleased\]/{u=1} u&&/^- /{n++} END{print n}' CHANGELOG.md)" = 101 && git diff --stat origin/development | tail -1 | grep -q '1 file changed' && diff <(git show origin/development:CHANGELOG.md | grep '^- ' | sort) <(grep '^- ' CHANGELOG.md | sort) && make typos JOBS=2` exits 0. The last leg is the multiset check: every bullet survived, none was reworded. The `1 file changed` leg proves nothing else was touched.
 - **Red-first:** run the first leg before the edit: it prints `Added Deprecated Changed Fixed Changed Added Changed Fixed` and fails. After green, delete one bullet in a scratch copy and watch the bullet count leg print 100 and the `diff` leg print a `<` line; restore. [asserted: I did not run the edit.]
 
-### P3: pointers in AGENTS.md, CONTRIBUTING.md and the PR template (wave 1)
+### P3: pointers in AGENTS.md, CONTRIBUTING.md and the PR template (wave 1) (DONE 2026-10-11, #173)
 - **Persona:** `uas-engineer`.
 - **Files, all exist:** `AGENTS.md` (rule 6 line 39, rule 8 line 41), `CONTRIBUTING.md` (the rules list, the line `Add one line under ...` is line 35 and the Pull requests paragraph follows), `.github/pull_request_template.md` (`Part of CER-N` is the last line; the file holds the five sections in order).
 - **Change:** AGENTS.md rule 6 and rule 8 each end with `See specs/0053-changelog-and-commit-text-policy.md.` and no other change. Rule 8 keeps "Never edit a released section." CONTRIBUTING.md line 35 gets the same pointer, and the "Pull requests" paragraph says the integrating lane writes the CHANGELOG line as a `docs(changelog)` commit and a builder writes none (D2, REQ-13). The PR template gets one HTML comment line above `Part of CER-N`: `<!-- One line under [Unreleased] in CHANGELOG.md for a user-visible change: see spec 0053. -->`. Do not add a section to the template: the check counts exactly the five of F9, in order, and the sample body of Test row 16 is `sed -n 1,28p` of this file.
 - **Done-when:** `test "$(grep -c 'specs/0053-changelog-and-commit-text-policy' AGENTS.md)" -ge 2 && test "$(grep -c 'specs/0053-changelog-and-commit-text-policy' CONTRIBUTING.md)" -ge 1 && grep -q 'spec 0053' .github/pull_request_template.md && test "$(grep -c '^## ' .github/pull_request_template.md)" = 5 && make oss-check typos JOBS=2` exits 0. The five-section count is the control that the template shape did not change.
 - **Red-first:** each count prints 0 before the edit [asserted: `git grep -c 0053 -- AGENTS.md CONTRIBUTING.md .github` prints nothing at the base; builder confirms]. After green, add a `## Notes` heading to a scratch copy of the template and watch the section count print 6 and the command fail; restore.
 
-### P4: `cargo xtask text-check` (wave 2)
+### P4: `cargo xtask text-check` (wave 2) (DONE 2026-10-11, #179)
 - **Persona:** `uas-builder`.
 - **Depends on:** P1 (amended rules and Test rows 19 to 21) and P2 (clean headings), both merged.
 - **Files:** `xtask/src/text_check.rs` (new, line 1 `// SPDX-License-Identifier: Apache-2.0 OR MIT`), `xtask/src/main.rs` (exists; the `mod` list, the `match` arm near line 26, the usage line and the doc comment list). `xtask/Cargo.toml` is untouched: `std` and the `git` binary only (D5; no spec 0004 pin).
@@ -94,7 +94,7 @@ Ordering for "the job never lands red against the tree": P2 (clean headings) bef
 - **Done-when:** `cargo nextest run -p xtask text_check -j 2 && make fmt-check clippy JOBS=2 && cargo xtask text-check --base origin/development --head origin/development && { cargo xtask text-check --base no-such-ref --head HEAD; test $? = 2; }` exits 0. The last leg is the fail-closed control: an unknown ref exits 2, not 0 or 1. The last leg is the positive control on an empty diff. Unit tests cover spec Test rows 1, 2, 3, 4, 6, 7 to 9, 11, 12, 15 to 18 and the new rows 19 to 22 as pure-function cases, plus a git-failure case and a missing-CHANGELOG case that expect the error path.
 - **Red-first:** write the unit tests against stub functions that return "pass" for everything and watch rows 1, 4, 6, 7 and the ticket, marker and released cases go red (the spec's own sentence: a check that passes every PR turns rows 1, 4 and 6 red). Then fill the functions. After green: make `exempt` return true for every path and watch the `nolog` test fail; make `ticket_in_subject` ignore the key `VES` and watch the `VES-1` case fail; restore each. [Size risk, asserted: about 300 to 380 changed lines with tests. If a diff passes 400, move the `#[cfg(test)]` module to `xtask/src/text_check_tests.rs` in the same package and say so in the verdict.]
 
-### P5: integration tests with planted controls (wave 3)
+### P5: integration tests with planted controls (wave 3) (DONE 2026-10-11, #183)
 - **Persona:** `uas-builder`.
 - **Depends on:** P4 merged.
 - **Files:** `xtask/tests/text_check.rs` (new; no `xtask/tests/` directory exists today, finding 10).
@@ -102,7 +102,7 @@ Ordering for "the job never lands red against the tree": P2 (clean headings) bef
 - **Done-when:** `cargo nextest run -p xtask --test text_check -j 2 && make fmt-check clippy JOBS=2` exits 0.
 - **Red-first:** break the binary's behavior three ways in a scratch copy of `text_check.rs`: make `released_tail_ok` return true, make `needs_log` return false, make the merge-base resolve to the base tip; the tests for rows 4, 1 and the moved-base case go red respectively. Restore. This is the control against a test that cannot fail.
 
-### P6: `make text-check` and the CI job (wave 3)
+### P6: `make text-check` and the CI job (wave 3) (DONE 2026-10-11, #183)
 - **Persona:** `uas-builder`.
 - **Depends on:** P4 merged. P2 merged earlier.
 - **Files, both exist:** `Makefile` (the `.PHONY` list at line 15 and the `spec-check` to `pin-check` target group near lines 64 to 71), `.github/workflows/ci.yml`.
@@ -119,8 +119,8 @@ Ordering for "the job never lands red against the tree": P2 (clean headings) bef
 - **Done-when:** `gh api repos/unsigned-gg/uas/branches/development/protection --jq '.required_status_checks.contexts | index("text-check")'` prints a number, not `null`, and the same read on `main` agrees with spec 0003.
 - **The body-check flip** (REQ-12): when the lane rules the body checks fail, remove the advisory exit in `text_check.rs` and flip the unit tests that expect `warn:` to expect `FAIL body`. D10 sets no date for that, so no package carries one.
 
-### P8: `RELEASING.md` link (wave 4, BLOCKED)
-- **BLOCKED on spec 0048 plan landing `RELEASING.md`** [verified missing; reported: REQ-0048-15, D13].
+### P8: `RELEASING.md` link (wave 4) (DONE 2026-10-11, #187)
+- Landed: `RELEASING.md` now exists and links spec 0053 (#187) [verified: `grep -c specs/0053-changelog RELEASING.md` prints 1].
 - **Persona:** `uas-engineer`. **Files:** `RELEASING.md` (new in 0048; this package only adds one line).
 - **Change:** the CHANGELOG paragraph links `specs/0053-changelog-and-commit-text-policy.md` and does not restate the rule (D11, REQ-15).
 - **Done-when:** `grep -c 'specs/0053-changelog-and-commit-text-policy' RELEASING.md` prints 1 and `! grep -qi 'one line under' RELEASING.md` exits 0 (the second leg proves the rule was not copied).
