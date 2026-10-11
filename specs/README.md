@@ -25,8 +25,8 @@ Methodology: LeanSpec. The reference copy is in `../vendor/leanspec/`.
 | [0017](0017-fastcache-prefix-hashing-and-affinity-routing.md) | FastCache prefix hashing and affinity routing | planned | high |
 | [0018](0018-mad-stack-operator-deck-and-settle-queue.md) | MAD stack operator deck and settle queue | planned | high |
 | [0019](0019-pool-runtime-decision.md) | Pool runtime decision | complete | high |
-| [0020](0020-build-job-cap.md) | Build job cap | planned | high |
-| [0021](0021-cas-storage-scope-and-phase.md) | uas-storage scope and phase | planned | medium |
+| [0020](0020-build-job-cap.md) | Build job cap | complete | high |
+| [0021](0021-cas-storage-scope-and-phase.md) | uas-storage scope and phase | complete | medium |
 | [0022](0022-custody-landing.md) | Custody landing | planned | high |
 | [0023](0023-test-time-compute-and-verifiable-reward.md) | Test-time compute and verifiable reward | planned | medium |
 | [0024](0024-estate-saga-cpm-and-agent-sprint-wave-strategy.md) | Estate saga CPM and agent sprint wave strategy | complete | high |
@@ -53,11 +53,11 @@ Methodology: LeanSpec. The reference copy is in `../vendor/leanspec/`.
 | [0046](0046-saga-team-and-topology-files.md) | Saga team and topology files | planned | high |
 | [0047](0047-slot-build-cache-retention.md) | Slot build cache retention | planned | high |
 | [0048](0048-licence-and-publication.md) | Licence and publication | in-progress | high |
-| [0049](0049-cpm-migration-to-saga.md) | CPM migration to saga | planned | high |
+| [0049](0049-cpm-migration-to-saga.md) | CPM migration to saga | in-progress | high |
 | [0050](0050-build-handoff-pipeline.md) | Build handoff pipeline | complete | high |
-| [0051](0051-repository-guards.md) | Repository guards | planned | high |
-| [0052](0052-spec-check-rule-set.md) | Spec-check rule set | planned | medium |
-| [0053](0053-changelog-and-commit-text-policy.md) | CHANGELOG and commit text policy | planned | medium |
+| [0051](0051-repository-guards.md) | Repository guards | in-progress | high |
+| [0052](0052-spec-check-rule-set.md) | Spec-check rule set | in-progress | medium |
+| [0053](0053-changelog-and-commit-text-policy.md) | CHANGELOG and commit text policy | in-progress | medium |
 | [0054](0054-ci-pipeline-policy.md) | CI pipeline policy | planned | medium |
 | [0055](0055-supply-chain-automation.md) | Supply-chain automation | planned | medium |
 | [0056](0056-agent-roster-and-tooling.md) | Agent roster and tooling surface | planned | medium |

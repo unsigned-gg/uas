@@ -85,7 +85,7 @@ P3 runs in wave 1 although it runs the other two scripts: each builder's worktre
 
 ## Packages
 
-### P1: guard-main-push (wave 1)
+### P1: guard-main-push (wave 1) (DONE 2026-10-11, #172)
 - **Persona:** `uas-builder`.
 - **Files, all exist [verified, `git ls-files`]:** `.claude/hooks/guard-main-push.sh` (match on lines 7 and 8, deny text on line 9, header on line 3), `.claude/hooks/tests/test-guard-main-push.sh` (rows on lines 30 to 39), `.claude/settings.json` (the `description` on line 24 only).
 - **Change, tests first:** line 36 of the test, `t allow feat 'git push origin development' 'push development'`, encodes the behaviour D5 removes. Flip it to `t deny feat 'git push origin development' 'push development'`. Then add nine rows after line 39 in the existing `t <deny|allow> <branch> <command> <description>` form. Deny: `feat` `git -C /x push origin main`; `feat` `git push --force origin development`; `development` `git push`; `development` `git -C . push`; `development` `git push origin`. Allow: `feat` `git push origin feat/main-menu`; `feat` `git -C /x push origin feat/x`; `development` `git push origin feat/x`; `feat` `git -C /x push origin development # allow-direct-push`. The suite then holds 10 + 9 = 19 rows, and the flipped row is one of the 19.
@@ -93,7 +93,7 @@ P3 runs in wave 1 although it runs the other two scripts: each builder's worktre
 - **Done-when:** `bash .claude/hooks/tests/test-guard-main-push.sh | tail -1 | grep -qx '19 passed, 0 failed' && bash .claude/hooks/tests/test-guard-main-push.sh >/dev/null && jq -e . .claude/settings.json >/dev/null` exits 0. These are the Test rows for REQ-0051-02, 03 and 04.
 - **Red-first:** flip line 36 and add the nine rows, then run the suite before the hook edit: it must print seven `FAIL` lines (the flipped `push development` row, the five new deny rows, and the `feat/main-menu` allow row) and exit 1; the other three new rows and the nine unchanged old rows stay green. The `FAIL` set is read from lines 7 and 8 for the `development` and remote-only rows [asserted]; the `-C main`, `development` and `feat/main-menu` outcomes I ran [verified, spec F3]. After the fix, restore the old line 7 in a scratch copy of the hook and watch at least one of the seven rows fail again.
 
-### P2: ci-gate timeout (wave 1)
+### P2: ci-gate timeout (wave 1) (DONE 2026-10-11, #172)
 - **Persona:** `uas-builder`.
 - **Files, all exist [verified]:** `.claude/hooks/ci-gate.sh` (lines 10 to 13), `.claude/hooks/tests/test-ci-gate.sh` (stub on lines 10 to 15, rows on lines 36 to 60).
 - **Change, tests first:** extend the stub `make` so it runs `sleep "${STUB_MAKE_SLEEP:-0}"` before it exits. Add three assertions: a push with `CI_GATE_TIMEOUT=1`, `STUB_MAKE_SLEEP=5` and `STUB_MAKE_RC=0` prints a deny whose reason contains the word `timeout`; the hook returns in under 4 seconds (measure with `date +%s`); a push with `CI_GATE_TIMEOUT=1` and no sleep prints nothing (the control). The suite then holds 17 assertions.
@@ -101,7 +101,7 @@ P3 runs in wave 1 although it runs the other two scripts: each builder's worktre
 - **Done-when:** `bash .claude/hooks/tests/test-ci-gate.sh | tail -1 | grep -qx '17 passed, 0 failed' && bash .claude/hooks/tests/test-ci-gate.sh >/dev/null` exits 0. This is the Test row for REQ-0051-05 and 06.
 - **Red-first:** run the new rows before the hook edit: the deny assertion and the under-4-seconds assertion fail and the run takes at least 5 seconds; the control stays green. After the fix, change `-k 10 "${CI_GATE_TIMEOUT:-840}"` to `0` in a scratch copy and watch the deny assertion fail.
 
-### P3: hook tests join hygiene (wave 1)
+### P3: hook tests join hygiene (wave 1) (DONE 2026-10-11, #172)
 - **Persona:** `uas-builder`.
 - **Files, all exist [verified]:** `Makefile` (`.PHONY` lines 15 to 17, `hygiene` line 49), `.claude/README.md` (the Hooks rows on lines 15 and 16, the Tests section on lines 20 to 26).
 - **Change:** a target `hook-test: ## Run the Claude Code hook tests` that loops over `.claude/hooks/tests/test-*.sh` with `bash "$$t" || exit 1`, listed in `.PHONY` and as a prerequisite of `hygiene`. In the README, say that the guard denies `main`, `master` and `development`, that ci-gate stops at 840 seconds (`CI_GATE_TIMEOUT` lowers it for tests), and that the tests run with `make hook-test` and inside `make hygiene`. Do not touch `ci.yml`: the `hygiene` job already runs `make hygiene` (line 84).
@@ -109,7 +109,7 @@ P3 runs in wave 1 although it runs the other two scripts: each builder's worktre
 - **Red-first:** before the edit `make -n hygiene | grep -c 'hooks/tests'` prints `0` (spec F2). After the edit, flip the expected word on one row of `test-guard-main-push.sh` (for example the `push to main` row from `deny` to `allow`) and run the last leg: it must exit 2 [verified on a scratch edit of this base]. Restore the row.
 - **Integrator step, not a builder act:** the spec asks for one red run in CI. The integrator pushes a throwaway commit that breaks one row, reads the `hygiene` job red, and removes it. That is a push and stays with the integrator.
 
-### P4: gitleaks fails closed, regex owner comment, AGENTS.md (wave 2)
+### P4: gitleaks fails closed, regex owner comment, AGENTS.md (wave 2) (DONE 2026-10-11, #176)
 - **Persona:** `uas-builder`.
 - **Files, all exist [verified]:** `lefthook.yml` (gitleaks command on lines 15 to 23, the regex on line 9), `AGENTS.md` (line 44, item 11).
 - **Change, lefthook:** in the missing-binary branch print to stderr that gitleaks is not installed, name the install step with the version CI pins (8.30.1, `ci.yml` line 37) and the release URL `https://github.com/gitleaks/gitleaks/releases/tag/v8.30.1`, then `exit 1`. Rewrite the comment on lines 16 and 17 (it says only a missing binary is tolerated). Add a comment above the `conventional` command: spec 0051 owns the subject regex. Leave the regex itself unchanged. ASCII only.
@@ -128,7 +128,7 @@ lefthook run pre-commit --force --commands gitleaks >/dev/null 2>&1; echo "REQ-1
 ```
 - **Red-first:** run the script on the unedited tree: the REQ-11 line prints `rc=0` and `0` hint lines [verified at this base; the edited copy printed `rc=1` and `1`]. After the edit, delete the `exit 1` in a scratch copy and the REQ-11 line goes back to `rc=0`. For the AGENTS.md legs, restore the old sentence in a scratch copy and the pair reads `1` and `0` again.
 
-### P5: the fork-gate job (wave 2)
+### P5: the fork-gate job (wave 2) (DONE 2026-10-11, #176)
 - **Persona:** `uas-builder`.
 - **Files:** `.github/workflows/ci.yml` (exists; header comment on line 2, new job after `ebpf-live`).
 - **Form chosen: a maintainer comment, not a mirror branch [reported ruling: label plus head SHA, recorded in a comment the job reads, or a mirror branch].** The comment needs one read call and no push. A mirror branch needs a push by a maintainer and a ref lookup, and it runs the fork's code on self-hosted runners, which is the thing the guard exists to stop. The comment is written by a maintainer with `gh pr comment <N> --body "fork-ci-approved: <40-character head sha>"`. The body is exactly that one line (trailing white space allowed). The job accepts a comment only when `author_association` is `OWNER` or `MEMBER`, so the fork author cannot approve their own PR.
@@ -162,7 +162,7 @@ grep -c 'fork-gate' $c
   The cases are, in order: a push; a fork PR with no label and no comment; the label alone; the comment alone; the label and a matching comment; the label and a comment for an older SHA (the new-push case); the label and a matching comment from a non-maintainer; a same-repository PR; a deleted fork with nothing; a label that only starts like the real one. The expected line is `0 1 1 1 0 1 1 0 1 1`. I ran this script against a draft of the job in a scratch copy of `ci.yml` and it printed that line [verified]. Today `yq` returns `null`, the first line is wrong, and `grep -c 'fork-gate'` prints `0` (spec F14).
 - **Red-first:** run the script before the edit and watch it fail. After the edit, change `grep -xF` to `grep -F` in a scratch copy and the last case flips from `1` to `0`. Change the comment filter to ignore the SHA and the old-SHA case flips from `1` to `0`. Remove the job in a scratch copy and the grep count returns to `0`.
 
-### P6: specs 0003 and 0005 (wave 2)
+### P6: specs 0003 and 0005 (wave 2) (DONE 2026-10-11, #176)
 - **Persona:** `uas-engineer` (a spec amendment).
 - **Files, all exist [verified]:** `specs/0003-branch-model-and-promotion.md` (line 46 and the protection table, `ebpf-live` row on line 64), `specs/0005-ci-cache-and-runners.md` (line 82), `specs/0051-repository-guards.md` (D8, REQ-0051-15 and its Test row).
 - **Change:** line 46 becomes "Commits are signed. Subjects follow the Conventional Commits regex in spec 0051; Merge and Revert subjects stay allowed." Add a table row "Required check `fork-gate` | no, until plan 0048 P13 | no, until plan 0048 P13" after the `ebpf-live` row; it says "no" on purpose so spec 0050 Test row 4 stays true (finding 7). Add `fork-gate` to the `ci.yml` job list on spec 0005 line 82. Amend spec 0051 D8, REQ-0051-15 and the REQ-0051-15 Test row to the ruled form: the gate passes only with the label and a maintainer comment `fork-ci-approved: <head sha>` that equals the PR's current head SHA; the test row names the case table of P5. Record the ruling (lane w25:p1, 2026-10-11 about 04:10Z, label "Label plus head SHA"). Also replace the concurrency Test row with the fixed-string form (finding 1). The spec says the integrator commits the spec 0003 amendment on its own, so the integrator may split this package into one commit per spec.

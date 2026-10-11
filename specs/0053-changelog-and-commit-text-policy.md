@@ -1,5 +1,5 @@
 ---
-status: planned
+status: in-progress
 created: 2026-10-11
 tags: [changelog, commits, pull-request, release, ci]
 priority: medium
@@ -9,7 +9,7 @@ depends_on: [0003-branch-model-and-promotion, 0005-ci-cache-and-runners, 0048-li
 
 # 0053-changelog-and-commit-text-policy
 
-> **Status**: planned, **Priority**: medium, **Created**: 2026-10-11
+> **Status**: in-progress, **Priority**: medium, **Created**: 2026-10-11
 
 ## Overview
 
