@@ -95,8 +95,9 @@ cargo nextest run -p uas-pool limits -j 2
 cargo nextest run -p uas-domain outcome -j 2
 ```
 
-The live OOM and pids cases run under `make pool-live-test` on a workstation and print a skip
-where `/sys/fs/cgroup/uas` cannot be created.
+The live OOM and pids cases run under `make pool-live-test` on a workstation (a uid-owned cgroup
+v2 user slice, no sudo). Under `make test` they print a skip where that slice is not writable;
+`make pool-live-test` fails on that skip.
 
 ## Notes
 

@@ -94,8 +94,9 @@ cargo nextest run -p uas-pool reconcile -j 2
 cargo nextest run -p uas-engine lost_slot -j 2
 ```
 
-The cgroup steps run under `make pool-live-test` on a workstation and are skipped where
-`/sys/fs/cgroup/uas` cannot be created, with the skip printed (spec 0005 skip rule).
+The cgroup steps run under `make pool-live-test` on a workstation (a uid-owned cgroup v2 user
+slice, no sudo). Under `make test` they print a skip where that slice is not writable (spec 0005
+skip rule); `make pool-live-test` fails on that skip.
 
 ## Notes
 
