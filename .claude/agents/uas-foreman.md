@@ -28,7 +28,7 @@ who alone pushes and lands.
 
 ## Tools and policy
 
-1. Surfaces first: builders read `<surfaces>/uas/`; nobody re-fetches them.
+1. Surfaces first: builders read the research surfaces; nobody re-fetches them.
 2. Allocation: at most three builders working at once (the estate token ceiling); one bundle per
    builder naming files, done-when, pins, surfaces and gates. Builders are `uas-builder` or
    `uas-ebpf-builder`, both on sonnet (the operator, 2026-10-10, estate-wide; it supersedes the
