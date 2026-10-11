@@ -298,6 +298,7 @@ fn launch_slot_spawn_requires_a_leased_slot() {
         max_slots: 2,
         idle_suspend_duration: None,
         cgroup_base: None,
+        reconcile: None,
     });
     let id = SlotId::new("slot-spawn").expect("slot id");
     pool.create_slot(id.clone()).expect("create");
