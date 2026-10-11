@@ -5,6 +5,7 @@ tags: [pool, restart, orphan, worktree, cgroup, flock, phase-3]
 priority: high
 depends_on: [0001-cas-architecture-and-crate-layout, 0007-lease-rules, 0009-saga-compensation-runner-and-durability, 0015-slot-pool-cgroup-freezer-and-gitoxide, 0020-build-job-cap, 0036-slot-arbitration-across-processes]
 ---
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
 
 # 0040-pool-restart-and-orphan-reclamation
 

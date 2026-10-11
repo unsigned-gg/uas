@@ -5,6 +5,7 @@ tags: [pool, cgroup, memory, pids, disk, limits, phase-3]
 priority: high
 depends_on: [0001-cas-architecture-and-crate-layout, 0015-slot-pool-cgroup-freezer-and-gitoxide, 0020-build-job-cap, 0028-branchless-crdt-worktrees, 0036-slot-arbitration-across-processes, 0042-cas-binary-conventions]
 ---
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
 
 # 0041-slot-memory-pids-and-disk-limits
 

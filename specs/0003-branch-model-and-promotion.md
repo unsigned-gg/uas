@@ -5,6 +5,7 @@ tags: [git, branches, protection, promotion]
 priority: high
 depends_on: [0002-verification-gates-and-evidence]
 ---
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
 
 # 0003-branch-model-and-promotion
 

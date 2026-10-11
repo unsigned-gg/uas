@@ -5,6 +5,7 @@ tags: [architecture, security, mcp]
 priority: high
 depends_on: [0001-cas-architecture-and-crate-layout, 0010-landlock-ruleset-and-abi-probe, 0011-network-namespace-isolation, 0013-llm-gateway-socket-proxy, 0016-zed-agent-communication-protocol, 0029-agent-identity-and-on-behalf-of-delegation]
 ---
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
 
 # 0031-mcp-security-baseline
 

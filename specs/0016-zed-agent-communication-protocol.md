@@ -5,6 +5,7 @@ tags: [acp, jsonrpc, zed, ide, phase-3]
 priority: high
 depends_on: [0001-cas-architecture-and-crate-layout, 0004-dependency-and-licence-policy, 0006-cas-engine-and-harness-dogfood, 0007-lease-rules, 0015-slot-pool-cgroup-freezer-and-gitoxide]
 ---
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
 
 # 0016-zed-agent-communication-protocol
 

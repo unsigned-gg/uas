@@ -5,6 +5,7 @@ tags: [pinning, ci, security, compliance]
 priority: high
 depends_on: [0004-dependency-and-licence-policy, 0005-ci-cache-and-runners]
 ---
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
 
 # 0034-tool-pinning-beyond-cargo
 

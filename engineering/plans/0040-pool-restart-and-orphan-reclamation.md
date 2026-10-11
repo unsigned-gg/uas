@@ -1,3 +1,4 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
 # Build plan: 0040-pool-restart-and-orphan-reclamation
 
 Spec: `specs/0040-pool-restart-and-orphan-reclamation.md` (status planned). Base: `origin/development` `9503684`.

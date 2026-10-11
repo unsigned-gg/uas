@@ -1,3 +1,4 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
 # Roadmap improvements
 
 The engineering-side roadmap in three horizons. Every item has a "what" and a "done when". Every item is proposed until the owner accepts it.
