@@ -81,10 +81,22 @@ jobs:
           command: release
         env:
           GITHUB_TOKEN: ${{ github.token }}
-      # SBOM on the release. Only when release-plz created a release on main.
+      # release-plz sets releases_created on every push to main in this workspace and
+      # lists package tags that have no GitHub release. The SBOM attaches to the
+      # uas-cli tag only, so the SBOM steps key on that tag.
+      - name: Find the uas-cli release tag
+        id: cli-tag
+        if: github.ref == 'refs/heads/main'
+        env:
+          RELEASES: ${{ steps.release-plz.outputs.releases }}
+        run: |
+          set -euo pipefail
+          tag="$(printf '%s' "${RELEASES:-[]}" | jq -r '.[] | select(.package_name=="uas-cli") | .tag')"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+      # SBOM on the release. Only when release-plz released uas-cli on main.
       # Pinned by version and sha256 (spec 0004, CI tools; plan 0045 finding 2).
       - name: Install cargo-cyclonedx (pinned)
-        if: github.ref == 'refs/heads/main' && steps.release-plz.outputs.releases_created == 'true'
+        if: github.ref == 'refs/heads/main' && steps.cli-tag.outputs.tag != ''
         env:
           CYCLONEDX_VERSION: 0.5.9
           CYCLONEDX_SHA256: fb8dbee9f182173e062a64a387b21a0badc6fab8b2abf9294973f012972bf6d8
@@ -96,7 +108,7 @@ jobs:
           tar -xJf "$RUNNER_TEMP/$name.tar.xz" -C "$RUNNER_TEMP"
           echo "$RUNNER_TEMP/$name" >> "$GITHUB_PATH"
       - name: make sbom
-        if: github.ref == 'refs/heads/main' && steps.release-plz.outputs.releases_created == 'true'
+        if: github.ref == 'refs/heads/main' && steps.cli-tag.outputs.tag != ''
         run: |
           set -euo pipefail
           make sbom
@@ -105,16 +117,10 @@ jobs:
           ls -l sbom
           test -n "$(ls -A sbom)"
       - name: Attach the SBOM to the release
-        if: github.ref == 'refs/heads/main' && steps.release-plz.outputs.releases_created == 'true'
+        if: github.ref == 'refs/heads/main' && steps.cli-tag.outputs.tag != ''
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASES: ${{ steps.release-plz.outputs.releases }}
+          TAG: ${{ steps.cli-tag.outputs.tag }}
         run: |
           set -euo pipefail
-          tags="$(printf '%s' "$RELEASES" | jq -r '.[].tag')"
-          if [ -z "$tags" ]; then
-            tags="v$(cargo metadata --no-deps --format-version 1 --locked | jq -r '.packages[0].version')"
-          fi
-          for tag in $tags; do
-            gh release upload "$tag" sbom/*.cdx.json --clobber
-          done
+          gh release upload "$TAG" sbom/*.cdx.json --clobber
