@@ -27,7 +27,8 @@ integrating lane's unless marked proposed.
 
 ### Facts
 
-Read 2026-10-11 on ceres at `origin/development` ebc7be8, worktree `/tmp/uas-w55`.
+Read 2026-10-11 on ceres in worktree `/tmp/uas-w55`, first at `origin/development` ebc7be8, then
+re-read at merge commit 65467c9 (origin/development merged in). The counts below held at both.
 
 - **F1 [verified]:** `.github/dependabot.yml` (22 lines) has two entries, `cargo` and
   `github-actions`, each `directory: /`, `target-branch: development`, `interval: weekly`, and
@@ -62,7 +63,8 @@ Read 2026-10-11 on ceres at `origin/development` ebc7be8, worktree `/tmp/uas-w55
   `target/`, guards with `test -n "$(ls -A sbom)"` (line 30) and uploads with
   `if-no-files-found: error` and `retention-days: 90` (lines 35 and 36). Format, version pin and
   release attachment belong to spec 0045 D4, REQ-0045-08 and REQ-0045-09.
-- **F7 [verified]:** with cargo-cyclonedx 0.5.9, `cargo cyclonedx --format json --spec-version
+- **F7 [verified]:** with cargo-cyclonedx 0.5.9 (installed 2026-10-11 into a scratch root:
+  `cargo install cargo-cyclonedx --version 0.5.9 --locked --root <scratch>`), `cargo cyclonedx --format json --spec-version
   1.5` writes 11 files for the 11 workspace packages (`cargo metadata --no-deps`), 1.6 KB to 315
   KB each, `bomFormat` `CycloneDX`, `specVersion` `1.5`, 0 to 255 components (`uas-storage` has
   0; the other ten have 9 to 255). Without the flag the same command writes `1.3`. The
@@ -105,13 +107,13 @@ the operator rules).
 | D5 | A major bump of a pinned crate is a reviewed upgrade. Before merge the row records the licence, the MSRV result of `make toolchain-check`, and a ruling when the row cites a prior decision. | F5: #122 merged a major before any row existed and needed a ratification afterwards. | lane-decided |
 | D6 | The three open PRs. #121 (tokio patch): take it under D4, row to 1.53.2. #123 and #124: close with a comment that cites 0004 lines 200 and 252 and ends with `@dependabot ignore this major version`, so they do not reopen. | F5: both bumps are recorded as not taken. #123's own title and lock disagree (F4). | lane-decided: integrating lane w25:p1, 2026-10-11; executed as a plan package, not by this spec |
 | D7 | Add a `cargo` entry for `/crates/uas-ebpf/ebpf`, same cadence, target branch and group. Its bumps pass the same D3 and D4. | F2: that lockfile is pin-checked yet unwatched. | lane-decided: integrating lane w25:p1, 2026-10-11 |
-| D8 | SBOM format, spec version, tool pin, 90-day artifact and release attachment are as ruled in spec 0045 D4. This spec adds no format decision. | One owner per contract (F6). | ruled: 0045 D4, the operator, 2026-10-10 |
+| D8 | SBOM format, spec version, tool pin, 90-day artifact and release attachment are as ruled in spec 0045 D4. This spec adds no format decision. | One owner per contract (F6). | lane-decided, citing 0045 D4 (that row cites the lane brief of 2026-10-10, not a ruling) |
 | D9 | The SBOM artifact is produced on `push` to `main` and on manual dispatch, as today. A pull request does not upload. | An upload per PR costs storage and a runner for no reader (F6). | lane-decided: keeps the shipped trigger |
 | D10 | `sbom-check` fails the job when the staging directory is empty, the file count differs from the workspace package count, a file is zero bytes or lacks `bomFormat` `CycloneDX` and `specVersion` `1.5`, or the files hold no component in total. It replaces the `test -n` line and runs before the upload. A per-file component floor is not used, because `uas-storage` has none (F7). | F7 and Test row 8: the shipped guard accepts `{}`. | lane-decided |
 | D11 | A PR that changes `Cargo.toml`, `Cargo.lock`, the `Makefile` or `sbom.yml` also runs generation and `sbom-check`, with no upload and a fork guard like `ci.yml` line 28. It starts non-required. | A Dependabot bump that breaks the SBOM would otherwise surface only after merge to `main`. | lane-decided: integrating lane w25:p1, 2026-10-11 |
 | D12 | The gitleaks rule set is the tool default: `useDefault = true` and no custom rule. | F8: the file holds nothing else, and a custom rule is code that nobody has read. | lane-decided: keeps the shipped config |
 | D13 | An allowlist entry is an `[[allowlists]]` table in `.gitleaks.toml` with a `description` that names a spec or ticket. It uses `regexes` or `paths` narrow enough to match one finding. There is no inline `gitleaks:allow` and no `.gitleaksignore`. A live secret is never allowlisted. | One reviewable file, shown in a PR diff. F8: there is no allowlist today, so this sets the entry rule before the first one. | lane-decided |
-| D14 | The CI job and the hook are the same scanner: one version, one config. `GITLEAKS_VERSION` in `ci.yml` is the source, the hook message repeats it, and `make pin-check` fails when they differ (the tool parser of 0034 REQ-0034-06, extended). Spec 0004's CI tools table gets a `gitleaks` row (0034 plan). The hook does not compare the workstation binary (F10); CI is authoritative. | F9 and F10: parity is now by habit. | lane-decided; the hook stays fail closed on a missing binary (0051 D7) |
+| D14 | The CI job and the hook are the same scanner: one version, one config. Spec 0004's CI tools table is the single owner of the version, as spec 0034 REQ-0034-06 and REQ-0034-07 rule, and P2 adds the `gitleaks` row (0034 plan). `make pin-check` fails when `GITLEAKS_VERSION` in `ci.yml` or the version in the `lefthook.yml` message differs from that row. The hook does not compare the workstation binary (F10); CI is authoritative. | F9 and F10: parity is now by habit. | lane-decided; the hook stays fail closed on a missing binary (0051 D7) |
 | D15 | A hit means stop. The secret is compromised: the owner rotates it through the operator gate, and a history rewrite does not clear it. The author does not allowlist it and does not bypass the hook with `LEFTHOOK=0`. A false positive goes through D13. | F12. `LEFTHOOK=0` is a bypass of the hook, not of CI. | lane-decided: cites 0045 D3 and the estate rule |
 
 ### Requirements (EARS)
@@ -152,9 +154,9 @@ the operator rules).
 - **[REQ-0055-13]** (Ubiquitous): The allowlist in `.gitleaks.toml` shall hold only entries that are an
   `[[allowlists]]` table whose `description` names a spec or ticket, and the repository shall
   hold no `gitleaks:allow` comment and no `.gitleaksignore` (D13).
-- **[REQ-0055-14]** (Unwanted behavior): IF the gitleaks version in `lefthook.yml` differs from
-  `GITLEAKS_VERSION` in `ci.yml`, THEN `make pin-check` shall exit non-zero and name both
-  values (D14).
+- **[REQ-0055-14]** (Unwanted behavior): IF the gitleaks version in `lefthook.yml` or
+  `GITLEAKS_VERSION` in `ci.yml` differs from the `gitleaks` row of the spec 0004 CI tools
+  table, THEN `make pin-check` shall exit non-zero and name the file and both values (D14).
 - **[REQ-0055-15]** (Unwanted behavior): IF a secret is staged or committed, THEN the hook and
   the CI `secrets` job shall each exit non-zero and, for the same secret, report the same rule
   id (D14).
@@ -171,8 +173,8 @@ or a config in this commit.
       first: Test rows 5 to 10. `sbom.yml` calls it in place of `test -n` and before the upload
       (REQ-10). The cargo-cyclonedx pin and `--spec-version 1.5` are spec 0045 plan items.
 - [ ] P2, spec 0004 CI tools table: rows for `gitleaks` 8.30.1 (sha256 from `ci.yml` line 39)
-      and `cargo-cyclonedx` (0045 plan), then the lefthook-versus-`ci.yml` comparison in
-      `xtask/src/pin_check.rs` (REQ-14; Test rows 15, 16). This is spec 0034's parser work.
+      and `cargo-cyclonedx` (0045 plan), then the comparison of `lefthook.yml` and `ci.yml` against that row in
+      `xtask/src/pin_check.rs` (REQ-14; Test rows 15, 16 compare the two files until the row exists). This is spec 0034's parser work.
 - [ ] P3, `.gitleaks.toml` comment that cites D13 and spec 0055 above `[extend]` (REQ-12, 13).
 - [ ] P4, the integrating lane applies D6: the D4 commit on #121; close #123 and
       #124 with the comment. These are outward actions on GitHub, so they wait for the lane.
@@ -183,7 +185,7 @@ or a config in this commit.
 
 The block runs from the repo root today. It builds a scratch worktree and a scratch git repo,
 changes no tracked file, and needs `gitleaks`, `cargo-cyclonedx` 0.5.9 and `jq` on PATH. A
-missing tool exits 1. Each row prints `ok` only on a positive assertion. Rows 2, 5 to 10, 12, 13
+missing tool exits 1. Each row prints `ok` only on a positive assertion. Rows 2, 5 to 7, 9, 10, 12, 13
 and 16 pass only when the bad input is rejected, so a check that accepts everything turns them
 red. The plant for row 2 is a `Cargo.toml` and `Cargo.lock` bump with no table edit, which is
 the shape of PR #121. The `sc` function is the reference for `sbom-check` (P1).
@@ -199,16 +201,17 @@ sed -i 's/^tokio = { version = "=1\.53\.1"/tokio = { version = "=1.53.2"/' "$s/C
 want 2 "$(rc pc)" 1
 sed -i 's/^\(| `tokio` | \)1\.53\.1/\11.53.2/' "$s/specs/0004-dependency-and-licence-policy.md"
 want 3 "$(rc pc)" 0
-sc() { n=$(ls "$1" 2>/dev/null | grep -c 'cdx\.json$'); [ "$n" -eq "$2" ] || return 1; for f in "$1"/*.cdx.json; do [ -s "$f" ] && jq -e '.bomFormat=="CycloneDX" and .specVersion=="1.5"' "$f" >/dev/null || return 1; done; [ "$(cat "$1"/*.cdx.json | jq -s '[.[].components|length]|add')" -gt 0 ]; }
+sc() { n=$(ls "$1" 2>/dev/null | grep -c 'cdx\.json$'); [ "$n" -eq "$2" ] || { echo "sbom-check: count $n want $2: $1"; return 1; }; for f in "$1"/*.cdx.json; do [ -s "$f" ] && jq -e '.bomFormat=="CycloneDX" and .specVersion=="1.5"' "$f" >/dev/null || { echo "sbom-check: invalid: $f"; return 1; }; done; [ "$(cat "$1"/*.cdx.json | jq -s '[.[].components|length]|add')" -gt 0 ] || { echo "sbom-check: no components: $1"; return 1; }; echo "sbom-check: ok"; }
+ro() { o=$("$@" 2>&1); echo "$? ${o//$g\//}"; }
 (cd "$s" && cargo cyclonedx --format json --spec-version 1.5 >/dev/null 2>&1); n=$(cd "$s" && cargo metadata --no-deps --format-version 1 | jq '.packages|length')
 mkdir "$g/ok" "$g/empty" "$g/zero" "$g/obj" "$g/bad"; find "$s" -name '*.cdx.json' -not -path '*/target/*' -exec cp {} "$g/ok/" \;
-want 4 "$(rc sc "$g/ok" "$n")" 0
-want 5 "$(rc sc "$g/empty" "$n")" 1
-: > "$g/zero/a.cdx.json"; want 6 "$(rc sc "$g/zero" 1)" 1
-echo '{}' > "$g/obj/a.cdx.json"; want 7 "$(rc sc "$g/obj" 1)" 1
+want 4 "$(ro sc "$g/ok" "$n")" "0 sbom-check: ok"
+want 5 "$(ro sc "$g/empty" "$n")" "1 sbom-check: count 0 want $n: empty"
+: > "$g/zero/a.cdx.json"; want 6 "$(ro sc "$g/zero" 1)" "1 sbom-check: invalid: zero/a.cdx.json"
+echo '{}' > "$g/obj/a.cdx.json"; want 7 "$(ro sc "$g/obj" 1)" "1 sbom-check: invalid: obj/a.cdx.json"
 want 8 "$([ -n "$(ls -A "$g/obj")" ] && echo old-guard-passes)" old-guard-passes
-cp "$g/ok"/* "$g/bad/"; rm "$g/bad/uas-cli.cdx.json"; want 9 "$(rc sc "$g/bad" "$n")" 1
-cp "$g/ok"/* "$g/bad/"; jq '.specVersion="1.3"' "$g/ok/uas-cli.cdx.json" > "$g/bad/uas-cli.cdx.json"; want 10 "$(rc sc "$g/bad" "$n")" 1
+cp "$g/ok"/* "$g/bad/"; rm "$g/bad/uas-cli.cdx.json"; want 9 "$(ro sc "$g/bad" "$n")" "1 sbom-check: count $((n-1)) want $n: bad"
+cp "$g/ok"/* "$g/bad/"; jq '.specVersion="1.3"' "$g/ok/uas-cli.cdx.json" > "$g/bad/uas-cli.cdx.json"; want 10 "$(ro sc "$g/bad" "$n")" "1 sbom-check: invalid: bad/uas-cli.cdx.json"
 d=$g/repo; mkdir "$d"; cp .gitleaks.toml "$d/"; git -C "$d" init -q; git -C "$d" add .; git -C "$d" -c user.name=t -c user.email=t@t commit -qm base
 want 11 "$(cd "$d" && rc gitleaks git . --redact --no-banner)" 0
 printf 'token = "ghp_%s"\n' "$(tr -dc A-Za-z0-9 </dev/urandom | head -c36)" > "$d/leak.txt"; git -C "$d" add leak.txt
@@ -217,8 +220,9 @@ git -C "$d" -c user.name=t -c user.email=t@t commit -qm leak
 ci=$(cd "$d" && gitleaks git . --redact --no-banner -f json -r - 2>/dev/null | jq -r '.[0].RuleID'); want 13 "$(cd "$d" && rc gitleaks git . --redact --no-banner)" 1
 want 14 "$([ -n "$ci" ] && [ "$ci" = "$hook" ] && echo "same:$ci")" "same:github-pat"
 cv=$(sed -n 's/^ *GITLEAKS_VERSION: //p' .github/workflows/ci.yml); lv=$(sed -n 's/.*install v\([0-9.]*\) .*/\1/p' lefthook.yml)
-want 15 "$([ -n "$cv" ] && [ "$cv" = "$lv" ] && echo "$cv")" 8.30.1
-want 16 "$([ "$cv" = "$(echo "$lv" | sed 's/30/31/')" ] && echo equal || echo differ)" differ
+pv() { [ -n "$1" ] && [ "$1" = "$2" ] && echo "ok $1" || echo "gitleaks mismatch: ci.yml=$1 lefthook.yml=$2"; }
+want 15 "$(pv "$cv" "$lv")" "ok 8.30.1"
+want 16 "$(pv "$cv" "$(echo "$lv" | sed 's/30/31/')")" "gitleaks mismatch: ci.yml=8.30.1 lefthook.yml=8.31.1"
 want 17 "$(grep -c 'target-branch: development' .github/dependabot.yml)$(grep -c 'interval: weekly' .github/dependabot.yml)$(grep -c -i major .github/dependabot.yml)" 220
 exit $r
 ```
@@ -239,7 +243,7 @@ P1 and P2 replace the shell and become their unit tests.
 | 08, 09 | 4 to 10 |
 | 10 | manual, reviewer: the `sbom-check` step precedes `upload-artifact` in `sbom.yml` |
 | 12, 13 | `git grep -c 'gitleaks:allow' -- . ':!specs'` prints nothing; `ls .gitleaksignore` fails |
-| 14 | 15, 16 (the comparison; the `make pin-check` wiring is P2) |
+| 14 | 15, 16 assert the message names both values; they compare the two files. Red today for the 0004 leg: `grep -c '^| .gitleaks. |' specs/0004-dependency-and-licence-policy.md` prints 0; green after P2 |
 | 15 | 11 to 14 |
 | 16 | manual, lane: a hit stops the author and goes to the operator gate (D15) |
 
