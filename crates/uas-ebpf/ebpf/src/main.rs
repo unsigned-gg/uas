@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0-only OR MIT
 //! Kernel-side eBPF tracepoint probes for priority clamping and execution audit.
 //!
 //! Declares `Dual MIT/GPL` in the ELF license section to satisfy Linux kernel
