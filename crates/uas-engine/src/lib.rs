@@ -71,7 +71,7 @@ mod wave;
 mod wave_exec;
 mod workflow;
 
-pub use activity::{Activity, ActivityKind, ActivityResult};
+pub use activity::{Activity, ActivityDisposition, ActivityKind, ActivityResult};
 pub use compensator::{
     BranchPruneCompensator, CompensationReceipt, Compensator, CompositeCompensator,
     LeaseReturnCompensator, NoopCompensator, RecordingCompensator, WorktreeCleanupCompensator,
