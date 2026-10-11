@@ -142,7 +142,7 @@ the first use.
 
 | Project | Licence (per research) | Role in UAS | Status | Source |
 |---|---|---|---|---|
-| gitoxide (`gix`) | MIT OR Apache-2.0 | `uas-pool`: in-process worktrees and checkpoints | approved 2026-10-09 (the operator, epic list below), pinned at 0.88.0, not yet in a Cargo.toml | `repos/gitoxide.md` line 15 (licence), lines 100-111 (role) |
+| gitoxide (`gix`) | MIT OR Apache-2.0 | `uas-pool`: in-process worktrees and checkpoints | approved 2026-10-09 (the operator, epic list below), pinned at 0.88.0, in `Cargo.toml` since spec 0015 | `repos/gitoxide.md` line 15 (licence), lines 100-111 (role) |
 | autumn-harvest | MIT OR Apache-2.0 | `uas-engine`: durable workflows | evaluated, unpinned, NOT approved | `repos/autumn-harvest.md` line 15 |
 | aya | MIT OR Apache-2.0 (not in the research; `aya-rs/aya` workspace `Cargo.toml`, read 2026-10-08) | `uas-ebpf`: eBPF programs and loader | approved 2026-10-09 (the operator, epic list below; spec 0014 D2), pinned at 0.14.0, in the workspace `Cargo.toml`, used by `crates/uas-ebpf/Cargo.toml` | `repos/neutral-engineering.md` section 2.1 |
 | `landlock` 0.4.7 | MIT OR Apache-2.0 | `uas-sandbox`: filesystem rulesets | approved 2026-10-09, pinned, in use (spec 0010) | `rust-native-agent-substrate.md` section 3.3 |
