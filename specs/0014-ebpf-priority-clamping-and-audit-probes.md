@@ -54,7 +54,7 @@ Parent tickets: CER-2682, CER-2683. Nested pid namespace fix: CER-2773 (T14, D12
 - **Event-driven:** WHEN a `track` succeeds, `uas-ebpfd` shall drain the ring buffer first, then open a receipt window for the pid, owned by the peer's uid and connection, with the pid as its only member (D14).
 - **Event-driven:** WHEN `uas-ebpfd` drains an `ExecEvent`, it shall place the event in the one window whose member set holds its `ppid`, else in the one whose set holds its `ns_pid`; an open window shall absorb it into its `RunHash` in delivery order and add a non-zero `ns_pid` to its set (D14).
 - **Event-driven:** WHEN the total of a `DROPPED_EVENTS` slot grows, `uas-ebpfd` shall add the delta to `dropped_events` of every open window (D14).
-- **Event-driven:** WHEN a peer sends `receipt` for a window it can read, `uas-ebpfd` shall drain the ring buffer, answer `{"receipt":{...}}` with the window's totals, and leave an open window open (D14).
+- **Event-driven:** WHEN a peer sends `receipt` for a window it is permitted to read (D14), `uas-ebpfd` shall drain the ring buffer, answer `{"receipt":{...}}` with the window's totals, and leave an open window open (D14).
 - **Event-driven:** WHEN a peer sends an accepted `untrack`, `uas-ebpfd` shall drain the ring buffer, then close the pid's window, which absorbs nothing more and stays readable (D14).
 - **Event-driven:** WHEN a peer sends an accepted `forget`, or the owning connection closes, `uas-ebpfd` shall discard the window and leave kernel tracking unchanged (D14).
 - **State-driven:** WHILE tracking worker processes, `uas-ebpfd` shall read the nice value of every tracked pid that execs and re-clamp it to `nice 19` using a non-zero `ns_pid`.
