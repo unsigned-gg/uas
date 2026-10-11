@@ -40,13 +40,13 @@ Measured 2026-10-11 on `origin/development` ebc7be8. Paths are relative to the r
   foreman, architect, builder (twice), ebpf-builder, engineer, critic, prober. Planner and
   k8s-builder are not in it. The README says `--model` wins over a persona's `model:` line
   (lines 33 to 35).
-- **F4 [verified]:** `prompt-linter` is a global read-only agent (`<home>/.claude/agents/prompt-linter.md`,
+- **F4 [verified]:** `prompt-linter` is a global read-only agent (the user-level agents directory,
   tools Read, Grep, Glob, no shell). It runs checks F1 to F8, P1 to P8 and A1 to A7. Nothing in
   the repo runs it: `grep -rn 'prompt-linter' .github Makefile lefthook.yml .claude/hooks` prints
   nothing. The README says to run it before a file is committed (lines 74 to 78).
 - **F5 [verified]:** the linter's check F6 reads banned strings from `tests/agents.test.sh`. That
-  file does not exist here (`ls tests` fails) or in the paas checkout (`ls
-  <home>/projects/unsigned/paas/tests` lists five fixture directories and no such file). No banned
+  file does not exist here (`ls tests` fails) or in the paas checkout (its `tests` directory
+  lists five fixture directories and no such file). No banned
   list is defined anywhere, so F6 cannot pass or fail today.
 - **F6 [verified]:** `.agents/skills/` holds 5 skills, each a `SKILL.md` of 36 to 79 lines whose
   description starts "Use when": ci-triage, custody-run, new-repo, release, spec-driven-dev.
