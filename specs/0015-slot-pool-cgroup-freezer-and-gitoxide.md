@@ -3,7 +3,7 @@ status: planned
 created: 2026-10-09
 tags: [pool, gitoxide, cgroup, freezer, ebpf, phase-3]
 priority: high
-depends_on: [0001-cas-architecture-and-crate-layout, 0004-dependency-and-licence-policy, 0007-lease-rules, 0010-landlock-ruleset-and-abi-probe, 0011-network-namespace-isolation, 0014-ebpf-priority-clamping-and-audit-probes]
+depends_on: [0001-cas-architecture-and-crate-layout, 0004-dependency-and-licence-policy, 0007-lease-rules, 0010-landlock-ruleset-and-abi-probe, 0011-network-namespace-isolation, 0014-ebpf-priority-clamping-and-audit-probes, 0040-pool-restart-and-orphan-reclamation]
 ---
 
 # 0015-slot-pool-cgroup-freezer-and-gitoxide
@@ -51,7 +51,8 @@ This spec defines the worker slot manager in `uas-pool` (Phase 3, CER-2682):
 
 ```mermaid
 stateDiagram-v2
-    [*] --> Idle
+    [*] --> Reconciling
+    Reconciling --> Idle
     Idle --> Leased: allocate(lease_id)
     Leased --> Running: spawn_worker() [pre_exec clamp + eBPF track]
     Running --> Suspended: freeze()
@@ -72,6 +73,7 @@ stateDiagram-v2
    - Background thread consumes `EventStream` to build execution transcript digest (`run_hash`).
 4. **`Suspended`**: Process execution halted via `cgroup.freeze` (or `SIGSTOP`). Memory and file descriptors remain intact.
 5. **`Reclaiming`**: Worker reaped. `AuditReceipt` (with `run_hash`, `dropped_events`, and `cpu_cap` per Spec 0020) sealed and returned to caller. In-process `gix` restores index and removes untracked files.
+6. **`Reconciling`**: The start state. Before the first `allocate`, the pool reclaims orphaned slot remains from an earlier run (spec 0040 D2), then enters `Idle`.
 
 ### Cgroup v2 Freezer Interface
 
@@ -146,3 +148,4 @@ cargo test -p uas-pool -j 2
 - **Kernel Requirement**: Cgroup v2 unified hierarchy must be mounted at `/sys/fs/cgroup`. On WSL2 kernel 6.6, systemd mounts cgroup v2 by default.
 - **Resource Protection**: Host throttling is preserved because active slots never exceed the configured worker cap.
 - **Audit Resilience**: If `uas-ebpfd` is not running, workers execute successfully with `PRIO_PGRP` clamping while marking audit receipts `unattested`.
+- **Spec 0040**: Spec 0040 also lists this spec in its `depends_on`; the dependence is mutual and `make spec-check` has no cycle test.
