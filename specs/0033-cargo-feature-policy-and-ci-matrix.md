@@ -9,7 +9,7 @@ depends_on: [0001-cas-architecture-and-crate-layout, 0004-dependency-and-licence
 
 # 0033-cargo-feature-policy-and-ci-matrix
 
-> **Status**: planned, **Priority**: high, **Created**: 2026-10-10
+> **Status**: in-progress, **Priority**: high, **Created**: 2026-10-10
 
 ## Overview
 
@@ -62,7 +62,7 @@ This spec sets the policy. It adds no feature of its own.
 | D4 | A spec that introduces a feature must name it, say which crate declares it, and say what the default build loses without it. Specs 0026, 0028 and 0029 are retrofitted by their own authors, not here. | UAS lane w25:p1, 2026-10-10 |
 | D5 | The gate is a matrix, not `--all-features`. Each feature gets its own leg [asserted]: a combined build can pass while a single feature fails to compile alone, and `--all-features` cannot express two features that are mutually exclusive by construction. A combined leg may be added later for pairs specified to work together. | UAS lane w25:p1, 2026-10-10 |
 | D6 | The matrix runs `clippy` and `test` per feature, not the full `check`. `fmt` and `deny` are feature-independent, and `doc-test` is covered by the default leg. | UAS lane w25:p1, 2026-10-10 |
-| D7 | A declared feature with no matrix leg fails `make hygiene`. This is the enforcement half: without it the policy erodes exactly as the one declared feature today (`cortex-grpc`; amended 2026-10-11, plan 0033 finding 4) did. | UAS lane w25:p1, 2026-10-10 |
+| D7 | A declared feature with no matrix leg fails `make hygiene`. This is the enforcement half: without it the policy erodes as it already has: `cortex-grpc` had no leg, and `crdt-collab` and `delegation` are assumed by specs 0028 and 0029 and declared nowhere (amended 2026-10-11, plan 0033 finding 4) did. | UAS lane w25:p1, 2026-10-10 |
 | D8 | `-j 2` applies to every matrix leg on a workstation, and CI keeps `JOBS=10`. The matrix multiplies build time, so the leg count is a cost the operator sees. | AGENTS.md rule 2; spec 0002 |
 
 ### Requirements (EARS)
@@ -87,7 +87,7 @@ This spec sets the policy. It adds no feature of its own.
 - [ ] Write the red-first tests for the xtask: a fixture with an uncovered feature, one declared in the wrong crate, and one on by default. Watch each fail before the check exists.
 - [ ] Add the `make features` target, one `clippy` and one `test` leg per declared feature, honouring `JOBS`.
 - [ ] Add the matrix leg to `.github/workflows/ci.yml`, listing each leg in the `ci.yml` matrix as written, as REQ-0033-09 requires, so a new feature cannot be forgotten.
-- [ ] Record the one declared feature (`cortex-grpc` in `uas-engine`) and the two (`crdt-collab`, `delegation`) that specs 0028 and 0029 assume and their owning crates, and open a follow-up for the two that specs 0028 and 0029 assume but no crate declares.
+- [ ] Record `cortex-grpc` in `uas-engine`; open a follow-up for `crdt-collab` (spec 0028) and `delegation` (spec 0029), which no crate declares.
 
 ## Test
 
@@ -144,6 +144,6 @@ and it is what this spec exists to change.
 - `feature-check` reads the legs as text in two formats: the Makefile line
   `FEATURE_LEGS := <crate>:<feature> ...` and the `ci.yml` lines
   `- {crate: <crate>, feature: <feature>}` [reported 2026-10-11: plan 0033 P2 and
-  P4; `build/0033-p3@639bcf6:Makefile` line 77].
+  P4; the `FEATURE_LEGS :=` line of `Makefile`].
 - Amended 2026-10-11: opening words of the flagged requirement bullets reworded to begin with a standard EARS keyword; no change of meaning (spec 0052 P6).
-- Amended 2026-10-11: Plan bullet 5 lists the `ci.yml` legs as written (REQ-0033-09), Plan bullet 6 names the one declared feature and the two assumed ones, the REQ-0033-04 Test row is added, and the two notes above on the contracts fetch and the leg formats are added; no change of requirement (plan 0033 P1).
+- Amended 2026-10-11: Plan bullet 5 lists the `ci.yml` legs as written (REQ-0033-09), Plan bullet 6 names the one declared feature and the two assumed ones, D7 names the same erosion, the REQ-0033-04 Test row is added, and the two notes above on the contracts fetch and the leg formats are added; no change of requirement (plan 0033 P1).
