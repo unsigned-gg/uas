@@ -9,8 +9,8 @@ version = "0.1.0"
 # The pinned toolchain is in rust-toolchain.toml.
 rust-version = "1.89"
 publish = false
-license = "LicenseRef-Proprietary"
-authors = ["the operator <chris@todie.io>"]
+license = "Apache-2.0 OR MIT"
+authors = ["unsigned.gg"]
 repository = "https://github.com/unsigned-gg/uas"
 
 [workspace.lints.rust]

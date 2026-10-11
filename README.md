@@ -4,8 +4,8 @@ UAS is the Unsigned Agent Substrate. It is a Rust-native, pooled runtime for age
 harnesses. The design calls for durable workflows, kernel confinement, prefix-aware
 model routing and an operator dashboard.
 
-**Status:** scaffold and domain; no runtime yet. Version 0.1.0. Private. Proprietary
-licence (see `LICENSE`). The design is a draft from `cerebral-work/research@4068134`.
+**Status:** scaffold and domain; no runtime yet. Version 0.1.0. Private. Licensed
+`Apache-2.0 OR MIT` (see `LICENSE-APACHE`, `LICENSE-MIT` and `NOTICE`). The design is a draft from `cerebral-work/research@4068134`.
 
 ## Crates
 
