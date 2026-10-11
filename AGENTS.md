@@ -56,6 +56,7 @@ A crate depends only on crates in lower layers. Add a Cargo dependency only when
 | `make hygiene` | `typos`, `machete`, `spec-check`, `toolchain-check`, `pin-check`. |
 | `make ci` | What the CI `rust` job runs. |
 | `make smoke` | Build the CLI, run `uas --version`, check the domain has no I/O. |
+| `make features` | `clippy` and `test` once per declared cargo feature. Needs `make fetch-contracts` first. |
 | `make spec-check` | Validate `specs/`. |
 | `make release-notes VERSION=x.y.z` | Roll `[Unreleased]` into a version heading. |
 | `make custody-check` | Check the blackwall custody setup (`blackwall doctor`). See the `custody-run` skill. |
