@@ -61,6 +61,7 @@ OSS_PATTERN := \.ts\.net|/(home|Users)/[a-z]+/|/roo(t)/|~/(projects|\.agents|\.c
 
 oss-check: ## No tailnet hostname or operator path in tracked files (spec 0048 D7)
 	@if git grep -n -E -e '$(OSS_PATTERN)'; then echo "oss-check: tracked files above hold a hostname or operator path" >&2; exit 1; fi
+	@bad=0; for d in vendor/*/; do d=$${d%/}; [ -d "$$d" ] || continue; if [ ! -f "$$d/LICENSE" ]; then echo "oss-check: $$d has no LICENSE file" >&2; bad=1; fi; done; exit $$bad
 
 # Spec 0048 REQ-0048-04, D2, D10. Code: SPDX line in the first two lines with the right expression.
 # Markdown under docs, specs and engineering: CC-BY-4.0 tag in the first ten lines.
