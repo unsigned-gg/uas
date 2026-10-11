@@ -68,6 +68,11 @@ is pinned: development has moved since, and the counts below are for 3e60a55.
 - **F12 [reported]:** the Linear team keys are CER, OPS, EST, SEC, ONB, TOD, RD, BIZ, BRAND and
   VES (integrating lane w25:p1 brief, 2026-10-11, from the lane's tooling). Not re-read from
   Linear here. A key added later is not in the D7 pattern until the constant is edited.
+- **F13 [verified, 2026-10-11, plan 0053 finding 1]:** a release-roll PR fails the check as D6 first read. After
+  `make release-notes VERSION=9.9.9` on a scratch worktree, `git status --porcelain` lists CHANGELOG.md,
+  Cargo.lock and Cargo.toml, `[Unreleased]` is empty, and the Test block's `verdict` prints `FAIL-nolog`.
+- **F14 [verified, 2026-10-11, plan 0053 finding 2]:** D6 clashed with itself on agent files. A PR that changes
+  only `.claude/agents/uas-planner.md` printed `PASS`, because the `.md` exemption matched first.
 - **F11 [verified]:** `xtask/src/main.rs` lines 26 to 29 route `spec-check`, `toolchain-check` and
   `pin-check`. The CI `hygiene` job runs `make hygiene` on push and pull request.
 
@@ -83,14 +88,14 @@ lane w25:p1, "CHANGELOG and commit/PR text policy") that this spec is drafted.
 |---|---|---|---|
 | D1 | One bullet per user-visible PR, under `## [Unreleased]`, under one heading of D3. A wave PR gets one bullet for the wave. The bullet is one paragraph with no hard wrap and no nested list. It names the spec and plan package when there is one. No length cap: the practice runs to several hundred characters. | Spec 0048 D13 ruled the one-line-per-PR rule. The wave bullets in F1 are the practice. | ruled: 0048 D13 (the operator, 2026-10-11 about 02:35Z); wave and shape lane-decided |
 | D2 | The integrating lane writes the line, as a `docs(changelog)` commit inside the PR before it is marked ready. A builder writes none. A human author writes their own. | One writer cannot conflict with itself (0050 D6). F3 shows this is the practice. | lane-decided (0050 D6) |
-| D3 | `[Unreleased]` may carry the Keep a Changelog 1.1.0 headings, each at most once, in this order: Added, Changed, Deprecated, Removed, Fixed, Security. A bullet goes under the heading that fits it. Cleaning F1 is a Plan item, not part of this commit. | F1 has duplicates; the format forbids none but the roll reads cleaner without them. | lane-decided |
-| D4 | A released section is never edited. Enforcement is the check, not release-plz: release-plz writes no CHANGELOG (F4). The test: every line of base from its first `## [x.y.z]` heading to the end shall be a suffix of head. The roll inserts above that point, so a roll PR passes; an edit inside it fails. | `changelog_update = false` means the tool offers no protection. A suffix test needs no knowledge of which PR is a roll. | lane-decided |
-| D5 | The check is `cargo xtask text-check --base <ref>`, with `make text-check`, and a CI job `text-check` on `pull_request` only. It uses `std` and the `git` binary, no new crate, so no spec 0004 pin. The job ships non-required. Making it required is a branch-protection change, which D10 rules. | A Rust xtask matches `spec-check` (F11). A job in `hygiene` would run on push without a base. | lane-decided: integrating lane w25:p1, 2026-10-11; required status: ruled (D10) |
-| D6 | The CHANGELOG-line rule applies to a PR that changes a file outside this exempt list (a PR that changes only `Cargo.toml` or `Cargo.lock` is not exempt): `docs/**`, `specs/**`, `engineering/**`, any `*.md` other than CHANGELOG.md, and `**/tests/**`. A PR whose head ref begins `dependabot/` is exempt. Any other PR must add a line to `[Unreleased]`: a line of head's section that base's lacks. `.claude/` and `.agents/` are not exempt: agent files are user-visible to the lanes (the 2026-10-10 repo-agents bullet). | F2: 25 of 28. One miss is exempt (dependabot); #130 and the old PR are real misses. A manifest-only PR is not exempt, because a feature or dependency change is user-visible. | lane-decided: integrating lane w25:p1, 2026-10-11 |
+| D3 | `[Unreleased]` may carry the Keep a Changelog 1.1.0 headings, each at most once, in this order: Added, Changed, Deprecated, Removed, Fixed, Security. A bullet goes under the heading that fits it. Deprecated sits after Changed and before Fixed; a roll that empties the section recreates it there. The heading rule fails a PR only when the merge base's headings were valid, so a branch cut before the cleanup is not failed for old duplicates (amended 2026-10-11, plan 0053 finding 6). Cleaning F1 is a Plan item, not part of this commit. | F1 has duplicates; the format forbids none but the roll reads cleaner without them. | lane-decided |
+| D4 | A released section is never edited. Enforcement is the check, not release-plz: release-plz writes no CHANGELOG (F4). Base means the merge base of `--base` and `--head`, never the tip of `--base`, so a roll that merged after the branch was cut does not fail the PR (amended 2026-10-11, plan 0053 finding 5). The test: every line of base from its first `## [x.y.z]` heading to the end shall be a suffix of head. The roll inserts above that point, so a roll PR passes; an edit inside it fails. | `changelog_update = false` means the tool offers no protection. A suffix test needs no knowledge of which PR is a roll. | lane-decided |
+| D5 | The check is `cargo xtask text-check --base <ref>` (diffed from the merge base of `--base` and `--head`), with `make text-check`, and a CI job `text-check` on `pull_request` only. It uses `std` and the `git` binary, no new crate, so no spec 0004 pin. The job ships non-required. Making it required is a branch-protection change, which D10 rules. | A Rust xtask matches `spec-check` (F11). A job in `hygiene` would run on push without a base. | lane-decided: integrating lane w25:p1, 2026-10-11; required status: ruled (D10) |
+| D6 | Tested in this order. (1) A path under `.claude/` or `.agents/` is never exempt, even a `.md` file: agent files are user-visible to the lanes (the 2026-10-10 repo-agents bullet). This rule wins over the Markdown exemption. (2) The CHANGELOG-line rule applies to a PR that changes a file outside this exempt list (a PR that changes only `Cargo.toml` or `Cargo.lock` is not exempt, except under 3): `docs/**`, `specs/**`, `engineering/**`, any `*.md` other than CHANGELOG.md, and `**/tests/**`. A PR whose head ref begins `dependabot/` is exempt. Any other PR must add a line to `[Unreleased]`: a line of head's section that base's lacks. (3) Release-roll exemption: a PR is exempt from the line when every changed file is a `Cargo.toml` (any depth), `Cargo.lock` or `CHANGELOG.md`, head's `[Unreleased]` holds no bullet, and head's CHANGELOG.md has a `## [x.y.z]` heading directly after `## [Unreleased]` that base lacks. That is the shape `make release-notes` writes (F13). The D4 suffix test still runs on it. | F2: 25 of 28. One miss is exempt (dependabot); #130 and the old PR are real misses. A manifest-only PR is not exempt, because a feature or dependency change is user-visible. F13: without 3 every release PR fails. A code PR that fakes the CHANGELOG shape changes a file outside the set, so it still fails. F14: the precedence in 1. | lane-decided: integrating lane w25:p1, 2026-10-11; amended 2026-10-11 from plan 0053 findings 1 and 2 |
 | D7 | A non-merge, non-revert commit subject in `base..head` shall match no ticket pattern: `\b(CER|OPS|EST|SEC|ONB|TOD|RD|BIZ|BRAND|VES)-[0-9]+\b`. The ID goes in the PR body as a line `Part of CER-N` or `Part of spec NNNN`. The check reads `git log`, so it also catches a commit made with `LEFTHOOK=0`. The prefix list is the team keys in F12 and is edited in one constant. Spec 0051 owns the type regex (0051 D4); this rule adds only the ID. | F8: the regex cannot see it. F6: one violation in 300. | lane-decided: integrating lane w25:p1, 2026-10-11; the key list is reported (F12) |
 | D8 | A CHANGELOG conflict is resolved by keeping every bullet from both sides and dropping the markers, including diff3 base sections (`|||||||`). Order within a heading does not matter. The check fails on any marker line. Fewer conflicts come from D2. | F10. Both-sides is lossless for a list of independent bullets. | lane-decided (0050 D6 reduces the rate) |
 | D9 | The PR body contract is the five template sections of F9 in order, and one `Part of` line. The check reports a missing section or line. It is advisory for now: it prints `warn:` and exits 0. | F7: 0 of 29 bodies use the template, so a hard fail would fail every PR on day one. | lane-decided: integrating lane w25:p1, 2026-10-11 |
-| D10 | Required status follows a date rule: `text-check` lands non-required; after seven days with no false failure the lane adds it to the required checks on `development`. The ruling counts six required checks; `ci.yml` line 2 lists four today (secrets, rust, cargo-deny, hygiene). The body checks (D9) stay advisory until the lane rules they fail; this spec sets no date for that. | A required check with a false failure blocks every PR, so a week of runs comes first. | ruled: the operator, lane w25:p1, 2026-10-11 about 03:40Z (AskUserQuestion), "Required once it runs green for a week"; the body-check flip is lane-decided |
+| D10 | Required status follows a date rule: `text-check` lands non-required; after seven days with no false failure the lane adds it to the required checks on `development`. The count is seven required checks on `development`: the five live contexts (`secrets`, `rust / cargo`, `cargo-deny`, `hygiene`, `ebpf-live`; `gh api repos/unsigned-gg/uas/branches/development/protection --jq .required_status_checks.contexts`, 2026-10-11, spec 0003 lines 58 to 64), plus `fork-gate` (spec 0051 D8) and `text-check`. The earlier text said six (amended 2026-10-11, plan 0053 finding 8). The body checks (D9) stay advisory until the lane rules they fail; this spec sets no date for that. | A required check with a false failure blocks every PR, so a week of runs comes first. | ruled: the operator, lane w25:p1, 2026-10-11 about 03:40Z (AskUserQuestion), "Required once it runs green for a week"; the body-check flip is lane-decided |
 | D11 | `RELEASING.md` (0048 D13, REQ-0048-15) links to this spec for the CHANGELOG rule and does not copy it. `AGENTS.md` rules 6 and 8 and `CONTRIBUTING.md` line 35 get a pointer here (Plan). Spec 0005 item 5 stays as the release-flow statement. | One owner for the contract text keeps four copies from drifting. | lane-decided |
 
 ### Requirements (EARS)
@@ -98,7 +103,7 @@ lane w25:p1, "CHANGELOG and commit/PR text policy") that this spec is drafted.
 - **[REQ-0053-01]** (Ubiquitous): The repository shall carry one bullet in `## [Unreleased]` of
   CHANGELOG.md for each user-visible PR, under a heading of the D3 set (0053 D1, 0053 D3).
 - **[REQ-0053-02]** (Ubiquitous): `## [Unreleased]` shall hold each of the headings Added,
-  Changed, Deprecated, Removed, Fixed and Security at most once, in that order (0053 D3).
+  Changed, Deprecated, Removed, Fixed and Security at most once, in that order (0053 D3), and `text-check` shall fail a PR for this only when the merge base's headings met it.
 - **[REQ-0053-03]** (Event-driven): WHEN a PR changes a file outside the exempt list of 0053 D6,
   `text-check` shall fail unless head's `[Unreleased]` section holds a line that base's lacks.
 - **[REQ-0053-04]** (Optional feature): WHERE the PR head ref begins `dependabot/`, or every
@@ -130,6 +135,13 @@ lane w25:p1, "CHANGELOG and commit/PR text policy") that this spec is drafted.
 - **[REQ-0053-16]** (Event-driven): WHEN `text-check` has run seven days on pull requests into
   `development` with no false failure, the integrating lane shall add it to the required checks
   (0053 D10).
+- **[REQ-0053-17]** (Optional feature): WHERE every changed file is a `Cargo.toml`, `Cargo.lock` or
+  CHANGELOG.md, head's `[Unreleased]` holds no bullet and head has a new `## [x.y.z]` heading
+  directly under it, `text-check` shall not require a CHANGELOG line and shall still run the D4
+  suffix test (0053 D6 rule 3).
+- **[REQ-0053-18]** (Unwanted behavior): IF a changed path is under `.claude/` or `.agents/`, THEN
+  `text-check` shall treat the PR as needing a CHANGELOG line even when the path ends in `.md`
+  (0053 D6 rule 1).
 
 ## Plan
 
@@ -161,13 +173,14 @@ only by a positive assertion.
 
 ```bash
 b=origin/development; s=$(mktemp -d); git worktree add -q --detach "$s" "$b"; trap 'git worktree remove --force "$s"' EXIT
-ex='^(docs|specs|engineering)/|(^|/)tests/|\.md$'
+ex='^(docs|specs|engineering)/|(^|/)tests/|\.md$'; ag='^\.(claude|agents)/'
 unrel() { awk '/^## \[Unreleased\]/{u=1;next} /^## \[[0-9]/{u=0} u' "$1"; }
 rel()   { awk '/^## \[[0-9]/{p=1} p' "$1"; }
-code()  { git -C "$s" diff --name-only "$b" | grep -vE "$ex" | grep -vc '^CHANGELOG.md$' || true; }
+code()  { f=$(git -C "$s" diff --name-only "$b" | grep -v '^CHANGELOG.md$'); { echo "$f" | grep -E "$ag"; echo "$f" | grep -vE "$ex"; } | grep -c . || true; }
+roll()  { [ -z "$(git -C "$s" diff --name-only "$b" | grep -vE '(^|/)Cargo\.toml$|^Cargo\.lock$|^CHANGELOG\.md$')" ] || return 1; [ "$(unrel "$s/CHANGELOG.md" | grep -c '^- ')" -eq 0 ] || return 1; h=$(awk '/^## \[Unreleased\]/{u=1;next} u&&NF{print;exit}' "$s/CHANGELOG.md"); case "$h" in '## ['[0-9]*) ;; *) return 1;; esac; ! git -C "$s" show "$b:CHANGELOG.md" | grep -qxF "$h"; }
 added() { comm -13 <(git -C "$s" show "$b:CHANGELOG.md" | unrel /dev/stdin | sort) <(unrel "$s/CHANGELOG.md" | sort) | grep -c .; }
 suffix(){ n=$(git -C "$s" show "$b:CHANGELOG.md" | rel /dev/stdin | wc -l); [ "$(tail -n "$n" "$s/CHANGELOG.md")" = "$(git -C "$s" show "$b:CHANGELOG.md" | rel /dev/stdin)" ]; }
-verdict() { if [ "$(code)" -gt 0 ] && [ "$(added)" -eq 0 ]; then echo FAIL-nolog; elif ! suffix; then echo FAIL-released; elif grep -qE '^(<<<<<<<|=======|>>>>>>>|\|\|\|\|\|\|\|)' "$s/CHANGELOG.md"; then echo FAIL-marker; else echo PASS; fi; }
+verdict() { if [ "$(code)" -gt 0 ] && [ "$(added)" -eq 0 ] && ! roll; then echo FAIL-nolog; elif ! suffix; then echo FAIL-released; elif grep -qE '^(<<<<<<<|=======|>>>>>>>|\|\|\|\|\|\|\|)' "$s/CHANGELOG.md"; then echo FAIL-marker; else echo PASS; fi; }
 reset() { git -C "$s" checkout -q -- .; }
 want() { [ "$2" = "$3" ] && echo "row $1: ok ($3)" || { echo "row $1: RED got $2 want $3"; r=1; }; }
 r=0
@@ -188,6 +201,11 @@ want 12 "$(printf 'Part of nothing\n' | grep -qE "$pl" && echo ACCEPT || echo RE
 want 13 "$(grep -q '^changelog_update = false' release-plz.toml && echo PASS || echo FAIL)" PASS
 want 5 "$(cd "$s" && make -s release-notes VERSION=9.9.9 >/dev/null 2>&1; sed -n 8,10p CHANGELOG.md | tr '\n' '|')" '## [Unreleased]||## [9.9.9] - '"$(date -u +%F)"'|'
 want 14 "$(suffix && echo PASS || echo FAIL)" PASS; reset
+rn() { (cd "$s" && make -s release-notes VERSION=9.9.9 >/dev/null 2>&1); }
+rn;                                                                              want 19 "$(verdict)" PASS; reset
+rn; sed -i '/^## \[0.1.0\]/,$ s/^- /- EDITED /' "$s/CHANGELOG.md";               want 20 "$(verdict)" FAIL-released; reset
+echo x >> "$s/.claude/agents/uas-planner.md";                                    want 21 "$(verdict)" FAIL-nolog; reset
+rn; echo "// x" >> "$s/crates/uas-cli/src/main.rs";                              want 22 "$(verdict)" FAIL-nolog; reset
 body() { for h in Problem 'What this does' Verified 'Gated steps after merge' Rollback; do grep -q "^## $h" "$1" || { echo "warn: missing $h"; :; }; done; grep -qE "$pl" "$1" || { echo "warn: no Part of"; :; }; return 0; }
 printf 'nothing\n' > "$s/b1"; sed -n 1,28p .github/pull_request_template.md | sed 's/Part of CER-N/Part of CER-9/' > "$s/b2"
 want 15 "$(body "$s/b1" | grep -c '^warn:'; body "$s/b1" >/dev/null; echo rc=$?)" $'6\nrc=0'
@@ -208,10 +226,12 @@ become its unit tests.
 | REQ | Row or check |
 |---|---|
 | 01, 03 | 1, 2 |
-| 02 | 17, 18 (the headings test). Today's file fails it (F1); P4 fixes that |
+| 02 | 17, 18 (the headings test). Today's file fails it (F1); P4 fixes that. The merge-base scope has no row yet; the xtask adds one |
 | 04 | 3 |
 | 05 | 4 |
 | 06 | 5, 14 |
+| 17 | 19, 20, 22 |
+| 18 | 21 |
 | 07 | 13 |
 | 08 | 6 |
 | 10, 11 | 7 to 9 (subjects), 11, 12 (the `Part of` line) |
@@ -237,3 +257,8 @@ become its unit tests.
 - Parked: a `skip-changelog` PR label as an escape hatch. Not added: a label is a bypass that
   the check cannot audit, and D6 already covers the real exemptions.
 - Parked: the merge-subject branch-name IDs (F6, 4dfd100) come from GitHub, not an author.
+- Amendment log: 2026-10-11, from plan 0053's findings (`engineering/plans/0053-changelog-and-commit-text-policy.md`):
+  D6 gains the release-roll exemption (REQ-17, F13, Test rows 19, 20, 22) restricted to Cargo.toml, Cargo.lock and
+  CHANGELOG.md, and the `.claude/` and `.agents/` precedence (REQ-18, F14, row 21); D4 and D5 diff from the merge base
+  (finding 5); D3 and REQ-02 apply only when the merge base's headings were valid, and Deprecated sits between Changed
+  and Fixed (findings 4 and 6); D10 counts seven required checks (finding 8). Rows 1 to 18 are unchanged.
