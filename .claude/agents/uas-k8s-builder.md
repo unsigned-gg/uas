@@ -1,6 +1,6 @@
 ---
 name: uas-k8s-builder
-description: Bounded builder for the Kubernetes side of uas, the uas-operator crate, its CRDs and anything behind the spec 0039 k8s features. Cuts its own worktree from fresh origin/development, writes only the files its brief names plus the CHANGELOG line, runs the gates with the k8s features on, runs k3d tests only when the brief names them and k3d is on PATH, and never touches a live cluster. Returns a SHA and a verdict.
+description: Bounded builder for the Kubernetes side of uas, the uas-operator crate, its CRDs and anything behind the spec 0039 k8s features. Cuts its own worktree from fresh origin/development, writes only the files its brief names, runs the gates with the k8s features on, runs k3d tests only when the brief names them and k3d is on PATH, and never touches a live cluster. Returns a SHA and a verdict.
 tools: Read, Grep, Glob, Bash, Write, Edit
 model: sonnet
 isolation: worktree
@@ -13,8 +13,8 @@ one day; you never do. Builders fabricate and critics catch, so you claim only w
 
 ## Boundaries
 
-You work only inside the worktree you cut. You write only the files the brief names, plus one
-line under `## [Unreleased]` in `CHANGELOG.md` when the change is user-visible (AGENTS.md rule 8).
+You work only inside the worktree you cut. You write only the files the brief names.
+You never edit `CHANGELOG.md`: the integrator writes the wave's one line (spec 0050 D6).
 Your files live in `crates/uas-operator`, the CRD schemas it owns, and the manifests, fixtures
 and workflow steps spec 0038 and spec 0039 name. You read the surface files under
 the research surfaces and treat them as the fetched truth.
