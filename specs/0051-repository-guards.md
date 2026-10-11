@@ -5,6 +5,7 @@ tags: [hooks, lefthook, guards, ci, gitleaks, conventional-commits]
 priority: high
 depends_on: [0002-verification-gates-and-evidence, 0003-branch-model-and-promotion, 0005-ci-cache-and-runners, 0048-licence-and-publication]
 ---
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
 
 # 0051-repository-guards
 
@@ -30,9 +31,9 @@ lane's unless marked proposed.
   `git push origin HEAD:main` and `git push origin HEAD:refs/heads/main` deny. `git -C /x push origin
   main`, `git push origin development` and `git push --force origin development` print nothing.
   `git push origin feat/main-menu` denies, a false positive.
-- **F4 [verified]:** `ci-gate.sh` lines 7 to 8 match `git -C dir push`; `guard-main-push.sh` line 8
-  matches only `git +push`. The two hooks disagree on what a push looks like.
-- **F5 [verified]:** `ci-gate.sh` line 4 reads `SKIP_CI_GATE` from its own environment. A prefix
+- **F4 [verified]:** `ci-gate.sh` lines 7 to 8 match `git -C dir push`; `guard-main-push.sh` line 7
+  matches only `git +push`, and line 8 tests the current branch against `main` only. The two hooks disagree on what a push looks like.
+- **F5 [verified]:** `ci-gate.sh` line 5 reads `SKIP_CI_GATE` from its own environment. A prefix
   typed inside the pushed command does not reach it. `lint-on-edit.sh` line 5 reads `SKIP_LINT` the
   same way. `settings.json` sets `timeout` 5 on the guard, 900 on ci-gate, 30 on lint-on-edit.
 - **F6 [asserted]:** Claude Code treats a hook that exceeds `timeout` as a non-blocking error and
@@ -45,7 +46,7 @@ lane's unless marked proposed.
   `Merge` reject. Spec 0003 line 45 states only "Conventional Commits", so the regex is wider.
 - **F8 [verified]:** `lefthook run pre-commit --force --commands gitleaks` prints `no leaks found`
   with gitleaks on PATH. With both gitleaks directories off PATH it prints `gitleaks not installed -
-  CI will enforce` and exits 0 (lefthook.yml lines 17 to 22).
+  CI will enforce` and exits 0 (lefthook.yml lines 15 to 23, the missing-binary branch at 21 to 22; the skip prints a notice and is not silent).
 - **F9 [verified]:** `scripts/lefthook-affected-cargo.sh` maps changed files to `crates/<name>` and
   runs `cargo test` or `clippy` with `-j 2` for those packages. A change to `Cargo.*`,
   `rust-toolchain*`, `.github/`, `.cargo/`, `Makefile`, `lefthook.yml`, `scripts/` or `xtask/` runs
@@ -89,16 +90,16 @@ check, and CI never trusts that a local gate ran.
 | D2 | Bypasses are not logged locally and no logging is built. The push that carries a bypassed change meets CI, and the override text sits in the transcript. `# allow-direct-push` is for the integrator and states why in the report. `SKIP_CI_GATE` and `LEFTHOOK=0` are for any lane with the reason in the PR body. No lane sets `SKIP_CI_GATE` as a habit. | lane-decided |
 | D3 | ci-gate wraps `make check` in `timeout 840` and denies on exit 124, so the 900 s hook limit is never the first to fire. This makes the gate fail closed whatever F6 proves. | lane-decided |
 | D4 | This spec owns the subject regex. Spec 0003 line 45 is amended to say "subjects follow the regex in spec 0051" (Plan). Merge and Revert subjects stay allowed: merge commits are the branch model. | lane-decided |
-| D5 | guard-main-push gains three fixes: it matches `git -C dir push` like ci-gate, it denies a push whose target is `development` as well as `main` and `master`, and it matches the target as a whole ref name so `feat/main-menu` passes. | lane-decided |
+| D5 | guard-main-push gains four fixes: it matches `git -C dir push` like ci-gate, it denies a push whose target is `development` as well as `main` and `master`, it denies a bare `git push` while `development` is checked out (line 8 tests only `main`), and it matches the target as a whole ref name so `feat/main-menu` passes. | lane-decided |
 | D6 | The hook tests become a Make target `hook-test`, listed in `hygiene`, so the CI `hygiene` job runs them. The job's image already runs `jq` (ci.yml line 120). | lane-decided |
-| D7 | The gitleaks tolerance stays while the repository is private, because the CI `secrets` job scans every reachable commit. Before the fresh public repository exists (spec 0048 D9) a missing binary fails the hook and names the install command. | proposed, for the operator |
-| D8 | Once public, a fork PR gets no self-hosted job (F12 stays). A required job `fork-gate` on a hosted runner fails a fork PR until a maintainer pushes the head to a branch in this repository, then CI runs on that branch. This closes F14. | proposed, for the operator |
+| D7 | The gitleaks tolerance stays while the repository is private, because the CI `secrets` job scans every reachable commit. A missing binary now fails the commit hook with a non-zero exit and names the install step. It lands with the plan 0051 build. Ruled: the operator, label "Fail closed now", AskUserQuestion in lane w25:p1, 2026-10-11 about 03:25Z. | ruled |
+| D8 | Once public, a fork PR gets no self-hosted job (F12 stays). A required job `fork-gate` on a hosted runner fails a fork PR until a maintainer pushes the head to a branch in this repository, then CI runs on that branch. This closes F14. Ruled: the operator, label "Required fork-gate job", same interview and time. The job always runs, fails a fork PR until a maintainer applies a label, and lands before the public cut as a plan 0048 P13 prerequisite. | ruled |
 | D9 | `AGENTS.md` line 44 is corrected to name lefthook and the CI `secrets` job, not `make` (F13). | lane-decided |
 
 ### Requirements (EARS)
 
 - **[REQ-0051-01]** (Ubiquitous): The repository shall treat branch protection and the CI checks of spec 0003 as the authority, and every local gate shall be bypassable without weakening them.
-- **[REQ-0051-02]** (Event-driven): WHEN a Bash command pushes to `main`, `master` or `development`, in any `git` option form including `-C dir`, the guard-main-push hook shall deny it.
+- **[REQ-0051-02]** (Event-driven): WHEN a Bash command pushes to `main`, `master` or `development`, including a bare `git push` while `main` or `development` is checked out, in any `git` option form including `-C dir`, the guard-main-push hook shall deny it.
 - **[REQ-0051-03]** (Unwanted): IF a push names only a branch whose name contains `main` as a substring, such as `feat/main-menu`, THEN the guard-main-push hook shall allow it.
 - **[REQ-0051-04]** (Event-driven): WHEN the command carries `# allow-direct-push`, the guard-main-push hook shall allow it and print nothing.
 - **[REQ-0051-05]** (Event-driven): WHEN a Bash command runs `git push` in any option form and `SKIP_CI_GATE` is not `1`, the ci-gate hook shall run `make check` and deny the push when it exits non-zero.
@@ -107,11 +108,11 @@ check, and CI never trusts that a local gate ran.
 - **[REQ-0051-08]** (Unwanted): IF a commit's first line does not match the subject regex in `lefthook.yml`, THEN the commit-msg stage shall reject the commit.
 - **[REQ-0051-09]** (Ubiquitous): The subject regex shall accept the types `feat fix perf refactor docs test ci build infra security style chore`, an optional scope, an optional `!`, and git's own `Merge` and `Revert` subjects.
 - **[REQ-0051-10]** (Unwanted): IF a staged change contains a secret and gitleaks is installed, THEN the pre-commit stage shall exit non-zero.
-- **[REQ-0051-11]** (State-driven): WHILE the repository is private, the pre-commit stage shall skip the scan with a printed notice when gitleaks is not installed.
+- **[REQ-0051-11]** (Unwanted): IF gitleaks is not installed, THEN the pre-commit stage shall exit non-zero and name the install step.
 - **[REQ-0051-12]** (Event-driven): WHEN files change under `crates/<name>/`, the affected-crate script shall run cargo with `-j 2` for those packages only, and for the whole workspace when a workspace-level path changes or no base ref exists.
 - **[REQ-0051-13]** (Ubiquitous): The `hygiene` target shall run the three hook test scripts, and a failing script shall fail the target.
 - **[REQ-0051-14]** (Unwanted): IF a pull request comes from a fork, THEN the CI workflow shall run no self-hosted job on it.
-- **[REQ-0051-15]** (Optional): WHERE the repository is public, a required `fork-gate` job shall fail a fork PR until its head is pushed to a branch in this repository.
+- **[REQ-0051-15]** (Optional): WHERE the repository is public, a required `fork-gate` job shall always run and fail a fork PR until a maintainer applies a label.
 
 ## Plan
 
@@ -121,7 +122,7 @@ check, and CI never trusts that a local gate ran.
 - [ ] Amend spec 0003 line 45 to point at this spec's regex (D4). Done in a separate commit by the integrator; this commit leaves spec 0003 alone.
 - [ ] Correct `AGENTS.md` line 44 (D9).
 - [ ] Add a `lefthook.yml` comment that points to this spec as the owner of the subject regex.
-- [ ] After the operator rules D7 and D8: change the gitleaks branch to `exit 1`; add `fork-gate` to `ci.yml` and to the spec 0003 table.
+- [ ] D7: change the gitleaks branch to `exit 1` naming the install step. D8: add `fork-gate` to `ci.yml` and to the spec 0003 table, before the public cut (plan 0048 P13).
 - [ ] Test F6 in a live session with `timeout` set to 1 and a `sleep 5` hook, and record the result here.
 
 ## Test
@@ -130,7 +131,8 @@ Rows marked "red today" fail on the current tree and pass after the Plan item la
 
 | Requirement | Negative control |
 |---|---|
-| REQ-0051-02 | Planted `git push origin main` denies (green today). Red today: `git -C x push origin main` and `git push origin development` print nothing (F3). |
+| REQ-0051-01 | `gh api repos/unsigned-gg/uas/branches/development/protection --jq .required_status_checks.contexts` lists the five contexts of spec 0003; control: `SKIP_CI_GATE=1` leaves that list unchanged. Text-level: delete one context name from the spec 0003 table in a scratch copy and the diff against the API output goes non-empty. |
+| REQ-0051-02 | Planted `git push origin main` denies (green today). Red today: `git -C x push origin main`, `git push origin development` and a bare `git push` on a branch named `development` print nothing (F3, F4). |
 | REQ-0051-03 | Red today: `git push origin feat/main-menu` denies (F3). Control: `git push origin feat/x` allows. |
 | REQ-0051-04 | `git push origin main # allow-direct-push` prints nothing (test row 10). Remove the marker and it denies. |
 | REQ-0051-05 | Stub `make` exiting 1: the hook prints a deny carrying the stub output. With `SKIP_CI_GATE=1` the stub is not reached (test-ci-gate.sh). Control: `git status` never reaches it. |
@@ -138,10 +140,12 @@ Rows marked "red today" fail on the current tree and pass after the Plan item la
 | REQ-0051-07 | A stub `rustfmt` exiting 1 leaves the hook exit code 0 (test-lint-on-edit.sh). |
 | REQ-0051-08, 09 | The F7 list: four accept, five reject. Delete `Merge .+` from a scratch copy of the regex and `Merge pull request #1` flips to reject. |
 | REQ-0051-10 | A scratch repo with a staged fake key: `lefthook run pre-commit --force --commands gitleaks` exits non-zero. Control: an empty stage prints `no leaks found`. |
-| REQ-0051-11 | Both gitleaks directories off PATH in a scratch shell: exit 0 and the notice (F8). Red the day D7 lands. |
+| REQ-0051-11 | Both gitleaks directories off PATH in a scratch shell: today exit 0 and the notice (F8). After D7 it exits non-zero, so this row is red until then. |
 | REQ-0051-12 | Stage a `specs/` file only: the script prints `no crate changes`. Stage `Cargo.lock`: it prints `full workspace`. |
 | REQ-0051-13 | Red today: F2. After D6, break one test row and `make hygiene` exits non-zero. |
-| REQ-0051-14, 15 | Read `ci.yml`: each job carries the `head.repo.full_name` guard (F12). Not exercisable until a fork exists. F14 and D8 are the open question. |
+| REQ-0051-14 | Text-level control, not a live fork: `grep -c 'head.repo.full_name == github.repository' .github/workflows/ci.yml` prints 6. In a scratch copy delete one such line and the count prints 5, so the grep goes red. |
+| REQ-0051-14 (concurrency) | Text-level: `grep -c 'cancel-in-progress: ${{ github.event_name == .pull_request. }}' .github/workflows/ci.yml` prints 1; delete the line in a scratch copy and it prints 0. |
+| REQ-0051-15 | Text-level, red today: `grep -c 'fork-gate' .github/workflows/ci.yml` prints 0 until the job lands (F14). After it lands, remove the job in a scratch copy and the count returns to 0. |
 
 ```bash
 for t in test-guard-main-push test-ci-gate test-lint-on-edit; do bash .claude/hooks/tests/$t.sh | tail -1; done
@@ -159,6 +163,6 @@ make spec-check JOBS=2 | tail -1
 - The brief called the regex wider than spec 0003; F7 confirms it, and D4 records it.
 - Open for other lanes: who installs `prepare-commit-msg`. It is a lefthook shim and does nothing
   here; not verified beyond its header.
-- Rulings needed from the operator: D7 and D8. Neither blocks the lane-decided Plan items.
+- D7 and D8 were ruled on 2026-10-11 about 03:25Z. No ruling is pending. The tag sits after the frontmatter, as in the other specs, because spec-check wants the frontmatter first.
 - The guards stop honest mistakes, not a determined bypass. Branch protection is the control that
   holds (spec 0003).
