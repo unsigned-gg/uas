@@ -182,7 +182,7 @@ Package 4, ruled D7 and D12 (0050 P4):
 - [x] R13 status parity, with a test that plants a mismatch (REQ-0052-15). Done in PR #188 (plan 0052 P7), 2026-10-11.
 - [ ] Amend spec 0050's P4 box (lines 164 to 166) through plan 0050 to say the integrating lane took P4 here.
 - [x] R14 plan package shape as a warning, with a test on a package that lacks a done-when (REQ-0052-16). Done in PR #192 (plan 0052 P9), 2026-10-11.
-- [x] Amend this spec for R14 (plan 0052 P10). Done in this PR, 2026-10-11 (the integrator fills the number).
+- [x] Amend this spec for R14 (plan 0052 P10). Done in #193, 2026-10-11 (the integrator fills the number).
 - [ ] BLOCKED, plan 0052 P11: promote R07 in legacy to an error. The clean week started 2026-10-11, the day PR #185 landed and the keyword warnings cleared (merged 05:03Z). The lane dates the promotion after that week (D5 step 3).
 - [ ] BLOCKED, plan 0052 P12: promote R14 to an error. The clean week starts on the day PR #192 lands, 2026-10-11 if it lands today (D12). The lane dates the promotion after that week.
 
