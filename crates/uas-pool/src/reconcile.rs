@@ -4,7 +4,7 @@
 //! pool left behind. Ownership is the advisory lock on the slot marker, never a
 //! pid: a marker whose lock can be taken is an orphan, a held lock is a live
 //! pool. The filesystem half of the reclaim lives here; the cgroup half is
-//! `reclaim_cgroup` (spec 0040 plan P5).
+//! `freezer::reclaim_cgroup`.
 
 use std::ffi::OsString;
 use std::fs::{self, File, OpenOptions, TryLockError};
@@ -16,6 +16,7 @@ use rustix::fs::OFlags;
 use uas_domain::ReconcileReport;
 
 use crate::error::PoolError;
+use crate::freezer;
 use crate::marker::{SlotMarker, MARKER_NAME, MARKER_TMP_NAME};
 
 /// The two roots a reconcile pass may touch (spec 0040 D2, D6).
@@ -25,6 +26,10 @@ pub struct ReconcileRoots {
     pub common_git_dir: PathBuf,
     /// Directory every slot `worktree_dir` must live under.
     pub worktree_root: PathBuf,
+    /// Cgroup directory holding the `slot-<id>` cgroups. `None` skips the cgroup
+    /// step. Production callers keep it `None` until the worktree is provisioned
+    /// before the cgroup (plan P7).
+    pub cgroup_root: Option<PathBuf>,
 }
 
 /// What one scanned entry came to.
@@ -231,11 +236,21 @@ fn branch_ref_name(name: &OsString, marker: &SlotMarker) -> Result<gix::refs::Fu
         .map_err(|e| refused(name, format!("invalid branch name: {e}")))
 }
 
-/// Hook for the cgroup half of the reclaim order (spec 0040 D3: write `cgroup.kill`,
-/// wait for `populated 0`, `rmdir` descendants deepest first, then the slot cgroup).
-/// It runs before any file is removed. Plan P5 fills this in; until then it does
-/// nothing.
-fn reclaim_cgroup(_roots: &ReconcileRoots, _marker: &SlotMarker) -> Result<(), PoolError> {
+/// Kill and remove the slot cgroup (spec 0040 D3). It runs before any file is
+/// removed. A timeout or refusal fails the entry and leaves the marker for the
+/// next start (D4).
+fn reclaim_cgroup(roots: &ReconcileRoots, marker: &SlotMarker) -> Result<(), PoolError> {
+    let Some(root) = &roots.cgroup_root else {
+        return Ok(());
+    };
+    let mut parts = Path::new(&marker.cgroup).components();
+    let (Some(Component::Normal(leaf)), None) = (parts.next(), parts.next()) else {
+        return Err(PoolError::ReconcileRefused {
+            slot: marker.slot_id.clone(),
+            reason: "marker cgroup is not a single path component".to_string(),
+        });
+    };
+    freezer::reclaim_cgroup(&root.join(leaf), freezer::DEFAULT_RECLAIM_TIMEOUT)?;
     Ok(())
 }
 
