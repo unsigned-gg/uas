@@ -21,7 +21,7 @@ pass=0 fail=0
 t() {
   local expect="$1" json="$2" desc="$3" rc_stub="${4:-0}" skip="${5:-0}" got hook_rc
   export RUSTFMT_LOG="$WORK/log"; rm -f "$RUSTFMT_LOG"
-  printf '%s' "$json" | PATH="$WORK/bin:$PATH" STUB_RUSTFMT_RC="$rc_stub" SKIP_LINT="$skip" bash "$HOOK"
+  PATH="$WORK/bin:$PATH" STUB_RUSTFMT_RC="$rc_stub" SKIP_LINT="$skip" bash "$HOOK" <<<"$json"
   hook_rc=$?
   got=skipped; [ -f "$RUSTFMT_LOG" ] && got=called
   if [ "$got" = "$expect" ] && [ "$hook_rc" = 0 ]; then pass=$((pass+1)); else

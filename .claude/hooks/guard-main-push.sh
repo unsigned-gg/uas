@@ -11,7 +11,10 @@ deny=0
 # One shell segment per line; a segment is a push when it is git, option words, then push.
 while IFS= read -r seg; do
   seg=${seg#"${seg%%[![:space:]]*}"}
+  seg=${seg//[\"\']/}
   read -ra w <<<"$seg"
+  # Skip leading NAME=value words, sudo and env.
+  while [ "${#w[@]}" -gt 0 ] && [[ ${w[0]} =~ ^[A-Za-z_][A-Za-z0-9_]*=|^(sudo|env)$ ]]; do w=("${w[@]:1}"); done
   [ "${w[0]:-}" = git ] || continue
   i=1 dir=.
   while [ "$i" -lt "${#w[@]}" ] && [ "${w[$i]}" != push ]; do
@@ -24,15 +27,21 @@ while IFS= read -r seg; do
   done
   [ "${w[$i]:-}" = push ] || continue
   # Positional args after push: the first is the remote, the rest are refspecs.
-  args=()
+  args=() needcur=0
   for a in "${w[@]:$((i+1))}"; do
-    case "$a" in -*) ;; *) args+=("$a") ;; esac
+    case "$a" in
+      --all|--mirror) deny=1 ;;
+      --repo=*) args=("${a#--repo=}") ;;
+      -*) ;;
+      *) args+=("$a") ;;
+    esac
   done
   for a in "${args[@]:1}"; do
     a=${a#+}; a=${a##*:}
     if [[ $a =~ ^${protected}$ ]]; then deny=1; fi
+    [ "$a" = HEAD ] && needcur=1
   done
-  if [ "${#args[@]}" -le 1 ]; then
+  if [ "${#args[@]}" -le 1 ] || [ "$needcur" = 1 ]; then
     cur=$(git -C "$dir" branch --show-current 2>/dev/null)
     case "$cur" in main|development) deny=1 ;; esac
   fi
