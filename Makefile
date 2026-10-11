@@ -151,7 +151,7 @@ pool-live-test: ## Run the uas-pool live cgroup tests, fail on any skip (delegat
 	mkdir -p "$$(dirname "$(POOL_LIVE_LOG)")"
 	: > "$(POOL_LIVE_LOG)"
 	rc=0
-	cargo nextest run -p uas-pool --test freezer --build-jobs $(JOBS) --locked --no-fail-fast --nocapture >> "$(POOL_LIVE_LOG)" 2>&1 || rc=1
+	cargo nextest run -p uas-pool --test freezer --build-jobs $(JOBS) --locked --no-fail-fast --nocapture --color never >> "$(POOL_LIVE_LOG)" 2>&1 || rc=1
 	BIN=$$(cargo test -p uas-pool --test limits_live --no-run -j $(JOBS) --message-format=json 2>/dev/null | jq -r 'select(.reason=="compiler-artifact" and .target.name=="limits_live") | .executable' | grep -v null | tail -n1)
 	test -x "$$BIN" || { echo "pool-live-test: limits_live binary not found" >&2; exit 1; }
 	systemd-run --user --scope -q -p Delegate=yes "$$BIN" --nocapture --test-threads=1 >> "$(POOL_LIVE_LOG)" 2>&1 || rc=1
