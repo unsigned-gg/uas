@@ -1,5 +1,5 @@
 ---
-status: planned
+status: in-progress
 created: 2026-10-11
 tags: [hooks, lefthook, guards, ci, gitleaks, conventional-commits]
 priority: high
@@ -9,7 +9,7 @@ depends_on: [0002-verification-gates-and-evidence, 0003-branch-model-and-promoti
 
 # 0051-repository-guards
 
-> **Status**: planned, **Priority**: high, **Created**: 2026-10-11
+> **Status**: in-progress, **Priority**: high, **Created**: 2026-10-11
 
 ## Overview
 

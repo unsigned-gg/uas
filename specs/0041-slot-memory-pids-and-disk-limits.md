@@ -86,7 +86,7 @@ D3). The kernel enforces them; the pool observes `memory.events` and reports.
 | REQ-0041-01 | A fake freezer records writes; the test asserts `memory.max`, `memory.high` and `pids.max` are written before `exec`. Goes red if any write is removed. |
 | REQ-0041-02 | A unit test feeds a fake `MemTotal` of 6 GiB, 54 GiB and 256 GiB with `host_max_slots` 2 and expects a refusal, 13.5 GiB and 64 GiB, with `memory.high` 10.8 GiB and 51.2 GiB for the last two. A fourth case, 54 GiB with `host_max_slots` 3, expects 9 GiB. Goes red if the 16 GiB ceiling is kept (256 GiB then gives 16 GiB) or the divisor ignores `host_max_slots` (the fourth case then gives 13.5 GiB). |
 | REQ-0041-04 | A fake `statvfs` reports 1 GiB free; `allocate` returns `DiskLow`. Goes red if the check is removed. |
-| REQ-0041-07 | Under `make ebpf-test`, a worker runs `python3 -c "x=bytearray(2**32)"` (4 GiB) in a slot with `memory.max` at the 2 GiB floor; the receipt shows `oom_kill 1` and `Killed(Oom)`. Goes red if the outcome is `Exited(137)`. A second worker forks past `pids.max` 64; the receipt shows `pids_max_hits` above 0 and the outcome `Exited(code)`. Goes red if the outcome is a `Killed` variant. |
+| REQ-0041-07 | Under `make pool-live-test`, a worker runs `python3 -c "x=bytearray(2**32)"` (4 GiB) in a slot with `memory.max` at the 2 GiB floor; the receipt shows `oom_kill 1` and `Killed(Oom)`. Goes red if the outcome is `Exited(137)`. A second worker forks past `pids.max` 64; the receipt shows `pids_max_hits` above 0 and the outcome `Exited(code)`. Goes red if the outcome is a `Killed` variant. |
 | REQ-0041-11 | A fake `MemTotal` of 6 GiB with `host_max_slots` 2 gives 1.5 GiB; `allocate` returns `MemoryLow` and creates no slot cgroup. Goes red if the floor clamps up to 2 GiB or the check is removed: `allocate` then succeeds. |
 | REQ-0041-12 | A test starts a pool with no override, with `UAS_SLOT_MEMORY_MAX` set, and with a `PoolConfig` value; the captured `info` line names `formula`, `env` and `config` in turn. Goes red if the line or its source field is removed. |
 
@@ -95,8 +95,9 @@ cargo nextest run -p uas-pool limits -j 2
 cargo nextest run -p uas-domain outcome -j 2
 ```
 
-The live OOM and pids cases run under `make ebpf-test` on a workstation and print a skip
-where `/sys/fs/cgroup/uas` cannot be created.
+The live OOM and pids cases run under `make pool-live-test` on a workstation (a uid-owned cgroup
+v2 user slice, no sudo). Under `make test` they print a skip where that slice is not writable;
+`make pool-live-test` fails on that skip.
 
 ## Notes
 
