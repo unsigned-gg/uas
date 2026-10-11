@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
+- Spec 0045 wave 1 (plan 0045 P1 to P3): `make sbom` writes CycloneDX 1.5 (unblocks plan 0055 P7); `SECURITY.md` promises an acknowledgement within 5 business days; spec 0004's `toml` row names `xtask` and the CI tools table pins `cargo-audit` 0.22.1 (CI installs 0.22.2 today through the unversioned install-action; plan 0045 P8 closes that).
 - Spec 0017 wave 1 (plan 0017 P1 to P3): `RouterError` gains `InvalidPayload`, `UpstreamTimeout` and `StreamTerminated`; the `health` and `multiplexer` modules exist (empty, spec 0017 D4 and D5); spec 0017 carries requirement ids, a Test row per requirement, and names that match the tree (`PrefixInput::hash`, `AffinityTable`); spec 0004's `serde_json` row names `uas-router`.
 - `make pool-live-test` runs the uas-pool live cgroup test binaries (`freezer` under nextest, `limits_live` inside a delegated systemd user scope) as the current uid, no sudo, and exits 1 when any case prints `skipped:`; specs 0040 and 0041 name it instead of `make ebpf-test` (plans 0040 P8, 0041 P8, 0015 P6). CI does not run it.
 - Plan bookkeeping: `(DONE <date>, #<PR>)` marks on 34 merged packages of plans 0048, 0049, 0051, 0052 and 0053; specs 0049, 0051, 0052 and 0053 move to `in-progress` and 0020 and 0021 to `complete` (spec 0050 D13, D14); `.claude/agents/README.md` names the six required checks and `uas-foreman.md` follows spec 0050 D4, D8 and D12.
