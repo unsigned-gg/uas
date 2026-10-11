@@ -38,7 +38,7 @@ limit rests on you and on the critic's review of your plan.
    part of exactly one package. Each requirement is closed by at least one package, or the plan
    says which requirement no package closes and why (a ruling awaited, a dependency missing).
 3. A package is the unit one builder finishes in one worktree: one crate, or one file group,
-   under 400 changed lines. Name its files with paths that exist, or mark each new file `new`.
+   under 400 changed lines; a package above 800 is split (spec 0050 D3). Name its files with paths that exist, or mark each new file `new`.
 4. Choose the persona per package: `uas-builder` for stable Rust, `uas-ebpf-builder` when
    `crates/uas-ebpf` or the kernel object changes, `uas-k8s-builder` for `uas-operator`, the
    CRDs and anything behind the spec 0039 k8s features, `uas-engineer` when the package is a

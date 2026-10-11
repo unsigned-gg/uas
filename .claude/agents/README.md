@@ -12,7 +12,7 @@ opus, foreman on sonnet, builders on sonnet (the operator, 2026-10-10, estate-wi
 | `uas-engineer` | opus | specs, briefs | a concept or architecture change, or a package needs a brief |
 | `uas-builder` | sonnet | one package in a worktree | a brief names stable-Rust files and a done-when |
 | `uas-ebpf-builder` | sonnet | `crates/uas-ebpf`, the object and its hash | the package touches the kernel program or the loader |
-| `uas-critic` | opus | nothing | before any PR is marked ready, and on every builder SHA |
+| `uas-critic` | opus | nothing | once on each merged wave branch before its PR is marked ready, and on a builder SHA that touches unsafe, the sandbox, the pool's kernel calls or crates/uas-ebpf |
 | `uas-foreman` | sonnet | nothing | only when a pane gang is applied through saga (`uas-estate`) |
 | `uas-architect` | the team slot (max tier) | the design-debt list | in the `uas-estate` gang: a plan, spec or brief needs a design review |
 | `uas-prober` | haiku | nothing | in the `uas-estate` gang: the foreman names a CI, PR, repo or inbox probe |
@@ -21,9 +21,10 @@ opus, foreman on sonnet, builders on sonnet (the operator, 2026-10-10, estate-wi
 
 ## Two tiers
 
-1. **In-lane waves (default).** The lane runs up to three subagents at once through the Agent
-   tool: builders in sibling worktrees, then `uas-critic`, then the lane pushes with
-   `git -C <worktree>`, opens the PR and lands on green. Surfaces are built once with
+1. **In-lane waves (default).** The lane runs at most five agents at once (builders, critics and
+   probers together), at most three of them builders in a wave, through the Agent tool: builders
+   in sibling worktrees, then the lane merges them into a wave branch and opens a draft PR, then
+   `uas-critic` reads the merged branch, then the lane lands on green. Surfaces are built once with
    `surface-builder` into the research surfaces and every agent reads them there.
 2. **Pane gang (on request).** `saga yggdrasil team apply uas-estate --cwd <repo>` splits a
    herdr tab into the `estate-cockpit` grid; the lane starts each pane with
@@ -35,24 +36,28 @@ opus, foreman on sonnet, builders on sonnet (the operator, 2026-10-10, estate-wi
 
 ## Build handoff
 
-the operator's rule of 2026-10-10 in lane w25:p1: build tasks go to orchestrated agents, and the
-lane keeps decisions, integration and every gated action. The pipeline, per spec:
+The procedure of record is spec 0050 (`specs/0050-build-handoff-pipeline.md`). In short:
 
-1. `uas-planner` reads the landed spec and writes `engineering/plans/<spec>.md`: packages with
-   files, a done-when from the spec's Test section, the red-first control, the persona, and a
-   wave order of at most three concurrent builders with disjoint files.
-2. The lane reads the plan, resolves anything BLOCKED (a ruling, a spec 0004 pin), and
-   dispatches wave 1 through the Agent tool: `uas-builder`, `uas-ebpf-builder` or
-   `uas-k8s-builder`, each in its own worktree cut from fresh `origin/development`, each with
-   the package brief verbatim. Up to the lane's cap at once: three by the global rule, raised to five by the operator on
-   2026-10-10 for this lane (the account's token ceiling is the reason for a cap at all).
-3. Each builder returns a SHA and the verdict block. `uas-critic` reads every SHA against its
-   brief and the spec; a defect goes back to the same builder with the critic's line.
-4. The lane merges the wave's branches into one feature branch, pushes with `git -C`, opens the
-   PR with the receipts in the body, and `ci-watcher` (global) or `uas-prober` watches the
-   checks. Green lands with a merge commit; red stops the wave (no merge around it).
-5. The next wave starts from the new `origin/development`. The plan file is marked done when
-   every package landed, and the spec's status moves to `in-progress` or `complete`.
+1. `uas-planner` writes `engineering/plans/<spec>.md` from a landed spec: packages with files, a
+   done-when, a red-first control, a persona and a wave (at most three builders, disjoint files).
+2. The lane resolves anything BLOCKED and dispatches one wave through the Agent tool, each builder
+   in its own worktree cut from fresh `origin/development`. The lane runs at most five agents at
+   once, counting builders, critics and probers (the operator, 2026-10-10).
+3. A builder commits signed, never pushes, never edits `CHANGELOG.md`, and returns the verdict
+   block: 15 lines or fewer, bad news first, a tier on each claim.
+4. The lane merges the builder branches into one wave branch with merge commits, adds the wave's
+   one `docs(changelog)` commit, pushes with `git -C`, and opens the PR as a draft.
+5. `uas-critic` makes one pass on the merged wave branch between draft and ready and returns
+   numbered defects. A package that touches `unsafe`, the sandbox, the pool's kernel calls or
+   `crates/uas-ebpf` also gets a pass on its builder branch before the merge (D8).
+6. The lane marks the PR ready and lands it with a merge commit pinned to the head when the five
+   required checks read SUCCESS. Red or pending stops the wave.
+7. After `gh pr view <n> --json state` reads MERGED, and not before, the lane removes the wave's
+   worktrees, runs `git worktree prune`, and deletes the local builder and wave branches.
+8. Conflicts resolve with merge commits. In `CHANGELOG.md` keep every line from both sides; in
+   `specs/README.md` keep one row per spec in number order. A scripted resolution drops the whole
+   `|||||||` base section (diff3). No conflict marker reaches a pushed commit.
+9. The plan's last package moves the spec status (D14).
 
 While a development hold stands, step 2 does not run: planning is reading and is exempt;
 dispatching builders is development work and waits for the lift.
@@ -60,8 +65,8 @@ dispatching builders is development work and waits for the lift.
 ## Rules every agent carries
 
 `AGENTS.md` is the rule set. In particular: `-j 2` on shared hosts (rule 2), evidence tiers with a
-named command (rule 3), signed conventional commits and merge commits only (rules 5 to 7), a
-CHANGELOG line (rule 8), pins in spec 0004 before use (rule 12), `unsafe` only in the syscall
+named command (rule 3), signed conventional commits and merge commits only (rules 5 to 7), one
+CHANGELOG line per wave PR, written by the integrator (rule 8), pins in spec 0004 before use (rule 12), `unsafe` only in the syscall
 crates with a `SAFETY` comment (rule 14), the crate layering, and `uas-domain` with zero I/O.
 Builders never push: the push hooks judge the shared checkout, and the shared checkout belongs to
 whoever is in it. Verdicts are 15 lines or fewer and say what a command proved.
