@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: complete
 created: 2026-10-10
 tags: [cli, daemon, config, logging, exit-codes, version]
 priority: high
@@ -9,7 +9,7 @@ depends_on: [0001-cas-architecture-and-crate-layout, 0002-verification-gates-and
 
 # 0042-cas-binary-conventions
 
-> **Status**: in-progress, **Priority**: high, **Created**: 2026-10-10
+> **Status**: complete, **Priority**: high, **Created**: 2026-10-10
 
 ## Overview
 
@@ -61,12 +61,12 @@ Measured 2026-10-10 on ceres at development `bd31291`, debug build.
 
 ## Plan
 
-- [ ] `uas-ebpfd`: add `version = VERSION` to the command, set `.with_writer(std::io::stderr)`, default filter `info`.
-- [ ] `uas`: default filter `warn` when `RUST_LOG` is unset; `UAS_LOG_FORMAT` switch.
-- [ ] Workspace: move the stamp from `crates/uas-cli/build.rs` to a shared `build-rev` helper used by every binary crate.
-- [ ] Workspace `Cargo.toml`: add `env` to the `clap` features (line 33 has `derive` only), then `env = "UAS_WAVE_REPO"` on `--repo`, `env = "UAS_WAVE_STATE_DIR"` on `--state-dir`, and a new `--open-prs` flag with `env = "UAS_WAVE_OPEN_PRS"` on `wave step`, since that variable has no argument today (plan 0042 finding 3; ruled by the integrating lane 2026-10-10 as within REQ-0042-02, not a new decision).
-- [ ] `make release-notes`: refuse a `-dirty` rev.
-- [ ] Spec 0038: `uas-operator` cites this spec for its flags, logging and exit codes.
+- [x] `uas-ebpfd`: add `version = VERSION` to the command, set `.with_writer(std::io::stderr)`, default filter `info`.
+- [x] `uas`: default filter `warn` when `RUST_LOG` is unset; `UAS_LOG_FORMAT` switch.
+- [x] Workspace: move the stamp from `crates/uas-cli/build.rs` to a shared `build-rev` helper used by every binary crate.
+- [x] Workspace `Cargo.toml`: add `env` to the `clap` features (line 33 has `derive` only), then `env = "UAS_WAVE_REPO"` on `--repo`, `env = "UAS_WAVE_STATE_DIR"` on `--state-dir`, and a new `--open-prs` flag with `env = "UAS_WAVE_OPEN_PRS"` on `wave step`, since that variable has no argument today (plan 0042 finding 3; ruled by the integrating lane 2026-10-10 as within REQ-0042-02, not a new decision).
+- [x] `make release-notes`: refuse a `-dirty` rev.
+- [x] Spec 0038: `uas-operator` cites this spec for its flags, logging and exit codes.
 
 ## Test
 

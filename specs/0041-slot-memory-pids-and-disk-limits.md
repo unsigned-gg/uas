@@ -1,5 +1,5 @@
 ---
-status: planned
+status: in-progress
 created: 2026-10-10
 tags: [pool, cgroup, memory, pids, disk, limits, phase-3]
 priority: high
@@ -9,7 +9,7 @@ depends_on: [0001-cas-architecture-and-crate-layout, 0015-slot-pool-cgroup-freez
 
 # 0041-slot-memory-pids-and-disk-limits
 
-> **Status**: planned, **Priority**: high, **Created**: 2026-10-10
+> **Status**: in-progress, **Priority**: high, **Created**: 2026-10-10
 
 ## Overview
 
