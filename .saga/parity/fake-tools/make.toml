@@ -1,0 +1,6 @@
+# Canned answers of the fake `make` for the wave smoke parity run: every target succeeds.
+[[rule]]
+pat = "*"
+out = ""
+err = ""
+code = 0
