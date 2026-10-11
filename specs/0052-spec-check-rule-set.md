@@ -82,10 +82,11 @@ control: it exits 0 with two warnings.
   (`> **Status**: ...`, line 12 here), so a stale body line passes (plan 0052 findings 1 and 3).
 - **F10 [reported]:** `engineering/plans/README.md` says a plan is deleted or marked done when its
   packages land (read 2026-10-11). Plans are working files.
+- **F12 [verified]:** on 2026-10-11 at d1d0648 (the wave 6 head with P9), `cargo xtask spec-check` printed two warnings, both length, and none from R14. Command: `cargo xtask spec-check 2>/dev/null | grep -c 'engineering/plans'` printed 0. Control: the same run on a scratch copy with `**Done-when` stripped from plan 0049 printed five R14 warnings.
 
 ## Design
 
-Thirteen rules enforced today, R01 to R13, each with its error paths in the row (R12 over plans and R13 since PR #188, 2026-10-11), and one decided and not built, R14. The code comment numbers stop being the reference (D11).
+Fourteen rules enforced today, R01 to R14, each with its error paths in the row (R12 over plans and R13 since PR #188, R14 since PR #192, both 2026-10-11). The code comment numbers stop being the reference (D11).
 
 | ID | Checks | Mode | Severity | Message stem (exact, after `specs/<file>:<line>: `) |
 |---|---|---|---|---|
@@ -102,7 +103,7 @@ Thirteen rules enforced today, R01 to R13, each with its error paths in the row 
 | R11 | `specs/README.md` exists and links every spec once and no missing file | README | error | `specs/README.md:1: 0099-plant.md is not listed`; `... is listed 2 times`; `lists 0098-ghost.md but the file does not exist`; `file is missing` |
 | R12 | Relative links in specs, the README and `engineering/plans/*.md` resolve (D7, PR #188) | all, plans | error | `broken link `nope.md``, printed as `engineering/plans/<file>:<line>: broken link `nope.md`` for a plan |
 | R13 | Frontmatter `status` equals the Status column of the first README row of that spec (D12, PR #188) | README | error | `specs/<file>:<line>: status `X` differs from the specs/README.md row `Y``; `specs/README.md:<line>: no Status column` |
-| R14 | Plan packages hold Persona, Files, Done-when, Red-first or BLOCKED (D12) | plans | warning | not built; message fixed when built |
+| R14 | Each `### P<n>` package in `engineering/plans/*.md` other than the README holds `**Persona`, `**Files`, `**Done-when` and `**Red-first` (case-insensitive), or the word BLOCKED in its section, or the word DONE in its heading (D12, PR #192) | plans | warning | `engineering/plans/<file>:<line>: package P12 lacks Done-when`; one per package, naming the first missing label |
 
 Mode, modern or legacy, is set by an H2 named `Requirements`. Modern sections are Requirements,
 Design, Tasks, Verification, Notes. Legacy sections are Overview, Design, Plan, Test, Notes. The
@@ -135,7 +136,7 @@ stderr, then `spec-check: ok (N warning(s))` or `spec-check: N error(s)`.
 | D9 | The modal list stays the four words above. Adding a word follows D10. | Only `shall` lines are scanned; a longer list raises false positives on prose such as "may be empty". | lane-decided: uas-engineer, 2026-10-11 |
 | D10 | A rule change ships in one PR with three parts: an amendment of the table above, a unit test in `xtask/src/spec_check.rs` that goes red without the change, and a CHANGELOG line. | Today a rule can change with no spec and no test (F1, F9). | lane-decided: integrating lane brief, 2026-10-11 |
 | D11 | The code comment block stops carrying a numbered list. It points at this spec and keeps one line per rule name. That is a code change, left to a builder (Plan). | Two numbering schemes already disagree (F1). | lane-decided: uas-engineer, 2026-10-11 |
-| D12 | Two more rules (spec 0050 Plan P4, proposed there for Christian, taken by the integrating lane here; spec 0050's P4 box is amended by plan 0050 to point at this spec). R13: the frontmatter `status` of each spec shall equal the Status column of its `specs/README.md` row; a mismatch is an error. R14: each package in `engineering/plans/*.md` shall hold a Persona, Files, Done-when and Red-first, or the word BLOCKED with the spec line that blocks it (spec 0050 REQ-0050-01); a missing part is a warning first, an error on a date the lane sets after one clean week. | The registry status and the frontmatter drift apart today (the checker reads only the README links, R11). A plan without a done-when cannot be dispatched. | lane-decided: integrating lane w25:p1, 2026-10-11 (0050 P4) |
+| D12 | Two more rules (spec 0050 Plan P4, proposed there for Christian, taken by the integrating lane here; spec 0050's P4 box is amended by plan 0050 to point at this spec). R13: the frontmatter `status` of each spec shall equal the Status column of its `specs/README.md` row; a mismatch is an error. R14: each package in `engineering/plans/*.md` shall hold a Persona, Files, Done-when and Red-first, or the word BLOCKED with the spec line that blocks it (spec 0050 REQ-0050-01); a missing part is a warning first, an error on a date the lane sets after one clean week. A package whose heading holds DONE is exempt, because its fields are history (plan 0052 finding 4; built in PR #192, 2026-10-11). The check looks for the word BLOCKED, not for a spec line [asserted: plan 0052 P9]. | The registry status and the frontmatter drift apart today (the checker reads only the README links, R11). A plan without a done-when cannot be dispatched. | lane-decided: integrating lane w25:p1, 2026-10-11 (0050 P4) |
 
 ### Requirements (EARS)
 
@@ -154,7 +155,7 @@ stderr, then `spec-check: ok (N warning(s))` or `spec-check: N error(s)`.
 - **[REQ-0052-13]** (Ubiquitous): The change to a rule, a severity, a cap or the modal list shall ship with an amendment of this spec's tables and a unit test in `xtask/src/spec_check.rs` that fails without the change (D10).
 - **[REQ-0052-14]** (Ubiquitous): The comment block of `spec_check.rs` shall name this spec as the owner of the rule list and shall carry no second numbering of the rules (D11).
 - **[REQ-0052-15]** (Unwanted behavior): IF a spec's frontmatter `status` differs from the Status column of its `specs/README.md` row, THEN the checker shall report an error naming both values (R13).
-- **[REQ-0052-16]** (Unwanted behavior): IF a package in a plan file under `engineering/plans/` lacks a Persona, Files, Done-when or Red-first and is not marked BLOCKED with a spec line, THEN the checker shall print a warning naming the plan and the package (R14).
+- **[REQ-0052-16]** (Unwanted behavior): IF a package in a plan file under `engineering/plans/` lacks a Persona, Files, Done-when or Red-first and is not marked BLOCKED with a spec line and does not hold DONE in its heading, THEN the checker shall print a warning naming the plan, the line and the first missing field (R14).
 - **[REQ-0052-17]** (Event-driven): WHEN a link in a plan file under `engineering/plans/` does not resolve, the checker shall report an error naming the target (R12 over plans, D7).
 
 ## Plan
@@ -180,7 +181,10 @@ Package 4, ruled D7 and D12 (0050 P4):
 - [x] Run R12 over `engineering/plans/*.md`, with a test that plants a broken link (REQ-0052-17). Done in PR #188 (plan 0052 P7), 2026-10-11.
 - [x] R13 status parity, with a test that plants a mismatch (REQ-0052-15). Done in PR #188 (plan 0052 P7), 2026-10-11.
 - [ ] Amend spec 0050's P4 box (lines 164 to 166) through plan 0050 to say the integrating lane took P4 here.
-- [ ] R14 plan package shape as a warning, with a test on a package that lacks a done-when (REQ-0052-16). Open: plan 0052 P9.
+- [x] R14 plan package shape as a warning, with a test on a package that lacks a done-when (REQ-0052-16). Done in PR #192 (plan 0052 P9), 2026-10-11.
+- [x] Amend this spec for R14 (plan 0052 P10). Done in #193, 2026-10-11 (the integrator fills the number).
+- [ ] BLOCKED, plan 0052 P11: promote R07 in legacy to an error. The clean week started 2026-10-11, the day PR #185 landed and the keyword warnings cleared (merged 05:03Z). The lane dates the promotion after that week (D5 step 3).
+- [ ] BLOCKED, plan 0052 P12: promote R14 to an error. The clean week starts on the day PR #192 lands, 2026-10-11 if it lands today (D12). The lane dates the promotion after that week.
 
 ## Test
 
@@ -205,7 +209,7 @@ when the check named in it is removed from the code.
 | REQ-0052-13 | Not exercisable by a plant. Review check: a diff that touches a table row above or a rule constant must also touch the other two parts. `git diff --stat origin/development -- specs/0052-spec-check-rule-set.md xtask/src/spec_check.rs` lists both files. |
 | REQ-0052-14 | `grep -c 'Rule [0-9]*:' xtask/src/spec_check.rs` prints 0 and `grep -c 'spec 0052' xtask/src/spec_check.rs` prints at least 1. Red today: the first prints 3 (F1) and the second prints 0. |
 | REQ-0052-15 | Built in PR #188. Plant, run 2026-10-11 in a scratch `git archive` copy of a1014bf with its own target dir: frontmatter `status: in-progress`, README row `planned`: `error: specs/0049-cpm-migration-to-saga.md:2: status `in-progress` differs from the specs/README.md row `planned``, exit 1. Header cell `Status` renamed `State`: `error: specs/README.md:7: no Status column`. Control: the unplanted tree exits 0 (F11). Before #188 the checker exited 0 on both. |
-| REQ-0052-16 | Not built. Plant: a plan package with no `Done-when`. Red-first: exit 0 today (F7). Green: a `warning:` naming plan and package; a package marked BLOCKED with a spec line draws none. |
+| REQ-0052-16 | Built in PR #192. Plant, run 2026-10-11 in a scratch `git archive` copy of d1d0648 with its own target dir: `**Done-when` renamed `**Finish` in plan 0049: five lines `warning: engineering/plans/0049-cpm-migration-to-saga.md:67: package P1 lacks Done-when` (also lines 74, 84, 91, 98 for P2 to P5), `spec-check: ok (7 warning(s))`, exit 0. Control: the real tree draws none (F12). A package with BLOCKED in its section or DONE in its heading draws none (checker tests `plan_shape`). |
 | REQ-0052-17 | Built in PR #188. Plant, same scratch copy: `[x](nope.md)` appended to `engineering/plans/0052-spec-check-rule-set.md`: `error: engineering/plans/0052-spec-check-rule-set.md:159: broken link `nope.md``, `spec-check: 2 error(s)` with the R13 plant above, exit 1. A link to `../../specs/0001-first.md#design` passes (checker test `plan_links_are_checked` fixture). Before #188 it passed (F7). |
 
 ```bash
@@ -234,3 +238,4 @@ red with the exact H1 message; the scratch copy lives outside the repository.
 - F6's 2026-10-11 count comes from the checker itself. The earlier figure came from a throwaway script and was wrong.
 - Amendment log, 2026-10-11 (P5 count fix): last line of `cargo xtask spec-check` after this edit: `spec-check: ok (47 warning(s))`.
 - Amendment log, 2026-10-11 (P8, plan 0052): R12 over plans and R13 are built (PR #188); F3, F7, F11, the R12 and R13 rows, the Plan boxes for P6 (#185) and P7 (#188) and the Test rows 15 and 17 are amended. Left open on purpose: D5 step 3 (promote R07 after one clean week) and the D12 BLOCKED clause with its date for R14 as an error. Last line of `cargo xtask spec-check` on the scratch merge: `spec-check: ok (2 warning(s))`.
+- Amendment log, 2026-10-11 (P10, plan 0052): R14 is built (PR #192); the R14 row, D12, REQ-0052-16, F12, the Plan boxes and the Test row are amended. P11 and P12 stay BLOCKED on their clean week. Last line of `cargo xtask spec-check` after this edit: `spec-check: ok (2 warning(s))`.
