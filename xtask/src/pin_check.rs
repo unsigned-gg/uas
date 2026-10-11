@@ -157,7 +157,7 @@ pub fn check_repo(
     report
 }
 
-/// The `(crate, version)` pairs of every `| Crate | Version |` table. Only `X.Y.Z` versions count.
+/// The `(crate, version)` pairs of every `| Crate | Version |` table. Only `X.Y.Z` or `X.Y.Z+build` versions count.
 pub fn parse_pins(spec: &str) -> Vec<(String, String)> {
     let mut pins: Vec<(String, String)> = Vec::new();
     let mut in_table = false;
