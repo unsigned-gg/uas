@@ -63,13 +63,13 @@ exception that expires. Releases stop while the gate is red. The SBOM ships with
 - **[REQ-0045-01]** (Ubiquitous): The branch protection of `development` and `main` shall list `cargo-deny` as a required check, and `make deny` shall run `cargo deny check` against the repo's `deny.toml`.
 - **[REQ-0045-02]** (Event-driven): WHEN the weekly `audit` workflow runs, it shall run `cargo xtask advisory-check` and `make audit`, and `make audit` shall run `cargo audit --deny warnings` with one `--ignore` per `deny.toml` ignore id.
 - **[REQ-0045-03]** (Unwanted): IF the weekly `audit` run fails, THEN the workflow shall create or comment on the D7 Linear ticket on team CER, and it shall block no PR and no release.
-- **[REQ-0045-04]** (Ubiquitous): Every `[advisories] ignore` entry in `deny.toml` shall be a table, not a bare id string, with an `id` and a `reason` of the form `expires YYYY-MM-DD; <ticket>; <why>`.
+- **[REQ-0045-04]** (Ubiquitous): The `[advisories] ignore` entry in `deny.toml` shall be a table, not a bare id string, with an `id` and a `reason` of the form `expires YYYY-MM-DD; <ticket>; <why>`.
 - **[REQ-0045-05]** (Unwanted): IF an ignore entry is a bare id, has a malformed reason, an expiry before the check date, or an expiry more than 90 days after it, THEN `cargo xtask advisory-check` shall exit non-zero and name the entry.
 - **[REQ-0045-06]** (Event-driven): WHEN `make release-notes` runs, it shall run `cargo deny check advisories` first, and it shall exit non-zero without editing a file if that check fails.
 - **[REQ-0045-07]** (State-driven): WHILE `cargo deny check advisories` fails on the `main` checkout, the `release` workflow shall create no tag and no GitHub release.
 - **[REQ-0045-08]** (Event-driven): WHEN the `release` workflow creates a GitHub release, it shall attach the CycloneDX 1.5 JSON SBOM file of every workspace package to that release.
-- **[REQ-0045-09]** (Ubiquitous): `make sbom` shall run the cargo-cyclonedx version pinned in spec 0004 with `--format json --spec-version 1.5`, and the `sbom` workflow shall keep its artifact for 90 days.
-- **[REQ-0045-10]** (Ubiquitous): `SECURITY.md` shall name `chris@todie.io` as the private channel, the acknowledgement target D3 names, fixes for the latest `main` release only, and the rule that a secret found in the repo or its history is compromised and rotated.
+- **[REQ-0045-09]** (Ubiquitous): The `make sbom` target shall run the cargo-cyclonedx version pinned in spec 0004 with `--format json --spec-version 1.5`, and the `sbom` workflow shall keep its artifact for 90 days.
+- **[REQ-0045-10]** (Ubiquitous): The `SECURITY.md` file shall name `chris@todie.io` as the private channel, the acknowledgement target D3 names, fixes for the latest `main` release only, and the rule that a secret found in the repo or its history is compromised and rotated.
 - **[REQ-0045-11]** (Optional feature): WHERE the repository offers GitHub private vulnerability reporting, `SECURITY.md` shall name it as a second private channel beside the email.
 
 ## Plan
@@ -119,3 +119,4 @@ Passing means exit 0: each failing fixture fails inside its test, `valid.toml` p
 - Out of scope: CVE assignment, a GitHub security advisory per fix, and signing the SBOM.
 - Spec 0046 D9 (`toml` in `xtask`) was dropped by the saga ruling of 2026-10-10. The `advisory-check` parse therefore cites spec 0004's `### toml` section directly, and the Plan item carries the amendment that names `xtask`. Ruled: integrating lane w25:p1, 2026-10-11.
 - Amended 2026-10-11 (source: spec 0048 D6, ruled by the operator the same day; plan 0048 P12): D8 points at spec 0048 D6, which makes the crate the publication vehicle. D8 is closed by that ruling.
+- Amended 2026-10-11: opening words of the flagged requirement bullets reworded to begin with a standard EARS keyword; no change of meaning (spec 0052 P6).

@@ -159,10 +159,10 @@ to 12 below state it in this spec's terms.
 
 ### Requirements (EARS)
 
-- **[REQ-0049-01]** (Ubiquitous): After the removal PR, no uas crate shall read `.saga/plans/`,
+- **[REQ-0049-01]** (Ubiquitous): The uas crates shall not, after the removal PR, read `.saga/plans/`,
   compute a CPM schedule or a wave plan, run a wave step, or open or merge a PR (0049 D1,
   0049 D8).
-- **[REQ-0049-02]** (Ubiquitous): uas shall keep `LandingActivity::reconcile` and
+- **[REQ-0049-02]** (Ubiquitous): The uas code shall keep `LandingActivity::reconcile` and
   `LandingReceipt`, and the receipt JSON shall keep the spec 0022 D11 field set, including
   `merge_commit` and `NotAudited` (0049 D9).
 - **[REQ-0049-03]** (State-driven): WHILE the removal set exists, `uas wave --help` shall print
@@ -179,7 +179,7 @@ to 12 below state it in this spec's terms.
 - **[REQ-0049-07]** (Event-driven, saga): WHEN saga runs a wave plan, saga shall compute the spec
   0024 schedule, split the steps into waves of at most `[flow] max_concurrency`, zero-float
   first, and dispatch each step by its spec 0025 role (saga 0040 D4, saga 0040 D5, saga 0040 D6).
-- **[REQ-0049-08]** (Ubiquitous, saga): Saga shall hold its build lock around each reconcile,
+- **[REQ-0049-08]** (Ubiquitous, saga): The saga system shall hold its build lock around each reconcile,
   Critic run and Probe (saga 0040 D8). While uas runs waves, `SAGA_BUILD_LOCK` shall name the F9
   path, so one host runs at most one `make check JOBS=2` (spec 0025 D8).
 - **[REQ-0049-09]** (Unwanted behavior, saga): IF a step meets a spec 0025 not-ready row, or its
@@ -284,3 +284,4 @@ wave-only file (F3). P1 is a `chore` and the removal a `refactor!`, so neither c
 - Parked: `LandingActivity` has no slot caller yet; the spec 0022 Plan wires it after settle.
 - Parked: spec 0025 P15 (the pre-read `timeout`) is built in `wave_exec.rs` 972 to 999 but not
   ticked there. The 0049 D6 amendment of 0025 can tick it.
+- Amended 2026-10-11: opening words of the flagged requirement bullets reworded to begin with a standard EARS keyword; no change of meaning (spec 0052 P6).

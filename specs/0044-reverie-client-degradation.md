@@ -82,7 +82,7 @@ choice for the operator.
 - **[REQ-0044-07]** (Event-driven): WHEN the engine completes an activity with a client wired, it shall set `ActivityResult.memory` by the D5 precedence.
 - **[REQ-0044-08]** (Unwanted): IF the pending records exceed 10,000 lines or 50 MiB, THEN the holder of `drain.lock` shall drop the oldest pending records before it releases the lock, add them to the persisted dropped count, and log the total at `warn`.
 - **[REQ-0044-09]** (Event-driven): WHEN the engine replays a session from its event log, it shall issue no `record` for a completed activity, and the first successful call after the restart shall send the records the outbox already held.
-- **[REQ-0044-10]** (Ubiquitous): Each `record` call shall get one D9 `event_id` before its first send attempt, distinct from every other call's, and every resend shall carry it unchanged.
+- **[REQ-0044-10]** (Ubiquitous): The `record` call shall get one D9 `event_id` before its first send attempt, distinct from every other call's, and every resend shall carry it unchanged.
 - **[REQ-0044-11]** (Unwanted): IF the outbox directory is a symlink, has a mode looser than `0700` or a foreign owner, THEN the client shall read and write nothing under it, `state.json` included, log once at `warn`, and mark every activity result `outbox(refused)`. IF an append or its fsync fails on an accepted directory, THEN the client shall log that record at `error` and mark that result `outbox(refused)`. In both cases `record` shall return `Ok` and the dropped count shall not change.
 - **[REQ-0044-12]** (Optional feature): WHERE `--reverie-url` or `UAS_REVERIE_URL` is set, `uas` shall use that URL, the flag first, instead of `http://127.0.0.1:7437`.
 
@@ -145,3 +145,4 @@ the feature runs 1 test (F14).
   same way inside and outside a slot.
 - Not verified: that the running `reveried` includes the `event_id` contract of F10. Until it
   does, a crash resend may duplicate a row.
+- Amended 2026-10-11: opening words of the flagged requirement bullets reworded to begin with a standard EARS keyword; no change of meaning (spec 0052 P6).
