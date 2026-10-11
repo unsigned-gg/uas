@@ -222,11 +222,15 @@ impl SagaFlowCoordinator {
         self.completed.len() == self.steps.len()
     }
 
+    /// Deprecated: moves to saga (spec 0049); removed with the CPM surface.
+    ///
     /// Compute the Critical Path Method (CPM) schedule for this flow.
     pub fn cpm_schedule(&self) -> Result<crate::CpmSchedule, EngineError> {
         crate::CpmSchedule::compute(&self.steps)
     }
 
+    /// Deprecated: moves to saga (spec 0049); removed with the wave surface.
+    ///
     /// Plan concurrent execution waves using CPM critical path priority.
     pub fn plan_waves(&self, max_concurrency: usize) -> Result<crate::WavePlan, EngineError> {
         crate::WavePlan::plan(&self.steps, max_concurrency)
