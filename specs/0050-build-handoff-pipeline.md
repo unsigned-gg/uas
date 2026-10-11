@@ -1,5 +1,5 @@
 ---
-status: planned
+status: in-progress
 created: 2026-10-11
 tags: [process, agents, plans, waves, ci, changelog]
 priority: high
@@ -9,7 +9,7 @@ depends_on: [0002-verification-gates-and-evidence, 0003-branch-model-and-promoti
 
 # 0050-build-handoff-pipeline
 
-> **Status**: planned, **Priority**: high, **Created**: 2026-10-11
+> **Status**: in-progress, **Priority**: high, **Created**: 2026-10-11
 
 ## Overview
 
