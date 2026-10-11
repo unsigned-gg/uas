@@ -110,16 +110,21 @@ pub fn check(root: &Path) -> Report {
         spec_names.push(name.clone());
     }
 
+    let mut statuses: BTreeMap<String, (String, usize)> = BTreeMap::new();
     for name in &spec_names {
         let rel = format!("specs/{name}");
         match fs::read_to_string(dir.join(name)) {
-            Ok(text) => check_spec(
-                &rel,
-                &text,
-                name.trim_end_matches(".md"),
-                &stems,
-                &mut report,
-            ),
+            Ok(text) => {
+                if let Some(status) = check_spec(
+                    &rel,
+                    &text,
+                    name.trim_end_matches(".md"),
+                    &stems,
+                    &mut report,
+                ) {
+                    statuses.insert(name.clone(), status);
+                }
+            }
             Err(err) => report
                 .errors
                 .push(format!("{rel}:1: cannot read file: {err}")),
@@ -134,7 +139,7 @@ pub fn check(root: &Path) -> Report {
     match fs::read_to_string(&readme) {
         Ok(text) => {
             check_links("specs/README.md", &dir, &text, &mut report);
-            check_readme(&text, &spec_names, &mut report);
+            check_readme(&text, &spec_names, &statuses, &mut report);
         }
         Err(_) => {
             if !spec_names.is_empty() {
@@ -142,6 +147,29 @@ pub fn check(root: &Path) -> Report {
                     .errors
                     .push("specs/README.md:1: file is missing".into());
             }
+        }
+    }
+
+    // R12 over plans (spec 0052 D7): relative links in engineering/plans/*.md.
+    let plans = root.join("engineering/plans");
+    let mut plan_names: Vec<String> = fs::read_dir(&plans)
+        .map(|rd| {
+            rd.filter_map(Result::ok)
+                .filter(|e| e.path().is_file())
+                .filter_map(|e| e.file_name().into_string().ok())
+                .filter(|n| n.ends_with(".md"))
+                .collect()
+        })
+        .unwrap_or_default();
+    plan_names.sort();
+    for name in &plan_names {
+        if let Ok(text) = fs::read_to_string(plans.join(name)) {
+            check_links(
+                &format!("engineering/plans/{name}"),
+                &plans,
+                &text,
+                &mut report,
+            );
         }
     }
     report
@@ -279,7 +307,14 @@ fn valid_date(s: &str) -> bool {
     (1..=12).contains(&month) && (1..=31).contains(&day)
 }
 
-fn check_spec(rel: &str, text: &str, stem: &str, stems: &BTreeSet<String>, report: &mut Report) {
+/// Returns the frontmatter `status` value and its line, when the frontmatter parses.
+fn check_spec(
+    rel: &str,
+    text: &str,
+    stem: &str,
+    stems: &BTreeSet<String>,
+    report: &mut Report,
+) -> Option<(String, usize)> {
     let lines: Vec<&str> = text.lines().collect();
 
     // Length limit.
@@ -302,7 +337,7 @@ fn check_spec(rel: &str, text: &str, stem: &str, stems: &BTreeSet<String>, repor
         report.errors.push(format!(
             "{rel}:1: missing frontmatter (first line must be ---)"
         ));
-        return;
+        return None;
     }
     let Some(end) = lines
         .iter()
@@ -313,7 +348,7 @@ fn check_spec(rel: &str, text: &str, stem: &str, stems: &BTreeSet<String>, repor
         report
             .errors
             .push(format!("{rel}:1: frontmatter is not closed by a --- line"));
-        return;
+        return None;
     };
     let entries = parse_frontmatter(rel, &lines[1..end], 2, report);
     check_entries(rel, &entries, stems, report);
@@ -405,6 +440,10 @@ fn check_spec(rel: &str, text: &str, stem: &str, stems: &BTreeSet<String>, repor
             .map_or(body.len(), |p| from + p);
         check_ears_requirements(rel, &body[from..to], body[pos].no, true, report);
     }
+    entries.iter().find_map(|(k, v, no)| match (k.as_str(), v) {
+        ("status", Value::Scalar(v)) => Some((v.clone(), *no)),
+        _ => None,
+    })
 }
 
 fn contains_word(text: &str, word: &str) -> bool {
@@ -612,11 +651,36 @@ fn check_links(rel: &str, dir: &Path, text: &str, report: &mut Report) {
 }
 
 /// R11: README lists every spec file once and no missing file.
-fn check_readme(text: &str, spec_names: &[String], report: &mut Report) {
+/// R13: the Status cell of each row equals the frontmatter `status` (spec 0052 D12).
+fn check_readme(
+    text: &str,
+    spec_names: &[String],
+    statuses: &BTreeMap<String, (String, usize)>,
+    report: &mut Report,
+) {
     let rel = "specs/README.md";
     let lines: Vec<&str> = text.lines().collect();
     let mut listed: BTreeMap<String, Vec<usize>> = BTreeMap::new();
+    let mut cells: BTreeMap<String, String> = BTreeMap::new();
+    let mut status_col: Option<usize> = None;
+    let mut header_seen = false;
     for line in classify(&lines, 1).iter().filter(|l| !l.inside) {
+        let row: Vec<&str> = line
+            .text
+            .trim()
+            .trim_matches('|')
+            .split('|')
+            .map(str::trim)
+            .collect();
+        if line.text.trim_start().starts_with('|') && !header_seen {
+            header_seen = true;
+            status_col = row.iter().position(|c| *c == "Status");
+            if status_col.is_none() && !spec_names.is_empty() {
+                report
+                    .errors
+                    .push(format!("{rel}:{}: no Status column", line.no));
+            }
+        }
         for target in line_links(line.text) {
             let Some(path) = relative_target(&target) else {
                 continue;
@@ -624,6 +688,11 @@ fn check_readme(text: &str, spec_names: &[String], report: &mut Report) {
             let name = path.strip_prefix("./").unwrap_or(path);
             if spec_number(name).is_some() {
                 listed.entry(name.to_string()).or_default().push(line.no);
+                if let Some(cell) = status_col.and_then(|c| row.get(c)) {
+                    cells
+                        .entry(name.to_string())
+                        .or_insert_with(|| (*cell).to_string());
+                }
             }
         }
     }
@@ -635,6 +704,15 @@ fn check_readme(text: &str, spec_names: &[String], report: &mut Report) {
                 "{rel}:{}: {name} is listed {n} times",
                 listed[name][1]
             )),
+        }
+    }
+    for (name, (status, no)) in statuses {
+        if let Some(cell) = cells.get(name) {
+            if cell != status {
+                report.errors.push(format!(
+                    "specs/{name}:{no}: status `{status}` differs from the specs/README.md row `{cell}`"
+                ));
+            }
         }
     }
     for (name, nos) in &listed {
@@ -694,9 +772,10 @@ mod tests {
     }
 
     fn readme(names: &[&str]) -> String {
-        let mut s = String::from("# Specs\n\n| Spec | Title |\n|---|---|\n");
+        let mut s =
+            String::from("# Specs\n\n| Spec | Title | Status | Priority |\n|---|---|---|---|\n");
         for n in names {
-            s.push_str(&format!("| [{n}]({n}) | t |\n"));
+            s.push_str(&format!("| [{n}]({n}) | t | planned | high |\n"));
         }
         s
     }
@@ -1203,6 +1282,56 @@ mod tests {
         assert!(t.errors().is_empty(), "{:?}", t.errors());
         t.write("specs/0001-first.md", &with_link("```\n[x](nope.md)\n```"));
         assert!(t.errors().is_empty(), "{:?}", t.errors());
+    }
+
+    #[test]
+    fn plan_links_are_checked() {
+        let t = good();
+        // A missing plans directory is skipped.
+        assert!(t.errors().is_empty(), "{:?}", t.errors());
+        fs::create_dir_all(t.0.join("engineering/plans")).unwrap();
+        t.write("engineering/plans/0001-p.md", "# p\n\n[x](nope.md)\n");
+        assert!(has(
+            &t.errors(),
+            "engineering/plans/0001-p.md:3: broken link `nope.md`"
+        ));
+        t.write(
+            "engineering/plans/0001-p.md",
+            "# p\n\n[x](../../specs/0001-first.md#design) [u](https://x.test) `[c](nope.md)`\n",
+        );
+        assert!(t.errors().is_empty(), "{:?}", t.errors());
+    }
+
+    #[test]
+    fn status_parity_is_checked() {
+        let t = good();
+        t.write(
+            "specs/README.md",
+            &readme(&["0001-first.md", "0002-second.md"]).replacen(
+                "0001-first.md) | t | planned",
+                "0001-first.md) | t | in-progress",
+                1,
+            ),
+        );
+        let e = t.errors();
+        assert!(
+            has(
+                &e,
+                "specs/0001-first.md:2: status `planned` differs from the specs/README.md row `in-progress`"
+            ),
+            "{e:?}"
+        );
+        assert_eq!(e.len(), 1, "{e:?}");
+    }
+
+    #[test]
+    fn status_parity_requires_a_status_column() {
+        let t = good();
+        t.write(
+            "specs/README.md",
+            "# Specs\n\n| Spec | Title |\n|---|---|\n| [0001-first.md](0001-first.md) | t |\n| [0002-second.md](0002-second.md) | t |\n",
+        );
+        assert!(has(&t.errors(), "specs/README.md:3: no Status column"));
     }
 
     #[test]
