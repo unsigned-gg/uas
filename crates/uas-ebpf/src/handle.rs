@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 //! The interface the daemon drives, and a fake for unprivileged tests.
 //!
 //! [`crate::loader::Probes`] implements [`ProbeHandle`] over the live BPF maps.

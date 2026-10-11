@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 //! The pool-member adapter (spec 0026). A step-driven state machine over the ports, so a fake
 //! clock and a fake port test it without a runtime.
 

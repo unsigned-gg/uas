@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 //! Workflow session definitions and lifecycle state machine.
 
 use serde::{Deserialize, Serialize};

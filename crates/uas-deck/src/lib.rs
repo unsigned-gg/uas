@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 //! Operator dashboard for the Unsigned Agent Substrate (spec 0018, slices 1 and 2).
 //!
 //! `uas-deck` serves a read-only page: the session table and the settle queue.

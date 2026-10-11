@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 //! CER-2723: Worker slot allocation state machine, capacity limits, and auto-suspend integration tests.
 
 use std::thread;

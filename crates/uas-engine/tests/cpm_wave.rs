@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 //! Integration tests for Critical Path Method (CPM) and Agent Sprint Wave Strategy.
 //!
 //! Verification for LeanSpec 0024 and estate orchestration invariants.

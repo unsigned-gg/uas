@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: Apache-2.0 OR MIT
 # Tests for guard-main-push.sh. Feeds PreToolUse JSON on stdin, as Claude Code does.
 # A deny prints a JSON decision. An allow prints nothing. The hook always exits 0.
 # Run: bash .claude/hooks/tests/test-guard-main-push.sh

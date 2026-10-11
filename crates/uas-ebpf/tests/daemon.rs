@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 //! Integration tests for `uas-ebpfd` over a fake probe handle (no privileges).
 
 use std::{
