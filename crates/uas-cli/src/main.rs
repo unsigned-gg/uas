@@ -52,11 +52,16 @@ enum Command {
         command: HarnessCommand,
     },
     /// Plan saga flows per wave and run wave steps on the custody chain (spec 0025).
+    #[command(after_help = DEPRECATION_NOTICE)]
     Wave {
         #[command(subcommand)]
         command: WaveCommand,
     },
 }
+
+/// The deprecation line for `uas wave` and the CPM flags of `harness run` (spec 0049 D10).
+/// Shown in `uas wave --help` and written to stderr when a deprecated path runs.
+const DEPRECATION_NOTICE: &str = "deprecated: moves to saga (spec 0049); fixes only";
 
 /// `--open-prs` and `UAS_WAVE_OPEN_PRS`: only the value `1` is true (spec 0025 D16).
 #[allow(clippy::unnecessary_wraps)]
@@ -67,6 +72,7 @@ fn open_prs_value(raw: &str) -> Result<bool, String> {
 #[derive(Debug, Subcommand)]
 enum WaveCommand {
     /// Write one saga flow per wave from a plan.
+    #[command(after_help = DEPRECATION_NOTICE)]
     Flow {
         /// The plan: a saga flow file with `[[step]]` entries.
         #[arg(long)]
@@ -79,6 +85,7 @@ enum WaveCommand {
         max_concurrency: usize,
     },
     /// Run one step of a wave. Saga calls this as the `verify_cmd` of a generated step.
+    #[command(after_help = DEPRECATION_NOTICE)]
     Step {
         /// The plan, as given to `wave flow --from`.
         #[arg(long)]
@@ -110,6 +117,7 @@ enum WaveCommand {
     },
     /// Resolve a Builder's PR and run `blackwall merge-gate` on it. Saga calls this as the
     /// `verify_cmd` of a generated merge step.
+    #[command(after_help = DEPRECATION_NOTICE)]
     MergeGate {
         /// The plan, as given to `wave flow --from`.
         #[arg(long)]
@@ -168,14 +176,17 @@ enum HarnessCommand {
         dry_run: bool,
 
         /// Print or include Critical Path Method (CPM) schedule analysis for flow.
+        /// Deprecated: moves to saga (spec 0049).
         #[arg(long)]
         show_cpm: bool,
 
         /// Execute flow organized by agent sprint waves.
+        /// Deprecated: moves to saga (spec 0049).
         #[arg(long)]
         wave: bool,
 
         /// Maximum concurrent subagents per wave (defaults to 3).
+        /// Deprecated: moves to saga (spec 0049).
         #[arg(long, default_value_t = DEFAULT_MAX_WAVE_CONCURRENCY)]
         max_concurrency: usize,
     },
@@ -222,8 +233,10 @@ struct HarnessReport {
     compensation_receipts: Vec<CompensationReceipt>,
     failure_reason: Option<String>,
     events: Vec<WorkflowEvent>,
+    /// Deprecated: moves to saga (spec 0049); removed with the CPM surface.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     cpm_schedule: Option<CpmSchedule>,
+    /// Deprecated: moves to saga (spec 0049); removed with the wave surface.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     wave_plan: Option<WavePlan>,
 }
@@ -1110,6 +1123,21 @@ fn main() -> Result<()> {
     }
 
     let cli = Cli::parse();
+    let uses_cpm_flags = matches!(
+        &cli.command,
+        Command::Harness {
+            command: HarnessCommand::Run { show_cpm: true, .. }
+                | HarnessCommand::Run { wave: true, .. }
+        }
+    ) || matches!(
+        &cli.command,
+        Command::Harness {
+            command: HarnessCommand::Run { max_concurrency, .. }
+        } if *max_concurrency != DEFAULT_MAX_WAVE_CONCURRENCY
+    );
+    if matches!(cli.command, Command::Wave { .. }) || uses_cpm_flags {
+        eprintln!("{DEPRECATION_NOTICE}");
+    }
     match cli.command {
         Command::Demo { slot } => {
             let report = demo(&slot)?;
