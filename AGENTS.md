@@ -24,7 +24,7 @@ A crate depends only on crates in lower layers. Add a Cargo dependency only when
 | `crates/` | The `uas-*` crates. `uas-cli` is the binary `uas`; it parses arguments and calls the domain. |
 | `xtask/` | Repo tasks in Rust: `spec-check`, `toolchain-check` and `pin-check`. The package name stays `xtask`. |
 | `specs/` | LeanSpec specs and the registry `specs/README.md`. |
-| `vendor/` | Vendored and never edited: `leanspec/` (the method, MIT), `soma/` (containment and dispatch JSON schemas), `cortex/` (Mesh v1 protobufs), `saga/` (workflow templates and domain contracts). |
+| `vendor/` | Vendored and never edited: `leanspec/` (the method, MIT). The Soma, Cortex and Saga contracts are not vendored: `cargo xtask fetch-contracts` fetches them into the ignored `.contracts/`, pinned in `contracts.lock` (spec 0048 D9). |
 | `.agents/skills/` | Skills for agents, surfaced to Claude Code through `.claude/skills/`. |
 | `.claude/` | Claude Code settings and hooks. `.claude/agents/` holds the repo's subagents; see `.claude/agents/README.md`. |
 | `docs/`, `engineering/` | Docs for people. Engineering notes. |
