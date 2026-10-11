@@ -12,8 +12,8 @@ The rules for this repo live in [AGENTS.md](../AGENTS.md). This directory holds 
 
 | Hook | Event | Purpose | Bypass |
 |---|---|---|---|
-| `guard-main-push.sh` | PreToolUse, Bash | Deny a direct push to `main` or `master`. | Add `# allow-direct-push` to the command, and say why. |
-| `ci-gate.sh` | PreToolUse, Bash | On a push command, run `make check`. Deny the push if it fails. The reason holds the last 15 lines of output. | `SKIP_CI_GATE=1` in the environment. |
+| `guard-main-push.sh` | PreToolUse, Bash | Deny a direct push to `main`, `master` or `development`. | Add `# allow-direct-push` to the command, and say why. |
+| `ci-gate.sh` | PreToolUse, Bash | On a push command, run `make check`. Deny the push if it fails or runs past 840 seconds (`CI_GATE_TIMEOUT` lowers the limit for tests). The reason holds the last 15 lines of output. | `SKIP_CI_GATE=1` in the environment. |
 | `lint-on-edit.sh` | PostToolUse, Edit or Write | Run `rustfmt --edition 2021` on an edited `.rs` file. Never blocks. | `SKIP_LINT=1` in the environment. |
 
 ## Tests
@@ -21,8 +21,10 @@ The rules for this repo live in [AGENTS.md](../AGENTS.md). This directory holds 
 One test per hook is in `hooks/tests/`. Each test is plain bash. It sends JSON on stdin, as Claude Code does.
 
 ```bash
-for t in .claude/hooks/tests/*.sh; do bash "$t" || exit 1; done
+make hook-test
 ```
+
+`make hook-test` fails if a test row fails or a test script is missing. It also runs inside `make hygiene`, so the CI `hygiene` job runs it. The tests need `bash` and `jq`.
 
 ## Permissions
 
