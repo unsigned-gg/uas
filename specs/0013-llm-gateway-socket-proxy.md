@@ -5,6 +5,7 @@ tags: [sandbox, router, proxy, unix-socket, gateway, phase-2]
 priority: high
 depends_on: [0010-landlock-ruleset-and-abi-probe, 0011-network-namespace-isolation, 0012-sandbox-escape-suite, 0004-dependency-and-licence-policy]
 ---
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
 
 # 0013-llm-gateway-socket-proxy
 

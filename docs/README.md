@@ -1,3 +1,4 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
 # Documentation
 
 This is the docs index for uas (the Unsigned Agent Substrate).

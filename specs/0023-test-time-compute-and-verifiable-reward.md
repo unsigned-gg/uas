@@ -5,6 +5,7 @@ tags: [ttc, rollout, saga, budget, receipt, evaluator, phase-4]
 priority: medium
 depends_on: [0002-verification-gates-and-evidence, 0007-lease-rules, 0008-soma-cortex-saga-reverie-integration, 0014-ebpf-priority-clamping-and-audit-probes, 0015-slot-pool-cgroup-freezer-and-gitoxide, 0022-custody-landing]
 ---
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
 
 # 0023-test-time-compute-and-verifiable-reward
 

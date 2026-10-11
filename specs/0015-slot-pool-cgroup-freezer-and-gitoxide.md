@@ -5,6 +5,7 @@ tags: [pool, gitoxide, cgroup, freezer, ebpf, phase-3]
 priority: high
 depends_on: [0001-cas-architecture-and-crate-layout, 0004-dependency-and-licence-policy, 0007-lease-rules, 0010-landlock-ruleset-and-abi-probe, 0011-network-namespace-isolation, 0014-ebpf-priority-clamping-and-audit-probes, 0040-pool-restart-and-orphan-reclamation, 0041-slot-memory-pids-and-disk-limits]
 ---
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
 
 # 0015-slot-pool-cgroup-freezer-and-gitoxide
 

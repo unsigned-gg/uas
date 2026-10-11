@@ -5,6 +5,7 @@ tags: [sandbox, seccomp, syscall, landlock, escape-suite, phase-2]
 priority: high
 depends_on: [0004-dependency-and-licence-policy, 0010-landlock-ruleset-and-abi-probe, 0011-network-namespace-isolation, 0012-sandbox-escape-suite, 0014-ebpf-priority-clamping-and-audit-probes]
 ---
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
 
 # 0043-seccomp-syscall-filter-for-slot-workers
 

@@ -1,3 +1,4 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
 # Build plan: 0041-slot-memory-pids-and-disk-limits
 
 Spec: `specs/0041-slot-memory-pids-and-disk-limits.md` (status planned). Base: `origin/development` `2399dda`.

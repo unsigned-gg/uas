@@ -5,6 +5,7 @@ tags: [security, advisories, sbom, disclosure, release, ci]
 priority: high
 depends_on: [0002-verification-gates-and-evidence, 0003-branch-model-and-promotion, 0004-dependency-and-licence-policy, 0005-ci-cache-and-runners, 0025-wave-execution-on-the-custody-chain, 0034-tool-pinning-beyond-cargo]
 ---
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
 
 # 0045-security-disclosure-and-advisory-policy
 

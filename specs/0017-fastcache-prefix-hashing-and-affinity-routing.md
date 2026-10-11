@@ -5,6 +5,7 @@ tags: [router, fastcache, prefix-hash, affinity, rendezvous, sse, phase-4]
 priority: high
 depends_on: [0001-cas-architecture-and-crate-layout, 0004-dependency-and-licence-policy, 0013-llm-gateway-socket-proxy]
 ---
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
 
 # 0017-fastcache-prefix-hashing-and-affinity-routing
 

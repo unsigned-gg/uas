@@ -5,6 +5,7 @@ tags: [licence, publication, ebpf, crates-io, dco, export]
 priority: high
 depends_on: [0003-branch-model-and-promotion, 0004-dependency-and-licence-policy, 0005-ci-cache-and-runners, 0037-repository-migration-to-uas, 0045-security-disclosure-and-advisory-policy]
 ---
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
 
 # 0048-licence-and-publication
 

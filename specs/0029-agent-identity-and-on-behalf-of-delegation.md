@@ -5,6 +5,7 @@ tags: [identity, delegation, oidc, spiffe, audit, uas-engine, uas-sandbox]
 priority: high
 depends_on: [0001-cas-architecture-and-crate-layout, 0004-dependency-and-licence-policy, 0007-lease-rules, 0013-llm-gateway-socket-proxy, 0022-custody-landing]
 ---
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
 
 # 0029-agent-identity-and-on-behalf-of-delegation
 
