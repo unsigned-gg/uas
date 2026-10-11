@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
-Spec 0052 wave 3 (plan 0052 P4)
+- Spec 0052 wave 3 (plan 0052 P4): `spec-check` accepts the house requirement form without a false keyword warning and runs the EARS checks (shall, ambiguous modals, keywords) on legacy `### Requirements (EARS)` blocks as warnings; the real tree prints 46 keyword warnings across 19 specs and one modal warning at spec 0014 (plus the two length warnings), reworded in P6; seven unit tests (xtask 42 to 49).
 - Spec 0048 wave 4, first half (plan 0048 P9): `make spdx-check`, inside `make hygiene`, fails naming each tracked `.rs` or `.sh` outside `vendor/` without the SPDX line or with the wrong licence expression, and each Markdown file under `docs/`, `specs/` or `engineering/` without the CC-BY-4.0 tag; one test file that landed untagged after P7 is tagged, and the spec template carries the tag so new specs pass. Open branches that add an untagged file go red on `hygiene` once this lands.
 - Spec 0052 wave 2 (plan 0052 P3): five spec-check unit tests for the checks that had none (the keyword warning, a duplicate frontmatter key, unclosed frontmatter, a list or scalar type error, a missing H1), each asserting the exact message and line (xtask tests 37 to 42; no checker change).
 - Spec 0051 wave 2 (plan 0051 P5): a `fork-gate` CI job that always runs on a pull request, passes for a same-repo PR, and for a fork PR passes only with the maintainer label and a comment by an owner or member reading `fork-ci-approved: <head sha>` equal to the PR's current head (a new push turns it red); read-only token, no checkout, no secrets to a fork; non-required until plan 0051 P7 after one green run.
