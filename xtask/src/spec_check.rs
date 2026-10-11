@@ -1,20 +1,22 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 //! `cargo xtask spec-check`: validate specification files under `specs/`.
 //!
-//! Rules (derived from estate standard in cerebral research):
-//! 1. File names are `NNNN-kebab-slug.md`. Numbers are unique.
-//! 2. YAML frontmatter with `status` and `created`. Unknown keys are errors.
-//! 3. One H1, `# NNNN-slug`, equal to the file stem.
-//! 4. Dual-mode H2 sections:
-//!    - Modern: Requirements, Design, Tasks, Verification, Notes, in that order.
-//!    - Legacy: Overview, Design, Plan, Test, Notes, in that order.
-//! 5. The Verification (or Test) section holds a fenced code block.
-//! 6. In modern mode, Requirements section requires at least one EARS clause with `shall`.
-//! 7. Ambiguous modals (`should`, `could`, `might`, `may`) are flagged.
-//! 8. Bullet clauses must begin with standard EARS keywords (The, When, While, If, Where).
-//! 9. More than 300 lines warns. More than 400 lines is an error.
-//! 10. `specs/README.md` links every spec exactly once and no missing file.
-//! 11. Relative markdown links in `specs/*.md` resolve.
+//! Spec 0052 owns the rule set. The code and that spec agree; a mismatch is a defect in whichever is stale.
+//!
+//! R01 file names
+//! R02 frontmatter
+//! R03 depends_on stems
+//! R04 H1 equals the file stem
+//! R05 H2 sections in order
+//! R06 fenced block in Test or Verification
+//! R07 a requirement with shall
+//! R08 ambiguous modals
+//! R09 EARS keyword at the start of a bullet
+//! R10 line count
+//! R11 README lists every spec
+//! R12 relative links
+//!
+//! Changing a rule: amend the spec 0052 tables, add a unit test that fails without the change.
 //!
 //! A missing or empty `specs/` directory passes with a notice.
 
@@ -85,7 +87,7 @@ pub fn check(root: &Path) -> Report {
         return report;
     }
 
-    // Rule 1: names and unique numbers.
+    // R01: names and unique numbers.
     let mut stems: BTreeSet<String> = BTreeSet::new();
     let mut numbers: BTreeMap<String, String> = BTreeMap::new();
     let mut spec_names: Vec<String> = Vec::new();
@@ -561,7 +563,7 @@ fn relative_target(target: &str) -> Option<&str> {
     (!path.is_empty()).then_some(path)
 }
 
-/// Rule 8: relative links must resolve.
+/// R12: relative links must resolve.
 fn check_links(rel: &str, dir: &Path, text: &str, report: &mut Report) {
     let lines: Vec<&str> = text.lines().collect();
     for line in classify(&lines, 1).iter().filter(|l| !l.inside) {
@@ -577,7 +579,7 @@ fn check_links(rel: &str, dir: &Path, text: &str, report: &mut Report) {
     }
 }
 
-/// Rule 7: README lists every spec file once and no missing file.
+/// R11: README lists every spec file once and no missing file.
 fn check_readme(text: &str, spec_names: &[String], report: &mut Report) {
     let rel = "specs/README.md";
     let lines: Vec<&str> = text.lines().collect();
