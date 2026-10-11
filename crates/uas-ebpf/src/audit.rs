@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 //! The `run_hash` transcript digest (spec 0014 D7, CER-2720).
 //!
 //! `run_hash` is a per-run transcript digest, not a content digest: it absorbs

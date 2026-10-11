@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 //! Landing receipts for changesets that Blackwall reconciled and opened as pull requests.
 //!
 //! A receipt records the custody facts of one landing and the evidence tier

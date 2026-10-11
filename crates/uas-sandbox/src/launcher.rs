@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 //! Spawn a worker process inside the jail.
 //!
 //! Spec 0010, "Launcher". The child enters the jail between `fork` and `exec`:

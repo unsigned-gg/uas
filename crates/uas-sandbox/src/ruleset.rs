@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 //! The default-deny filesystem ruleset for a worker.
 //!
 //! Spec 0010 D5 and D6: every access the kernel offers is handled, so anything not

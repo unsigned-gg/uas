@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 //! `cargo xtask spec-check`: validate specification files under `specs/`.
 //!
 //! Rules (derived from estate standard in cerebral research):
