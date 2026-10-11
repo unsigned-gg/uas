@@ -1,0 +1,12 @@
+# Repository fixture behind the wave smoke golden (spec 0049 REQ-05, plan P2).
+# Saga must build the same repository before it replays the smoke plan on the fake tools.
+# `tasks/wave-smoke-build/` is copied from this repository's `tasks/` directory.
+
+# The content of `.blackwall/init-head`; it becomes `base_sha` in the receipt.
+init_head = "056d7c7abcdef"
+
+# The content of `blackwall.toml`; its [verify] command becomes `verify_cmd` in the receipt.
+blackwall_toml = """
+[verify]
+command = "make check JOBS=2"
+"""
