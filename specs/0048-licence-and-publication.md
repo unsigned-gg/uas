@@ -1,5 +1,5 @@
 ---
-status: planned
+status: in-progress
 created: 2026-10-11
 tags: [licence, publication, ebpf, crates-io, dco, export]
 priority: high
@@ -9,7 +9,7 @@ depends_on: [0003-branch-model-and-promotion, 0004-dependency-and-licence-policy
 
 # 0048-licence-and-publication
 
-> **Status**: planned, **Priority**: high, **Created**: 2026-10-11
+> **Status**: in-progress, **Priority**: high, **Created**: 2026-10-11
 
 ## Overview
 
