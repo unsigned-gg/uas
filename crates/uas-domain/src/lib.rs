@@ -31,6 +31,7 @@ mod ident;
 mod landing;
 mod lease;
 mod policy;
+mod reconcile;
 mod slot;
 
 pub use attestation::{Attestation, EvidenceTier};
@@ -42,4 +43,5 @@ pub use landing::{
 };
 pub use lease::{check_slot_free, Budget, Lease, LeaseId, LeaseLedger, LeaseToken, PrincipalRef};
 pub use policy::{PolicyTier, SomaClassification};
+pub use reconcile::{LostSlot, ReconcileReport};
 pub use slot::{Slot, SlotId, SlotState, WorktreeRef};
