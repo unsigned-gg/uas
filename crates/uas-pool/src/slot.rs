@@ -4,7 +4,8 @@
 //! domain leases (`uas-domain`), and manages automatic suspension of idle slots.
 
 use std::collections::BTreeMap;
-use std::path::PathBuf;
+use std::io;
+use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
@@ -14,6 +15,7 @@ use uas_domain::{
 
 use crate::error::PoolError;
 use crate::freezer::{CgroupFreezer, CpuCap, Freezer, ResourceLimits, SignalFreezer};
+use crate::limits::{self, LimitOverrides, LimitSource, ResolvedLimits};
 use crate::reconcile::{self, ReconcileRoots};
 
 /// Configuration options for the worker slot pool.
@@ -28,6 +30,20 @@ pub struct PoolConfig {
     /// Roots to reconcile before the pool admits work (spec 0040 D2). `None`
     /// skips reconciliation.
     pub reconcile: Option<ReconcileRoots>,
+    /// Explicit memory, pids and disk overrides; they beat the environment (spec 0041 D7).
+    pub limits: LimitOverrides,
+    /// Worktree root whose filesystem must keep `min_free_bytes` free (spec 0041 D3).
+    /// `None` uses `reconcile.worktree_root` when set, else the current directory.
+    pub disk_root: Option<PathBuf>,
+}
+
+impl PoolConfig {
+    /// Host slot ceiling used by the memory formula (spec 0041 D1).
+    ///
+    /// Spec 0036 adds a dedicated host field and replaces this body.
+    pub fn host_max_slots(&self) -> usize {
+        self.max_slots
+    }
 }
 
 impl Default for PoolConfig {
@@ -37,6 +53,32 @@ impl Default for PoolConfig {
             idle_suspend_duration: Some(Duration::from_secs(300)),
             cgroup_base: None,
             reconcile: None,
+            limits: LimitOverrides::default(),
+            disk_root: None,
+        }
+    }
+}
+
+#[doc(hidden)] // exists for tests: injects the host facts
+/// Host facts the pool reads once at construction: `MemTotal`, the environment and `statvfs`.
+///
+/// [`SlotPool::new`] reads the real host; [`SlotPool::with_host`] takes injected values.
+pub struct HostProbe {
+    /// `MemTotal` in bytes; `None` when `/proc/meminfo` is unreadable.
+    pub mem_total: Option<u64>,
+    /// Environment lookup for the `UAS_*` twins.
+    pub env: Box<dyn Fn(&str) -> Option<String> + Send + Sync>,
+    /// Free bytes on the filesystem holding a path.
+    pub free_bytes: Box<dyn Fn(&Path) -> io::Result<u64> + Send + Sync>,
+}
+
+impl HostProbe {
+    /// The real host: `/proc/meminfo`, `std::env::var` and `statvfs`.
+    pub fn real() -> Self {
+        Self {
+            mem_total: limits::read_mem_total(),
+            env: Box::new(|k| std::env::var(k).ok()),
+            free_bytes: Box::new(limits::free_bytes_at),
         }
     }
 }
@@ -113,6 +155,10 @@ pub struct SlotPool {
     config: PoolConfig,
     slots: Mutex<BTreeMap<SlotId, ManagedSlot>>,
     reconcile_report: ReconcileReport,
+    /// Limits resolved once at construction; the error side is the `MemoryLow` data.
+    resolved: Result<ResolvedLimits, (u64, u64)>,
+    min_free_bytes: u64,
+    free_bytes: Box<dyn Fn(&Path) -> io::Result<u64> + Send + Sync>,
 }
 
 impl SlotPool {
@@ -122,6 +168,53 @@ impl SlotPool {
     /// reclaimed here, before any slot can be created (spec 0040 D2, D4). A
     /// failed reclaim never stops the pool; it is counted in the report.
     pub fn new(config: PoolConfig) -> Self {
+        Self::with_host(config, HostProbe::real())
+    }
+
+    /// Like [`Self::new`] with the host facts injected. Exists for tests.
+    ///
+    /// Resolves the slot limits once (config, then env, then formula), logs the value in
+    /// force and its source (spec 0041 D7, REQ-0041-12). A memory limit below the floor does
+    /// not stop construction: [`Self::create_slot`] refuses with [`PoolError::MemoryLow`].
+    #[doc(hidden)] // exists for tests
+    pub fn with_host(config: PoolConfig, host: HostProbe) -> Self {
+        let min_free_bytes;
+        let resolved = match limits::resolve(
+            &config.limits,
+            host.mem_total,
+            config.host_max_slots(),
+            host.env.as_ref(),
+        ) {
+            Ok(r) => {
+                limits::log_start(&r);
+                min_free_bytes = r.min_free_bytes;
+                Ok(r)
+            }
+            Err(PoolError::MemoryLow {
+                per_slot_bytes,
+                floor_bytes,
+            }) => {
+                // The disk floor is independent of the memory refusal: resolve it with a
+                // memory value at the floor so a refused pool still honours its override.
+                min_free_bytes = limits::resolve(
+                    &LimitOverrides {
+                        memory_max_bytes: Some(limits::MEMORY_FLOOR_BYTES),
+                        ..config.limits.clone()
+                    },
+                    None,
+                    config.host_max_slots(),
+                    host.env.as_ref(),
+                )
+                .map_or(limits::DEFAULT_MIN_FREE_BYTES, |r| r.min_free_bytes);
+                tracing::error!(
+                    per_slot_bytes,
+                    floor_bytes,
+                    "slot memory limit below the floor; create_slot will refuse"
+                );
+                Err((per_slot_bytes, floor_bytes))
+            }
+            Err(e) => unreachable!("limits::resolve only returns MemoryLow, got {e}"),
+        };
         let reconcile_report = config
             .reconcile
             .as_ref()
@@ -131,7 +224,20 @@ impl SlotPool {
             config,
             slots: Mutex::new(BTreeMap::new()),
             reconcile_report,
+            resolved,
+            min_free_bytes,
+            free_bytes: host.free_bytes,
         }
+    }
+
+    /// The resolved slot limits, or `None` when the memory limit is below the floor.
+    pub fn resolved_limits(&self) -> Option<&ResolvedLimits> {
+        self.resolved.as_ref().ok()
+    }
+
+    /// Where the memory limit in force came from; `None` when none is set or it was refused.
+    pub fn memory_source(&self) -> Option<LimitSource> {
+        self.resolved_limits().and_then(|r| r.memory_source)
     }
 
     /// Reconcile the slot remains under `roots` and return the counts.
@@ -165,14 +271,37 @@ impl SlotPool {
             return Err(PoolError::CapacityExhausted(self.config.max_slots));
         }
 
+        if let Err((per_slot_bytes, floor_bytes)) = &self.resolved {
+            return Err(PoolError::MemoryLow {
+                per_slot_bytes: *per_slot_bytes,
+                floor_bytes: *floor_bytes,
+            });
+        }
+
+        let root = self
+            .config
+            .disk_root
+            .clone()
+            .or_else(|| {
+                self.config
+                    .reconcile
+                    .as_ref()
+                    .map(|r| r.worktree_root.clone())
+            })
+            .unwrap_or_else(|| PathBuf::from("."));
+        let free = (self.free_bytes)(&root).map_err(PoolError::DiskProbe)?;
+        limits::check_free(free, self.min_free_bytes)?;
+
         let freezer: Option<Box<dyn Freezer>> = if let Some(ref base) = self.config.cgroup_base {
-            match CgroupFreezer::new(base, id.clone()) {
-                Ok(cg) => Some(Box::new(cg)),
-                Err(e) => {
-                    tracing::warn!("cgroup freezer creation failed for slot {id}: {e}; falling back to signal freezer");
-                    Some(Box::new(SignalFreezer::new(id.clone())))
-                }
-            }
+            let resource_limits = match &self.resolved {
+                Ok(r) => ResourceLimits::from(r),
+                Err(_) => ResourceLimits::default(),
+            };
+            Some(Box::new(CgroupFreezer::with_limits(
+                base,
+                id.clone(),
+                &resource_limits,
+            )?))
         } else {
             Some(Box::new(SignalFreezer::new(id.clone())))
         };
