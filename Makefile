@@ -66,15 +66,19 @@ oss-check: ## No tailnet hostname or operator path in tracked files (spec 0048 D
 # Markdown under docs, specs and engineering: CC-BY-4.0 tag in the first ten lines.
 spdx-check: ## Every code file and doc carries its SPDX tag (spec 0048 REQ-04)
 	@bad=0
+	code="$$(git ls-files -- '*.rs' '*.sh' ':!:vendor/*')" || { echo "spdx-check: git ls-files failed (not a git tree?)" >&2; exit 1; }
+	docs="$$(git ls-files -- 'docs/*.md' 'specs/*.md' 'engineering/*.md')" || { echo "spdx-check: git ls-files failed (not a git tree?)" >&2; exit 1; }
+	[ -n "$$code" ] || { echo "spdx-check: git ls-files lists no .rs or .sh files" >&2; exit 1; }
+	[ -n "$$docs" ] || { echo "spdx-check: git ls-files lists no Markdown under docs, specs or engineering" >&2; exit 1; }
 	while IFS= read -r f; do
 	  expr="$$(head -n 2 "$$f" | sed -n 's/.*SPDX-License-Identifier:[[:space:]]*\(.*[^[:space:]]\)[[:space:]]*$$/\1/p' | head -n 1)"
 	  case "$$f" in crates/uas-ebpf/ebpf/*) want='GPL-2.0-only OR MIT';; *) want='Apache-2.0 OR MIT';; esac
 	  if [ -z "$$expr" ]; then echo "spdx-check: $$f: no SPDX-License-Identifier line in the first two lines" >&2; bad=1
 	  elif [ "$$expr" != "$$want" ]; then echo "spdx-check: $$f: expression '$$expr', want '$$want'" >&2; bad=1; fi
-	done < <(git ls-files -- '*.rs' '*.sh' ':!:vendor/*')
+	done <<< "$$code"
 	while IFS= read -r f; do
 	  head -n 10 "$$f" | grep -q 'SPDX-License-Identifier: CC-BY-4.0' || { echo "spdx-check: $$f: no CC-BY-4.0 tag in the first ten lines" >&2; bad=1; }
-	done < <(git ls-files -- 'docs/*.md' 'specs/*.md' 'engineering/*.md')
+	done <<< "$$docs"
 	[ "$$bad" -eq 0 ] || exit 1
 	echo "spdx-check: ok"
 
