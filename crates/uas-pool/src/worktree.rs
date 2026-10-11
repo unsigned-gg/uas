@@ -32,7 +32,7 @@ pub struct WarmWorktree {
     marker: Option<File>,
 }
 
-fn repo_open_opts() -> gix::open::Options {
+pub(crate) fn repo_open_opts() -> gix::open::Options {
     let mut opts = gix::open::Options::default();
     opts.permissions.env.git_prefix = gix::sec::Permission::Deny;
     opts

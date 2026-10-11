@@ -11,6 +11,7 @@ pub mod error;
 pub mod freezer;
 pub mod launch;
 mod marker;
+pub mod reconcile;
 pub mod slot;
 pub mod worktree;
 
@@ -22,5 +23,6 @@ pub use freezer::{
 pub use launch::{
     spawn_worker, AuditDegradation, LaunchConfig, Worker, WorkerAudit, DEFAULT_DAEMON_SOCKET,
 };
+pub use reconcile::ReconcileRoots;
 pub use slot::{ManagedSlot, PoolConfig, SlotPool, SweepReport};
 pub use worktree::WarmWorktree;
