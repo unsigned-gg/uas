@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 //! `cargo xtask text-check`: the CHANGELOG line, the commit subject and the PR body (spec 0053 D5).
 //!
-//! `cargo xtask text-check --base <ref> [--head <ref>=HEAD] [--body-file <path>] [--head-ref <name>]`
+//! `cargo xtask text-check --base <ref> [--head <ref>=HEAD] [--body-file <path>] [--head-ref <name>] [--repo <dir>]`
+//!
+//! `--repo` aims every `git` call at another repository (the integration tests use a temp one);
+//! it defaults to this repository.
 //!
 //! Everything is diffed from the merge base of `--base` and `--head` (D4). Uses `std` and the
 //! `git` binary only: no `gh`, no network. The PR body comes only from `--body-file` (REQ-14).
@@ -34,7 +37,7 @@ const BODY_SECTIONS: &[&str] = &[
     "Gated steps after merge",
     "Rollback",
 ];
-const USAGE: &str = "usage: cargo xtask text-check --base <ref> [--head <ref>] [--body-file <path>] [--head-ref <name>]";
+const USAGE: &str = "usage: cargo xtask text-check --base <ref> [--head <ref>] [--body-file <path>] [--head-ref <name>] [--repo <dir>]";
 
 /// One failure: `kind` is `nolog`, `released`, `marker`, `ticket` or `headings`.
 #[derive(Debug, PartialEq, Eq)]
@@ -349,10 +352,12 @@ struct Args {
     head: String,
     body_file: Option<String>,
     head_ref: Option<String>,
+    repo: Option<String>,
 }
 
 fn parse_args(args: &[String]) -> Result<Args, String> {
-    let (mut base, mut head, mut body_file, mut head_ref) = (None, "HEAD".to_string(), None, None);
+    let (mut base, mut head, mut body_file, mut head_ref, mut repo) =
+        (None, "HEAD".to_string(), None, None, None);
     let mut it = args.iter();
     while let Some(flag) = it.next() {
         let value = it.next().cloned().ok_or(format!("{flag} needs a value"))?;
@@ -361,6 +366,7 @@ fn parse_args(args: &[String]) -> Result<Args, String> {
             "--head" => head = value,
             "--body-file" => body_file = Some(value),
             "--head-ref" => head_ref = Some(value),
+            "--repo" => repo = Some(value),
             other => return Err(format!("unknown argument {other:?}")),
         }
     }
@@ -369,6 +375,7 @@ fn parse_args(args: &[String]) -> Result<Args, String> {
         head,
         body_file,
         head_ref,
+        repo,
     })
 }
 
@@ -381,6 +388,7 @@ pub fn run(root: &Path, args: &[String]) -> ExitCode {
         Ok(a) => a,
         Err(why) => return usage_error(why),
     };
+    let root = args.repo.as_deref().map_or(root, Path::new);
     let mut input = match gather(root, &args.base, &args.head) {
         Ok(i) => i,
         Err(why) => {
