@@ -391,8 +391,19 @@ fn check_spec(rel: &str, text: &str, stem: &str, stems: &BTreeSet<String>, repor
         if let Some(pos) = h2.iter().position(|(_, h)| *h == "Requirements") {
             let from = h2[pos].0 + 1;
             let to = h2.get(pos + 1).map_or(body.len(), |(i, _)| *i);
-            check_ears_requirements(rel, &body[from..to], body[h2[pos].0].no, report);
+            check_ears_requirements(rel, &body[from..to], body[h2[pos].0].no, false, report);
         }
+    } else if let Some(pos) = body
+        .iter()
+        .position(|l| !l.inside && l.text.trim_end() == "### Requirements (EARS)")
+    {
+        // Legacy layout: the block runs to the next H2 or H3 outside a fence.
+        let from = pos + 1;
+        let to = body[from..]
+            .iter()
+            .position(|l| !l.inside && (l.text.starts_with("## ") || l.text.starts_with("### ")))
+            .map_or(body.len(), |p| from + p);
+        check_ears_requirements(rel, &body[from..to], body[pos].no, true, report);
     }
 }
 
@@ -411,6 +422,15 @@ fn is_ears_prefix(line: &str) -> bool {
             s = rest[idx + 2..].trim();
             if let Some(rest2) = s.strip_prefix(':') {
                 s = rest2.trim();
+            }
+            // House form: `**[REQ-NNNN-NN]** (Pattern): ...`.
+            if let Some(rest2) = s.strip_prefix('(') {
+                if let Some(close) = rest2.find(')') {
+                    s = rest2[close + 1..].trim();
+                    if let Some(rest3) = s.strip_prefix(':') {
+                        s = rest3.trim();
+                    }
+                }
             }
         }
     }
@@ -436,7 +456,13 @@ fn strip_inline_code(line: &str) -> String {
     stripped
 }
 
-fn check_ears_requirements(rel: &str, lines: &[Line], heading_no: usize, report: &mut Report) {
+fn check_ears_requirements(
+    rel: &str,
+    lines: &[Line],
+    heading_no: usize,
+    legacy: bool,
+    report: &mut Report,
+) {
     let mut shall_count = 0;
     for l in lines {
         if l.inside {
@@ -463,9 +489,15 @@ fn check_ears_requirements(rel: &str, lines: &[Line], heading_no: usize, report:
         }
     }
     if shall_count == 0 {
-        report.errors.push(format!(
+        let msg = format!(
             "{rel}:{heading_no}: `## Requirements` needs at least one EARS requirement clause containing 'shall'"
-        ));
+        );
+        // Legacy blocks only warn (spec 0052 D5).
+        if legacy {
+            report.warnings.push(msg);
+        } else {
+            report.errors.push(msg);
+        }
     }
 }
 
@@ -752,6 +784,90 @@ mod tests {
         let r = check(&t.0);
         assert!(r.errors.is_empty(), "{:?}", r.errors);
         assert!(r.warnings.is_empty(), "{:?}", r.warnings);
+    }
+
+    /// A legacy spec whose Overview holds a `### Requirements (EARS)` block.
+    fn legacy_ears_spec(stem: &str, block: &str) -> String {
+        spec(stem).replace(
+            "## Overview\n\nText.\n",
+            &format!("## Overview\n\nText.\n\n### Requirements (EARS)\n\n{block}\n\n### Other\n\n- Systems will run.\n"),
+        )
+    }
+
+    fn warnings_for(name: &str, body: &str) -> (Vec<String>, Vec<String>) {
+        let t = Tmp::new();
+        t.write(&format!("specs/{name}.md"), body);
+        t.write("specs/README.md", &readme(&[&format!("{name}.md")]));
+        let r = check(&t.0);
+        (r.errors, r.warnings)
+    }
+
+    #[test]
+    fn house_form_bullet_draws_no_keyword_warning() {
+        let bad = modern_spec("0001-hf").replace(
+            "* **Ubiquitous:** The system shall operate continuously.",
+            "- **[REQ-0001-01]** (Ubiquitous): The system shall run.",
+        );
+        let (e, w) = warnings_for("0001-hf", &bad);
+        assert!(e.is_empty(), "{e:?}");
+        assert!(w.is_empty(), "{w:?}");
+    }
+
+    #[test]
+    fn house_form_bullet_with_bad_keyword_still_warns() {
+        let bad = modern_spec("0001-hf").replace(
+            "* **Ubiquitous:** The system shall operate continuously.",
+            "- **[REQ-0001-01]** (Ubiquitous): Systems shall run.",
+        );
+        let (e, w) = warnings_for("0001-hf", &bad);
+        assert!(e.is_empty(), "{e:?}");
+        assert_eq!(w.len(), 1, "{w:?}");
+        assert!(w[0].contains("does not begin with a standard EARS pattern keyword"));
+    }
+
+    #[test]
+    fn legacy_ears_block_bad_keyword_warns_not_errors() {
+        let body = legacy_ears_spec("0001-lg", "- Systems shall run.");
+        let (e, w) = warnings_for("0001-lg", &body);
+        assert!(e.is_empty(), "{e:?}");
+        assert_eq!(w.len(), 1, "{w:?}");
+        assert!(w[0].contains("does not begin with a standard EARS pattern keyword"));
+    }
+
+    #[test]
+    fn legacy_ears_block_ambiguous_modal_warns() {
+        let body = legacy_ears_spec("0001-lg", "- The system shall run and may stop.");
+        let (e, w) = warnings_for("0001-lg", &body);
+        assert!(e.is_empty(), "{e:?}");
+        assert_eq!(w.len(), 1, "{w:?}");
+        assert!(w[0].contains("ambiguous modal 'may'"));
+    }
+
+    #[test]
+    fn legacy_ears_block_without_shall_warns_not_errors() {
+        let body = legacy_ears_spec("0001-lg", "- The system will run.");
+        let (e, w) = warnings_for("0001-lg", &body);
+        assert!(e.is_empty(), "{e:?}");
+        assert_eq!(w.len(), 1, "{w:?}");
+        assert!(w[0].contains("needs at least one EARS requirement clause containing 'shall'"));
+    }
+
+    #[test]
+    fn legacy_ears_house_form_and_backticked_modal_do_not_warn() {
+        let body = legacy_ears_spec(
+            "0001-lg",
+            "- **[REQ-0001-01]** (Ubiquitous): The system shall flag `may` and `should`.",
+        );
+        let (e, w) = warnings_for("0001-lg", &body);
+        assert!(e.is_empty(), "{e:?}");
+        assert!(w.is_empty(), "{w:?}");
+    }
+
+    #[test]
+    fn legacy_spec_without_ears_block_draws_nothing() {
+        let (e, w) = warnings_for("0001-lg", &spec("0001-lg"));
+        assert!(e.is_empty(), "{e:?}");
+        assert!(w.is_empty(), "{w:?}");
     }
 
     #[test]
