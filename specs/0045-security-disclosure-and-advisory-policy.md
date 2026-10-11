@@ -79,7 +79,7 @@ exception that expires. Releases stop while the gate is red. The SBOM ships with
 - [ ] `sbom.yml`: install `cargo-cyclonedx@0.5.9` (D4).
 - [ ] `release.yml`: a `cargo deny check advisories` step before release-plz (D5). After it, `if: steps.<release-plz id>.outputs.releases_created == 'true'`: install pinned cargo-cyclonedx, `make sbom`, copy every `*.cdx.json` outside `target/` into a staging directory as `sbom.yml` does (F8), and `gh release upload v<version>` with that directory's files (D4).
 - [ ] Spec 0004 CI tools table: rows for `cargo-audit` and `cargo-cyclonedx` 0.5.9 (spec 0034 plan names the second).
-- [ ] `SECURITY.md`: the D3 text; drop "no fixed response time". The acknowledgement target waits for Christian's ruling on D3.
+- [ ] `SECURITY.md`: the D3 text; drop "no fixed response time". The acknowledgement target is ruled: 5 business days (D3).
 
 ## Test
 
@@ -109,8 +109,9 @@ Passing means exit 0: each failing fixture fails inside its test, `valid.toml` p
   D1's shared ignore list closes the gap F7 shows.
 - Spec 0004 lines 197-198 already reject `syntect` and `yrs` over unmaintained advisories. D2
   is the route if one of them is ever taken with no fix.
-- Parked for Christian: D3's acknowledgement target, D8, and the licence mismatch of F10
-  (crate `MIT OR Apache-2.0`, workspace `LicenseRef-Proprietary`), which is spec 0004's subject.
+- Parked for Christian: D8 and the licence mismatch of F10 (crate `MIT OR Apache-2.0`,
+  workspace `LicenseRef-Proprietary`), which is spec 0004's subject. D3's acknowledgement
+  target is ruled: 5 business days.
 - Parked: enabling PVR is an operator step at go-public time; this spec does not track it.
 - ceres runs cargo-deny 0.19.0 and CI runs 0.19.9 (F5). The F5 and F6 runs used 0.19.0; F6 is
   confirmed in 0.19.9 source. Aligning the local version is spec 0034's subject.

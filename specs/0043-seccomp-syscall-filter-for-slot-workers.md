@@ -69,7 +69,7 @@ to read another process, and leaves every other call untouched.
 
 ## Plan
 
-- [ ] Spec 0004: add the `seccompiler` 0.5.0 row to both tables and move the `libc` row to 0.2.190 for `uas-sandbox` (D7). Run `make pin-check`.
+- [x] Spec 0004: add the `seccompiler` 0.5.0 row to both tables and move the `libc` row to 0.2.190 for `uas-sandbox` (D7). Run `make pin-check`. Landed in PR #136.
 - [ ] `uas-sandbox`: `seccomp.rs` with the D2 program, `install()` for `pre_exec`, and the `JailRefused` mapping (D4).
 - [ ] `uas-sandbox`: wire `install()` into `launcher::launch` after `restrict_child` (D1).
 - [ ] Escape suite: the eleven D6 rows and the D8 timing print.
