@@ -3,7 +3,7 @@ status: planned
 created: 2026-10-10
 tags: [pool, cgroup, cpu-max, job-cap, nice, phase-3]
 priority: high
-depends_on: [0001-cas-architecture-and-crate-layout, 0002-verification-gates-and-evidence, 0014-ebpf-priority-clamping-and-audit-probes, 0015-slot-pool-cgroup-freezer-and-gitoxide]
+depends_on: [0001-cas-architecture-and-crate-layout, 0002-verification-gates-and-evidence, 0014-ebpf-priority-clamping-and-audit-probes, 0015-slot-pool-cgroup-freezer-and-gitoxide, 0041-slot-memory-pids-and-disk-limits]
 ---
 
 # 0020-build-job-cap
@@ -47,7 +47,8 @@ Facts, measured on ceres 2026-10-10 unless stated:
   controller runs uncapped and nothing records it.
 - **F7 [verified]:** `pids.max` is delegated too (F3). It caps the number of tasks
   in the cgroup, not CPU time. A build with two jobs and a thread pool of 16 is
-  legitimate, so `pids.max` is the wrong knob for a job cap.
+  legitimate, so `pids.max` is the wrong knob for a job cap; spec 0041 D2 sets it as a
+  fork-bomb ceiling instead.
 
 ## Design
 
@@ -81,7 +82,7 @@ Two CPUs of quota is the arithmetic twin of `-j 2`: two jobs that each use one C
 fit exactly; a worker that starts sixteen gets the same total time and slows
 itself, not the host. The quota is a ceiling on CPU time; it does not stop a
 process from blocking on I/O or from allocating memory (`memory.high` and
-`memory.max`, already in `ResourceLimits`, cover that and are out of scope here).
+`memory.max`, already in `ResourceLimits`, cover that; spec 0041 covers memory, pids and disk).
 
 ### Decisions
 
@@ -134,3 +135,4 @@ has no delegated `cpu` controller, which is the `uncapped` path.
   of the slot cgroup; a later measurement spec can read it into the receipt.
 - The quota is per slot. Two slots on one host may use four CPUs together; the
   pool's slot count (spec 0015) is the host-level bound.
+- **Spec 0041**: Spec 0041 also lists this spec in its `depends_on`; the dependence is mutual and `make spec-check` has no cycle test.
