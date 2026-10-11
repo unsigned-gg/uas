@@ -43,7 +43,8 @@ diffs `origin/development` everywhere.
 
 - Merge with merge commits only. No squash. No rebase merge. Merge commits keep
   the signed commits intact.
-- Commits are signed. Subjects follow Conventional Commits.
+- Commits are signed. Subjects follow the Conventional Commits regex in spec 0051
+  (D4); Merge and Revert subjects stay allowed. Amended 2026-10-11 (plan 0051 P6).
 - Nobody pushes directly to `main` or `development`. Every change uses a PR.
 - The repo setting `delete_branch_on_merge` is on. Squash merge is off.
 
@@ -62,6 +63,7 @@ Both branches carry the same classic protection.
 | Required check `cargo-deny` | yes | yes |
 | Required check `hygiene` | yes | yes |
 | Required check `ebpf-live` | yes (2026-10-10, after development run 38028975897; spec 0005 D2) | no, until the next promotion |
+| Required check `fork-gate` | no, until plan 0048 P13 | no, until plan 0048 P13 |
 
 The template repo itself also requires `template-check` on both branches. A
 repo made from the template does not, because `make new-repo` deletes that

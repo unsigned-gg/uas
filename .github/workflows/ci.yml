@@ -1,5 +1,6 @@
 # CI gates. Spec: specs/0005-ci-cache-and-runners.md; gate rules: specs/0002.
-# Required checks on `development` and `main` (specs/0003): secrets, rust, cargo-deny, hygiene.
+# Required checks on `development` and `main` (specs/0003): secrets, rust, cargo-deny, hygiene, ebpf-live.
+# `fork-gate` (spec 0051 D8) becomes a required check once the repository is public.
 # Every action is pinned by commit SHA with its version in a comment.
 name: CI
 
@@ -195,3 +196,46 @@ jobs:
             exit 1
           fi
           grep -q 'test result: ok. 9 passed' ebpf-live.log || { echo "::error::expected 9 passed"; exit 1; }
+
+  fork-gate:
+    name: fork-gate
+    # Spec 0051 D8. Always runs. A fork PR passes only with the label `fork-ci-approved` and a
+    # maintainer comment `fork-ci-approved: <current head sha>`. Uses no action, checks out nothing,
+    # and holds no secret: a fork's token is read-only. Labels, head SHA and comments are read from
+    # the API at run time because a re-run replays the original event payload.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - name: fork PR needs the label and a maintainer comment on the head SHA
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          BASE_REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT" != "pull_request" ] || [ "$HEAD_REPO" = "$BASE_REPO" ]; then
+            echo "not a fork PR; nothing to gate"
+            exit 0
+          fi
+          labels_json=$(gh api "repos/$BASE_REPO/issues/$PR/labels?per_page=100")
+          pull_json=$(gh api "repos/$BASE_REPO/pulls/$PR")
+          comments_json=$(gh api --paginate "repos/$BASE_REPO/issues/$PR/comments?per_page=100")
+          labels=$(printf '%s' "$labels_json" | jq -r '.[].name')
+          head_sha=$(printf '%s' "$pull_json" | jq -r '.head.sha')
+          want="fork-ci-approved: $head_sha"
+          approved=$(printf '%s' "$comments_json" | jq -r --arg want "$want" \
+            '.[] | select(.author_association == "OWNER" or .author_association == "MEMBER")
+                 | select((.body | gsub("^\\s+|\\s+$"; "")) == $want) | .id')
+          have_label=0
+          if printf '%s\n' "$labels" | grep -xF 'fork-ci-approved' >/dev/null; then have_label=1; fi
+          if [ "$have_label" = 1 ] && [ -n "$approved" ]; then
+            echo "fork PR approved for head $head_sha"
+            exit 0
+          fi
+          echo "::error::fork PR: a maintainer must add the label fork-ci-approved and comment exactly '$want', then re-run this job"
+          exit 1
