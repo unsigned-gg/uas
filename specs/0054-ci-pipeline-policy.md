@@ -64,7 +64,7 @@ Read 2026-10-11 at `origin/development` ebc7be8. Line numbers are for that commi
   --jq .required_status_checks.contexts` prints six: `secrets`, `rust / cargo`, `cargo-deny`,
   `hygiene`, `ebpf-live`, `fork-gate`. The same call on `main` prints four, without `ebpf-live`
   and `fork-gate`. `strict` is false, approvals 0, admins enforced. Stale copies: spec 0003's
-  table says `fork-gate` is not required; spec 0005 says four required checks and lists
+  table says `fork-gate` is not required (PR #194 corrects it); spec 0005 says four required checks and lists
   `template-check.yml`, which does not exist here; `ci.yml` lines 2 to 3 list five and defer
   `fork-gate`. The context `rust / cargo` is the caller job `rust` plus the called job `cargo`.
 - **F8 [verified]:** runners. Every job but one uses group `ent-default`; labels are
@@ -130,15 +130,15 @@ Classes: `ruled` (the operator decided it), `lane-decided` (the integrating lane
 | D3 | Every job of a `pull_request` workflow carries the same-repo condition of F3, except `fork-gate`. A fork PR therefore skips every self-hosted job. A skipped job counts as passing for a required check [asserted: GitHub docs], so `fork-gate` is what turns a fork PR red; 0051 D8 owns that rule and this spec does not restate it. A called workflow relies on its caller's `if`. | The condition keeps fork code off the self-hosted pods. | lane-decided (0051 D8 ruled) |
 | D4 | No workflow uses `paths` or `paths-ignore`. A docs-only PR runs the full pipeline. Cost: the 113 median job-seconds of F9's table, 43 s of them on the single `ci-kernel` runner, and 49 s of wall time. The labeler map is not a filter source: its job runs in a separate workflow, so labels land after the checks start, and F5 leaves many files unlabeled. | A workflow skipped by a path filter leaves its required check unreported and blocks the merge [asserted: GitHub docs]. The cost is small. `moon-affected` already skips its own work. | lane-decided |
 | D5 | `labeler.yml` is a contract. Each label exists in the repository. Each glob matches a tracked file. `fork-ci-approved` is never defined there, because a person applies it (0051 D8). The `ci` label also covers the files that change pipeline behaviour: `.config/**`, `.cargo/**`, `scripts/**`, `.github/**`, `deny.toml`, `release-plz.toml`, `rust-toolchain.toml`, `_typos.toml`, `.gitleaks.toml`. The dead glob `.lean-spec` goes (Plan P1). Labels inform; no gate reads them. | F5. A label that misses `.config/nextest.toml` hides a pipeline change from a reader scanning labels. | lane-decided |
-| D6 | The profiles stay as F6 shows. CI runs `ci`: `retries = 1`, `fail-fast = false`, junit at `target/nextest/ci/junit.xml`. Retry is the flake policy: a test that passes only on retry is a defect. The integrating lane files it. `pre-push` has no caller, so it is dead until a caller exists or the profile goes (Plan P5). | A retry keeps one flake from blocking a PR; a filed defect keeps it from staying. | lane-decided; the `pre-push` choice is proposed: integrating lane |
+| D6 | The profiles stay as F6 shows. CI runs `ci`: `retries = 1`, `fail-fast = false`, junit at `target/nextest/ci/junit.xml`. Retry is the flake policy: a test that passes only on retry is a defect. The integrating lane files it. `pre-push` has no caller (lefthook runs `cargo test`, not nextest, and no Make target names it), so the profile is dropped (Plan P5). | A retry keeps one flake from blocking a PR; a filed defect keeps it from staying. | lane-decided; the `pre-push` drop: lane-decided: integrating lane w25:p1, 2026-10-11 |
 | D7 | The required checks are the contexts of F7: six on `development`, four on `main`. A job becomes required by the 0053 D10 form: it lands non-required, runs seven days on pull requests with no false failure, then the lane adds it to the protection, to the spec 0003 table and to the `ci.yml` header in one landing. A job name or caller job id that is a required context is part of the contract. Renaming or removing one needs the protection edit in the same landing. `moon-affected`, `text-check` until D10 of 0053 fires, `semver-checks`, `labeler` and `codeql` stay non-required. | A renamed context leaves the old one pending forever. F7 shows three copies already stale. | ruled: the operator, 0053 D10, lane w25:p1, 2026-10-11 about 03:40Z, for the date form; the rename rule is lane-decided |
 | D8 | A job names one runner from F8. A job on `ci-rust` may assume the baked toolchain, 10 CPU and no `gh`. It may not assume a toolchain install, a persistent disk or `sudo`. `ebpf-live` runs as uid 0 with no `sudo` (0005 lane table). `fork-gate` is the only hosted job, holds no secret and checks out nothing. A new job takes one of the existing labels, so `actionlint.yaml` stays true. | The lane facts are 0005's. This row fixes which jobs may rely on them. | lane-decided |
-| D9 | Every job sets `timeout-minutes`. Raising one needs a measurement in the PR body. | A hung job holds a pod; `ebpf-live` runs one pod at a time (0005). | lane-decided; lowering `ebpf-live` from 45 to 15 is proposed: integrating lane, since the maximum is 49 s |
+| D9 | Every job sets `timeout-minutes`. Raising one needs a measurement in the PR body. | A hung job holds a pod; `ebpf-live` runs one pod at a time (0005). | lane-decided; `ebpf-live` goes from 45 to 15 minutes: lane-decided: integrating lane w25:p1, 2026-10-11 (maximum measured 49 s) |
 | D10 | `workflow_dispatch` is allowed on any workflow and runs the same jobs as a push. A workflow with a `schedule` also has dispatch, and a scheduled workflow is never a required check. `audit` and `codeql` run weekly on Monday. Nothing in the repository alerts on a red scheduled run. | Dispatch is the manual re-run path for a flaky scheduled job. A required scheduled check would block merges on a calendar event. | lane-decided; who watches a red `audit` is open (see Notes) |
-| D11 | A `run:` line interpolates `${{` only for `inputs.*` of a called workflow. `github.event.*`, `head_ref`, `base_ref` and `ref_name` reach the shell through `env:`. One exception stands until Plan P2 removes it: `ci.yml` 118. | F11. 0053 REQ-14 set the pattern. | lane-decided; the `ci.yml` 118 fix is proposed: integrating lane |
+| D11 | A `run:` line interpolates `${{` only for `inputs.*` of a called workflow. `github.event.*`, `head_ref`, `base_ref` and `ref_name` reach the shell through `env:`. One exception stands until Plan P2 removes it: `ci.yml` 118. | F11. 0053 REQ-14 set the pattern. | lane-decided; the `ci.yml` 118 fix: lane-decided: integrating lane w25:p1, 2026-10-11 |
 | D12 | Every workflow sets top-level `permissions: contents: read`. A job raises a scope only when it writes: `labeler` (`pull-requests: write`), `release` (`contents: write`), `codeql` (`security-events: write`). | A default token with write scope turns any injected step into a write. | lane-decided |
-| D13 | `actionlint` joins `make hygiene` so CI runs it. Its pin goes into spec 0004 first (rule 12). | F12: the tool passes today and runs nowhere. | proposed: integrating lane |
-| D14 | The `junit` step in `_rust.yml` also writes the count of `flakyFailure` elements to the step summary. It does not fail the job. | D6 needs a count to file a defect from, and F6 shows none is recorded. | proposed: integrating lane |
+| D13 | `actionlint` joins `make hygiene` so CI runs it, after a spec 0004 CI-tools row pins it by version and sha256, as for `cargo-semver-checks`. | F12: the tool passes today and runs nowhere. | lane-decided: integrating lane w25:p1, 2026-10-11 |
+| D14 | The `junit` step in `_rust.yml` also writes the count of `flakyFailure` elements to the step summary. It does not fail the job. | D6 needs a count to file a defect from, and F6 shows none is recorded. | lane-decided: integrating lane w25:p1, 2026-10-11 |
 
 ### Requirements (EARS)
 
@@ -189,15 +189,15 @@ Classes: `ruled` (the operator decided it), `lane-decided` (the integrating lane
 - [ ] P1, `.github/labeler.yml`: drop `.lean-spec`; add the D5 paths to `ci`. Then delete the
       `.lean-spec` exception from Test. Red first: Test row 4 with the glob left in.
 - [ ] P2, `ci.yml`: move `github.base_ref` at line 118 into an `env:` entry; rewrite the header
-      lines 2 to 3 to the F7 list and the non-required jobs. Delete the `moon-affected`
+      lines 2 to 3 to the F7 list and the non-required jobs (PR #194 does not touch the header). Delete the `moon-affected`
       exception from the Test script. One PR with P1.
 - [ ] P3, amend spec 0003 (`fork-gate` row, and `main` stays at four) and spec 0005 (the
       required-check sentence, and the workflow table: drop `template-check.yml`, add `semver`
-      and `text-check`). Through the spec-amend lane; this commit leaves both files alone.
-- [ ] P4, D9 proposed: `ebpf-live` `timeout-minutes` 45 to 15, after the lane rules it.
-- [ ] P5, D6 proposed: wire `pre-push` into a caller or remove the profile.
-- [ ] P6, D13 and D14 proposed: add `actionlint` to `make hygiene` after its spec 0004 pin;
-      add the flaky count to the `junit` step.
+      and `text-check`). PR #194 already corrects the 0003 `fork-gate` row (development yes, main no); 0005 remains.
+- [ ] P4, D9: `ebpf-live` `timeout-minutes` 45 to 15.
+- [ ] P5, D6: remove `[profile.pre-push]` from `.config/nextest.toml` and the 0002 mention.
+- [ ] P6, D13 and D14: pin `actionlint` in spec 0004, then add it to `make hygiene`; add the
+      flaky count to the `junit` step.
 
 ## Test
 
