@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 //! Binary conventions for `uas` (spec 0042 D1 to D4): version line, exit code, log format,
 //! the wave env flags and the stdout/stderr split.
 

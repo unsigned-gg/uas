@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 //! Spec 0041 P5: the pool resolves, logs and applies the slot limits and the disk floor.
 
 mod common;

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: Apache-2.0 OR MIT
 # Deny direct push to main/master. Override: "# allow-direct-push".
 # Reads the Claude Code PreToolUse JSON on stdin. Prints a deny decision or nothing. Always exits 0.
 input=$(cat); cmd=$(printf '%s' "$input" | jq -r '.tool_input.command // ""')

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 //! The lease bridge (spec 0026, Lease bridge and D4, D5, D9).
 
 use uas_domain::{

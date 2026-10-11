@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 //! Agent Sprint Wave Strategy for UAS orchestration.
 //!
 //! Partitions DAG steps into sequential execution waves bounded by a concurrency cap

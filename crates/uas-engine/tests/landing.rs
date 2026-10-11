@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 //! Landing activity tests. Each test puts fake `git` and `blackwall` scripts first on `PATH`.
 //! The scripts log their argv and return canned output, so no real repository is touched.
 //! Each test's temp dir is removed when its `Scratch` guard drops, also on panic.

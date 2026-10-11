@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 //! Canonical prompt prefix serialization and hashing (spec 0017 D1, D2).
 //!
 //! The canonical form is length-prefixed (spec 0017 D1, amended 2026-10-10), with tools

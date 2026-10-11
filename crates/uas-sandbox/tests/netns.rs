@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 //! Spec 0011 gate: `cargo test -p uas-sandbox -j 2 --test netns`.
 //!
 //! The worker is this test binary, re-executed with `helper_probe` as the only

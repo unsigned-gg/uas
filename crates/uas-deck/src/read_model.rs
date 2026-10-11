@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 //! Read model: one row per workflow session, folded from its event log.
 
 use uas_domain::{EvidenceTier, SlotId};

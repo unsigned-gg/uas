@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 //! Spec 0013 gate: `cargo test -p uas-sandbox -j 2 --test uds_proxy`.
 //!
 //! A fake gateway listens on 127.0.0.1 and echoes the `host` and `authorization`

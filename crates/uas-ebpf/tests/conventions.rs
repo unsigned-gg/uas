@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 //! Binary conventions of `uas-ebpfd` (spec 0042 D2, D3, D5).
 //!
 //! The tests assume nothing about the host: the daemon exits 2 where it cannot

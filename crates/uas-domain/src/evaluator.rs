@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 //! Paths that a wave Builder may not change, and paths a Critic must not load (spec 0023 D4
 //! and D6, spec 0025 D17).
 //!

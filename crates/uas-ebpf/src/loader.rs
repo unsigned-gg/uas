@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 //! The aya loader: loads `BPF_OBJECT`, attaches the tracepoints and owns the maps.
 //!
 //! Needs `CAP_BPF` and `CAP_PERFMON`. [`Probes::load`] runs the host probe first

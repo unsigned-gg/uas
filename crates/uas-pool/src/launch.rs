@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 //! Worker launch with clamping and audit tracking (spec 0015 D6, spec 0014 D4 and D14).
 //!
 //! [`spawn_worker`] starts a worker, clamps it, and registers its pid with

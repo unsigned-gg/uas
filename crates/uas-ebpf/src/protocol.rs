@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 //! The `uas-ebpfd` line protocol (spec 0014 D8, ruling R3).
 //!
 //! One JSON object per line over a Unix socket. The client sends a
