@@ -72,6 +72,7 @@ fn open_prs_value(raw: &str) -> Result<bool, String> {
 #[derive(Debug, Subcommand)]
 enum WaveCommand {
     /// Write one saga flow per wave from a plan.
+    #[command(after_help = DEPRECATION_NOTICE)]
     Flow {
         /// The plan: a saga flow file with `[[step]]` entries.
         #[arg(long)]
@@ -84,6 +85,7 @@ enum WaveCommand {
         max_concurrency: usize,
     },
     /// Run one step of a wave. Saga calls this as the `verify_cmd` of a generated step.
+    #[command(after_help = DEPRECATION_NOTICE)]
     Step {
         /// The plan, as given to `wave flow --from`.
         #[arg(long)]
@@ -115,6 +117,7 @@ enum WaveCommand {
     },
     /// Resolve a Builder's PR and run `blackwall merge-gate` on it. Saga calls this as the
     /// `verify_cmd` of a generated merge step.
+    #[command(after_help = DEPRECATION_NOTICE)]
     MergeGate {
         /// The plan, as given to `wave flow --from`.
         #[arg(long)]
@@ -183,6 +186,7 @@ enum HarnessCommand {
         wave: bool,
 
         /// Maximum concurrent subagents per wave (defaults to 3).
+        /// Deprecated: moves to saga (spec 0049).
         #[arg(long, default_value_t = DEFAULT_MAX_WAVE_CONCURRENCY)]
         max_concurrency: usize,
     },
@@ -1125,6 +1129,11 @@ fn main() -> Result<()> {
             command: HarnessCommand::Run { show_cpm: true, .. }
                 | HarnessCommand::Run { wave: true, .. }
         }
+    ) || matches!(
+        &cli.command,
+        Command::Harness {
+            command: HarnessCommand::Run { max_concurrency, .. }
+        } if *max_concurrency != DEFAULT_MAX_WAVE_CONCURRENCY
     );
     if matches!(cli.command, Command::Wave { .. }) || uses_cpm_flags {
         eprintln!("{DEPRECATION_NOTICE}");
