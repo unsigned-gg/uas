@@ -73,6 +73,10 @@ pub enum PoolError {
         floor_bytes: u64,
     },
 
+    /// Reading the free space of the worktree filesystem failed.
+    #[error("disk free-space probe failed: {0}")]
+    DiskProbe(#[source] std::io::Error),
+
     /// The worktree filesystem has less free space than the floor (spec 0041 D5).
     #[error("{free_bytes} bytes free is below the {min_free_bytes} byte floor")]
     DiskLow {

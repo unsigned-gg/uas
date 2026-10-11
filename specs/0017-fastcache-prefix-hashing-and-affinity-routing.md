@@ -24,7 +24,7 @@ Parent tickets: CER-2690, CER-2691, CER-2692, CER-2693.
 
 Facts, measured and recorded 2026-10-09:
 - **Upstream Gateway [verified]:** Estate LLM gateway operates at
-  `http://llm.tail769bd2.ts.net` and in-cluster at `http://llm.llm:4000`.
+  `http://llm` and in-cluster at `http://llm.llm:4000`.
 - **Approved Crates [verified]:** Spec 0004 approves `sha2` 0.11.0 and
   `futures-util` 0.3.34 for `uas-router`. `tokio` 1.53.1 is in use.
 - **Domain Purity [verified]:** `uas-router` depends on `uas-domain` for

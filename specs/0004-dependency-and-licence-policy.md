@@ -12,10 +12,14 @@ depends_on: [0001-cas-architecture-and-crate-layout]
 
 This spec sets the licence of the template and the rules for external code.
 
-The template is proprietary. `[workspace.package]` sets
-`license = "LicenseRef-Proprietary"`. The copyright holder is Christian M.
-Todie / cerebral.work. Contact: chris@todie.io. Cortex drifted from this rule
-with `license = "MIT"` beside a proprietary LICENSE, measured 2026-10-08.
+The licence position is ruled in spec 0048 D1, D2 and D10 (Christian, 2026-10-11).
+The userspace crates are `Apache-2.0 OR MIT`: `[workspace.package]` sets
+`license = "Apache-2.0 OR MIT"`. The BPF program package is `GPL-2.0-only OR MIT`
+and its object declares `Dual MIT/GPL`. Docs and specs are `CC-BY-4.0`. The
+copyright holder is `unsigned.gg`. Contact: chris@todie.io. Until 2026-10-11 the
+template was proprietary (holder Christian M. Todie /
+cerebral.work). Cortex had drifted from that rule with `license = "MIT"` beside
+a proprietary LICENSE, measured 2026-10-08.
 
 Facts from 2026-10-08:
 
@@ -52,7 +56,7 @@ Facts from 2026-10-10, read at `origin/development` `065015a`:
 
 ### Requirements (EARS)
 
-- **Ubiquitous:** The workspace shall declare a proprietary licence (`LicenseRef-Proprietary`) and deny copyleft licences via `deny.toml`.
+- **Ubiquitous:** The workspace shall declare `Apache-2.0 OR MIT` for every root package, and the BPF program package shall declare `GPL-2.0-only OR MIT` (spec 0048 D1); `deny.toml` shall still deny copyleft dependencies.
 - **Ubiquitous:** The workspace shall pin every external dependency by exact version or git revision before use.
 - **Event-driven:** WHEN adding an external dependency, the developer shall document rationale in workspace dependencies and update this specification.
 - **State-driven:** WHILE building eBPF kernel probe objects, the build system shall declare dual MIT/GPL licensing for kernel compatibility.
@@ -74,7 +78,9 @@ Facts from 2026-10-10, read at `origin/development` `065015a`:
   `deny` list. A licence passes only when it is in `allow`. No GPL, AGPL or
   LGPL licence is in `allow`, so all of them fail. The two named cases are
   autonice and zerostack.
-- `cargo deny check` runs in `make check` and in the CI job `cargo-deny`.
+- `cargo deny check` runs in `make check` and in the CI job `cargo-deny`. `deny.toml` sets
+  `[licenses.private] ignore = false`, so the gate reads this workspace's own licence too
+  (spec 0048 D8).
 - A new licence needs an operator decision before it enters the allow list.
 
 ### External dependencies
@@ -118,16 +124,20 @@ definitions and workflow templates.
 ### Vendored estate contracts and schemas
 
 To integrate with other estate components without creating circular workspace
-dependencies or heavy binary links, UAS vendors interface schemas and contracts:
+dependencies or heavy binary links, UAS uses interface schemas and contracts.
+Per spec 0048 D9, `cargo xtask fetch-contracts` fetches Soma, Cortex and Saga
+into the ignored `.contracts/`, each file pinned by upstream commit and sha256
+in the tracked `contracts.lock`. Only `vendor/leanspec/` (MIT) stays in `vendor/`.
+The table lists each source and the path it takes once fetched:
 
 | Component | Upstream repository | Path in UAS | Licensor / Licence | Role in UAS |
 |---|---|---|---|---|
 | LeanSpec | `codervisor/leanspec` | `vendor/leanspec/` | MIT | LeanSpec methodology templates and skills |
-| Soma OS | `unsigned-gg/soma-os` | `vendor/soma/schemas/` | BSL 1.1 (unsigned-gg) | JSON schemas for containment and dispatch |
-| Cortex Mesh | `cerebral-work/cortex` | `vendor/cortex/proto/` | Proprietary (Cerebral) | Protocol Buffers for mesh RPC and messaging |
-| Saga Orchestrator | `unsigned-gg/saga` | `vendor/saga/flows/`, `vendor/saga/contracts/` | BSL 1.1 (unsigned-gg) | Workflow definitions and domain contract types |
+| Soma OS | `unsigned-gg/soma-os` | `.contracts/soma/schemas/` | BSL 1.1 (unsigned-gg) | JSON schemas for containment and dispatch |
+| Cortex Mesh | `cerebral-work/cortex` | `.contracts/cortex/proto/` | Proprietary (Cerebral) | Protocol Buffers for mesh RPC and messaging |
+| Saga Orchestrator | `unsigned-gg/saga` | `.contracts/saga/flows/`, `.contracts/saga/contracts/` | BSL 1.1 (unsigned-gg) | Workflow definitions and domain contract types |
 
-Each directory includes a README or VENDORED note recording upstream commits, dates, and licensing terms.
+`contracts.lock` records the upstream commits and sha256 values; the licence column records the upstream licensing terms.
 
 
 ### UAS dependencies from the research
@@ -155,12 +165,14 @@ The research does not state the aya licence. The `aya-rs/aya` workspace
 `Cargo.toml` declares `MIT OR Apache-2.0` (read 2026-10-08). Re-read it at the
 pin. A separate question remains: an eBPF program that calls GPL-only kernel
 helpers must declare a GPL-compatible licence in its `license` section (Linux
-kernel `Documentation/bpf/bpf_licensing.rst`). This repo is proprietary.
+kernel `Documentation/bpf/bpf_licensing.rst`). The root workspace is `Apache-2.0 OR MIT` (spec 0048 D1).
 
 Position, decided by Christian on 2026-10-09: the kernel-side BPF program
 object declares `Dual MIT/GPL` in its `license` section, as the aya template
-does. Only that program object carries it. The userspace loader and every
-other crate stay proprietary, and `deny.toml` still denies GPL crates.
+does. Only that program object carries it. Amended 2026-10-11 by spec 0048 D1
+(Christian): the userspace loader and every other crate are `Apache-2.0 OR MIT`,
+not proprietary, and the program package is `GPL-2.0-only OR MIT`. `deny.toml`
+still denies GPL crates.
 
 ### UAS epic dependency list (approved 2026-10-09)
 
@@ -177,7 +189,7 @@ metadata, read 2026-10-09.
 | `landlock` | 0.4.7 | MIT OR Apache-2.0 | uas-sandbox | 2 | none |
 | `rustix` | 1.1.5 | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT | uas-sandbox, uas-pool | 2, 3 | default-features off; `std`, `process`, `thread`, `fs`, `mount`. In use since spec 0011 (2026-10-09) with `std`, `thread`, `process`, `fs` |
 | `aya` | 0.14.0 | MIT OR Apache-2.0 | uas-ebpf (loader) | 2 | MSRV 1.87 |
-| `aya-ebpf` | 0.2.1 | MIT OR Apache-2.0 | kernel-side BPF program, outside the workspace build | 2 | nightly, rust-src, bpf-linker; program object declares `Dual MIT/GPL` |
+| `aya-ebpf` | 0.2.1 | MIT OR Apache-2.0 | kernel-side BPF program, outside the workspace build | 2 | nightly, rust-src, bpf-linker; program package is `GPL-2.0-only OR MIT`; the object still declares `Dual MIT/GPL` |
 | `aya-log`, `aya-log-ebpf` | 0.3.0, 0.2.0 | MIT OR Apache-2.0 | uas-ebpf | 2 | only if the BPF program logs |
 | `seccompiler` | 0.5.0 | Apache-2.0 OR BSD-3-Clause | uas-sandbox | 2 | default features; no `libseccomp` link (spec 0043 D7; ruling 2026-10-11, lane w25:p1) |
 | `libc` | 0.2.190 | MIT OR Apache-2.0 | uas-sandbox | 2 | direct dependency: seccompiler keys rules by syscall number and rustix exports none (plan 0043 R1). Locked at 0.2.190 (spec 0043 D7; ruling 2026-10-11, lane w25:p1) |
@@ -185,7 +197,7 @@ metadata, read 2026-10-09.
 | `gix` | 0.88.0 | MIT OR Apache-2.0 | uas-pool | 3 | default-features off, minimal features; MSRV 1.88; fallback 0.87.1 |
 | `agent-client-protocol` | 2.2.0 | Apache-2.0 | uas-acp | 3 | MSRV 1.88; 3.x is under 14 days old. In use since spec 0016 (2026-10-10); transitive pull in D1 |
 | `tokio` | 1.53.1 | MIT | uas-router, uas-deck, uas-storage; uas-engine behind feature `cortex-grpc` (spec 0026; UAS lane amendment, Christian corrects it in place) | 4, 5, 6 | default-features off; `rt-multi-thread`, `macros`, `net`, `time`, `sync`. The uas-pool runtime stays open (spec 0001 gap 1). In use since spec 0013 (2026-10-09) in uas-router, plus `io-util` (a feature of the same crate, needed by `AsyncReadExt` and `AsyncWriteExt`; UAS lane amendment, Christian corrects it in place) |
-| `sha2` | 0.11.0 | MIT OR Apache-2.0 | uas-ebpf, uas-router | 2, 4 | none |
+| `sha2` | 0.11.0 | MIT OR Apache-2.0 | uas-ebpf, uas-router, xtask | 2, 4 | none |
 | `reqwest` | 0.13.5 | MIT OR Apache-2.0 | uas-router, uas-deck | 4, 5 | default-features off; `rustls` (aws-lc-rs provider, needs cmake), `http2`, `json`, `stream` |
 | `futures-util` | 0.3.34 | MIT OR Apache-2.0 | uas-router, uas-deck | 4, 5 | none |
 | `axum` | 0.8.9 | MIT | uas-deck | 5 | default features off, `http1` and `tokio` (P4, 2026-10-10); `ws` waits for D2 |
