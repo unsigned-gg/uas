@@ -8,6 +8,7 @@
 # On every push to `main`, release-plz (`git_only = true`, see release-plz.toml)
 # compares the workspace version with the git tags. When `v<version>` does not
 # exist yet, it creates the tag and the GitHub release. Otherwise it does nothing.
+# `cargo deny check advisories` runs first and blocks the release on a new advisory.
 name: release
 
 on:
@@ -68,11 +69,58 @@ jobs:
           # release-plz lists the pull requests of the released commit. This
           # needs the pull-requests scope.
           gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/pulls" --jq length
+      # Blocks the release on an open advisory. No `if:`: a dispatch from a branch runs it too.
+      - name: cargo deny check advisories
+        run: cargo deny check advisories
       # Tag only from main. A manual run on another branch tests the steps above
       # and creates no tag.
       - uses: release-plz/action@18641b6c63063cc5ff8786ebf69cd57e8541bae1 # v0.5.140
+        id: release-plz
         if: github.ref == 'refs/heads/main'
         with:
           command: release
         env:
           GITHUB_TOKEN: ${{ github.token }}
+      # release-plz sets releases_created on every push to main in this workspace and
+      # lists package tags that have no GitHub release. The SBOM attaches to the
+      # uas-cli tag only, so the SBOM steps key on that tag.
+      - name: Find the uas-cli release tag
+        id: cli-tag
+        if: github.ref == 'refs/heads/main'
+        env:
+          RELEASES: ${{ steps.release-plz.outputs.releases }}
+        run: |
+          set -euo pipefail
+          tag="$(printf '%s' "${RELEASES:-[]}" | jq -r '.[] | select(.package_name=="uas-cli") | .tag')"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+      # SBOM on the release. Only when release-plz released uas-cli on main.
+      # Pinned by version and sha256 (spec 0004, CI tools; plan 0045 finding 2).
+      - name: Install cargo-cyclonedx (pinned)
+        if: github.ref == 'refs/heads/main' && steps.cli-tag.outputs.tag != ''
+        env:
+          CYCLONEDX_VERSION: 0.5.9
+          CYCLONEDX_SHA256: fb8dbee9f182173e062a64a387b21a0badc6fab8b2abf9294973f012972bf6d8
+        run: |
+          set -euo pipefail
+          name=cargo-cyclonedx-x86_64-unknown-linux-gnu
+          curl -sSfL --retry 3 "https://github.com/CycloneDX/cyclonedx-rust-cargo/releases/download/cargo-cyclonedx-${CYCLONEDX_VERSION}/$name.tar.xz" -o "$RUNNER_TEMP/$name.tar.xz"
+          echo "${CYCLONEDX_SHA256}  $RUNNER_TEMP/$name.tar.xz" | sha256sum -c -
+          tar -xJf "$RUNNER_TEMP/$name.tar.xz" -C "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/$name" >> "$GITHUB_PATH"
+      - name: make sbom
+        if: github.ref == 'refs/heads/main' && steps.cli-tag.outputs.tag != ''
+        run: |
+          set -euo pipefail
+          make sbom
+          mkdir -p sbom
+          find . -name '*.cdx.json' -not -path './target/*' -not -path './sbom/*' -exec cp {} sbom/ \;
+          ls -l sbom
+          test -n "$(ls -A sbom)"
+      - name: Attach the SBOM to the release
+        if: github.ref == 'refs/heads/main' && steps.cli-tag.outputs.tag != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.cli-tag.outputs.tag }}
+        run: |
+          set -euo pipefail
+          gh release upload "$TAG" sbom/*.cdx.json --clobber
