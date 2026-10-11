@@ -158,7 +158,7 @@ the first use.
 
 ### Considered, no uas pin (grill sheet 2026-10-10)
 
-Each row: ruled: Christian, grill sheet 2026-10-10 answer <n>, read 2026-10-11. Principles (answer 1a): stars are a weak signal and manifests are the source of truth, in `cerebral-work/cerebral-docs` `agentic-systems/guides/hyperscaler-library-selection-principles.md` at 39b0919 [reported: research lane w1X:p1, mesh 2026-10-11; commit verified on GitHub by w25:p1]. That commit also fixed two citations and added verdict lines to 24 dossiers.
+Each row: ruled: Christian, grill sheet 2026-10-10 answer <n>, read 2026-10-11. Principles (answer 1a): stars are a weak signal and manifests are the source of truth, in `cerebral-work/cerebral-docs` `agentic-systems/guides/hyperscaler-library-selection-principles.md` at 39b0919 [reported: research lane w1X:p1, mesh 2026-10-11; commit verified on GitHub by w25:p1]. The commit touches 23 files: it adds that guide, changes one line of `linux-agent-runtime-control-taxonomy.md` and adds a `Verdict` line to each of 21 `repos/*.md` dossiers [verified 2026-10-11: `gh api repos/cerebral-work/cerebral-docs/commits/39b0919`].
 
 | Library | Answer | Verdict |
 |---|---|---|
@@ -167,8 +167,8 @@ Each row: ruled: Christian, grill sheet 2026-10-10 answer <n>, read 2026-10-11. 
 | `shellflip` | 5a | Watch. Adopt only when `uas-ebpfd` or the deck needs zero-downtime restart with fd passing |
 | `foundations` | 6a | Rejected: uas owns its seccomp and landlock jails |
 | io_uring, `tokio-uring`, `heph` | 7a | Closed by spec 0019 D2 (OS threads) |
-| `kube-rs`, `rust-spiffe` | 9c | Not for uas. Christian's candidate is saga on top of uas, relayed to the saga lead |
-| `parseable`, `pingora`, `wirefilter`, `lol-html` | 9c | Not for uas (paas surfaces) |
+| `kube-rs`, `rust-spiffe` | 9c | Not for uas. Christian's candidate is saga on top of uas, relayed to the saga lead [reported: w25:p1 mesh message 07da62cd, 2026-10-11] |
+| `parseable`, `pingora`, `wirefilter`, `lol-html` | none | Not for uas (paas surfaces). lane-decided: w25:p1, 2026-10-11, on 9a's reasoning; not ruled |
 
 The research dossier pass and its two citation errors are with the research lane (answer 10a).
 
@@ -313,3 +313,5 @@ make toolchain-check
 ## Notes
 
 Open question: does pgt get a licence or stay internal-only? The answer decides whether instantiated repos may publish a crate that depends on it.
+
+References: `cerebral-work/pgt@54d90f5:Cargo.toml`; `cerebral-work/cortex@524a97b:deny.toml`.
