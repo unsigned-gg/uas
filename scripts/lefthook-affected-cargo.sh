@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: Apache-2.0 OR MIT
 # lefthook affected-cargo: run cargo only for the workspace crates a change set
 # touches. Workspace-level changes (lockfile, root manifest, CI) fall back to the
 # full workspace. Non-crate paths (docs, specs) skip cargo.

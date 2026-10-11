@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 //! ACP over stdio, against a mocked pool. Spec 0016 (A1, A2), Tests section.
 
 use std::cell::{Cell, RefCell};

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 //! Path canonicalisation for rules.
 
 use std::io::ErrorKind;

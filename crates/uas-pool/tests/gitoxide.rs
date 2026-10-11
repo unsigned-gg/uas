@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 //! CER-2724: In-process Gitoxide (`gix`) worktree provisioning and teardown integration tests.
 
 use std::fs;

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 //! Repo automation. Run with `cargo xtask <command>`.
 //!
 //! Commands:

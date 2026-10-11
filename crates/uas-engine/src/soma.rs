@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 //! Soma reflex policy gateway integration.
 //!
 //! Evaluates incoming activities against [`uas_domain::PolicyTier`] constraints

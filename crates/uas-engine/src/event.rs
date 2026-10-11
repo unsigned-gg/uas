@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 //! Event-sourced workflow event log and replay storage.
 
 use serde::{Deserialize, Serialize};
