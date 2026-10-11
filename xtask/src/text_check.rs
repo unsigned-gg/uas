@@ -175,9 +175,9 @@ fn is_word(c: char) -> bool {
     c.is_alphanumeric() || c == '_'
 }
 
-/// D7: a subject carries a ticket ID. `Merge` and `Revert` subjects are skipped.
+/// D7: a subject carries a ticket ID. The forms git writes, `Merge ` and `Revert \"`, are skipped.
 pub fn ticket_in_subject(subject: &str) -> bool {
-    if subject.starts_with("Merge") || subject.starts_with("Revert") {
+    if subject.starts_with("Merge ") || subject.starts_with("Revert \"") {
         return false;
     }
     TICKET_KEYS.iter().any(|key| {
