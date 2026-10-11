@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 //! A private network namespace for a worker.
 //!
 //! Spec 0011. `isolate` installs a `pre_exec` hook that runs in the child before

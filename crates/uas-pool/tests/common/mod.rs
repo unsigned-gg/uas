@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 //! Shared fixtures for the uas-pool integration tests (copied from `gitoxide.rs`).
 #![allow(dead_code, missing_docs)]
 

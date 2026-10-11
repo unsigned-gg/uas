@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 //! `cargo xtask toolchain-check`.
 //!
 //! Fails unless the active `rustc` equals the `channel` in `rust-toolchain.toml`

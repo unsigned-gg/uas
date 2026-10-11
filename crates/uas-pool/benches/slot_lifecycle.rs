@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 //! Worker slot lifecycle micro-benchmarks.
 //!
 //! Evaluates lease acquisition, worktree warming, suspension (freeze/thaw),

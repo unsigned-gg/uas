@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 //! Tests of the Cortex pool-member adapter (spec 0026). A fake port, a fake runner and a fake
 //! clock stand in for Cortex, the harness and time, so no network is touched.
 #![cfg(feature = "cortex-grpc")]

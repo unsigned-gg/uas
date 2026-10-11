@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 //! The wave executor on the custody chain (spec 0025).
 //!
 //! `WaveExecutor` runs one step of a wave plan. A Builder is a jailed `blackwall start`, then

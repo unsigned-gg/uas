@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 //! Reverie memory daemon client integration.
 //!
 //! Reverie runs on `http://127.0.0.1:7437` and provides persistent episodic and

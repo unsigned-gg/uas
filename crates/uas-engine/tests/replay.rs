@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 //! Deterministic replay and crash recovery test suite.
 //!
 //! Verification gate for CER-2679.

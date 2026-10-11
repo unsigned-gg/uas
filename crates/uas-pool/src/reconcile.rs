@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 //! Restart reconciliation of slot remains (spec 0040 D2, D4, D6).
 //!
 //! A starting pool scans `<common_git_dir>/worktrees/*` and reclaims what a dead

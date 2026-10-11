@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 //! The ports of the pool-member adapter (spec 0026 D2). No tonic type appears here, so fakes
 //! test the bridge and the adapter. `grpc.rs` maps the generated types to these.
 

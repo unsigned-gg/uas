@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 //! The ACP server: one JSON-RPC 2.0 object per line, over any reader and writer.
 
 use std::collections::BTreeMap;
