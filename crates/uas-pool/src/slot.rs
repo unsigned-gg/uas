@@ -33,7 +33,7 @@ pub struct PoolConfig {
     /// Explicit memory, pids and disk overrides; they beat the environment (spec 0041 D7).
     pub limits: LimitOverrides,
     /// Worktree root whose filesystem must keep `min_free_bytes` free (spec 0041 D3).
-    /// `None` skips the disk check.
+    /// `None` uses `reconcile.worktree_root` when set, else the current directory.
     pub disk_root: Option<PathBuf>,
 }
 
@@ -59,6 +59,7 @@ impl Default for PoolConfig {
     }
 }
 
+#[doc(hidden)] // exists for tests: injects the host facts
 /// Host facts the pool reads once at construction: `MemTotal`, the environment and `statvfs`.
 ///
 /// [`SlotPool::new`] reads the real host; [`SlotPool::with_host`] takes injected values.
@@ -170,11 +171,12 @@ impl SlotPool {
         Self::with_host(config, HostProbe::real())
     }
 
-    /// Like [`Self::new`] with the host facts injected.
+    /// Like [`Self::new`] with the host facts injected. Exists for tests.
     ///
     /// Resolves the slot limits once (config, then env, then formula), logs the value in
     /// force and its source (spec 0041 D7, REQ-0041-12). A memory limit below the floor does
     /// not stop construction: [`Self::create_slot`] refuses with [`PoolError::MemoryLow`].
+    #[doc(hidden)] // exists for tests
     pub fn with_host(config: PoolConfig, host: HostProbe) -> Self {
         let min_free_bytes;
         let resolved = match limits::resolve(
@@ -269,31 +271,37 @@ impl SlotPool {
             return Err(PoolError::CapacityExhausted(self.config.max_slots));
         }
 
-        if self.config.cgroup_base.is_some() {
-            if let Err((per_slot_bytes, floor_bytes)) = &self.resolved {
-                return Err(PoolError::MemoryLow {
-                    per_slot_bytes: *per_slot_bytes,
-                    floor_bytes: *floor_bytes,
-                });
-            }
+        if let Err((per_slot_bytes, floor_bytes)) = &self.resolved {
+            return Err(PoolError::MemoryLow {
+                per_slot_bytes: *per_slot_bytes,
+                floor_bytes: *floor_bytes,
+            });
         }
 
-        if let Some(root) = &self.config.disk_root {
-            limits::check_free((self.free_bytes)(root)?, self.min_free_bytes)?;
-        }
+        let root = self
+            .config
+            .disk_root
+            .clone()
+            .or_else(|| {
+                self.config
+                    .reconcile
+                    .as_ref()
+                    .map(|r| r.worktree_root.clone())
+            })
+            .unwrap_or_else(|| PathBuf::from("."));
+        let free = (self.free_bytes)(&root).map_err(PoolError::DiskProbe)?;
+        limits::check_free(free, self.min_free_bytes)?;
 
         let freezer: Option<Box<dyn Freezer>> = if let Some(ref base) = self.config.cgroup_base {
             let resource_limits = match &self.resolved {
                 Ok(r) => ResourceLimits::from(r),
                 Err(_) => ResourceLimits::default(),
             };
-            match CgroupFreezer::with_limits(base, id.clone(), &resource_limits) {
-                Ok(cg) => Some(Box::new(cg)),
-                Err(e) => {
-                    tracing::warn!("cgroup freezer creation failed for slot {id}: {e}; falling back to signal freezer");
-                    Some(Box::new(SignalFreezer::new(id.clone())))
-                }
-            }
+            Some(Box::new(CgroupFreezer::with_limits(
+                base,
+                id.clone(),
+                &resource_limits,
+            )?))
         } else {
             Some(Box::new(SignalFreezer::new(id.clone())))
         };
