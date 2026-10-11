@@ -3,6 +3,11 @@
 [flow]
 name = "uas-wave-smoke"
 description = "Smoke plan for the wave executor: one Builder, its Critic, and an independent spec probe."
+# saga reads the next four keys (saga spec 0040 D3); uas ignores them (spec 0049 F17).
+on_halt = "halt-all"
+critic_agent = "uas-critic"
+builder_model = "sonnet"
+halt_paths = ["crates/uas-ebpf/ebpf/**"]
 
 [[step]]
 id = "wave-smoke-build"
