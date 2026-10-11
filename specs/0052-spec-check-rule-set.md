@@ -3,7 +3,7 @@ status: planned
 created: 2026-10-11
 tags: [spec-check, xtask, ears, hygiene, rules]
 priority: medium
-depends_on: [0001-cas-architecture-and-crate-layout, 0002-verification-gates-and-evidence, 0049-cpm-migration-to-saga]
+depends_on: [0001-cas-architecture-and-crate-layout, 0002-verification-gates-and-evidence, 0049-cpm-migration-to-saga, 0050-build-handoff-pipeline]
 ---
 <!-- SPDX-License-Identifier: CC-BY-4.0 -->
 
@@ -21,12 +21,12 @@ this spec is drafted (AskUserQuestion, lane w25:p1, label "Spec-check rule set")
 integrating lane brief]. Content decisions are the integrating lane's.
 
 The checker is accurate about what it checks. Three things it does not check matter more than any
-rule it has: the EARS checks skip the layout 47 of 48 specs use (F5), the keyword check
+rule it has: the EARS checks skip the layout 50 of 51 specs use (F5), the keyword check
 misfires on the house requirement form (F6), and plans get no check (F7).
 
 ### Facts
 
-Measured 2026-10-11 on `origin/development` 3e60a55. Each plant was one violation in a scratch
+Measured 2026-10-11 on `origin/development` 8d80119 plus this spec (51 specs). Each plant was one violation in a scratch
 `git archive` copy, built and run there. The checker bakes its repository root in at compile time
 (`xtask/src/main.rs` line 18), so a scratch copy needs its own checkout. The unplanted copy is the
 control: it exits 0 with two warnings.
@@ -42,15 +42,15 @@ control: it exits 0 with two warnings.
 - **F3 [verified]:** `make spec-check JOBS=2` exits 0 with two warnings: spec 0004 at 318
   lines and spec 0025 at 301. A warning never changes the exit code.
 - **F4 [verified]:** a spec is in modern mode if and only if it has an H2 `## Requirements`
-  (`spec_check.rs` line 352). One of 48 specs does (0024). A legacy spec with a stray
+  (`spec_check.rs` line 352). One of 51 specs does (0024). A legacy spec with a stray
   `## Requirements` H2 flips mode and fails with three errors (planted copy, 2026-10-11).
 - **F5 [verified]:** rules R07, R08 and R09 run only in modern mode. In a legacy spec, a
   `### Requirements (EARS)` block with `will` for `shall` passes, one with `may` passes, and one
   with `Systems shall run.` passes (three planted copies, 2026-10-11, all exit 0).
 - **F6 [verified]:** in modern mode, the house bullet form `- **[REQ-0099-01]** (Ubiquitous): The
   system shall run.` draws the keyword warning, because `is_ears_prefix` (line 402) strips a bold
-  label and then meets `(Ubiquitous)`. Bullets in the 47 house `### Requirements (EARS)` blocks:
-  about 430 with `shall`, of which about 250 would warn, by a throwaway script that mirrors the
+  label and then meets `(Ubiquitous)`. Bullets in the 50 house `### Requirements (EARS)` blocks:
+  about 470 with `shall`, of which about 290 would warn, by a throwaway script that mirrors the
   function. The count is approximate; the false positive itself is exact.
 - **F7 [verified]:** the checker reads `specs/*.md` only. A broken link in
   `engineering/plans/9999-bad.md` passes. Files in a subdirectory of `specs/` and non-`.md`
@@ -58,7 +58,7 @@ control: it exits 0 with two warnings.
   checked. A link in a fence is skipped; so is a link in a code span.
 - **F8 [verified]:** the line caps are `WARN_LINES` 300 and `ERROR_LINES` 400 (lines 38 and 39).
   By `wc -l`: 300 lines passes clean, 301 warns, 400 warns, 401 fails.
-- **F9 [verified]:** `spec_check.rs` has 22 unit tests (lines 695 to 1029), run by `make test`
+- **F9 [verified]:** `spec_check.rs` has 22 unit tests (lines 686 to 1029), run by `make test`
   through `--workspace`. `repository_specs_pass_check` (line 1021) runs the real `specs/`. No
   test asserts: the keyword warning, `duplicate key`, `frontmatter is not closed`, the list or
   single-value type error, or `missing H1`.
@@ -67,12 +67,12 @@ control: it exits 0 with two warnings.
 
 ## Design
 
-Twelve rules enforced today, R01 to R12, and two decided and not built, R13 and R14. The code comment numbers stop being the reference (D11).
+Twelve rules enforced today, R01 to R12, each with its error paths in the row, and two decided and not built, R13 and R14. The code comment numbers stop being the reference (D11).
 
 | ID | Checks | Mode | Severity | Message stem (exact, after `specs/<file>:<line>: `) |
 |---|---|---|---|---|
 | R01 | File name `NNNN-kebab-slug.md`, number unique | all | error | `file name must be NNNN-kebab-slug.md`; `number 0099 is already used by 0099-other.md` |
-| R02 | Frontmatter: opens on line 1, closes, known keys, no duplicate, enums, date, `status` and `created` present, list keys are lists | all | error | `missing frontmatter (first line must be ---)`; `frontmatter is not closed by a --- line`; `unknown frontmatter key `owner``; `duplicate key `status``; `status `done` must be one of ...`; `priority `urgent` must be one of ...`; `created `2026-13-45` must be YYYY-MM-DD`; `missing required key `created``; `` `tags` must be a list `` |
+| R02 | Frontmatter: opens on line 1, closes, known keys, no duplicate, enums, date, `status` and `created` present, list keys are lists | all | error | `missing frontmatter (first line must be ---)`; `frontmatter is not closed by a --- line`; `unknown frontmatter key `owner``; `duplicate key `status``; `status `done` must be one of ...`; `priority `urgent` must be one of ...`; `created `2026-13-45` must be YYYY-MM-DD`; `missing required key `created``; `list item without a list key`; `cannot parse frontmatter line`; `cannot read file: <os error>` (any rule, at read time); `` `tags` must be a list `` |
 | R03 | Each `depends_on` entry is a spec file stem | all | error | `depends_on `0777-nope` is not a spec` |
 | R04 | Exactly one H1 outside fences, equal to `# <stem>` | all | error | `H1 must be `# 0099-plant`, found `# 0099-wrong``; `more than one H1`; `missing H1 `# 0099-plant`` |
 | R05 | The five H2 sections of the mode, in order | all | error | `missing section `## Plan``; `section `## Test` is out of order` |
@@ -108,21 +108,21 @@ stderr, then `spec-check: ok (N warning(s))` or `spec-check: N error(s)`.
 |---|---|---|---|
 | D1 | This spec owns the rule set: table R01 to R12 and the modal list. The code and this table must agree; a mismatch is a defect in whichever is stale. | The rules live in a comment today, and the comment has a count error (F1). | lane-decided: integrating lane brief, 2026-10-11 |
 | D2 | Severities stay as the table shows. Structure, registry, links, the `shall` count and the 400-line cap fail the build. The 300-line cap, the modal check and the keyword check warn. | A warning that blocks every PR on a style point costs more than it saves; the structural rules protect the registry and the gate. | lane-decided: integrating lane brief, uas-engineer, 2026-10-11 |
-| D3 | The caps stay 300 and 400, and the 300 warning stays advisory. Specs 0004 (318) and 0025 (301) keep their warning: this spec does not touch either file. Spec 0004 splits before it reaches 400. Spec 0025 may drop under 300 when spec 0049 amends it; nothing here depends on that. | Moving the cap hides the next long spec. Two warnings in 48 specs show the cap does its job (F3). Spec 0004 grows with every pin (assumed ~20 lines a wave, `asserted`). | lane-decided: integrating lane, uas-engineer, 2026-10-11 |
-| D4 | The legacy layout is the house layout and stays. Keep both modes. No deprecation date for the legacy. | 47 of 48 specs and the spec template use it (F4, F5). A deprecation date would force 47 rewrites for no new check. Modern mode keeps its one user until spec 0049 removes that user's file from uas. | lane-decided: integrating lane w25:p1, 2026-10-11; proposed by uas-engineer |
-| D5 | Close the enforcement hole instead: run R07 to R09 on the `### Requirements (EARS)` block of legacy specs. Order: (1) fix `is_ears_prefix` to accept `**[REQ-NNNN-NN]** (Pattern):` (F6); (2) turn the three checks on for the block as warnings; (3) promote R07 to an error once the repository is clean. The repository holds one modal word in about 430 bullets (approximate scan, 2026-10-11). Step 3 becomes an error on a date the lane sets after one clean week of warnings. | Today the EARS rules protect one spec (F4, F5). The cost is one parser fix, then warnings. | lane-decided: integrating lane w25:p1, 2026-10-11; proposed by uas-engineer |
+| D3 | The caps stay 300 and 400, and the 300 warning stays advisory. Specs 0004 (318) and 0025 (301) keep their warning: this spec does not touch either file. Spec 0004 splits before it reaches 400. Spec 0025 may drop under 300 when spec 0049 amends it; nothing here depends on that. | Moving the cap hides the next long spec. Two warnings in 51 specs show the cap does its job (F3). Spec 0004 grows with every pin (assumed ~20 lines a wave, `asserted`). | lane-decided: integrating lane, uas-engineer, 2026-10-11 |
+| D4 | The legacy layout is the house layout and stays. Keep both modes. No deprecation date for the legacy. | 50 of 51 specs and the spec template use it (F4, F5). A deprecation date would force 47 rewrites for no new check. Modern mode keeps its one user until spec 0049 removes that user's file from uas. | lane-decided: integrating lane w25:p1, 2026-10-11; proposed by uas-engineer |
+| D5 | Close the enforcement hole instead: run R07 to R09 on the `### Requirements (EARS)` block of legacy specs. Order: (1) fix `is_ears_prefix` to accept `**[REQ-NNNN-NN]** (Pattern):` (F6); (2) turn the three checks on for the block as warnings; (3) promote R07 to an error once the repository is clean. The repository holds one modal word in about 470 bullets (approximate scan, 2026-10-11). Step 3 becomes an error on a date the lane sets after one clean week of warnings. | Today the EARS rules protect one spec (F4, F5). The cost is one parser fix, then warnings. | lane-decided: integrating lane w25:p1, 2026-10-11; proposed by uas-engineer |
 | D6 | Plans (`engineering/plans/*.md`) get no section, EARS or length rule. The only plan checks are D7 (links) and D12 (package shape, warning). | Plans are working files deleted or marked done when packages land (F10). | lane-decided: uas-engineer, 2026-10-11 |
 | D7 | Plans do get link resolution (R12 only), over `engineering/plans/*.md`. | Today a broken link in a plan passes (F7), and plans cite specs by file name. One call to the existing link function. | lane-decided: integrating lane w25:p1, 2026-10-11; proposed by uas-engineer |
 | D8 | R09 stays a warning, now and after D5. | It misfires on the house form (F6), and a keyword style point does not justify failing a PR. | lane-decided: uas-engineer, 2026-10-11 |
 | D9 | The modal list stays the four words above. Adding a word follows D10. | Only `shall` lines are scanned; a longer list raises false positives on prose such as "may be empty". | lane-decided: uas-engineer, 2026-10-11 |
 | D10 | A rule change ships in one PR with three parts: an amendment of the table above, a unit test in `xtask/src/spec_check.rs` that goes red without the change, and a CHANGELOG line. | Today a rule can change with no spec and no test (F1, F9). | lane-decided: integrating lane brief, 2026-10-11 |
 | D11 | The code comment block stops carrying a numbered list. It points at this spec and keeps one line per rule name. That is a code change, left to a builder (Plan). | Two numbering schemes already disagree (F1). | lane-decided: uas-engineer, 2026-10-11 |
-| D12 | Two more rules (spec 0050 Plan P4, proposed there for the operator, taken by the lane here). R13: the frontmatter `status` of each spec shall equal the Status column of its `specs/README.md` row; a mismatch is an error. R14: each package in `engineering/plans/*.md` shall hold a Persona, Files, Done-when and Red-first, or the word BLOCKED with the spec line that blocks it (spec 0050 REQ-0050-01); a missing part is a warning first, an error on a date the lane sets after one clean week. Spec 0050's Plan box for P4 points here. | The registry status and the frontmatter drift apart today (the checker reads only the README links, R11). A plan without a done-when cannot be dispatched. | lane-decided: integrating lane w25:p1, 2026-10-11 (0050 P4) |
+| D12 | Two more rules (spec 0050 Plan P4, proposed there for the operator, taken by the integrating lane here; spec 0050's P4 box is amended by plan 0050 to point at this spec). R13: the frontmatter `status` of each spec shall equal the Status column of its `specs/README.md` row; a mismatch is an error. R14: each package in `engineering/plans/*.md` shall hold a Persona, Files, Done-when and Red-first, or the word BLOCKED with the spec line that blocks it (spec 0050 REQ-0050-01); a missing part is a warning first, an error on a date the lane sets after one clean week. | The registry status and the frontmatter drift apart today (the checker reads only the README links, R11). A plan without a done-when cannot be dispatched. | lane-decided: integrating lane w25:p1, 2026-10-11 (0050 P4) |
 
 ### Requirements (EARS)
 
 - **[REQ-0052-01]** (Ubiquitous): `make spec-check` shall run `cargo xtask spec-check` over every `specs/*.md` file, exit 0 when it reports no error whatever the warning count, and exit non-zero when it reports one.
-- **[REQ-0052-02]** (Event-driven): WHEN a file under `specs/` other than `README.md` is not named `NNNN-kebab-slug.md`, or two files share a number, the checker shall report an error naming the file (R01).
+- **[REQ-0052-02]** (Event-driven): WHEN a `.md` file directly under `specs/` other than `README.md` is not named `NNNN-kebab-slug.md`, or two files share a number, the checker shall report an error naming the file (R01).
 - **[REQ-0052-03]** (Unwanted behavior): IF a spec's frontmatter is missing, unclosed, holds an unknown or duplicate key, holds a `status`, `priority` or `created` value outside the allowed set, lacks `status` or `created`, or gives a scalar for a list key, THEN the checker shall report an error with the file, line and key (R02).
 - **[REQ-0052-04]** (Unwanted behavior): IF a `depends_on` entry is not the stem of a file in `specs/`, THEN the checker shall report an error naming the entry (R03).
 - **[REQ-0052-05]** (Unwanted behavior): IF the first H1 outside a fence is not `# <stem>`, or no H1 or a second H1 exists, THEN the checker shall report an error (R04).
@@ -160,11 +160,12 @@ Package 4, ruled D7 and D12 (0050 P4):
 
 - [ ] Run R12 over `engineering/plans/*.md`, with a test that plants a broken link (REQ-0052-17).
 - [ ] R13 status parity, with a test that plants a mismatch (REQ-0052-15).
+- [ ] Amend spec 0050's P4 box (lines 164 to 166) through plan 0050 to say the integrating lane took P4 here.
 - [ ] R14 plan package shape as a warning, with a test on a package that lacks a done-when (REQ-0052-16).
 
 ## Test
 
-Each row plants one violation in a scratch `git archive` copy of 3e60a55 and runs `cargo xtask
+Each row plants one violation in a scratch `git archive` copy of 8d80119 (the plants of F1 to F9 were run on 3e60a55 and re-checked at 8d80119 for the code lines) and runs `cargo xtask
 spec-check` there. The unplanted copy is the control: exit 0, two warnings (F3). A row goes red
 when the check named in it is removed from the code.
 
@@ -191,11 +192,11 @@ when the check named in it is removed from the code.
 ```bash
 make spec-check JOBS=2 && s="$(mktemp -d)" && git archive HEAD | tar -x -C "$s" \
   && sed -i 's/^# 0049-cpm-migration-to-saga$/# 0049-wrong/' "$s/specs/0049-cpm-migration-to-saga.md" \
-  && out="$(cd "$s" && cargo xtask spec-check 2>&1)"; rc=$?; rm -rf "$s"; \
+  && out="$(cd "$s" && CARGO_TARGET_DIR="$s/target" cargo xtask spec-check 2>&1)"; rc=$?; rm -rf "$s"; \
   test "$rc" -eq 1 && printf '%s\n' "$out" | grep -q 'H1 must be `# 0049-cpm-migration-to-saga`, found `# 0049-wrong`'
 ```
 
-Run it from the repository root. It exits 0 when the real specs pass and the planted copy goes
+Run it from the repository root. The scratch copy builds in its own target directory, because the binary bakes in the root of the checkout it was built from (`main.rs` line 18) and a shared target directory would run another checkout's specs. It exits 0 when the real specs pass and the planted copy goes
 red with the exact H1 message; the scratch copy lives outside the repository.
 
 ## Notes
@@ -209,8 +210,6 @@ red with the exact H1 message; the scratch copy lives outside the repository.
   Makefile (line 49) also runs `pin-check` and `oss-check`. Not fixed here; a spec 0002 amendment.
 - Spec 0048 REQ-0048-04 checks the SPDX line by shell, not by the checker (F7). Moving it into the
   checker is a rule change under D10 and has no ruling.
-- Spec 0050 is on branch `docs/spec-0050-build-handoff-pipeline`, not on `development`, so it is cited
-  here and not in `depends_on`. Its REQ-0050-01 at d2656bd names Persona, Files, Done-when and
-  Red-first, with no separate Change field. Spec 0051 is on `development`. This spec's README row can
-  conflict with 0050's on integration; keep both.
+- Spec 0050 is on `development` (8d80119). Its REQ-0050-01 names Persona, Files, Done-when and
+  Red-first, with no separate Change field. Spec 0050 lines 164 to 166 still say "the operator rules whether it is built" until plan 0050 amends them (Plan, package 4).
 - Caveat: F6's count comes from a throwaway script, not from the checker, and is approximate.
