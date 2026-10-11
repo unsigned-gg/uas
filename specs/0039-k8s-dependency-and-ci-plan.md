@@ -76,13 +76,13 @@ repository's `deny.toml` copied in:
 ### Requirements (EARS)
 
 - **[REQ-0039-01]** (Ubiquitous): The workspace shall depend on `kube` 4.2.0 with features `runtime` and `derive`, `k8s-openapi` 0.28.0 with feature `v1_36`, and `schemars` 1.2.2, each recorded in spec 0004 before the first `Cargo.toml` edit that uses it.
-- **[REQ-0039-02]** (Ubiquitous): `deny.toml` shall allow `CDLA-Permissive-2.0` for `webpki-root-certs` only, and spec 0004 shall record that entry with F5 as its reason.
+- **[REQ-0039-02]** (Ubiquitous): The `deny.toml` file shall allow `CDLA-Permissive-2.0` for `webpki-root-certs` only, and spec 0004 shall record that entry with F5 as its reason.
 - **[REQ-0039-03]** (State-driven): WHILE `unsigned-k8s-core` and `unsigned-k8s-api` are unpublished, no tracked manifest shall name them, and a workstation shall reach them only through an untracked local `[patch]` entry.
 - **[REQ-0039-04]** (Event-driven): WHEN the two estate crates are published, the workspace shall pin them by version recorded in spec 0004, and the path dependencies shall be removed in the same change.
-- **[REQ-0039-05]** (Ubiquitous): Every crate with Kubernetes-facing code shall declare the cargo feature `k8s` for the crates.io dependency set and the in-tree CRD types, and `k8s-estate` for the two estate crates, both off by default and both declared per spec 0033.
+- **[REQ-0039-05]** (Ubiquitous): The crate with Kubernetes-facing code shall declare the cargo feature `k8s` for the crates.io dependency set and the in-tree CRD types, and `k8s-estate` for the two estate crates, both off by default and both declared per spec 0033.
 - **[REQ-0039-05a]** (Ubiquitous): The CI feature matrix of spec 0033 shall carry a `k8s` leg on every pull request, so the operator's tests against a mocked API server run in CI.
 - **[REQ-0039-06]** (Event-driven): WHEN the `k8s` leg of the matrix runs, the `k8s-e2e` job shall run on the `ent-default` runner group with the `ci-rust` image and shall provision a `k3d` cluster.
-- **[REQ-0039-07]** (Ubiquitous): `k3d` and `kubectl` shall be pinned in spec 0004's CI tools table per spec 0034 before the `ci-rust` image gains them.
+- **[REQ-0039-07]** (Ubiquitous): The `k3d` and `kubectl` tools shall be pinned in spec 0004's CI tools table per spec 0034 before the `ci-rust` image gains them.
 - **[REQ-0039-08]** (Unwanted): IF `make pin-check` finds a Kubernetes crate in a manifest that spec 0004 does not record, THEN it shall fail and name the crate.
 - **[REQ-0039-09]** (Unwanted): IF a release of `kube` raises its MSRV above the workspace `rust-version`, THEN the bump shall wait for a spec 0004 decision on the floor.
 - **[REQ-0039-10]** (Unwanted): IF a lane's change would publish any crate or reserve any crates.io name, THEN the lane shall stop and leave that act to Christian.
@@ -145,3 +145,4 @@ when the allow is removed.
 - Reading: spec 0004 for the pin tables and line 205 on `CDLA-Permissive-2.0`;
   spec 0033 for the feature matrix; spec 0034 for tools beyond cargo; spec 0037
   D13 and F6 for the `uas` crate; spec 0038 D6 for the in-tree CRD window.
+- Amended 2026-10-11: opening words of the flagged requirement bullets reworded to begin with a standard EARS keyword; no change of meaning (spec 0052 P6).

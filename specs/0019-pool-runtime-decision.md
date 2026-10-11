@@ -57,7 +57,7 @@ Facts, measured 2026-10-10 on ceres unless stated:
 
 ### Requirements (EARS)
 
-- **Ubiquitous:** `uas-domain` shall stay runtime-neutral: no `tokio`, no `heph`,
+- **Ubiquitous:** The `uas-domain` crate shall stay runtime-neutral: no `tokio`, no `heph`,
   no thread spawning (spec 0001).
 - **Ubiquitous:** The pool shall run every blocking syscall and file operation on
   a thread that may block, never on an async executor's worker thread.
@@ -132,3 +132,4 @@ neither runtime. An empty result means the invariant broke.
   draft until measured, and this spec treats it as intent.
 - `io_uring_disabled = 0` is a fact about ceres today; a hardened host may set it
   to 2, which would break Option C there.
+- Amended 2026-10-11: opening words of the flagged requirement bullets reworded to begin with a standard EARS keyword; no change of meaning (spec 0052 P6).

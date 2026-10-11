@@ -87,7 +87,7 @@ whatever id the caller passes. The pool reads or writes `C/slots/<i>/` only whil
 - **[REQ-0047-04]** (Ubiquitous): The key directory name shall be the first 16 hex digits of SHA-256 over the canonical base repository path, a hyphen, and the sanitized toolchain channel, or `default` when the repository names none.
 - **[REQ-0047-05]** (Event-driven): WHEN `uas-pool` provisions a slot worktree or a slot enters `Reclaiming`, it shall remove whole key directories, oldest stamp first, until the slot cache is at most `cache_max_bytes`.
 - **[REQ-0047-06]** (Event-driven): WHEN a slot is leased, `uas-pool` shall touch `.stamps/<key>` in the slot cache, outside the key directory.
-- **[REQ-0047-07]** (Unwanted): IF, after eviction, the filesystem of the worktree root or of the slot cache has less than `min_free_bytes` free, THEN `uas-pool` shall refuse `allocate` with `PoolError::DiskLow` and provision nothing. Spec 0041 defines the floor and the error; the check on the slot cache's filesystem is this spec's amendment (D11).
+- **[REQ-0047-07]** (Unwanted): IF after eviction the filesystem of the worktree root or of the slot cache has less than `min_free_bytes` free, THEN `uas-pool` shall refuse `allocate` with `PoolError::DiskLow` and provision nothing. Spec 0041 defines the floor and the error; the check on the slot cache's filesystem is this spec's amendment (D11).
 - **[REQ-0047-08]** (Optional feature): WHERE `PoolConfig.sccache` is `true` and `sccache` resolves on the worker's `PATH`, `uas-pool` shall export `RUSTC_WRAPPER`, `SCCACHE_DIR` and `SCCACHE_CACHE_SIZE` and shall add `C/sccache` to the ruleset with `allow_write`.
 - **[REQ-0047-09]** (Unwanted): IF `PoolConfig.sccache` is `true` and `sccache` does not resolve, THEN `uas-pool` shall log at `warn`, export no `RUSTC_WRAPPER`, and spawn the worker.
 - **[REQ-0047-10]** (Ubiquitous): The `uas-pool` crate shall export no rust-analyzer variable.
@@ -138,3 +138,4 @@ cargo nextest run -p uas-pool cache -j 2 && cargo nextest run -p uas-ebpf receip
 - Two rows amend other specs: D2 loosens spec 0010 D7 so the key directory can execute, and D11 amends spec 0041 D3 and REQ-0041-04. Both await Christian. The D4 quota that D11 rests on is ruled at 20 GiB.
 - REQ-0047-12 is held on spec 0028. Its Test row names the control to adopt when the in-memory worktree lands.
 - Parked from the research lane's list: SVID pre-staged pools (identity is Allen's, spec 0029); IFC taint tracking (research only).
+- Amended 2026-10-11: opening words of the flagged requirement bullets reworded to begin with a standard EARS keyword; no change of meaning (spec 0052 P6).
