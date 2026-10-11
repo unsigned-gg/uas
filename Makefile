@@ -13,7 +13,7 @@ EBPF_TOOLCHAIN ?= nightly-2026-10-06
 SUDO ?= sudo
 
 .PHONY: help build fmt fmt-check clippy test doc-test deny check ci hygiene typos machete \
-	spec-check toolchain-check pin-check oss-check spdx-check hook-test smoke audit sbom doc release-notes custody-check pgt-install new-repo template-check \
+	spec-check toolchain-check pin-check text-check oss-check spdx-check hook-test smoke audit sbom doc release-notes custody-check pgt-install new-repo template-check \
 	ebpf-build ebpf-test fetch-contracts
 
 help: ## List targets
@@ -106,6 +106,12 @@ toolchain-check: ## Verify rustc matches rust-toolchain.toml
 
 pin-check: ## Verify the spec 0004 pin tables against the lockfiles
 	cargo xtask pin-check
+
+# Spec 0053 D5. Not part of `hygiene`: that job also runs on push, which has no base. Values come
+# from the environment (BASE, HEAD, PR_BODY_FILE, HEAD_REF), never through make expansion, so a
+# hostile branch name or PR body cannot reach a shell word (REQ-0053-14).
+text-check: ## CHANGELOG line, commit subjects, PR body (BASE=origin/development; PR_BODY_FILE, HEAD_REF optional)
+	cargo xtask text-check --base "$${BASE:-origin/development}" --head "$${HEAD:-HEAD}" $${PR_BODY_FILE:+--body-file "$$PR_BODY_FILE"} $${HEAD_REF:+--head-ref "$$HEAD_REF"}
 
 smoke: ## Build the CLI, run it, check the domain crate has no I/O
 	cargo build -p uas-cli --locked -j $(JOBS)
