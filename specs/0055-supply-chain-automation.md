@@ -57,7 +57,8 @@ re-read at merge commit 65467c9 (origin/development merged in). The counts below
   `Cargo.toml` line 44 says `=1.53.1`. Line 198 records that #122's `toml` bump was ratified
   after the merge (Christian, 2026-10-11, "Ratify 1.1.8"). No `toml` row existed at the merge,
   0856f37 (`git show 0856f37:specs/0004-dependency-and-licence-policy.md | grep -c '^| .toml. |'`
-  prints 0).
+  prints 0). `pin-check` compares a row with the lock as strings. Until build plan P2 it skipped
+  the `toml` row, whose version carries build metadata (F13).
 - **F6 [verified]:** `sbom.yml` runs on `push` to `main` and `workflow_dispatch` (lines 6 to 8),
   installs `cargo-cyclonedx` with no version (line 22), stages every `*.cdx.json` outside
   `target/`, guards with `test -n "$(ls -A sbom)"` (line 30) and uploads with
@@ -89,6 +90,18 @@ re-read at merge commit 65467c9 (origin/development merged in). The counts below
 - **F12 [reported]:** `SECURITY.md` line 27 and spec 0045 D3 say a secret found in the repo or
   its history is compromised and is rotated by its owner. AGENTS.md line 75 puts secrets behind
   the operator. Not re-read from the estate rule file here.
+- **F13 [verified]:** `pin-check` compares the table cell and the locked version as strings. At
+  57e0bc7 it reads the `toml` row: it prints `ok (23 pinned crates checked)`, and with the cell
+  set to `1.1.9+spec-1.1.0` it exits 1 and names `toml` (2026-10-11, xtask built at 57e0bc7).
+  Before build plan P2 (`engineering/plans/0055-supply-chain-automation.md`, PR #204) it read
+  digits-only cells, skipped that row and printed `ok (22 pinned crates checked)` after the same
+  edit [reported: unsigned-gg/uas@57e0bc7:engineering/plans/0055-supply-chain-automation.md,
+  finding 2].
+- **F14 [verified]:** `cargo xtask` runs in the root workspace, so cargo re-resolves a planted
+  lock before `pin-check` reads it. With the `tokio` entry of `Cargo.lock` set to `9.9.9`,
+  `cargo xtask pin-check` rewrote it to 1.53.1 and exited 0. The xtask binary built before the
+  edit exited 1 and named `tokio`. `cargo info tokio@9.9.9` finds no such version (2026-10-11,
+  at 57e0bc7).
 
 ## Design
 
@@ -102,7 +115,7 @@ Christian rules).
 |---|---|---|---|
 | D1 | Dependabot cadence is weekly for both ecosystems, as configured. Version updates open against `development` only (spec 0003). | F1 holds; F3 shows the first run opened four PRs at once and none since, so weekly is not noisy. | lane-decided: keeps the shipped config |
 | D2 | Minor and patch updates are grouped, one PR per ecosystem per run. A major update is never grouped and gets its own PR. | F1: the group takes `minor` and `patch` only, so a major falls outside it. #122 to #124 are the three majors and each opened alone (F3). | lane-decided: keeps the shipped config |
-| D3 | A Dependabot PR that moves a crate named in a spec 0004 pin table is refused by `hygiene` until the same PR carries the table edit. The refusal is `pin-check` (0004 D3), a required check. No new gate is added. | F4: all three open PRs fail exactly this way today. | lane-decided: follows 0004 D3 |
+| D3 | A Dependabot PR that moves a crate named in a spec 0004 pin table is refused by `hygiene` until the same PR carries the table edit. The refusal is `pin-check` (0004 D3), a required check. No new gate is added. | F4: all three open PRs fail exactly this way today. F13: it compares strings, and until build plan P2 it skipped the `toml` row. | lane-decided: follows 0004 D3 |
 | D4 | The integrating lane makes the edit: one signed commit on the Dependabot branch that sets the row version and adds the licence read and the date (spec 0004 licence rules). A Dependabot PR is never merged with a red `hygiene`. | A human edit on the branch stops Dependabot rewriting it [asserted: GitHub docs, not read here]. The row needs a licence read that only a person can sign. | lane-decided |
 | D5 | A major bump of a pinned crate is a reviewed upgrade. Before merge the row records the licence, the MSRV result of `make toolchain-check`, and a ruling when the row cites a prior decision. | F5: #122 merged a major before any row existed and needed a ratification afterwards. | lane-decided |
 | D6 | The three open PRs. #121 (tokio patch): take it under D4, row to 1.53.2. #123 and #124: close with a comment that cites 0004 lines 200 and 252 and ends with `@dependabot ignore this major version`, so they do not reopen. | F5: both bumps are recorded as not taken. #123's own title and lock disagree (F4). | lane-decided: integrating lane w25:p1, 2026-10-11; executed as a plan package, not by this spec |
@@ -187,20 +200,28 @@ The block runs from the repo root today. It builds a scratch worktree and a scra
 changes no tracked file, and needs `gitleaks`, `cargo-cyclonedx` 0.5.9 and `jq` on PATH. A
 missing tool exits 1. Each row prints `ok` only on a positive assertion. Rows 2, 5 to 7, 9, 10, 12, 13
 and 16 pass only when the bad input is rejected, so a check that accepts everything turns them
-red. The plant for row 2 is a `Cargo.toml` and `Cargo.lock` bump with no table edit, which is
-the shape of PR #121. The `sc` function is the reference for `sbom-check` (P1).
+red. The plant for row 2 moves the `tokio` entry of `Cargo.lock` with no table edit, the shape
+of PR #121. It uses `9.9.9`, a version no release has, so rows 2 and 3 hold whatever `tokio`
+the tree pins and need no network. `pc` runs the xtask binary built before the plant, because
+`cargo xtask` would re-resolve the planted lock first (F14). The `sc` function is the reference
+for `sbom-check` (P1).
+
+Install the tools first (F7): `cargo install cargo-cyclonedx --version 0.5.9 --locked`;
+`gitleaks` from its release page, at the version in the spec 0004 CI tools row; `jq` from the
+system package manager.
 
 ```bash
 for t in gitleaks cargo-cyclonedx jq; do command -v $t >/dev/null || { echo "missing $t"; exit 1; }; done
 b=origin/development; s=$(mktemp -d); g=$(mktemp -d); git worktree add -q --detach "$s" "$b"; trap 'git worktree remove --force "$s"; rm -rf "$g"' EXIT
 r=0; want() { [ "$2" = "$3" ] && echo "row $1: ok ($3)" || { echo "row $1: RED got $2 want $3"; r=1; }; }
 rc() { "$@" >/dev/null 2>&1; echo $?; }
-pc() { (cd "$s" && cargo xtask pin-check); }
+(cd "$s" && cargo build -q -j 2 -p xtask); x=$(cd "$s" && cargo metadata --no-deps --format-version 1 | jq -r .target_directory)/debug/xtask
+pc() { "$x" pin-check; }
 want 1 "$(rc pc)" 0
-sed -i 's/^tokio = { version = "=1\.53\.1"/tokio = { version = "=1.53.2"/' "$s/Cargo.toml"; (cd "$s" && cargo update -p tokio --precise 1.53.2 >/dev/null 2>&1)
+sed -i '/^name = "tokio"$/{n;s/^version = ".*"/version = "9.9.9"/}' "$s/Cargo.lock"
 want 2 "$(rc pc)" 1
-sed -i 's/^\(| `tokio` | \)1\.53\.1/\11.53.2/' "$s/specs/0004-dependency-and-licence-policy.md"
-want 3 "$(rc pc)" 0
+sed -i 's/^\(| `tokio` | \)[0-9.]*/\19.9.9/' "$s/specs/0004-dependency-and-licence-policy.md"
+want 3 "$(rc pc)" 0; git -C "$s" checkout -q -- Cargo.lock specs/0004-dependency-and-licence-policy.md
 sc() { n=$(ls "$1" 2>/dev/null | grep -c 'cdx\.json$'); [ "$n" -eq "$2" ] || { echo "sbom-check: count $n want $2: $1"; return 1; }; for f in "$1"/*.cdx.json; do [ -s "$f" ] && jq -e '.bomFormat=="CycloneDX" and .specVersion=="1.5"' "$f" >/dev/null || { echo "sbom-check: invalid: $f"; return 1; }; done; [ "$(cat "$1"/*.cdx.json | jq -s '[.[].components|length]|add')" -gt 0 ] || { echo "sbom-check: no components: $1"; return 1; }; echo "sbom-check: ok"; }
 ro() { o=$("$@" 2>&1); echo "$? ${o//$g\//}"; }
 (cd "$s" && cargo cyclonedx --format json --spec-version 1.5 >/dev/null 2>&1); n=$(cd "$s" && cargo metadata --no-deps --format-version 1 | jq '.packages|length')
@@ -223,7 +244,7 @@ cv=$(sed -n 's/^ *GITLEAKS_VERSION: //p' .github/workflows/ci.yml); lv=$(sed -n 
 pv() { [ -n "$1" ] && [ "$1" = "$2" ] && echo "ok $1" || echo "gitleaks mismatch: ci.yml=$1 lefthook.yml=$2"; }
 want 15 "$(pv "$cv" "$lv")" "ok 8.30.1"
 want 16 "$(pv "$cv" "$(echo "$lv" | sed 's/30/31/')")" "gitleaks mismatch: ci.yml=8.30.1 lefthook.yml=8.31.1"
-want 17 "$(grep -c 'target-branch: development' .github/dependabot.yml)$(grep -c 'interval: weekly' .github/dependabot.yml)$(grep -c -i major .github/dependabot.yml)" 220
+want 17 "$(grep -c 'target-branch: development' .github/dependabot.yml)$(grep -c 'interval: weekly' .github/dependabot.yml)$(grep -c -i major .github/dependabot.yml)" 330
 exit $r
 ```
 
@@ -235,7 +256,7 @@ P1 and P2 replace the shell and become their unit tests.
 
 | REQ | Row or check |
 |---|---|
-| 01, 02 | 17 (counts 2, 2, 0; a `major` in a group raises the third) |
+| 01, 02 | 17 (counts 3, 3, 0 for the three entries; a `major` in a group raises the third) |
 | 03, 04 | 2, 3 (row 1 is the clean control) |
 | 05 | manual, reviewer: the row of the PR carries the licence, the MSRV result and the ruling |
 | 06 | red today: `grep -c 'uas-ebpf/ebpf' .github/dependabot.yml` prints 0; green after P5 |
@@ -255,6 +276,10 @@ P1 and P2 replace the shell and become their unit tests.
   gate. Spec 0051 owns the fail-closed hook (D7). Spec 0034 owns the tool pin tables. Spec 0053
   D6 exempts a `dependabot/` head ref from the CHANGELOG line, and a D4 commit on that branch
   keeps the exemption because the head ref does not change.
+- Cross-reference: spec 0034 REQ-0034-06 and REQ-0034-07 own the general tool parser of
+  `pin-check`. D14 is its narrow `gitleaks` slice and does not replace it. The
+  `cargo-cyclonedx` row of the spec 0004 CI tools table is also a spec 0045 plan item. Build
+  plan P1 wrote it in PR #204, because the row was absent.
 - Caveat: F3's subject prefix differs between PRs (`chore(deps)` and `build(deps)`). Both pass
   the 0051 regex, so the spec sets none. A `commit-message` prefix in `dependabot.yml` would
   settle it and is not proposed.
