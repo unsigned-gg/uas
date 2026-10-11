@@ -411,14 +411,14 @@ impl Compensator for CompositeCompensator {
         "composite"
     }
 
-    /// Run every child in add order. A failed child yields a failed receipt, and the rest still run.
+    /// Run every child in reverse add order (spec 0009). A failed child yields a failed receipt, and the rest still run.
     fn compensate(
         &self,
         activity: &Activity,
         reason: &str,
     ) -> Result<Vec<CompensationReceipt>, EngineError> {
         let mut receipts = Vec::new();
-        for handler in &self.handlers {
+        for handler in self.handlers.iter().rev() {
             let result = handler.compensate(activity, reason);
             receipts.extend(receipts_or_failure(handler.name(), activity, result));
         }
@@ -482,9 +482,9 @@ mod tests {
         let act = Activity::new("act-fail", "Run", ActivityKind::Impl);
         let receipts = comp.compensate(&act, "error").unwrap();
         assert_eq!(receipts.len(), 3);
-        assert_eq!(receipts[0].handler_name, "worktree_cleanup");
+        assert_eq!(receipts[0].handler_name, "lease_return");
         assert_eq!(receipts[1].handler_name, "branch_prune");
-        assert_eq!(receipts[2].handler_name, "lease_return");
+        assert_eq!(receipts[2].handler_name, "worktree_cleanup");
     }
 
     #[test]

@@ -143,6 +143,115 @@ pub fn current_process_cgroup_path() -> Result<PathBuf, FreezerError> {
     Ok(PathBuf::from("/sys/fs/cgroup"))
 }
 
+/// Default bound on waiting for an orphan cgroup to empty after `cgroup.kill` (spec 0040 REQ-06).
+pub const DEFAULT_RECLAIM_TIMEOUT: Duration = Duration::from_secs(5);
+
+/// Kills and removes an orphan slot cgroup in the order of spec 0040 D3.
+///
+/// Writes `1` to `cgroup.kill`, polls `cgroup.events` until `populated 0` (bounded by
+/// `timeout`), then `rmdir`s every descendant cgroup deepest first and the slot cgroup last.
+/// A missing cgroup, `cgroup.kill` or `cgroup.events` is not an error. A cgroup still
+/// populated at `timeout` returns [`FreezerError::ReclaimTimeout`] and removes nothing.
+///
+/// Refuses a symlink and any cgroup that equals or contains the caller's own cgroup.
+pub fn reclaim_cgroup(slot_cgroup: &Path, timeout: Duration) -> Result<(), FreezerError> {
+    let own = current_process_cgroup_path().ok();
+    reclaim_cgroup_guarded(slot_cgroup, timeout, own.as_deref())
+}
+
+fn reclaim_cgroup_guarded(
+    slot_cgroup: &Path,
+    timeout: Duration,
+    own_cgroup: Option<&Path>,
+) -> Result<(), FreezerError> {
+    let io = |path: &Path, source| FreezerError::Io {
+        path: path.to_path_buf(),
+        source,
+    };
+
+    if let Some(own) = own_cgroup {
+        if own.starts_with(slot_cgroup) {
+            return Err(FreezerError::UnsafePath(format!(
+                "slot cgroup {slot_cgroup:?} equals or contains own process cgroup {own:?}"
+            )));
+        }
+    }
+    match fs::symlink_metadata(slot_cgroup) {
+        Ok(meta) if meta.file_type().is_symlink() || !meta.is_dir() => {
+            return Err(FreezerError::UnsafePath(format!(
+                "slot cgroup {slot_cgroup:?} is not a plain directory"
+            )));
+        }
+        Ok(_) => {}
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(e) => return Err(io(slot_cgroup, e)),
+    }
+
+    // 1. Kill the whole subtree. A kernel without cgroup.kill has no such file.
+    let kill_path = slot_cgroup.join("cgroup.kill");
+    match OpenOptions::new()
+        .write(true)
+        .open(&kill_path)
+        .and_then(|mut f| f.write_all(b"1\n"))
+    {
+        Ok(()) => {}
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => return Err(io(&kill_path, e)),
+    }
+
+    // 2. Wait for the subtree to empty. A missing cgroup.events counts as unpopulated.
+    let events_path = slot_cgroup.join("cgroup.events");
+    let start = Instant::now();
+    loop {
+        match fs::read_to_string(&events_path) {
+            Ok(content) => {
+                if !content.lines().any(|l| l.trim() == "populated 1") {
+                    break;
+                }
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => break,
+            Err(e) => return Err(io(&events_path, e)),
+        }
+        if start.elapsed() >= timeout {
+            return Err(FreezerError::ReclaimTimeout { path: events_path });
+        }
+        thread::sleep(Duration::from_millis(5));
+    }
+
+    // 3. Remove descendants deepest first, then the slot cgroup.
+    let mut dirs = Vec::new();
+    collect_cgroup_dirs(slot_cgroup, &mut dirs).map_err(|(p, e)| io(&p, e))?;
+    for dir in dirs.iter().rev() {
+        match fs::remove_dir(dir) {
+            Ok(()) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => return Err(io(dir, e)),
+        }
+    }
+    Ok(())
+}
+
+/// Pre-order list of `root` and every plain subdirectory; symlinks are not followed.
+fn collect_cgroup_dirs(
+    root: &Path,
+    out: &mut Vec<PathBuf>,
+) -> Result<(), (PathBuf, std::io::Error)> {
+    out.push(root.to_path_buf());
+    let entries = match fs::read_dir(root) {
+        Ok(e) => e,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(e) => return Err((root.to_path_buf(), e)),
+    };
+    for entry in entries {
+        let entry = entry.map_err(|e| (root.to_path_buf(), e))?;
+        let is_dir = entry.file_type().map(|t| t.is_dir()).unwrap_or(false);
+        if is_dir {
+            collect_cgroup_dirs(&entry.path(), out)?;
+        }
+    }
+    Ok(())
+}
+
 /// Linux cgroup v2 freezer controller for a single worker slot.
 #[derive(Debug)]
 pub struct CgroupFreezer {
@@ -580,5 +689,75 @@ impl Freezer for SignalFreezer {
 
     fn configure_limits(&self, _limits: &ResourceLimits) -> Result<CpuCap, FreezerError> {
         Ok(CpuCap::Uncapped)
+    }
+}
+
+#[cfg(test)]
+mod reclaim_tests {
+    use super::*;
+
+    fn tree(name: &str) -> PathBuf {
+        let p = std::env::temp_dir().join(format!("uas-reclaim-{name}-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&p);
+        fs::create_dir_all(&p).unwrap();
+        p
+    }
+
+    #[test]
+    fn reclaim_removes_nested_cgroups_deepest_first() {
+        let base = tree("nested");
+        let slot = base.join("slot-a");
+        fs::create_dir_all(slot.join("w1/w2")).unwrap();
+        fs::create_dir_all(slot.join("w3")).unwrap();
+        reclaim_cgroup_guarded(&slot, Duration::from_millis(100), None).unwrap();
+        assert!(!slot.exists());
+        assert!(base.exists());
+        fs::remove_dir_all(&base).unwrap();
+    }
+
+    #[test]
+    fn reclaim_missing_cgroup_is_ok() {
+        let base = tree("missing");
+        reclaim_cgroup_guarded(&base.join("slot-none"), Duration::from_millis(10), None).unwrap();
+        fs::remove_dir_all(&base).unwrap();
+    }
+
+    #[test]
+    fn reclaim_times_out_on_populated_cgroup() {
+        let base = tree("populated");
+        let slot = base.join("slot-p");
+        fs::create_dir_all(&slot).unwrap();
+        fs::write(slot.join("cgroup.events"), "populated 1\nfrozen 0\n").unwrap();
+        let t = Instant::now();
+        let err = reclaim_cgroup_guarded(&slot, Duration::from_millis(100), None).unwrap_err();
+        assert!(matches!(err, FreezerError::ReclaimTimeout { .. }));
+        assert!(t.elapsed() < Duration::from_secs(2));
+        assert!(slot.exists());
+        fs::remove_dir_all(&base).unwrap();
+    }
+
+    #[test]
+    fn reclaim_refuses_own_cgroup_and_ancestors() {
+        let base = tree("own");
+        let slot = base.join("slot-o");
+        fs::create_dir_all(&slot).unwrap();
+        let own = slot.join("child");
+        let err = reclaim_cgroup_guarded(&slot, Duration::from_millis(10), Some(&own)).unwrap_err();
+        assert!(matches!(err, FreezerError::UnsafePath(_)));
+        assert!(slot.exists());
+        fs::remove_dir_all(&base).unwrap();
+    }
+
+    #[test]
+    fn reclaim_refuses_symlink() {
+        let base = tree("symlink");
+        let real = base.join("real");
+        fs::create_dir_all(&real).unwrap();
+        let link = base.join("slot-l");
+        std::os::unix::fs::symlink(&real, &link).unwrap();
+        let err = reclaim_cgroup_guarded(&link, Duration::from_millis(10), None).unwrap_err();
+        assert!(matches!(err, FreezerError::UnsafePath(_)));
+        assert!(real.exists());
+        fs::remove_dir_all(&base).unwrap();
     }
 }

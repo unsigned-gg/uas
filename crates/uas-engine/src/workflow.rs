@@ -1,11 +1,11 @@
 //! Durable workflow session lifecycle manager and event replayer.
 
-use uas_domain::{LeaseId, SlotId};
+use uas_domain::{DomainError, LeaseId, LostSlot, SlotId};
 
 use crate::compensator::receipts_or_failure;
 use crate::{
-    Activity, ActivityResult, CompensationReceipt, Compensator, EngineError, EventStore,
-    InMemoryEventStore, NoopCompensator, SessionId, SessionState, WorkflowEvent,
+    Activity, ActivityDisposition, ActivityResult, CompensationReceipt, Compensator, EngineError,
+    EventStore, InMemoryEventStore, NoopCompensator, SessionId, SessionState, WorkflowEvent,
 };
 
 /// A durable workflow session managing execution turns and event logging.
@@ -137,6 +137,36 @@ impl<S: EventStore> WorkflowSession<S> {
             compensator,
             compensation_receipts: Vec::new(),
         }
+    }
+
+    /// Attach a compensator, for example to a session rebuilt by replay.
+    #[must_use]
+    pub fn with_compensator(mut self, compensator: Box<dyn Compensator>) -> Self {
+        self.compensator = compensator;
+        self
+    }
+
+    /// Map an activity error to a disposition (spec 0040 D5).
+    ///
+    /// `LeaseNotFound` for this session's own lease means the pool restarted and lost the
+    /// slot. The compensators run once with the [`LostSlot`] reason and the result is
+    /// `Readmit`. Every other error takes the plain [`Self::fail_activity`] path and returns
+    /// `Failed`. The engine has no lease port, so the caller acquires the fresh lease.
+    pub fn on_activity_error(
+        &mut self,
+        activity: &Activity,
+        err: &DomainError,
+        timestamp: u64,
+    ) -> Result<ActivityDisposition, EngineError> {
+        if let (DomainError::LeaseNotFound(id), Some(own)) = (err, self.lease_id.as_ref()) {
+            if id == own.as_str() {
+                let lost = LostSlot::new(own);
+                self.fail_activity(activity, lost.to_string(), timestamp)?;
+                return Ok(ActivityDisposition::Readmit(lost));
+            }
+        }
+        self.fail_activity(activity, err.to_string(), timestamp)?;
+        Ok(ActivityDisposition::Failed)
     }
 
     /// Access the session identifier.

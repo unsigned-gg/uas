@@ -1,7 +1,7 @@
 //! Workflow activity definitions, kinds, and execution outcomes.
 
 use serde::{Deserialize, Serialize};
-use uas_domain::Attestation;
+use uas_domain::{Attestation, LostSlot};
 
 /// Discrete classification of an activity.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -48,6 +48,16 @@ pub struct ActivityResult {
     pub attestation: Attestation,
     /// Optional output summary or diagnostic text.
     pub summary: Option<String>,
+}
+
+/// What the caller does after an activity error (spec 0040 D5).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ActivityDisposition {
+    /// The activity failed and the session ended in `Failed`.
+    Failed,
+    /// The pool no longer knows the lease. The compensators ran and the session
+    /// ended in `Failed`. The caller acquires a fresh lease and re-admits the task.
+    Readmit(LostSlot),
 }
 
 #[cfg(test)]
