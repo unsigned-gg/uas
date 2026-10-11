@@ -199,6 +199,8 @@ fn text_check_ticket_ids_in_subjects() {
     assert!(!ticket_in_subject("docs(spec): SHA-256 note"));
     assert!(!ticket_in_subject("fix: METHOD-1 and CER-x and CER-"));
     assert!(!ticket_in_subject("Merge branch 'build/CER-1'"));
+    assert!(ticket_in_subject("Merged CER-5 fix"));
+    assert!(ticket_in_subject("Reverted CER-5 fix"));
     assert!(!ticket_in_subject("Revert \"feat: CER-1 x\""));
 }
 
@@ -339,4 +341,67 @@ fn text_check_missing_changelog_is_an_error() {
     sh(&repo, &["commit", "-q", "-m", "init"]);
     let err = gather(&repo, "HEAD", "HEAD").unwrap_err();
     assert!(err.contains("CHANGELOG.md missing"), "{err}");
+}
+
+fn commit_file(repo: &Path, name: &str, body: &str, msg: &str) {
+    std::fs::write(repo.join(name), body).unwrap();
+    sh(repo, &["add", "."]);
+    sh(repo, &["commit", "-q", "-m", msg]);
+}
+
+#[test]
+fn text_check_gather_diffs_from_the_merge_base() {
+    let repo = tmp("mergebase");
+    sh(&repo, &["init", "-q", "-b", "main"]);
+    commit_file(&repo, "CHANGELOG.md", &base(), "init");
+    sh(&repo, &["checkout", "-q", "-b", "topic"]);
+    commit_file(&repo, "branch.rs", "x", "feat: branch work");
+    sh(&repo, &["checkout", "-q", "main"]);
+    commit_file(&repo, "base_only.rs", "y", "feat: CER-9 base moved on");
+    let input = gather(&repo, "main", "topic").unwrap();
+    assert_eq!(
+        input.files,
+        ["branch.rs"],
+        "files from the merge base, not the base tip"
+    );
+    assert_eq!(input.commits.len(), 1);
+    assert_eq!(input.commits[0].1, "feat: branch work");
+}
+
+fn makefile_awk() -> String {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+    let mk = std::fs::read_to_string(root.join("Makefile")).unwrap();
+    let from = mk
+        .find("awk -v v=\"$(VERSION)\"")
+        .expect("release-notes awk");
+    let rest = &mk[from..];
+    let open = rest.find('\'').unwrap() + 1;
+    let close = rest.find("' CHANGELOG.md").unwrap();
+    rest[open..close].to_string()
+}
+
+#[test]
+fn text_check_release_plz_never_writes_the_changelog() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).parent().unwrap();
+    let toml = std::fs::read_to_string(root.join("release-plz.toml")).unwrap();
+    assert!(toml.lines().any(|l| l.trim() == "changelog_update = false"));
+}
+
+// `make release-notes` also edits Cargo.toml and runs cargo, so only its awk step runs on a fixture.
+#[test]
+fn text_check_release_notes_awk_leaves_released_lines_intact() {
+    let dir = tmp("awk");
+    std::fs::write(dir.join("CHANGELOG.md"), base()).unwrap();
+    let out = Command::new("awk")
+        .args(["-v", "v=9.9.9", "-v", "d=2026-10-11", &makefile_awk()])
+        .arg(dir.join("CHANGELOG.md"))
+        .output()
+        .unwrap();
+    assert!(out.status.success());
+    let rolled = String::from_utf8(out.stdout).unwrap();
+    assert!(
+        rolled.contains("## [Unreleased]\n\n## [9.9.9] - 2026-10-11\n"),
+        "{rolled}"
+    );
+    assert!(released_tail_ok(&base(), &rolled).is_ok());
 }
