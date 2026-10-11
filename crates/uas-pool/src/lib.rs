@@ -10,6 +10,7 @@
 pub mod error;
 pub mod freezer;
 pub mod launch;
+mod marker;
 pub mod slot;
 pub mod worktree;
 
