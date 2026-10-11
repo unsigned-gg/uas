@@ -114,7 +114,8 @@ All of waves 1 to 3 can land before spec 0036's arbiter. The integrator owns the
 - **Why it matters:** until it lands, `ReconcileRoots::cgroup_base` must stay `None` in every production caller (finding 2).
 - **Persona once ruled:** `uas-builder`. Files: `crates/uas-pool/src/slot.rs`, `crates/uas-pool/tests/lifecycle.rs`. Wave after P5. Done-when: a lifecycle test that a provisioned slot's marker is locked before its `slot-<id>` cgroup directory exists, and `cargo nextest run -p uas-pool -j 2`.
 
-### P8: run the live cgroup test from a make target (BLOCKED)
+### P8: run the live cgroup test from a make target (DONE 2026-10-11, #209)
+- **Ruled 2026-10-11 (integrator, option one):** `make pool-live-test`, no `SUDO`, `ci.yml` untouched; the freezer and `limits_live` cases ran 17 of 17 and 3 of 3 on ceres with 0 skipped.
 - **Blocked on:** a ruling (finding 7). The spec says the cgroup steps run under `make ebpf-test`. That recipe runs one binary, and CI rejects any `skipped:` line and any result other than `9 passed`. Options for the integrator: a new target (for example `pool-live-test`, same shape as `ebpf-test`, with `SUDO`) and a spec 0040 Test-paragraph fix; or extend the `ebpf-live` job with an allowed skip line for the pool test, which edits spec 0005 and `ci.yml` and is the operator's gate. P5's manual live run proves the behaviour in the meantime.
 - **Persona once ruled:** `uas-builder`. File: `Makefile`; plus `ci.yml` only if the ruling says so.
 
