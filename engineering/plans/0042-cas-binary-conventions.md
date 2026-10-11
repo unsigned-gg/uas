@@ -19,7 +19,7 @@ Tiers: `verified` = I ran or read it at the path named; `reported` = the spec sa
 
 | Requirement | Package |
 |---|---|
-| REQ-0042-01, 02 | P4 (feature), P6 (attributes); `UAS_WAVE_OPEN_PRS` part of 02 is BLOCKED (P8) |
+| REQ-0042-01, 02 | P4 (feature), P6 (attributes); `UAS_WAVE_OPEN_PRS` part of 02 is P8, landed in #132 |
 | REQ-0042-03, 06 | P5 |
 | REQ-0042-04, 05 | P5 (`uas-ebpfd`), P6 (`uas`) |
 | REQ-0042-07 | P6 (conventions test pins the existing codes) |
@@ -27,7 +27,7 @@ Tiers: `verified` = I ran or read it at the path named; `reported` = the spec sa
 | REQ-0042-09 | P7 |
 | REQ-0042-10 | none; holds today (finding 7) |
 
-Closed by a package: 9 of 10 fully, REQ-0042-02 partly (P8 waits on a ruling). The spec 0038 citation is P2.
+Closed by a package: 9 of 10 fully, REQ-0042-02 by P6 plus P8 (P8 landed in #132 after the integrating lane's ruling of 2026-10-10). The spec 0038 citation is P2.
 
 ## Waves
 
@@ -36,7 +36,7 @@ Closed by a package: 9 of 10 fully, REQ-0042-02 partly (P8 waits on a ruling). T
 | 1 | P1, P3, P7 | none |
 | 2 | P4, P2 | none (P4 needs P1) |
 | 3 | P5, P6 | none (both need P3 and P4) |
-| later | P8 | BLOCKED |
+| later | P8 | landed in #132 |
 
 The integrator owns the single `CHANGELOG.md` line under `## [Unreleased]` for the feature PR. No builder edits it, to avoid a conflict across the wave.
 
@@ -87,9 +87,9 @@ The integrator owns the single `CHANGELOG.md` line under `## [Unreleased]` for t
 - **Open:** ask the spec to add a REQ-0042-09 Test row so this done-when stops being `asserted`.
 
 ### P8: `UAS_WAVE_OPEN_PRS` declared on a clap argument (DONE 2026-10-10, #132)
-- **Blocked on:** a ruling. REQ-0042-02 requires the variable on a clap argument, and none exists (finding 3). The proposed shape is `--open-prs` (bool flag, `env = "UAS_WAVE_OPEN_PRS"`) on `Step`, which the executor reads at `wave_flow.rs` line 584. A builder would have to choose the subcommands that carry it and whether `1` stays the only true value (clap booleans parse `true`). Spec 0025 D16 owns the semantics. Unblocks when the integrator rules on the flag, or amends REQ-0042-02 to exempt `UAS_WAVE_OPEN_PRS`.
-- **Persona once ruled:** `uas-builder`, file `crates/uas-cli/src/main.rs` plus `crates/uas-cli/src/wave_flow.rs`, wave after P6 (same file).
+- **Was blocked on:** a ruling, given by the integrating lane on 2026-10-10 as within REQ-0042-02; P8 then landed in #132. The text below records the question as it stood. REQ-0042-02 requires the variable on a clap argument, and none exists (finding 3). The proposed shape is `--open-prs` (bool flag, `env = "UAS_WAVE_OPEN_PRS"`) on `Step`, which the executor reads at `wave_flow.rs` line 584. A builder would have to choose the subcommands that carry it and whether `1` stays the only true value (clap booleans parse `true`). Spec 0025 D16 owns the semantics. Unblocks when the integrator rules on the flag, or amends REQ-0042-02 to exempt `UAS_WAVE_OPEN_PRS`.
+- **Persona (ruled):** `uas-builder`, file `crates/uas-cli/src/main.rs` plus `crates/uas-cli/src/wave_flow.rs`, wave after P6 (same file).
 
 ## Dependency summary
 
-P4 needs P1 (rule 7). P5 needs P3 (helper) and P4 (`json` feature). P6 needs P4 (`env` and `json` features). P2 needs nothing but follows the spec-only work. P8 needs a ruling and P6.
+P4 needs P1 (rule 7). P5 needs P3 (helper) and P4 (`json` feature). P6 needs P4 (`env` and `json` features). P2 needs nothing but follows the spec-only work. P8 needed a ruling and P6; both were in place and P8 landed in #132.
