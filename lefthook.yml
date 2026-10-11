@@ -3,6 +3,7 @@
 commit-msg:
   commands:
     conventional:
+      # Spec 0051 owns the subject regex below; change it there first.
       # git's own merge and revert subjects are allowed: merge commits are the
       # branch model (specs/0003), and they must not need a hook bypass.
       run: |
@@ -14,12 +15,14 @@ pre-commit:
   commands:
     gitleaks:
       # `cmd || echo` would swallow a real finding (gitleaks exits non-zero on a
-      # leak). Only a MISSING binary is tolerated; a leak blocks the commit.
+      # leak). A leak blocks the commit, and so does a MISSING binary (spec 0051
+      # D7, fail closed). Bypass on purpose with LEFTHOOK=0.
       run: |
         if command -v gitleaks >/dev/null 2>&1; then
           gitleaks protect --staged --redact --no-banner
         else
-          echo "gitleaks not installed - CI will enforce"
+          echo "gitleaks not installed: install v8.30.1 (the version CI pins) from https://github.com/gitleaks/gitleaks/releases/tag/v8.30.1" >&2
+          exit 1
         fi
     affected-tests:
       run: ./scripts/lefthook-affected-cargo.sh --staged test
