@@ -1,0 +1,19 @@
+# Canned answers of the fake `gh` for the wave smoke parity run. No uas code merges or reads
+# checks (spec 0025 D15), so those two answer 99.
+[[rule]]
+pat = "pr merge*"
+out = ""
+err = ""
+code = 99
+
+[[rule]]
+pat = "pr checks*"
+out = ""
+err = ""
+code = 99
+
+[[rule]]
+pat = "*"
+out = ""
+err = ""
+code = 0

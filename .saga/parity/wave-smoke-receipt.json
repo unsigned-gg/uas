@@ -1,0 +1,19 @@
+{
+  "audit": {
+    "status": "not_audited"
+  },
+  "base_sha": "056d7c7abcdef",
+  "blackwall_run": "bwrun0000001",
+  "branch": "blackwall/bwrun0000001",
+  "changeset_hash": "chg000000001",
+  "cost_source": "none",
+  "cpu_cap": "uncapped",
+  "evaluator_touched": false,
+  "evidence": "verified",
+  "pr_number": null,
+  "run_hash": "",
+  "slot_id": "wave-wave-smoke-build",
+  "stale_base": false,
+  "verify_cmd": "make check JOBS=2",
+  "verify_exit": 0
+}
