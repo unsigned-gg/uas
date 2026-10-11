@@ -1,3 +1,4 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
 # Cluster survey atlas
 
 This page maps where each signal about this repo's work lives on the estate. It is a map of where to look. It does not replace a live probe. Date every number you add.

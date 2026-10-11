@@ -1,3 +1,4 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
 # Build plan: 0043-seccomp-syscall-filter-for-slot-workers
 
 Spec: `specs/0043-seccomp-syscall-filter-for-slot-workers.md` (status planned). Base: `origin/development` `9503684`.
