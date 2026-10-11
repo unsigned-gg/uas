@@ -15,7 +15,7 @@ depends_on: [0001-cas-architecture-and-crate-layout, 0003-branch-model-and-promo
 The Kube-rs Integration Plan v5 moves this repository from `cerebral-work` to
 `unsigned-gg` and renames it from `cas-substrate` to `uas`, the Unsigned Agent
 Substrate, as the open compute runtime of a split-monorepo strategy [reported:
-the plan, copied at `<surfaces>/cas-ears/kube-rs-plan.md` from the
+the plan, copied at `kube-rs-plan.md` in the research surfaces from the
 author pane w1X:p22's brain file, metadata updated 2026-10-10T20:36Z; its
 approval provenance is unverified, see Notes]. This spec says what the move
 changes inside the repository, in what order, what must be carried across by
@@ -90,7 +90,7 @@ Facts, measured 2026-10-10 on `origin/development` at `ab8112a`:
 | D7 | The organisation secrets behind sccache (F4) and the runner group `ent-default` (F7) are the two things most likely to break CI on the other side. Both are resolved before the cutover, by the operator or the Director of Engineering, who hold organisation admin: either `unsigned-gg` gains equivalent organisation secrets and runner access, or CI is rewritten to need neither. A red CI after the transfer is a stop, not something to work around. | spec 0005; second-operator SOP section 3; CAS lane w25:p1, 2026-10-10 |
 | D8 | `release-plz` continues to tag from the renamed CLI package as `v{{ version }}`, and the version does not reset. The first release after the cutover is a minor bump whose changelog names the rename. | F9; spec 0003; CAS lane w25:p1, 2026-10-10 |
 | D9 | Linear stays as it is. The 52 `CER-` references in specs remain valid identifiers; the Linear project is renamed if the operator wants, which is his act. | F9; CAS lane w25:p1, 2026-10-10 |
-| D10 | Other lanes' checkouts (F8) are not touched by this lane. After the transfer, GitHub redirects the old remote, so an existing checkout keeps working until its owner updates `origin`. The cutover notice tells each owner to run `git remote set-url origin` and to move the directory under `<home>/projects/unsigned/` when they choose. | post-merge-branch-hygiene SOP, concurrency; CAS lane w25:p1, 2026-10-10 |
+| D10 | Other lanes' checkouts (F8) are not touched by this lane. After the transfer, GitHub redirects the old remote, so an existing checkout keeps working until its owner updates `origin`. The cutover notice tells each owner to run `git remote set-url origin` and to move the directory under their `unsigned/` projects directory when they choose. | post-merge-branch-hygiene SOP, concurrency; CAS lane w25:p1, 2026-10-10 |
 | D11 | The estate brief, the agentic context package, memory files and the `.saga` team files name this repo. Those outside this repository are not this spec's to edit; the cutover notice lists them for their owners. Those inside, `.saga/teams.toml` and `.saga/topologies.toml`, are part of the post-cutover PR. | CAS lane w25:p1, 2026-10-10 |
 | D12 | Facts F1 to F9 are the **transfer impact list** for `uas` that the implementation plan's step 7 waits on, and they are published as `docs/migration/uas-impact-list.md` in the preparation phase, so the `vespertin` lane and the operator read one file rather than this spec [reported: research lane w1X:p22 confirmed the list is "exactly what is needed", 2026-10-10 about 21:5xZ]. | CAS lane w25:p1, 2026-10-10 |
 | D13 | **Publication.** the operator ruled, in his own session in lane w25:p1 at about 21:38Z on 2026-10-10, that the `uas` crate on crates.io, which he published and owns (F6), is the vehicle for publishing substrate work. This amends, for this repository only, spec 0004's standing `publish = false` for estate crates. crates.io has no namespaces: `uas` is one crate name, and any `uas-*` sub-crate is a separate name that is unreserved until published, with a 24-hour lock after any deletion (as `vesperan` and `zerodays` showed today). Which crates publish, under which names, and who presses publish, are spec 0039's to record; publishing itself stays the operator's act. | the operator, 2026-10-10 about 21:38Z, in session [reported: this lane heard it] |
@@ -195,7 +195,7 @@ Until it does, the cutover does not begin (REQ-0037-09).
 - **Why the version does not reset.** Tags are history (D5), release-plz reads
   them, and a reset would make the first `uas` release look older than the last
   `cas` one.
-- Reading: the plan at `<surfaces>/cas-ears/kube-rs-plan.md`;
+- Reading: the plan at `kube-rs-plan.md` in the research surfaces;
   CER-2813; spec 0003 for the branch model the move preserves; spec 0005 for the
-  runners; `<home>/.agents/sops/revenant-bridge-authority.md` for the floor that puts
+  runners; the estate SOP `revenant-bridge-authority` for the floor that puts
   transfers and visibility with the operator.

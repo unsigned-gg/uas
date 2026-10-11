@@ -5,7 +5,7 @@ description: Use when you run agent work under blackwall custody in this repo. C
 
 # Custody run
 
-The chain is start, settle, reconcile, pr, then a manual merge. Config: `blackwall.toml`. SOP: `<home>/.agents/sops/blackwall-custody-process.md`.
+The chain is start, settle, reconcile, pr, then a manual merge. Config: `blackwall.toml`. the estate SOP `blackwall-custody-process`.
 
 ## Before you start
 
