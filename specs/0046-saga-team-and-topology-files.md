@@ -68,7 +68,7 @@ vendor/saga Makefile 'specs/0004-*.md'` prints nothing, F3 and F8 pass again, an
   vendor/saga` and `grep -rliE 'topolog|yggdrasil' vendor/saga` both exit 1.
   [reported, `vendor/saga/README.md`] It was vendored from `unsigned-gg/saga@1e4be86`.
 - **F6 [verified]:** the schema is in `cerebral-work/saga@b526308` (branch `development`,
-  commit date 2026-10-10), the `saga` checkout. Command:
+  commit date 2026-10-10), the `saga` checkout. Since 2026-10-11 the contract is saga spec 0039 (D1); this measurement is history. Command:
   `git -C <checkout> rev-parse --short HEAD`. In `crates/saga-domain/src/yggdrasil.rs`:
   `NorseRole` line 20 (eight kebab-case roles: ratatoskr, mimir, brokkr, sindri, thjalfi,
   huginn, muninn, loki); `SplitDirection` line 774 (right, down); `SlotSpec` line 793 (role,
@@ -144,11 +144,11 @@ agreement; a row with a uas-file half and a saga half marks each. Filed: in mesh
 
 | # | Decision | Rationale | Source |
 |---|---|---|---|
-| D1 | Saga at `cerebral-work/saga@b526308` owns the schema (F6). | Only saga reads them (F4); `vendor/saga` lacks the types (F5). | w25:p1 brief, 2026-10-10; ruled |
+| D1 | Saga owns the schema; the contract is saga spec 0039 (`cerebral-work/saga` `specs/0039-team-and-topology-file-contract.md`, PR 128, merge 17622fe, commit 74c2914), which supersedes the b526308 measurement (F6). | Only saga reads them (F4); `vendor/saga` lacks the types (F5). | w25:p1 brief, 2026-10-10; ruled |
 | D2 | Saga rejects a break of any D2 rule; uas files obey them (F1, F2). | Saga runs these checks today (F7); the contract names them. | w25:p1 brief, 2026-10-10; ruled, holds in saga but for D12 (F7, F14) |
 | D3 | A persona file's frontmatter `name` equals its stem. | A rename cannot then leave a dangling persona. | w25:p1 brief, 2026-10-10; uas files hold it (F3); saga check proposed: for the saga lane |
 | D4 | The comment atop `teams.toml` records Christian's rulings and stays prose. | Its tier mapping fits `claude` only (F11). | w25:p1 brief, 2026-10-10 |
-| D5 | Saga's loader is the sole validator; uas runs no team-check. | The ruling moves all team-checking to saga (Notes). | Christian, lane w25:p1, 2026-10-10; ruled |
+| D5 | Saga's loader is the sole validator; uas runs no team-check. `saga yggdrasil validate --root <repo>` (saga spec 0039 D6) replaces `make team-check`. | The ruling moves all team-checking to saga (Notes). | Christian, lane w25:p1, 2026-10-10; ruled |
 | D6 | Member role equals slot role. | `topologies.toml` line 6: teams set harness, effort, persona. | w25:p1 brief, 2026-10-10; uas files hold it (F2); saga check proposed: for the saga lane; Christian to rule |
 | D7 | A uas team's `topology` names a table in `.saga/topologies.toml`. | A saga built-in can change with no uas commit; saga, unlike team-check, sees them. | uas-engineer, 2026-10-10; uas files only; proposed |
 | D8 | A key outside the D8 list fails saga's load. | Saga ignores it, so a misspelt key drops a value (F10). | uas-engineer, 2026-10-10; proposed: for the saga lane (filed) |
@@ -287,7 +287,7 @@ ships, `team show` cannot prove REQ-0046-02 or 03; F1 to F3, measured at d4b2e51
   team-checking from uas to saga". [reported: w25:p1 brief, 2026-10-10]
 - Follow-up: the CPM half of the ruling (specs 0024 and 0025, the `uas wave` commands) needs
   its own migration spec. It is out of this spec's scope.
-- Changed from the pre-ruling draft: the `cargo xtask team-check` validator is gone (D5, D9, D10).
+- Changed from the pre-ruling draft: the `cargo xtask team-check` validator is gone (D5, D9, D10). Amended 2026-10-11 (source: saga spec 0039, PR 128, merge 17622fe): `saga yggdrasil validate --root <repo>` replaces `make team-check`.
 - Changed: each requirement binds either uas's files or saga's loader.
 - Changed: the Test rows are saga fixtures run with `saga yggdrasil team show`; F14 is the baseline.
 - Spec 0045's plan cites spec 0046 D9 for `toml` in xtask. D9 is dropped, so that item carries
@@ -295,5 +295,5 @@ ships, `team show` cannot prove REQ-0046-02 or 03; F1 to F3, measured at d4b2e51
 - Caveat: the installed saga's build commit is asserted (F10); the Plan's verify step builds one.
 - Parked: saga's doc (line 1134) says a persona is for `claude`; the contract allows it elsewhere.
 - Parked: `vendor/saga/README.md` names `unsigned-gg/saga@1e4be86`; the live remote is
-  `cerebral-work/saga` at b526308 (F5, F6). Re-vendoring is outside this spec.
+  `cerebral-work/saga` at b526308 (F5, F6); the schema owner is now saga spec 0039 (D1). Re-vendoring is outside this spec.
 - The `teams.toml` effort comment (F11) maps tiers for `claude` only. D4 keeps it prose.
