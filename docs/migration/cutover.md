@@ -1,3 +1,4 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
 # uas cutover runbook
 
 The order, the owner of each step, and the rollback, from spec 0037. One cutover, not a

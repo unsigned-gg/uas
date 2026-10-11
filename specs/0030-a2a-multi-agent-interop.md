@@ -5,6 +5,7 @@ tags: [architecture, agents, interoperability]
 priority: high
 depends_on: [0001-cas-architecture-and-crate-layout, 0008-soma-cortex-saga-reverie-integration, 0009-saga-compensation-runner-and-durability, 0016-zed-agent-communication-protocol, 0021-cas-storage-scope-and-phase, 0026-cortex-pool-member-adapter]
 ---
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
 
 # 0030-a2a-multi-agent-interop
 

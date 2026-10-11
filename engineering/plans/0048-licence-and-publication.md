@@ -27,7 +27,7 @@ Tiers: `verified` = I ran or read it at the path named; `reported` = the spec sa
 | Spec Plan item | Package |
 |---|---|
 | Pkg 1, spec 0004: line 55 requirement, 2026-10-09 position (lines 158 to 163), `aya-ebpf` row (line 180), lines 15 to 18 | P1 |
-| Pkg 1, spec 0045 D8 points at 0048 D6, "only once Christian confirms D6" | P12 (BLOCKED) |
+| Pkg 1, spec 0045 D8 points at 0048 D6, "only once Christian confirms D6" | P12 (done 2026-10-11) |
 | Pkg 1, `LICENSE-APACHE`, `LICENSE-MIT`, `NOTICE`, remove `LICENSE` and `docs/IP_NOTICE.md` | P4 |
 | Pkg 1, `LICENSE-DOCS` | P6 |
 | Pkg 1, `crates/uas-ebpf/ebpf/LICENSE` | P5 |
@@ -37,6 +37,10 @@ Tiers: `verified` = I ran or read it at the path named; `reported` = the spec sa
 | Pkg 1, `deny.toml` and the BPF leg of `make deny` | P3 |
 | Pkg 1, `CONTRIBUTING.md` DCO section | P4 |
 | Pkg 1, one CHANGELOG line | the integrator, once, on the feature PR (not a builder) |
+| Pkg 4, `MAINTAINERS.md`, CoC check | P14 |
+| Pkg 4, `RELEASING.md`, the semver job, spec 0004 row | P15 |
+| Pkg 4, README disclaimer, `oss-check` vendor LICENSE leg | P16 |
+| Pkg 4, the launch checklist | P17 (BLOCKED on P13) |
 | Pkg 2, hostnames and 42 path lines, `blackwall.toml`, service file, `oss-check` | P2 |
 | Pkg 2, `SECURITY.md` per spec 0045 | no package (finding 10) |
 | Pkg 3, spec 0004 vendored table and the `vendor/` row of `AGENTS.md` | P1 |
@@ -61,8 +65,12 @@ Tiers: `verified` = I ran or read it at the path named; `reported` = the spec sa
 | REQ-0048-10 | BLOCKED (P13): needs the fresh repository |
 | REQ-0048-11 | P10 |
 | REQ-0048-12 | BLOCKED (P13): needs the public form |
+| REQ-0048-13, 14 | P14 |
+| REQ-0048-15, 16 | P15 |
+| REQ-0048-18, 19 | P16 |
+| REQ-0048-17 | P17 (BLOCKED on P13) |
 
-8 of 12 requirements are closed by a package (01 to 06, 08, 11). 09 holds by a command, 07 is not exercisable, 10 and 12 wait on Christian.
+14 of 19 requirements are closed by an unblocked package (01 to 06, 08, 11, 13 to 16, 18, 19). REQ-0048-17 has P17, blocked on P13. 09 holds by a command, 07 is not exercisable, 10 and 12 wait on Christian.
 
 ## Waves and the spec's command
 
@@ -73,7 +81,8 @@ Tiers: `verified` = I ran or read it at the path named; `reported` = the spec sa
 | 3 | P7, P8 | P7: 128 code files. P8: 64 Markdown files | code SPDX, Markdown SPDX. First red: vendor |
 | 4 | P9, P10 | P9: `Makefile`. P10: `xtask/`, `build.rs`, `contracts.lock`, `.gitignore` | no new leg; `spdx-check` joins `hygiene`; REQ-0048-11 closes |
 | 5 | P11 | alone: `vendor/` and `Makefile` | vendor leg. The whole command exits 0 |
-| later | P12, P13 | BLOCKED | none |
+| 6 | P14, P15, P16 | P14: `MAINTAINERS.md` (and checks `CODE_OF_CONDUCT.md`). P15: `RELEASING.md`, one workflow, spec 0004 CI tools row sha256. P16: `README.md`, `Makefile` | the day-one leg of the fenced command |
+| later | P13, P17 | BLOCKED | none |
 
 P7 and P8 start from a `development` that already holds P4 (the Markdown set shrinks by one) and P1 to P3. P10 follows P7 because P7 tags `xtask/src/*.rs` and `crates/uas-engine/build.rs`; P10 edits both. P11 follows P10 and P9 because both edit `Makefile` or its inputs. The integrator owns the single `CHANGELOG.md` line.
 
@@ -157,9 +166,37 @@ P7 and P8 start from a `development` that already holds P4 (the Markdown set shr
 - **Done-when:** `test ! -e vendor/cortex -a ! -e vendor/soma -a ! -e vendor/saga && make oss-check hygiene JOBS=2 && cargo xtask fetch-contracts && cargo build -p uas-engine --features cortex-grpc --locked -j 2` exits 0. This is the vendor leg, red today. After it the spec's whole fenced command should exit 0; the builder runs it end to end and pastes the result.
 - **Red-first:** before the removal `make oss-check` already passes the pattern leg; after adding the directory leg and before `git rm`, it must exit non-zero naming the directory. After green, `git checkout` one removed directory and watch it fail again; `git rm` it.
 
-### P12: spec 0045 D8 points at 0048 D6 (BLOCKED)
+### P12: spec 0045 D8 points at 0048 D6 (DONE 2026-10-11)
 - **Persona:** `uas-engineer`.
-- **BLOCKED:** spec 0048 line 84 (D6) is `proposed, Christian to rule`, and the Plan says "Only once Christian confirms D6, spec 0045 D8 points at it". Spec 0045 line 58 (D8) is also his row. Unblocks when Christian rules D6. Files then: `specs/0045-security-disclosure-and-advisory-policy.md` only. Done-when: `grep -q 'spec 0048' specs/0045-security-disclosure-and-advisory-policy.md && make spec-check` exits 0 (`asserted`).
+- **DONE 2026-10-11:** Christian confirmed D6 ("Confirm, the crate is the vehicle", lane w25:p1, AskUserQuestion); spec 0045 D8 now points at it. Was blocked because spec 0048 line 84 (D6) was `proposed, Christian to rule`, and the Plan says "Only once Christian confirms D6, spec 0045 D8 points at it". Spec 0045 line 58 (D8) is also his row. Unblocks when Christian rules D6. Files then: `specs/0045-security-disclosure-and-advisory-policy.md` only. Done-when: `grep -q 'spec 0048' specs/0045-security-disclosure-and-advisory-policy.md && make spec-check` exits 0 (`asserted`).
+
+### P14: conduct, owners and maintainers (wave 6)
+- **Persona:** `uas-builder`.
+- **Files:** `MAINTAINERS.md` (new); `.github/CODEOWNERS` and `CODE_OF_CONDUCT.md` (exist; edit only if a check below fails). Both existing files predate this plan (spec F22).
+- **Change:** `MAINTAINERS.md` lists humans and areas only (Christian: all areas; the BPF program under `crates/uas-ebpf/ebpf/` and the sandbox `crates/uas-sandbox/` called out as their own lines; other named humans only as `.github/CODEOWNERS` comments already record them). No team, bot or alias. Carry the SPDX tag of REQ-0048-04. The CoC must name the spec 0045 D3 address; it does today.
+- **Done-when:** `test -f MAINTAINERS.md -a -f .github/CODEOWNERS && grep -c -i -E 'ebpf|sandbox' MAINTAINERS.md && grep -c 'version 2.1' CODE_OF_CONDUCT.md && grep -q "$(grep -o -E '[a-z.]+@[a-z.]+' SECURITY.md | head -1)" CODE_OF_CONDUCT.md && make hygiene JOBS=2` exits 0 (`asserted`: the spec Test rows REQ-0048-13 and 14 are the source).
+- **Red-first:** run the first `test -f` before writing the file and watch it exit 1; delete the contact line of the CoC in a scratch copy and watch the grep fail.
+
+### P15: RELEASING.md and the semver gate (wave 6)
+- **Persona:** `uas-builder`.
+- **Files:** `RELEASING.md` (new); a workflow job in `.github/workflows/` (new file `semver.yml`); `specs/0004-dependency-and-licence-policy.md` (the `cargo-semver-checks` row of the CI tools table gets the sha256 of the release binary; read it from the release page and a local `sha256sum`, both recorded).
+- **Change:** `RELEASING.md` per REQ-0048-15. The job installs `cargo-semver-checks` 0.51.0 pinned by version and sha256 (spec 0004 CI tools rule), runs it per published crate, and prints `skipped: no published crate` and exits 0 while every crate sets `publish = false` (spec F2). It is not a required check until a crate publishes.
+- **Done-when:** `test -f RELEASING.md && grep -rn 'semver-checks' .github/workflows && make pin-check spec-check JOBS=2` exits 0, and the REQ-0048-16 scratch control (pristine copy as baseline, one `pub fn` removed) exits non-zero locally with `cargo semver-checks --baseline-root`.
+- **Red-first:** run the scratch control on the unchanged copy (exit 0), then on the planted break (non-zero); remove the planted break.
+
+### P16: README disclaimer and the vendor LICENSE check (wave 6)
+- **Persona:** `uas-builder`.
+- **Files:** `README.md` (exists); `Makefile` (the `oss-check` target, which P11 already edits; P16 lands after P11 or rebases onto it).
+- **Change:** one README paragraph per REQ-0048-18. `oss-check` fails, naming the directory, when a `vendor/` subdirectory has no `LICENSE` (D16).
+- **Done-when:** `grep -c -i -E 'pre-1.0|no stability|not for production' README.md && make oss-check JOBS=2` exits 0.
+- **Red-first:** `mkdir vendor/x && touch vendor/x/f` and watch `oss-check` fail naming `vendor/x`; with `vendor/leanspec` alone it passes (the control). Remove the scratch directory.
+
+### P17: the launch checklist (BLOCKED on P13)
+- **Persona:** `uas-engineer`.
+- **BLOCKED:** needs the cut date and the repository name (P13). The file can be drafted before, but the go item is Christian's and the docs build command is not named by any spec; the builder names it and says it is `asserted`.
+- **Files:** `engineering/plans/0048-launch-checklist.md` (new). Items, each a `- [ ]` line with its command: `make hygiene` and `make oss-check` green; a secret scan of the whole tree (the scanner and its command named in the file); licence files and SPDX complete (the fenced spec command exits 0); the docs build green; Christian's explicit sign-off on the operator names (spec D7, Notes); then Christian's go. Announcement is out of the file: a parked decision (spec D14).
+- **Done-when:** `test -f engineering/plans/0048-launch-checklist.md && test "$(grep -c '^- \[' engineering/plans/0048-launch-checklist.md)" -ge 6` exits 0. The last item is Christian's.
+- **Red-first:** the `test -f` exits 1 before the file exists; delete one item in a scratch copy and the count leg fails.
 
 ### P13: the public form (BLOCKED, Christian's acts)
 - **BLOCKED:** the cut date and the public repository name are not ruled (spec Notes, "Rulings needed"); creating the repository is Christian's act (spec 0037 D1). Whether `uas-operator` (spec 0038) publishes separately is not ruled. Covers REQ-0048-10 (one commit holding the tree of `main`, `make check` green there, a required DCO check) and REQ-0048-12 (the crates.io `uas` crate's `repository` URL returns 200; today 404). Also the CI credential for `cortex-grpc`, an operator-gated secret. No builder acts on any of it. Until then `gh api repos/unsigned-gg/uas --jq .private` must print `true` (REQ-0048-09).

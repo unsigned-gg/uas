@@ -1,3 +1,4 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
 # Suggestions
 
 Numbered, evidence-backed suggestions for this repo. Add one entry per suggestion.

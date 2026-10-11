@@ -5,6 +5,7 @@ tags: [verification, gates, evidence, make]
 priority: high
 depends_on: [0001-cas-architecture-and-crate-layout]
 ---
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
 
 # 0002-verification-gates-and-evidence
 

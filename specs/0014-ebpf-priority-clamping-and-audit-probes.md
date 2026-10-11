@@ -5,6 +5,7 @@ tags: [ebpf, aya, tracepoint, autonice, audit, phase-2]
 priority: high
 depends_on: [0001-cas-architecture-and-crate-layout, 0004-dependency-and-licence-policy, 0010-landlock-ruleset-and-abi-probe, 0011-network-namespace-isolation]
 ---
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
 
 # 0014-ebpf-priority-clamping-and-audit-probes
 

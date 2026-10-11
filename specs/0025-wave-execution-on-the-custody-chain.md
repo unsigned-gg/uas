@@ -5,6 +5,7 @@ tags: [engine, wave, custody, blackwall, saga, cpm]
 priority: high
 depends_on: [0001-cas-architecture-and-crate-layout, 0008-soma-cortex-saga-reverie-integration, 0009-saga-compensation-runner-and-durability, 0020-build-job-cap, 0022-custody-landing, 0023-test-time-compute-and-verifiable-reward, 0024-estate-saga-cpm-and-agent-sprint-wave-strategy]
 ---
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
 
 # 0025-wave-execution-on-the-custody-chain
 **HELD 2026-10-10 (Christian, in session, lane w25:p1): wave execution is a saga domain; uas implements no more of it. The landed code stays as is, unarmed; the migration shape is to be ruled.**

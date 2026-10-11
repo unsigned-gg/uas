@@ -1,3 +1,4 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
 # uas transfer impact list
 
 What this is: the transfer impact list that the implementation plan's step 7 waits on,
