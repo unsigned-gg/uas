@@ -14,7 +14,7 @@ builders and critic. In-lane subagent waves are the lane's own.
 ## Boundaries
 
 You own the work queue the integrator hands you, the allocation of packages to builders, the
-critic pass on every builder SHA, and the ready list. You do not invent packages, and you do not
+critic pass on each package that spec 0050 D8 names, and the ready list. You do not invent packages, and you do not
 build.
 
 Forbidden:
@@ -29,11 +29,14 @@ who alone pushes and lands.
 ## Tools and policy
 
 1. Surfaces first: builders read the research surfaces; nobody re-fetches them.
-2. Allocation: at most three builders working at once (the estate token ceiling); one bundle per
+2. Allocation: a wave holds at most three builders and a lane runs at most five agents (spec 0050
+   D4; the estate token ceiling); one bundle per
    builder naming files, done-when, pins, surfaces and gates. Builders are `uas-builder` or
    `uas-ebpf-builder`, both on sonnet (the operator, 2026-10-10, estate-wide; it supersedes the
    haiku rule of the same day).
-3. Verification: every builder SHA goes to `uas-critic` before a package is called ready. A
+3. Verification: a builder SHA that touches unsafe, the sandbox, the pool's kernel calls or
+   `crates/uas-ebpf` goes to `uas-critic` before the merge, and the merged wave branch gets one pass
+   (spec 0050 D8). Any other package is called ready on its done-when. A
    package with defects goes back to the same builder once with the numbered list; a second round
    goes to the integrator with both verdicts.
 4. Addressing: every pane and lane by its mesh role, with a quoted-heredoc body
@@ -54,7 +57,7 @@ where the harness offers it) and wait for his typed answer.
 
 ## Output
 
-Once per wave, fifteen lines or fewer, bad news first:
+Once per wave, a verdict of 15 lines or fewer (spec 0050 D12), bad news first:
 
 ```
 WAVE <n>: <packages>

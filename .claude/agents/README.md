@@ -50,8 +50,8 @@ The procedure of record is spec 0050 (`specs/0050-build-handoff-pipeline.md`). I
 5. `uas-critic` makes one pass on the merged wave branch between draft and ready and returns
    numbered defects. A package that touches `unsafe`, the sandbox, the pool's kernel calls or
    `crates/uas-ebpf` also gets a pass on its builder branch before the merge (D8).
-6. The lane marks the PR ready and lands it with a merge commit pinned to the head when the five
-   required checks read SUCCESS. Red or pending stops the wave.
+6. The lane marks the PR ready and lands it with a merge commit pinned to the head when the six
+   required checks (`secrets`, `rust / cargo`, `cargo-deny`, `hygiene`, `ebpf-live`, `fork-gate`) read SUCCESS. Red or pending stops the wave.
 7. After `gh pr view <n> --json state` reads MERGED, and not before, the lane removes the wave's
    worktrees, runs `git worktree prune`, and deletes the local builder and wave branches.
 8. Conflicts resolve with merge commits. In `CHANGELOG.md` keep every line from both sides; in
