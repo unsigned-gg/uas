@@ -17,6 +17,7 @@ pub mod ipc;
 pub mod launcher;
 pub mod netns;
 pub mod ruleset;
+pub mod seccomp;
 
 pub use abi::{probe, AbiReport, AbiStatus};
 pub use canon::canonical;
