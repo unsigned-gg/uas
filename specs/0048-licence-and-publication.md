@@ -15,14 +15,16 @@ depends_on: [0003-branch-model-and-promotion, 0004-dependency-and-licence-policy
 the operator framed uas as "the containerd of agent harnesses" and ruled its licence. The userspace
 crates publish under `Apache-2.0 OR MIT`. The kernel-side BPF program sources and object stay
 `Dual MIT/GPL`, SPDX `GPL-2.0-only OR MIT` [reported: ruling in lane w25:p1, 2026-10-11 about
-00:35Z, relayed in the integrating lane's brief]. The ruling does not change visibility. The
-repository stays private, and a public cut is a new repository with a clean tree, not a
-visibility flip [reported: cortex lane w10:p0 relay of the operator, mesh ead30203, 2026-10-10 about
-23:05Z].
+00:35Z, relayed in the integrating lane's brief]. About five minutes later he ruled the route: "ok
+let's keep it private for a while longer but let's build it to be an open source repo"
+[reported: lane w25:p1, 2026-10-11 about 00:40Z, relayed verbatim]. The repository stays private
+[reported: cortex lane w10:p0 relay of the operator, mesh ead30203, 2026-10-10 about 23:05Z], and it
+is built to open-source standard now.
 
 Today the workspace is proprietary and spec 0004 requires that. The crates.io placeholder already
 says `MIT OR Apache-2.0` (spec 0045 D8). This spec sets the licence layout, the kernel boundary,
-the route to a public tree, the contribution rule, and what stays out of that tree.
+the open-source build-out of this repository, the contribution rule, and the one open question:
+the vendored private contracts.
 
 ### Facts
 
@@ -50,44 +52,48 @@ Measured 2026-10-11 on ceres at development `340475b`.
 
 - **F11 [verified]:** No `LICENSE-APACHE`, `LICENSE-MIT` or `NOTICE` exists. The tracked licence files are `LICENSE` and `vendor/leanspec/LICENSE` (`git ls-files | grep -iE '(^|/)(licen[cs]e|notice|copying)'`). None of the 121 tracked `.rs` and `.sh` files outside `vendor/` carries `SPDX-License-Identifier`: `git ls-files -z -- '*.rs' '*.sh' ':!vendor' | xargs -0 grep -L 'SPDX-License-Identifier' | wc -l` prints 121.
 - **F12 [verified]:** `vendor/` holds four directories. Their READMEs state: `leanspec` MIT (codervisor, with `LICENSE`); `cortex` "Proprietary (Cerebral)"; `soma` and `saga` "Business Source License 1.1 (unsigned-gg)". Cortex, soma and saga entered history in `7c17f69` on 2026-10-08 (`git log --diff-filter=A -- vendor/cortex vendor/soma vendor/saga`). Only `crates/uas-engine/build.rs` line 9 reads one of them, `vendor/cortex/proto`, and only under the feature `cortex-grpc`. `make check` builds default features (Makefile lines 23 to 38). Command: `git grep -n -E 'vendor/(cortex|soma|saga)' -- crates xtask Makefile .github`.
-- **F13 [verified]:** crates.io `uas` 0.1.0 has licence `MIT OR Apache-2.0` and repository `https://github.com/unsigned-gg/uas`. Command: `curl -s https://crates.io/api/v1/crates/uas | jq -r '.versions[0].license, .crate.repository'`. That expression has the same two arms as the ruled `Apache-2.0 OR MIT`. Spec 0045 F10 records the rest.
-- **F14 [verified]:** `gh api repos/unsigned-gg/uas --jq .private` prints `true`. `git ls-remote origin 'refs/pull/*/head' | wc -l` prints 139; the relay counted 125 at 23:05Z. The regex `[a-z0-9-]+\.tail[0-9a-f]+\.ts\.net` matches one line each in `blackwall.toml`, spec 0013 and spec 0017 (`git grep -c -E <regex>`). `docs/migration/` holds 10 files from spec 0037: settings exports, `cutover.md` and `uas-impact-list.md`. Every pull-request job in `ci.yml`, `codeql.yml` and `labeler.yml` runs on the self-hosted group `ent-default` behind the guard `github.event.pull_request.head.repo.full_name == github.repository`, which skips fork pull requests (`grep -n -E 'runs-on|head.repo.full_name' .github/workflows/*.yml`).
+- **F13 [verified]:** crates.io `uas` 0.1.0 has licence `MIT OR Apache-2.0` and repository `https://github.com/unsigned-gg/uas`. Command: `curl -s https://crates.io/api/v1/crates/uas | jq -r '.versions[0].license, .crate.repository'`. Anonymous `curl -s -o /dev/null -w '%{http_code}'` on that URL prints 404; control: `https://github.com/containerd/containerd` prints 200. That expression has the same two arms as the ruled `Apache-2.0 OR MIT`. Spec 0045 F10 records the rest.
+- **F14 [verified]:** `gh api repos/unsigned-gg/uas --jq .private` prints `true`. `git ls-remote origin 'refs/pull/*/head' | wc -l` prints 139 at 00:42Z and 142 at 00:54Z; the relay counted 125 at 23:05Z. The regex `[a-z0-9-]+\.tail[0-9a-f]+\.ts\.net` matches one line each: the OTLP endpoint at `blackwall.toml` line 32, spec 0013 line 38 and spec 0017 line 27 (`git grep -c -E <regex>`). `docs/migration/` holds 10 files from spec 0037: settings exports, `cutover.md` and `uas-impact-list.md`. Every pull-request job in `ci.yml`, `codeql.yml` and `labeler.yml` runs on the self-hosted group `ent-default` behind the guard `github.event.pull_request.head.repo.full_name == github.repository`, which skips fork pull requests (`grep -n -E 'runs-on|head.repo.full_name' .github/workflows/*.yml`).
 - **F15 [verified]:** containerd is `Apache-2.0` (`gh api repos/containerd/containerd --jq .license.spdx_id`). Its contribution guide, `containerd/project` `CONTRIBUTING.md`, asks for a `Signed-off-by:` line on every commit under the Developer Certificate of Origin (DCO, line 189). `grep -n -w CLA` on that file prints nothing; control: `grep -n 'Developer Certificate'` prints line 189.
+- **F16 [verified]:** The pattern `\.ts\.net|/home/[a-z]+/|~/(projects|\.agents|\.claude|vault|\.local|\.config|keys)|<surfaces>(s)` matches 45 lines in 25 tracked files, none under `vendor/` (`git grep -l -E <pattern> | wc -l`; `git grep -n -E <pattern> | wc -l`). By part: home paths 10 lines in 8 files, home-relative paths 19 in 14, the research surfaces 13 in 10, hostnames 3 in 3. The files include specs, `.claude/agents/`, `.github/CODEOWNERS`, `blackwall.toml`, `.agents/skills/custody-run/SKILL.md` and `crates/uas-ebpf/uas-ebpfd.service` line 6 (`Documentation=` with a home path). Every home-path match is an operator workstation path, not a test fixture (`git grep -n -o -E '/home/[a-z]+/[^ ]{0,30}'`). The pattern is written so it does not match itself.
+- **F17 [verified]:** With an allow list of only `MIT`, `Apache-2.0` and `BSD-3-Clause`, on the F10 copy with the D1 licences, `cargo deny --offline check licenses` exits 4 with 4 rejections: Zlib for `foldhash` 0.1.5 and 0.2.0 and `zlib-rs` 0.6.8, and `(MIT OR Apache-2.0) AND Unicode-3.0` for `unicode-ident` 1.0.26. The BPF workspace exits 4 on `unicode-ident`.
+- **F18 [verified]:** `CONTRIBUTING.md` (45 lines) names no DCO: `grep -c -i -E 'signed-off|DCO|certificate of origin' CONTRIBUTING.md` prints 0; control: `grep -c -i commit CONTRIBUTING.md` prints 2. `SECURITY.md` exists; spec 0045 owns its text.
 
 ## Design
 
 Two licences, one boundary. Userspace code is permissive. The BPF program is dual GPL and MIT,
 because the kernel demands a GPL-compatible licence for one helper it calls. The program reaches
-userspace only as bytes loaded at run time. The public tree is exported, not flipped.
+userspace only as bytes loaded at run time. The repository is built to open-source standard now
+and stays private; the vendored contracts decide its public form.
 
 ### Decisions
 
 | ID | Decision | Rationale | Source |
 |---|---|---|---|
 | D1 | Every root-workspace package (the `uas-*` crates and `xtask`) is licensed `Apache-2.0 OR MIT`. The BPF program, its source under `crates/uas-ebpf/ebpf/` and the object `uas-ebpf.o`, is licensed `GPL-2.0-only OR MIT`, and its `license` section keeps the kernel string `Dual MIT/GPL` (F4). This replaces spec 0004 line 55 and its 2026-10-09 position (F8). `deny.toml` still denies copyleft dependencies. | The kernel needs a GPL-compatible licence for `bpf_probe_read_kernel_str` (F5). The MIT arm keeps the object usable by a permissive loader. | ruled: the operator, lane w25:p1, 2026-10-11 about 00:35Z [reported: integrating lane brief] |
-| D2 | Layout. The root holds `LICENSE-APACHE` and `LICENSE-MIT`; the proprietary `LICENSE` goes. `crates/uas-ebpf/ebpf/LICENSE` holds the GPL-2.0 and MIT texts and offers either. `[workspace.package]` sets `license = "Apache-2.0 OR MIT"`, and every root package keeps `license.workspace = true` (F2). The BPF package cannot inherit (F3) and sets `license = "GPL-2.0-only OR MIT"`. Every tracked `.rs` and `.sh` file outside `vendor/` carries an SPDX line in its first two lines: `GPL-2.0-only OR MIT` under `crates/uas-ebpf/ebpf/`, `Apache-2.0 OR MIT` elsewhere. A root `NOTICE` names the copyright holder as `LICENSE` line 1 does today and says `vendor/` keeps its own licences (F12). | The files land in this repo in the Plan order; D9 holds the timing question. | layout: integrating lane brief, 2026-10-11; `vendor/` clause: uas-engineer, 2026-10-11 (F12) |
+| D2 | Layout. The root holds `LICENSE-APACHE` and `LICENSE-MIT`; the proprietary `LICENSE` goes. `crates/uas-ebpf/ebpf/LICENSE` holds the GPL-2.0 and MIT texts and offers either. `[workspace.package]` sets `license = "Apache-2.0 OR MIT"`, and every root package keeps `license.workspace = true` (F2). The BPF package cannot inherit (F3) and sets `license = "GPL-2.0-only OR MIT"`. Every tracked `.rs` and `.sh` file outside `vendor/` carries an SPDX line in its first two lines: `GPL-2.0-only OR MIT` under `crates/uas-ebpf/ebpf/`, `Apache-2.0 OR MIT` elsewhere. A root `NOTICE` names the copyright holder as `LICENSE` line 1 does today and says `vendor/` keeps its own licences (F12). | The files land in this repository now (D4). | layout: integrating lane brief, 2026-10-11; `vendor/` clause: uas-engineer, 2026-10-11 (F12) |
 | D3 | Kernel boundary. `uas-ebpf` embeds the object as bytes and the kernel loads it through `bpf(2)` at run time (F7). No symbol links a userspace crate to the program, and no crate links libbpf (F9). The kernel's BPF licensing document treats the two as separate executable processes (F7), and the embedded copy is available under its MIT arm, so no userspace crate takes GPL terms. Any future LSM or struct_ops program, or one that calls a kfunc, declares `Dual MIT/GPL` (F6). | The one GPL-only helper in use is `bpf_probe_read_kernel_str`; `bpf_ktime_get_ns` is not GPL-only in v6.6 (F5). | integrating lane brief, 2026-10-11; embedding and helper facts: uas-engineer, 2026-10-11 |
-| D4 | Publication route. The public tree is a new repository with a fresh history, written by the export step (Plan, package 3). This repository's visibility does not change: its history holds the vendored contracts (F12) and 139 pull-request refs (F14). It stays private, and the cut does not change it. Creating the public repository and its first push are the operator's acts, as spec 0037 D1 keeps visibility with him. | A flip publishes every commit and pull-request ref. A history rewrite here breaks spec 0037 D5. | ruled: the operator [reported: cortex lane w10:p0, mesh ead30203, 2026-10-10 about 23:05Z]; spec 0037 D1, D5 |
-| D5 | Contributions. The public repository requires a DCO sign-off on every commit of a pull request: a `Signed-off-by:` trailer that matches the commit author, checked by a required CI job. No CLA. Commits stay GPG-signed (AGENTS.md rule 5). This private repo does not add the trailer rule. | containerd's model (F15). Each contributor certifies the right to submit under the file's licence, with no contract. | integrating lane brief, 2026-10-11; the required job: uas-engineer, 2026-10-11 |
-| D6 | crates.io `uas`. At its next publish the crate carries the D1 expression; today's `MIT OR Apache-2.0` has the same arms (F13). Its `repository` moves to the public repository once that exists. Its README names the reporting address of spec 0045 D3. This closes spec 0045 D8: the crate is the publication vehicle (spec 0037 D13), not a name hold. Publishing stays the operator's act. | The workspace, not the crate, was out of line (F2). A reporter who follows the private link reaches nothing. | integrating lane brief, 2026-10-11; spec 0037 D13; README clause: uas-engineer, from spec 0045 D8's first option |
-| D7 | The export step leaves these out or replaces them, and fails on any it misses: (a) `vendor/cortex/`, `vendor/soma/` and `vendor/saga/`, and the `cortex-grpc` feature of `uas-engine` with the code behind it, since its `build.rs` reads `vendor/cortex/proto` (F12); `vendor/leanspec/` (MIT) stays with its `LICENSE`; (b) tailnet hostnames, replaced by a placeholder host (F14); (c) operator names in decision attributions, replaced by a role, while the copyright line, the `authors` field and the `SECURITY.md` contact stay; (d) `docs/migration/`, the spec 0037 settings export. | Each item is private to the estate or licensed against publication. A default build needs none of (a) (F12). | integrating lane brief, 2026-10-11; `leanspec` and `cortex-grpc`: uas-engineer, 2026-10-11 (F12) |
-| D8 | The licence gate checks this workspace's own licence. `deny.toml` sets `[licenses.private] ignore = false` and drops the "proprietary and unpublished" comment. The allow list does not change, so GPL stays out (F10). `make deny` also runs `cargo deny --manifest-path crates/uas-ebpf/ebpf/Cargo.toml check --config deny.toml licenses`. | Today a GPL workspace crate passes unseen, and the BPF workspace is never read (F10). F3 is a wrong field that passed. The brief named a new allow list; F10 shows none is needed. | uas-engineer, 2026-10-11 (F10) |
-| D9 | Timing of D2 and D8. The brief's Plan lands them in this private repo before the export tooling. If the operator wants the licence files to wait for the cut, those Plan items move behind package 3 and land in the export tree only. | The ruling, as relayed, fixes the licence and the visibility, not the day the files change. | the operator to rule; this spec follows the brief's Plan order until then |
+| D4 | Built to open-source standard now, while private. The repository's visibility stays private (REQ-0048-09). Packages 2 and 3 land in this repository now: the licence files, the manifest fields, the SPDX lines, `CONTRIBUTING.md` with the DCO, `SECURITY.md` per spec 0045, and a tree with no tailnet hostname and no operator-specific path. The public form, a visibility flip of this repository or a fresh clean-tree repository, turns on D9. Either act is the operator's (spec 0037 D1). | His words: "ok let's keep it private for a while longer but let's build it to be an open source repo". This supersedes the export-later framing (Notes). A history rewrite here stays barred by spec 0037 D5. | ruled: the operator, lane w25:p1, 2026-10-11 about 00:40Z [reported: integrating lane relay, verbatim]; visibility: cortex lane w10:p0, mesh ead30203 |
+| D5 | Contributions. `CONTRIBUTING.md` states the DCO now: every commit carries a `Signed-off-by:` trailer matching its author. No CLA. Commits stay GPG-signed (AGENTS.md rule 5). A DCO check becomes a required check when the repository takes its public form; making it required earlier is the operator's call. | containerd's model (F15). Each contributor certifies the right to submit under the file's licence, with no contract. Required now would change every lane's commit command before anyone outside can contribute. | integrating lane brief, 2026-10-11; the timing of the required check: uas-engineer, 2026-10-11 (the operator may override) |
+| D6 | crates.io `uas`. At its next publish the crate carries the D1 expression; today's `MIT OR Apache-2.0` has the same arms (F13). Its `repository` names the public form: this URL after a flip, the new one after a cut. Today that URL returns 404 to an anonymous reader (F13). Its README names the reporting address of spec 0045 D3. This closes spec 0045 D8: the crate is the publication vehicle (spec 0037 D13), not a name hold. Publishing stays the operator's act. | The workspace, not the crate, was out of line (F2). A reporter who follows the link reaches nothing. | integrating lane brief, 2026-10-11; spec 0037 D13; README clause: uas-engineer, from spec 0045 D8's first option |
+| D7 | Tree hygiene, now. Tracked files hold no tailnet hostname (F14) and no operator-specific path (F16). Specs and agent files describe the thing instead of its path; the `blackwall.toml` endpoint moves to an untracked local setting. `make hygiene` gains `oss-check`, which fails on the F16 pattern. Operator names in decision attributions stay (Notes). `vendor/` is D9's. | The ruling names hostnames and paths. `hygiene` is a required check (spec 0045 F3), so a new path cannot land. | ruled list: the operator, via the relay of 2026-10-11 about 00:40Z; the check and its pattern: uas-engineer, 2026-10-11 |
+| D8 | The licence gate checks this workspace's own licence. `deny.toml` sets `[licenses.private] ignore = false` and drops the "proprietary and unpublished" comment. The allow list does not change, so GPL stays out (F10). `make deny` also runs `cargo deny --manifest-path crates/uas-ebpf/ebpf/Cargo.toml check --config deny.toml licenses`. | Today a GPL workspace crate passes unseen, and the BPF workspace is never read (F10). F3 is a wrong field that passed. A list of only Apache-2.0, MIT and BSD-3-Clause fails on today's dependencies (F17); narrowing the list is a separate licence decision. | uas-engineer, 2026-10-11 (F10, F17) |
+| D9 | **Proposed, the operator to rule.** The vendored contracts under `vendor/cortex/`, `vendor/soma/` and `vendor/saga/` (F12). (a) Replace them with published artifacts or a fetch step pinned by upstream commit and sha256, and point `cortex-grpc`'s `build.rs` at the fetched copy. The tree is then open-source clean. History and the pull-request refs still hold the files from `7c17f69` (F12, F14), so the public form stays a fresh clean-tree repository unless the operator accepts that a flip publishes them. (b) Keep them, and accept that the public form is a fresh clean-tree repository made by an export step that strips them and the `cortex-grpc` feature. Recommended: (a), because a tree that builds a feature only from private files is not built to open-source standard (D4). | Neither option clears history, and spec 0037 D5 bars a rewrite. | proposed: uas-engineer, 2026-10-11, on the integrating lane's framing; the operator to rule |
 
 ### Requirements (EARS)
 
 - **[REQ-0048-01]** (Ubiquitous): The root `Cargo.toml` shall set `license = "Apache-2.0 OR MIT"` in `[workspace.package]`, and every root-workspace package shall inherit it with `license.workspace = true`.
 - **[REQ-0048-02]** (Ubiquitous): The package `crates/uas-ebpf/ebpf` shall set `license = "GPL-2.0-only OR MIT"`, and its object shall hold `Dual MIT/GPL` in its `license` section.
-- **[REQ-0048-03]** (Ubiquitous): The repository root shall hold `LICENSE-APACHE`, `LICENSE-MIT` and `NOTICE`; `crates/uas-ebpf/ebpf/LICENSE` shall hold the GPL-2.0 and MIT texts; `NOTICE` shall name the copyright holder and say that `vendor/` keeps its own licences.
+- **[REQ-0048-03]** (Ubiquitous): The repository root shall hold `LICENSE-APACHE`, `LICENSE-MIT`, `NOTICE` and a `CONTRIBUTING.md` that states the DCO sign-off rule; `crates/uas-ebpf/ebpf/LICENSE` shall hold the GPL-2.0 and MIT texts; `NOTICE` shall name the copyright holder and say that `vendor/` keeps its own licences.
 - **[REQ-0048-04]** (Ubiquitous): Every tracked `.rs` and `.sh` file outside `vendor/` shall carry an `SPDX-License-Identifier` line in its first two lines, `GPL-2.0-only OR MIT` under `crates/uas-ebpf/ebpf/` and `Apache-2.0 OR MIT` elsewhere.
 - **[REQ-0048-05]** (Unwanted): IF a root-workspace package or the BPF package declares a licence expression with no arm in the `deny.toml` allow list, THEN `make deny` shall exit non-zero and name the package.
 - **[REQ-0048-06]** (Ubiquitous): No userspace crate shall link libbpf or a GPL-licensed library; userspace shall reach the BPF program only as object bytes loaded through the `bpf` system call.
 - **[REQ-0048-07]** (Optional feature): WHERE a BPF program of type LSM or struct_ops, or one that calls a kfunc, is added, the program shall declare `Dual MIT/GPL` and its package shall stay `GPL-2.0-only OR MIT`.
-- **[REQ-0048-08]** (State-driven): WHILE the public repository does not exist, this repository shall stay private, and no lane shall change its visibility or create the public repository.
-- **[REQ-0048-09]** (Event-driven): WHEN the export step runs, it shall write a tree with a single-commit history that holds no `vendor/cortex/`, `vendor/soma/`, `vendor/saga/`, `docs/migration/` or `cortex-grpc` feature and no tailnet hostname, and `make check` shall pass on that tree.
-- **[REQ-0048-10]** (Unwanted): IF the export tree holds any item D7 names, THEN the export step shall exit non-zero, name the file, and push nothing.
-- **[REQ-0048-11]** (Event-driven): WHEN a pull request opens on the public repository, a required check shall fail on any commit with no `Signed-off-by:` trailer that matches its author.
-- **[REQ-0048-12]** (Event-driven): WHEN the crates.io `uas` crate is next published, its licence shall have the arms `Apache-2.0` and `MIT` only, and its `repository` shall name the public repository once that exists.
+- **[REQ-0048-08]** (Unwanted): IF a tracked file holds a match for the F16 pattern, a tailnet hostname or an operator-specific path, THEN `make hygiene` shall exit non-zero and name the file and line.
+- **[REQ-0048-09]** (State-driven): WHILE the operator has not given the repository its public form, the repository shall stay private, and no lane shall change its visibility or create a public copy.
+- **[REQ-0048-10]** (Event-driven): WHEN the repository takes its public form, a required check shall fail any pull request that holds a commit with no `Signed-off-by:` trailer matching its author.
+- **[REQ-0048-11]** (Optional feature): WHERE the public form is a fresh repository, the export step shall write a single-commit tree from `main` that holds none of the D9 vendored contracts, `make check` shall pass on it, and the step shall exit non-zero and push nothing if one remains.
+- **[REQ-0048-12]** (Event-driven): WHEN the crates.io `uas` crate is next published after the public form exists, its licence shall have the arms `Apache-2.0` and `MIT` only, and its `repository` shall name a URL an anonymous reader can open.
 
 ## Plan
 
@@ -96,61 +102,81 @@ Package 1, spec amendments, before any file changes (rule 12's order):
 - [ ] Spec 0004: replace the line 55 requirement with D1; amend the 2026-10-09 position (lines 159 to 162) and the `aya-ebpf` row (line 179) so the program package is `GPL-2.0-only OR MIT`. Copyleft stays denied for dependencies.
 - [ ] Spec 0045: D8 points at this spec's D6.
 
-Package 2, licence files and gate, one PR into `development` (D1, D2, D8):
+Package 2, licence files and gate, now, one PR into `development` (D1, D2, D5, D8):
 
 - [ ] Add `LICENSE-APACHE`, `LICENSE-MIT`, `NOTICE` and `crates/uas-ebpf/ebpf/LICENSE`; remove `LICENSE`.
 - [ ] Set the workspace licence and the BPF package licence (REQ-0048-01, 02).
-- [ ] Add the SPDX line to the 121 files of F11. Add a `spdx-check` target to `make hygiene` that fails on a missing line or the wrong expression for the path.
+- [ ] Add the SPDX line to the 121 files of F11, and a `spdx-check` target in `make hygiene` that fails on a missing line or the wrong expression for the path.
 - [ ] `deny.toml`: `ignore = false`; `make deny`: the BPF workspace leg (D8).
+- [ ] `CONTRIBUTING.md`: a DCO section with the certificate text and `git commit -s` (D5).
 - [ ] One CHANGELOG line under `[Unreleased]`.
 
-Package 3, export tooling, a later PR (D4, D7):
+Package 3, tree hygiene, now, one PR into `development` (D7):
 
-- [ ] `cargo xtask export --out <dir>`: `git archive` of `main` into `<dir>`; remove the D7 paths and the `cortex-grpc` feature; replace hostnames and attributions; `git init` with one commit; run the D7 check and `make check`. It pushes nothing.
-- [ ] A DCO workflow for the public repository, written into the export tree only (D5).
+- [ ] Replace the three hostnames of F14 and the 42 path lines of F16. Specs and agent files name the thing, not the path: "the research surfaces", "the estate SOP on custody", "the shared checkout".
+- [ ] `blackwall.toml`: move the OTLP endpoint to an untracked local setting. Whether blackwall reads one is not checked (Notes).
+- [ ] `uas-ebpfd.service`: `Documentation=` points at the spec by its repository path, not a home path.
+- [ ] An `oss-check` target in `make hygiene` that runs `git grep -n -E` with the F16 pattern and fails on any match.
+- [ ] `SECURITY.md` per spec 0045 D3. That spec's Plan owns the item; it is listed here so the open-source checklist is whole.
 
-The cut, the operator's acts:
+Package 4, after the operator rules D9:
 
-- [ ] Create the public repository and push the export; set its required checks, the DCO job among them; enable private vulnerability reporting (spec 0045 D3).
+- [ ] Option (a): a fetch step pinned by upstream commit and sha256 for the three vendored contracts; `cortex-grpc`'s `build.rs` reads the fetched copy; the tracked copies go.
+- [ ] Option (b): `cargo xtask export --out <dir>` writes the single-commit tree of REQ-0048-11 and runs `make check` on it. It pushes nothing.
+
+The public form, the operator's acts:
+
+- [ ] Flip this repository or create the fresh one (D9); make the DCO check required (D5); enable private vulnerability reporting (spec 0045 D3).
 - [ ] Publish `uas` per D6.
 
 ## Test
 
 | Requirement | Negative control |
 |---|---|
-| REQ-0048-01, 05 | On a `git archive` copy with `ignore = false`: today's tree exits 4 with 11 rejections; the D1 licence exits 0; one crate at `GPL-2.0-only` exits 4 (F10, measured 2026-10-11). Goes red if `ignore = true` returns: the GPL crate then passes (F10). |
+| REQ-0048-01, 05 | On a `git archive` copy with `ignore = false`: today's tree exits 4 with 11 rejections; the D1 licence exits 0; one crate at `GPL-2.0-only` exits 4 (F10). Goes red if `ignore = true` returns: the GPL crate then passes (F10). |
 | REQ-0048-02, 05 | `cargo deny --manifest-path crates/uas-ebpf/ebpf/Cargo.toml check --config deny.toml licenses` exits 0 at `GPL-2.0-only OR MIT` and 4 at `GPL-2.0-only` (F10). `strings crates/uas-ebpf/ebpf/uas-ebpf.o \| grep -cx 'Dual MIT/GPL'` prints 1. A changed `LICENSE` static, rebuilt and committed, makes it print 0; left unbuilt, it fails the `ebpf-live` drift step. Red today: the manifest says `MIT OR Apache-2.0` (F3). |
-| REQ-0048-03 | `test -f` on the four files exits 0. Red today: none exists (F11). |
+| REQ-0048-03 | `test -f` on the four licence files exits 0, and `grep -c 'Signed-off-by' CONTRIBUTING.md` prints at least 1. Red today: no licence file exists (F11) and the grep prints 0 (F18). |
 | REQ-0048-04 | The SPDX leg of the command below prints nothing. Red today: it lists 121 files (F11). Guard: remove the line from one file and it lists that file; put `Apache-2.0 OR MIT` in `ebpf/src/main.rs` and `spdx-check` fails. |
 | REQ-0048-06 | `grep -rn libbpf Cargo.lock crates/uas-ebpf/ebpf/Cargo.lock` prints nothing; control: `grep -c '^name = "aya"' Cargo.lock` prints 1 (F9). |
 | REQ-0048-07 | Not exercisable: no LSM, struct_ops or kfunc program exists (F6). The kernel is the control: `bpf_lsm.c` rejects a non-GPL LSM program at load. |
-| REQ-0048-08 | `gh api repos/unsigned-gg/uas --jq .private` prints `true` (F14). Red if it prints `false` before the public repository exists. |
-| REQ-0048-09, 10 | On the export tree: `ls -d vendor/cortex vendor/soma vendor/saga docs/migration` lists nothing; `grep -rlE '[a-z0-9-]+\.tail[0-9a-f]+\.ts\.net' .` prints nothing; `git rev-list --count HEAD` prints 1; `make check JOBS=2` exits 0. Positive control, this tree on 2026-10-11: the `ls` lists 4 paths and the grep 3 files. Guard: plant one hostname in the export input; the export exits non-zero. |
-| REQ-0048-11 | On the public repository, a pull request with one commit lacking the trailer fails the DCO check. Not exercisable until the repository exists. |
-| REQ-0048-12 | `curl -s https://crates.io/api/v1/crates/uas \| jq -r .crate.repository` prints the public URL. Red today: it prints this private repository (F13, F14). |
+| REQ-0048-08 | `git grep -n -E` with the F16 pattern prints nothing. Positive control, today: 25 files, 45 lines (F16). Guard: put a home path in a scratch tracked file; `make hygiene` fails and names it. |
+| REQ-0048-09 | `gh api repos/unsigned-gg/uas --jq .private` prints `true` (F14). Red if it prints `false` before the operator acts. |
+| REQ-0048-10 | On the public form, a pull request with one commit lacking the trailer fails the DCO check. Not exercisable until then. |
+| REQ-0048-11 | Only under D9 option (b). On the export tree: `ls -d vendor/cortex vendor/soma vendor/saga` lists nothing, `git rev-list --count HEAD` prints 1, `make check JOBS=2` exits 0. Positive control, this tree: the `ls` lists 3 paths. |
+| REQ-0048-12 | `curl -s -o /dev/null -w '%{http_code}'` on the crate's `repository` URL prints 200. Red today: 404 (F13); control: the containerd URL prints 200. |
 
 ```bash
 make deny hygiene JOBS=2 && \
   test -f LICENSE-APACHE -a -f LICENSE-MIT -a -f NOTICE -a -f crates/uas-ebpf/ebpf/LICENSE && \
+  grep -q 'Signed-off-by' CONTRIBUTING.md && \
   test -z "$(git ls-files -z -- '*.rs' '*.sh' ':!vendor' | xargs -0 grep -L 'SPDX-License-Identifier')" && \
+  ! git grep -n -E '\.ts\.net|/home/[a-z]+/|~/(projects|\.agents|\.claude|vault|\.local|\.config|keys)|<surfaces>(s)' && \
   strings crates/uas-ebpf/ebpf/uas-ebpf.o | grep -qx 'Dual MIT/GPL'
 ```
 
-Passing means exit 0 after package 2. Today it fails at the `test -f` leg (F11).
+Passing means exit 0 after packages 2 and 3. Today it fails at the `test -f` leg (F11).
 
 ## Notes
 
-- The ruling does not decide: the date of the public cut; the name of the public repository;
-  whether `uas-operator` (spec 0038) publishes separately; the copyright holder line for the
-  public tree (`LICENSE` names "unsigned.gg" while the repo sits in
+- Superseded at drafting time: the first brief framed the public tree as a clean-tree export,
+  later, from a repository kept proprietary. the operator's ruling of 2026-10-11 about 00:40Z
+  replaced that: build to open-source standard now, stay private (D4). The export step survives
+  only as D9 option (b).
+- The ruling does not decide: when the repository goes public; the name of a fresh repository,
+  if D9 needs one; whether `uas-operator` (spec 0038) publishes separately; the copyright holder
+  line (`LICENSE` names "unsigned.gg" while the repo sits in
   `unsigned-gg`); whether docs and specs take the root licence or another one. Each is the operator's.
+- Kept, not removed: operator names in decision attributions. The first brief listed them for
+  the export; the ruling names hostnames and paths only. Removing them is the operator's call.
 - No counsel has reviewed D3. It rests on the kernel's own document and the object's MIT arm
   [asserted].
-- Open: `uas-ebpf` cannot publish as packaged (F7). Which crates publish is spec 0039's subject.
-- Open: today every pull-request job runs on self-hosted runners behind a same-repo guard (F14).
-  The runners of the public repository are spec 0005's subject; the export keeps the guards.
-- Brief corrections: `bpf_ktime_get_ns` is not GPL-only in v6.6 (F5); the repo has 139
-  pull-request refs, not 125 (F14); no allow-list change is needed (F10); the BPF package
-  declares `MIT OR Apache-2.0`, not an inherited licence (F3); `vendor/leanspec` is MIT and stays.
+- Open: `uas-ebpf` cannot publish as packaged (F7); which crates publish is spec 0039's subject.
+  Whether blackwall reads its OTLP endpoint from an untracked setting is not checked.
+- Open: every pull-request job runs on self-hosted runners behind a same-repo guard (F14). The
+  runners of the public form are spec 0005's subject; the guards stay.
+- Brief corrections: `bpf_ktime_get_ns` is not GPL-only in v6.6 (F5); pull-request refs number
+  139 to 142, not 125 (F14); no allow-list change is needed, and the narrower example list fails
+  (F10, F17); the BPF package declares `MIT OR Apache-2.0` (F3); `vendor/leanspec` is MIT and
+  stays; replacing the vendored contracts does not clear them from history (D9).
 - Out of scope: trademark use of the name `uas`, an SBOM licence field (spec 0045 D4), and
   relicensing the vendored contracts.
