@@ -115,6 +115,8 @@ Pass criteria: exit code 0 across all test suites under mandatory `-j 2` host th
 
 ## Notes
 
+- `CompositeCompensator` ran its children in add order until PR #140 changed it to reverse add order, per line 33 (reverse dependency order). Ordering across activities was already reverse; the fix is the order inside one composite. Test: `lost_slot_runs_compensators_in_reverse_order` in `crates/uas-engine/tests/lost_slot.rs` [verified 2026-10-11 at `2399dda`: `cargo nextest run -p uas-engine lost_slot_runs_compensators_in_reverse_order -j 2`, 1 passed]. The same PR reordered the receipt assertions of `saga_compensation_runner_reverse_execution_and_receipts` in `tests/saga.rs`. Ruled: integrating lane w25:p1, 2026-10-11.
+
 References:
 - `specs/0001-cas-architecture-and-crate-layout.md`
 - `specs/0006-cas-engine-and-harness-dogfood.md`
