@@ -127,6 +127,32 @@ jobs:
           # --downstream deep: dependents of a changed crate run too (EST-219).
           moon ci --base "$base" --downstream deep
 
+  text-check:
+    name: text-check
+    # Informational, not required: spec 0053 D10 adds it to the required checks after seven days
+    # with no false failure. Add it to the required list in the header only then.
+    # Fork guard: self-hosted runners never run code from a fork. Pull requests only, because a
+    # push has no base to diff against (D5).
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: {group: ent-default, labels: [ci-rust]}
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0 # the merge base with origin/<base> needs the history of both sides
+      # The PR body and head ref reach the shell only as environment variables (REQ-0053-14).
+      - name: make text-check
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$PR_BODY" > "$RUNNER_TEMP/pr-body.md"
+          export HEAD_REF
+          make text-check BASE="origin/$BASE_REF" PR_BODY_FILE="$RUNNER_TEMP/pr-body.md"
+
   ebpf-live:
     name: ebpf-live
     # Fork guard: this runner loads BPF into the node kernel. Never run a fork's code here.
