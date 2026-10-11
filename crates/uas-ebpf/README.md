@@ -34,7 +34,8 @@ depends only on crates in lower layers.
 - **Clean-room Aya implementation:** `aya` 0.14.0 and `aya-ebpf` 0.2.1 (MIT OR Apache-2.0).
   Zero code copied from `neutral-engineering/autonice` (GPL-2.0).
 - **Licensing boundary:** the kernel object declares `Dual MIT/GPL` in its `license`
-  section. The userspace crate stays proprietary.
+  section. The userspace crate is `Apache-2.0 OR MIT`; the BPF program is `GPL-2.0-only OR MIT`
+  (see `NOTICE`).
 - **Scope:** worker process trees only. No host-wide autonice.
 - **Clamp method:** `uas-pool` puts each worker in its own process group and calls
   `setpriority(PRIO_PGRP, pgid, 19)` once before `exec`. Measured on ceres:
