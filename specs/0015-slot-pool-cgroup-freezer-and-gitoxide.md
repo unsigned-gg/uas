@@ -28,14 +28,14 @@ This spec defines the worker slot manager in `uas-pool` (Phase 3, CER-2682):
 
 ### Requirements (EARS)
 
-- **Ubiquitous:** The `uas-pool` slot manager shall enforce host concurrency limits (`max_slots = 2`) on worker allocations.
-- **Ubiquitous:** The pool shall manage ephemeral worktrees using in-process `gix` operations without external `git` subprocesses.
-- **Event-driven:** WHEN freezing an inactive worker, the pool shall write `1` to `cgroup.freeze`.
-- **Event-driven:** WHEN spawning a worker process, the pool shall call `uas_ebpf::clamp::enter_clamped_group` in `pre_exec` and register the child PID via `DaemonClient::track`.
-- **State-driven:** WHILE a worker executes, the pool shall consume `EventStream` and incorporate `AuditReceipt` into the task's Saga execution receipt.
-- **State-driven:** WHILE reclaiming an expired slot, the pool shall reap child processes and reset worktree state.
-- **Unwanted behavior:** IF cgroup v2 operations fail, THEN the pool shall fallback to POSIX `SIGSTOP` and `SIGCONT` signals.
-- **Unwanted behavior:** IF `uas-ebpfd` is unavailable, THEN the pool shall proceed with process group clamping and mark the audit receipt as `unattested`.
+- **[REQ-0015-01]** (Ubiquitous): The `uas-pool` slot manager shall enforce host concurrency limits (`max_slots = 2`) on worker allocations.
+- **[REQ-0015-02]** (Ubiquitous): The pool shall manage ephemeral worktrees using in-process `gix` operations without external `git` subprocesses.
+- **[REQ-0015-03]** (Event-driven): WHEN freezing an inactive worker, the pool shall write `1` to `cgroup.freeze`.
+- **[REQ-0015-04]** (Event-driven): WHEN spawning a worker process, the pool shall call `uas_ebpf::clamp::enter_clamped_group` in `pre_exec` and register the child PID via `DaemonClient::track`.
+- **[REQ-0015-05]** (State-driven): WHILE a worker executes, the pool shall consume `EventStream` and incorporate `AuditReceipt` into the task's Saga execution receipt.
+- **[REQ-0015-06]** (State-driven): WHILE reclaiming an expired slot, the pool shall reap child processes and reset worktree state.
+- **[REQ-0015-07]** (Unwanted behavior): IF cgroup v2 operations fail, THEN the pool shall fallback to POSIX `SIGSTOP` and `SIGCONT` signals.
+- **[REQ-0015-08]** (Unwanted behavior): IF `uas-ebpfd` is unavailable, THEN the pool shall proceed with process group clamping and mark the audit receipt as `unattested`.
 
 ### Decisions
 
@@ -76,6 +76,13 @@ stateDiagram-v2
 5. **`Reclaiming`**: Worker reaped. `AuditReceipt` (with `run_hash`, `dropped_events`, `cpu_cap` per Spec 0020, and `oom_kill` and `pids_max_hits` per spec 0041, whose `Killed(Oom)` outcome a non-zero `oom_kill` selects) sealed and returned to caller. In-process `gix` restores index and removes untracked files.
 6. **`Reconciling`**: The start state. Before the first `allocate`, the pool reclaims orphaned slot remains from an earlier run (spec 0040 D2), then enters `Idle`.
 
+The domain `SlotState` has the states `Cold`, `Warm`, `Leased`, `Suspended` and `Draining`, and no `Idle`, `Running` or `Reclaiming` [verified 2026-10-11: `crates/uas-domain/src/slot.rs` line 110 at `f10f572`]. The names above map onto it as follows:
+
+- `Idle` is `Warm`.
+- `Running` is `Leased` with a spawned worker. The domain has no separate state for it.
+- `Leased` and `Suspended` keep their names.
+- `Reclaiming` is the pool's `reclaim_slot`, which ends in `Warm`. It starts from `Leased` or `Suspended` and uses the existing transitions, `resume` then `release`. `reclaim_slot` is not on `development` yet; plan 0015 P3 adds it.
+
 ### Cgroup v2 Freezer Interface
 
 - **Cgroup Path**: `/sys/fs/cgroup/uas/slot-<slot-id>`
@@ -103,32 +110,16 @@ stateDiagram-v2
 
 ### Error Handling
 
-```rust
-#[derive(Debug, thiserror::Error)]
-pub enum PoolError {
-    #[error("slot pool capacity exhausted (max {0})")]
-    CapacityExhausted(usize),
-    #[error("slot {0} lease expired")]
-    LeaseExpired(uas_domain::SlotId),
-    #[error("cgroup freezer error: {0}")]
-    Freezer(String),
-    #[error("gitoxide operation failed: {0}")]
-    Gitoxide(String),
-    #[error("worker process spawn failed: {0}")]
-    Spawn(#[from] std::io::Error),
-    #[error("ebpf audit client error: {0}")]
-    Ebpf(String),
-}
-```
+`crates/uas-pool/src/error.rs` is the source of `PoolError` and `FreezerError` [verified 2026-10-11: read at `f10f572`]. This spec does not copy the enums; the copy that stood here had gone stale.
 
 ## Plan
 
-- [ ] Add `gix = "0.88.0"`, `rustix = "1.1.5"`, and internal `uas-ebpf` dependency to `crates/uas-pool/Cargo.toml`.
-- [ ] Implement `uas_pool::slot::Slot` state machine and `SlotPool` allocation queue (CER-2723).
-- [ ] Implement `uas_pool::worktree::WarmWorktree` using in-process `gix` checkouts and resets (CER-2724).
+- [x] Add `gix = "0.88.0"`, `rustix = "1.1.5"`, and internal `uas-ebpf` dependency to `crates/uas-pool/Cargo.toml`. Evidence: `crates/uas-pool/Cargo.toml` lines 14 to 16 and root `Cargo.toml` lines 46 and 78 [verified 2026-10-11].
+- [x] Implement `uas_pool::slot::Slot` state machine and `SlotPool` allocation queue (CER-2723). Evidence: `crates/uas-pool/src/slot.rs`, where `SlotPool::create_slot` returns `CapacityExhausted` at `max_slots` [verified 2026-10-11].
+- [x] Implement `uas_pool::worktree::WarmWorktree` using in-process `gix` checkouts and resets (CER-2724). Evidence: `crates/uas-pool/src/worktree.rs` (`provision`, `reset_clean`, `teardown`) [verified 2026-10-11].
 - [ ] Implement `uas_pool::freezer::CgroupFreezer` with `SIGSTOP` fallback (CER-2722).
-- [ ] Wire `uas_ebpf` hooks: `enter_clamped_group` in worker `pre_exec`, `DaemonClient::track` post-spawn, and `EventStream` audit capture into `AuditReceipt`.
-- [ ] Implement unprivileged fallback returning `unattested` audit receipt when `uas-ebpfd` is unavailable.
+- [ ] Wire `uas_ebpf` hooks: `enter_clamped_group` in worker `pre_exec`, `DaemonClient::track` post-spawn, and `EventStream` audit capture into `AuditReceipt`. Open: the clamp and the track are in `crates/uas-pool/src/launch.rs`; the `EventStream` capture is not built (plan 0015 P9).
+- [x] Implement unprivileged fallback returning `unattested` audit receipt when `uas-ebpfd` is unavailable. Evidence: `AuditDegradation` in `crates/uas-pool/src/launch.rs` [verified 2026-10-11].
 - [ ] Write integration test `tests/slot_lifecycle.rs` verifying:
   - Allocation respects `max_slots` concurrency ceiling.
   - Freeze suspends process CPU execution and thaw resumes it.
@@ -138,9 +129,29 @@ pub enum PoolError {
 
 ## Test
 
-Run integration and unit tests for `uas-pool`:
+Each row names a command and the change that turns it red. Plan 0015 (`engineering/plans/0015-slot-pool-cgroup-freezer-and-gitoxide.md`) names the package that adds each test. On `development` at `f10f572` the names `freeze_writes_`, `signal_group_`, `reap_` and `reclaim_slot` occur nowhere under `crates/uas-pool`, and `tests/reclaim.rs` and `tests/slot_lifecycle.rs` do not exist [verified 2026-10-11: `grep` and `ls`]. So those rows exit non-zero until their package lands: a filter that matches no test exits 4, and a missing `--test` target exits 101 [reported: plan 0015 finding 1].
+
+| Requirement | Command | Goes red when | State |
+|---|---|---|---|
+| REQ-0015-01 | `cargo nextest run -p uas-pool --test slot_lifecycle -j 2` | `max_slots` is 3, so a third `create_slot` succeeds and the ceiling case fails. | P4 adds the test |
+| REQ-0015-02 | `cargo nextest run -p uas-pool --test slot_lifecycle -j 2` | `reclaim_slot` skips `reset_clean`, so the modified `README.md` stays and the restore case fails. | P4 adds the test |
+| REQ-0015-03 | `cargo nextest run -p uas-pool freeze_writes_ -j 2` | `CgroupFreezer::freeze` no longer writes `1` to `cgroup.freeze`. | P2 adds the test |
+| REQ-0015-03, live | `make pool-live-test` | `freeze` writes nothing, so `cgroup.events` never reads `frozen 1`. | BLOCKED: the target is not in the `Makefile` yet, and the run needs a delegated cgroup v2 subtree (P6) |
+| REQ-0015-04 | `cargo nextest run -p uas-pool --test slot_lifecycle -j 2` | `pre_exec` no longer calls `enter_clamped_group`, so the nice 19 case fails. | P4 adds the test |
+| REQ-0015-04, live | `make pool-live-test` | The socket names no daemon, so the receipt is `Unattested`, not `Attested`. | BLOCKED: the target is not in the `Makefile` yet, and the run needs root and a loaded eBPF object (P7) |
+| REQ-0015-05 | pending P9 | No row until the reword lands. | Waits on Christian (plan 0015 P9) |
+| REQ-0015-06 | `cargo nextest run -p uas-pool reap_ -j 2`, `cargo nextest run -p uas-pool --test reclaim -j 2` and `cargo nextest run -p uas-pool --test slot_lifecycle -j 2` | `reap` keeps an empty body, or `reclaim_slot` skips `reap` (the worker group lives on) or `reset_clean` (the dirty files stay). | P2 adds `reap_`, P3 adds `reclaim`, P4 adds `slot_lifecycle` |
+| REQ-0015-07 | `cargo nextest run -p uas-pool signal_group_ -j 2` | `SignalFreezer` signals the pid and not its group, so the forked child is not stopped. | P2 adds the test |
+| REQ-0015-08 | `cargo nextest run -p uas-pool --test slot_lifecycle -j 2` | The worker with no daemon socket fails, or its receipt is not `Unattested` with `AuditDegradation::NoSocket`. | P4 adds the test |
+| All | `cargo test -p uas-pool -j 2` | Any `uas-pool` test fails. | Green at `1bf73c5` [reported: plan 0015 finding 1] |
 
 ```bash
+cargo nextest run -p uas-pool freeze_writes_ -j 2
+cargo nextest run -p uas-pool signal_group_ -j 2
+cargo nextest run -p uas-pool reap_ -j 2
+cargo nextest run -p uas-pool --test reclaim -j 2
+cargo nextest run -p uas-pool --test slot_lifecycle -j 2
+# make pool-live-test  (REQ-0015-03 and REQ-0015-04 live; BLOCKED)
 cargo test -p uas-pool -j 2
 ```
 
