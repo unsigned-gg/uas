@@ -31,7 +31,7 @@ Facts, measured 2026-10-10 on ceres unless stated:
   commit pinned to the head (`blackwall.toml` comment; spec 0003; merge-style SOP).
 - **F3 [verified]:** a custody changeset is a whole-file blob, not a patch.
   `reconcile` must get `--base <sha>`; applying a stale blob reverts work landed
-  since the clone (`~/.agents/sops/custody-changeset-rebasing.md`, measured
+  since the clone (the estate SOP `custody-changeset-rebasing`, measured
   2026-08-26).
 - **F4 [reported]:** saga spec 0018 (`unsigned-gg/saga@a53a9d6:specs/0018-persistence-and-messaging.md`):
   `orlog` is the append-only run journal; receipts hold the file path, hash and
@@ -78,7 +78,7 @@ Facts added by the 2026-10-10 amendment (P5a critic findings). Source lines are
   It has no PR-body flag; it writes its own body (`pr.rs:260`, [reported]).
 
 Facts added by the second 2026-10-10 amendment: blackwall rebuilt from soma
-main `ec076f6`, installed on ceres at `~/.local/bin/blackwall` (mtime
+main `ec076f6`, installed on ceres as `blackwall` (mtime
 2026-10-10 03:19).
 
 - **F13 [verified 2026-10-10 07:22Z, `blackwall --version`, `--help`, `echo $?`
@@ -97,7 +97,7 @@ main `ec076f6`, installed on ceres at `~/.local/bin/blackwall` (mtime
 - **F16 [verified 2026-10-10, `blackwall doctor; echo $?`]:** `doctor` exits 1
   in an empty temp dir and in a fresh worktree of this repo, which has no
   `.blackwall/` (`.gitignore` excludes it). The control: it exits 0 in the main
-  checkout `/home/ctodie/projects/cerebral/uas`, where `blackwall init`
+  the pre-migration checkout, where `blackwall init`
   ran. So the Test line `blackwall doctor` can fail.
 
 ## Design

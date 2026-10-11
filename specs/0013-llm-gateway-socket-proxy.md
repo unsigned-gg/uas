@@ -35,7 +35,7 @@ Landlock ABI 3, unprivileged):
   `uas-storage`, not for `uas-sandbox`. `reqwest` with `rustls` needs cmake
   at build time.
 - The public gateway host has been unstable since 2026-07 (OPS-603). The
-  tailnet (`http://llm.tail769bd2.ts.net`) and in-cluster
+  tailnet (`http://llm`) and in-cluster
   (`http://llm.llm:4000`) hosts speak plain HTTP.
 
 ## Design
@@ -129,5 +129,5 @@ needs it.
 References:
 
 - `specs/0004-dependency-and-licence-policy.md` (tokio row, reqwest row)
-- `~/.agents/sops/blast-radius-and-estate-ops.md` (gateway hosts and keys)
+- the estate SOP `blast-radius-and-estate-ops` (gateway hosts and keys)
 - RFC 9112 (HTTP/1.1 message syntax), hop-by-hop headers
