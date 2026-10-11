@@ -101,6 +101,7 @@ impl Fixture {
             reconcile: Some(ReconcileRoots {
                 common_git_dir: self.base.join(".git"),
                 worktree_root: self.wt_root(),
+                cgroup_root: Some(self.tmp.path().join("cg")),
             }),
             ..PoolConfig::default()
         })
@@ -136,6 +137,10 @@ fn reconcile_kills_child_holding_marker_then_reclaims() {
     let mut child = spawn_child(&fx.base, "slot-a", &wt, "uas/slot-a");
     assert!(wt.is_dir() && fx.control("slot-a").is_dir() && fx.branch_exists("uas/slot-a"));
 
+    // Fake cgroup tree for the slot: only deepest-first removal can delete it.
+    let cg = fx.tmp.path().join("cg").join("slot-slot-a");
+    fs::create_dir_all(cg.join("w1").join("w2")).expect("fake cgroup tree");
+
     child.0.kill().expect("SIGKILL child");
     child.0.wait().expect("reap child");
 
@@ -143,6 +148,7 @@ fn reconcile_kills_child_holding_marker_then_reclaims() {
     assert!(!wt.exists(), "worktree dir must be gone");
     assert!(!fx.control("slot-a").exists(), "control dir must be gone");
     assert!(!fx.branch_exists("uas/slot-a"), "branch must be gone");
+    assert!(!cg.exists(), "slot cgroup tree must be gone");
     let report = pool.reconcile_report();
     assert_eq!((report.reclaimed, report.kept, report.failed), (1, 0, 0));
 }
