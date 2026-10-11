@@ -4,6 +4,7 @@ created: '{date}'
 tags: []
 priority: medium
 ---
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
 
 # {name}
 
