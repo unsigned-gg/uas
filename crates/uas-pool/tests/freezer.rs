@@ -329,3 +329,54 @@ fn live_cgroup_v2_freeze_and_unfreeze_lifecycle() {
     let _ = child.wait();
     freezer.destroy().expect("clean up live cgroup");
 }
+
+/// Live proof of spec 0040 D3 on a real cgroup v2 tree. Needs a writable own cgroup (no sudo
+/// on ceres: uid 1000 owns its service cgroup). Prints `skipped:` otherwise.
+#[test]
+fn reclaim_kills_and_removes_nested_live_cgroup() {
+    use std::io::Write;
+    let own = current_process_cgroup_path().expect("own cgroup");
+    let probe = own.join("cgroup.subtree_control");
+    if fs::OpenOptions::new().write(true).open(&probe).is_err() {
+        eprintln!("skipped: cannot write {}", probe.display());
+        return;
+    }
+    let slot = own.join(format!("uas-reclaim-{}", std::process::id()));
+    let grand = slot.join("child");
+    if let Err(e) = fs::create_dir_all(&grand) {
+        eprintln!(
+            "skipped: cannot create a cgroup under {}: {e}",
+            own.display()
+        );
+        return;
+    }
+    let mut sleeper = Command::new("sleep")
+        .arg("30")
+        .stdout(Stdio::null())
+        .spawn()
+        .expect("spawn sleep");
+    let enrolled = fs::OpenOptions::new()
+        .write(true)
+        .open(grand.join("cgroup.procs"))
+        .and_then(|mut f| f.write_all(format!("{}\n", sleeper.id()).as_bytes()));
+    if let Err(e) = enrolled {
+        let _ = sleeper.kill();
+        let _ = sleeper.wait();
+        let _ = fs::remove_dir(&grand);
+        let _ = fs::remove_dir(&slot);
+        eprintln!(
+            "skipped: cannot enroll a pid under {}: {e}",
+            grand.display()
+        );
+        return;
+    }
+
+    uas_pool::freezer::reclaim_cgroup(&slot, std::time::Duration::from_secs(5)).expect("reclaim");
+
+    let status = sleeper.wait().expect("wait sleep");
+    assert!(
+        !status.success(),
+        "sleep should have been killed: {status:?}"
+    );
+    assert!(!grand.exists() && !slot.exists());
+}
