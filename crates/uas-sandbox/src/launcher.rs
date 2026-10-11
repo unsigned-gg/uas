@@ -2,7 +2,9 @@
 //!
 //! Spec 0010, "Launcher". The child enters the jail between `fork` and `exec`:
 //! `restrict_self` sets `PR_SET_NO_NEW_PRIVS` and calls `landlock_restrict_self`.
-//! The parent never restricts itself.
+//! Spec 0043 adds the seccomp filter as the last `pre_exec` step, after the
+//! namespace hook and Landlock. The parent builds the filter programs before
+//! spawning and never restricts itself.
 
 use std::error::Error;
 use std::io;
@@ -14,6 +16,7 @@ use landlock::{RulesetCreated, RulesetError, RulesetStatus};
 
 use crate::error::SandboxError;
 use crate::netns::NETNS_REFUSED_ERRNO;
+use crate::seccomp::{self, Programs};
 
 /// `ENOTRECOVERABLE`. The child reports a refused jail with this errno. std forwards
 /// only a raw OS error from `pre_exec` to the parent and turns anything else into
@@ -39,15 +42,39 @@ pub fn jail(command: &mut Command, ruleset: RulesetCreated) -> &mut Command {
     }
 }
 
-/// Spawn `command` inside `ruleset`. Fails closed: a child that cannot enter the
-/// jail never runs, and the error says so.
+/// Spawn `command` inside `ruleset` and the seccomp filter. Fails closed: a child
+/// that cannot enter the jail never runs, and the error says so.
 ///
-/// `JailRefused` is the launcher's own verdict: `no_new_privs` was not set, the
-/// ruleset was not enforced, or the kernel refused without an errno. `NetnsRefused`
-/// comes from a `netns::isolate` hook on the same command. A kernel errno from
-/// `landlock_restrict_self` or `prctl` arrives unchanged in `Spawn`.
+/// The filter programs are built in the parent first; a build failure returns
+/// `JailRefused` before anything is spawned (spec 0043 D4). In the child the
+/// `pre_exec` order is: any `netns::isolate` hook already on the command, then
+/// Landlock, then the seccomp filter last (spec 0043 D1).
+///
+/// `JailRefused` is the launcher's own verdict: the filter could not be built or
+/// installed, `no_new_privs` was not set, the ruleset was not enforced, or the kernel
+/// refused without an errno. `NetnsRefused` comes from a `netns::isolate` hook on the
+/// same command. A kernel errno from `landlock_restrict_self` or `prctl` arrives
+/// unchanged in `Spawn`.
 pub fn launch(ruleset: RulesetCreated, command: &mut Command) -> Result<Child, SandboxError> {
-    jail(command, ruleset).spawn().map_err(classify_spawn_error)
+    launch_with(ruleset, command, seccomp::build)
+}
+
+/// `launch` with the filter builder injected, so a test can make the build fail.
+fn launch_with(
+    ruleset: RulesetCreated,
+    command: &mut Command,
+    build: impl FnOnce() -> Result<Programs, SandboxError>,
+) -> Result<Child, SandboxError> {
+    let programs = build()?;
+    jail(command, ruleset);
+    // SAFETY: the closure runs in the child after `restrict_child` and before exec.
+    // `seccomp::install` makes only prctl and seccomp syscalls over the prebuilt
+    // programs and builds its errors from raw errnos, so it does not allocate.
+    #[allow(unsafe_code)]
+    unsafe {
+        command.pre_exec(move || seccomp::install(&programs));
+    }
+    command.spawn().map_err(classify_spawn_error)
 }
 
 /// Turn a `spawn` error into the sandbox verdict. The reserved errnos come from
@@ -104,6 +131,7 @@ fn kernel_errno(err: &RulesetError) -> Option<i32> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::ruleset::LandlockRulesetBuilder;
 
     #[test]
     fn reserved_errnos_become_verdicts() {
@@ -119,5 +147,40 @@ mod tests {
         assert!(matches!(eperm, SandboxError::Spawn(ref e) if e.raw_os_error() == Some(1)));
         let other = classify_spawn_error(io::Error::other("no errno"));
         assert!(matches!(other, SandboxError::Spawn(ref e) if e.raw_os_error().is_none()));
+    }
+
+    /// REQ-0043-05 and D4: a filter that cannot be built refuses the launch before
+    /// any spawn. The marker file proves the child never ran.
+    #[test]
+    fn seccomp_build_failure_refuses_the_launch() {
+        let report = crate::abi::probe().expect("probe");
+        if !report.is_available() {
+            eprintln!("skipped: landlock not available ({:?})", report.status);
+            return;
+        }
+        let dir = std::env::temp_dir().join(format!("launcher-refuse-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).expect("scratch dir");
+        let marker = dir.join("ran");
+        let (ruleset, _) = LandlockRulesetBuilder::worker(&dir, Vec::<std::path::PathBuf>::new())
+            .build()
+            .expect("ruleset");
+        let mut command = Command::new("/bin/sh");
+        command
+            .arg("-c")
+            .arg(format!("touch '{}'", marker.display()));
+        let refused = launch_with(ruleset, &mut command, || Err(SandboxError::JailRefused));
+        assert!(matches!(refused, Err(SandboxError::JailRefused)));
+        assert!(!marker.exists(), "the child must not have run");
+        // Positive control: the same command runs when the build succeeds.
+        let (ruleset, _) = LandlockRulesetBuilder::worker(&dir, Vec::<std::path::PathBuf>::new())
+            .build()
+            .expect("ruleset");
+        let mut child = launch_with(ruleset, &mut command, seccomp::build).expect("launch");
+        assert!(child.wait().expect("wait").success());
+        assert!(
+            marker.exists(),
+            "control: the child runs when the build succeeds"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }
