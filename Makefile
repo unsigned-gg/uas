@@ -38,7 +38,8 @@ doc-test: ## Run doc tests
 	cargo test --doc --workspace --locked -j $(JOBS)
 
 deny: ## Check licences, advisories, bans and sources
-	cargo deny check
+	cargo deny --locked check
+	cargo deny --locked --manifest-path crates/uas-ebpf/ebpf/Cargo.toml check --config deny.toml licenses
 
 check: fmt-check clippy test doc-test deny ## Full gate: fmt, clippy, test, doc-test, deny
 
