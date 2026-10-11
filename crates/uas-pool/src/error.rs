@@ -51,6 +51,15 @@ pub enum PoolError {
     #[error("gitoxide operation failed: {0}")]
     Gitoxide(String),
 
+    /// Reconciliation refused to touch a slot remain (spec 0040 D6).
+    #[error("reconcile refused slot {slot}: {reason}")]
+    ReconcileRefused {
+        /// Slot id, or the control directory name when the marker is unreadable.
+        slot: String,
+        /// Why the entry was refused.
+        reason: String,
+    },
+
     /// eBPF audit client error.
     #[error("ebpf audit client error: {0}")]
     Ebpf(String),
