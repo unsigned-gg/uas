@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 //! Worker priority clamping with process groups (spec 0014 D4, ruling R2).
 //!
 //! On Linux `setpriority(PRIO_PROCESS, pid, nice)` changes one thread. Measured

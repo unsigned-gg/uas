@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 //! Cortex mesh telemetry and settle queue integration.
 //!
 //! Provides event envelopes for Cortex agent mesh delivery and settlement cards

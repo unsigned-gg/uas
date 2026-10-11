@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 //! The landing activity: reconcile a settled changeset with Blackwall and open its pull request.
 //!
 //! The activity runs `git` and the `blackwall` CLI as subprocesses (spec 0022 D1). It

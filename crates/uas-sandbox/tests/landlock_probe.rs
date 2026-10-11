@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 //! Spec 0010 gate: `cargo test -p uas-sandbox -j 2 --test landlock_probe`.
 //!
 //! The jail cases need a kernel with Landlock. Without one they print

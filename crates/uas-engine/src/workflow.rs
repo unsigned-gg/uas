@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 //! Durable workflow session lifecycle manager and event replayer.
 
 use uas_domain::{DomainError, LeaseId, LostSlot, SlotId};

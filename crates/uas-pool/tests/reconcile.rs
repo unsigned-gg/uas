@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 //! Spec 0040 D2, D4, D6 (REQ-0040-02, 03, 04, 07, 08): a starting pool
 //! reclaims the filesystem remains of dead pools and leaves live ones alone.
 //!

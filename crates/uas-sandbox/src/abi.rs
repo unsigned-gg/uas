@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 //! Kernel Landlock ABI probe.
 //!
 //! The `landlock` crate keeps its probe private and reports the kernel status only

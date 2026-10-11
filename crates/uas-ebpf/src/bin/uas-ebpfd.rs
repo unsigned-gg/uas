@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 //! `uas-ebpfd`: the privileged loader daemon (spec 0014 D8, ruling R3).
 //!
 //! It probes the host, loads the kernel program and serves the line protocol

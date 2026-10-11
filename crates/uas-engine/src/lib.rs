@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 //! Durable workflow engine for the Unsigned Agent Substrate.
 //!
 //! `uas-engine` provides Autumn-Harvest style event-sourced workflows,

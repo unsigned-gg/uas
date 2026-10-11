@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 //! Spec 0040 D1, REQ-0040-01 and REQ-0040-12: the locked slot marker written
 //! before the worktree directory and the branch exist.
 
