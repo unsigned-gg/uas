@@ -199,6 +199,29 @@ fn reconcile_refuses_symlinked_worktree_dir() {
 }
 
 #[test]
+fn reconcile_refuses_symlinked_root() {
+    let fx = Fixture::new("symlink-root");
+    let real = fx.tmp.path().join("real-root");
+    let victim = real.join("wt");
+    fs::create_dir_all(&victim).expect("victim");
+    fs::write(victim.join("sentinel"), b"keep").expect("sentinel");
+    let link = fx.tmp.path().join("link-root");
+    symlink(&real, &link).expect("symlink");
+    fx.plant_marker("viaroot", &link.join("wt"));
+
+    let pool = SlotPool::new(PoolConfig {
+        reconcile: Some(ReconcileRoots {
+            common_git_dir: fx.base.join(".git"),
+            worktree_root: link,
+            cgroup_root: None,
+        }),
+        ..PoolConfig::default()
+    });
+    assert!(victim.join("sentinel").is_file(), "sentinel must survive");
+    assert_eq!(pool.reconcile_report().failed, 1);
+}
+
+#[test]
 fn reconcile_refuses_symlinked_control_dir() {
     let fx = Fixture::new("symlink-ctl");
     let victim = fx.tmp.path().join("victim");
