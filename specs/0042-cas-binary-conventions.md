@@ -48,13 +48,13 @@ Measured 2026-10-10 on ceres at development `bd31291`, debug build.
 
 ### Requirements (EARS)
 
-- **[REQ-0042-01]** (Ubiquitous): Each `uas-*` binary shall resolve every setting as flag, then environment variable, then built-in default, and shall read no configuration file of its own; a library's own credential discovery, such as the kube client's `KUBECONFIG`, is not the binary's configuration.
-- **[REQ-0042-02]** (Ubiquitous): Each environment variable a `uas-*` binary reads shall be declared on its clap argument and appear in `--help`, and shall carry the `UAS_` prefix unless it is `RUST_LOG`, `XDG_STATE_HOME` or `HOME`.
-- **[REQ-0042-03]** (Ubiquitous): Each `uas-*` binary shall write log records to stderr through `tracing`, filtered by `RUST_LOG`.
+- **[REQ-0042-01]** (Ubiquitous): The `uas-*` binary shall resolve every setting as flag, then environment variable, then built-in default, and shall read no configuration file of its own; a library's own credential discovery, such as the kube client's `KUBECONFIG`, is not the binary's configuration.
+- **[REQ-0042-02]** (Ubiquitous): The environment variable a `uas-*` binary reads shall be declared on its clap argument and appear in `--help`, and shall carry the `UAS_` prefix unless it is `RUST_LOG`, `XDG_STATE_HOME` or `HOME`.
+- **[REQ-0042-03]** (Ubiquitous): The `uas-*` binary shall write log records to stderr through `tracing`, filtered by `RUST_LOG`.
 - **[REQ-0042-04]** (Ubiquitous): The default log filter when `RUST_LOG` is unset shall be `info` for a daemon and `warn` for the `uas` CLI.
 - **[REQ-0042-05]** (Event-driven): WHEN `UAS_LOG_FORMAT` is `json`, the binary shall emit one JSON object per log record.
-- **[REQ-0042-06]** (Ubiquitous): Each `uas-*` binary shall write only the command's result to stdout.
-- **[REQ-0042-07]** (Ubiquitous): Each `uas-*` binary shall exit 0 on success, 1 when it attempted the work and failed, and 2 when it did nothing because the invocation or a precondition was wrong.
+- **[REQ-0042-06]** (Ubiquitous): The `uas-*` binary shall write only the command's result to stdout.
+- **[REQ-0042-07]** (Ubiquitous): The `uas-*` binary shall exit 0 on success, 1 when it attempted the work and failed, and 2 when it did nothing because the invocation or a precondition was wrong.
 - **[REQ-0042-08]** (Event-driven): WHEN invoked with `--version`, each `uas-*` binary shall print `<binary> <semver> (<rev>)` and exit 0, where `<rev>` is the build-time `git describe --always --dirty --abbrev=7` or `unknown`.
 - **[REQ-0042-09]** (Unwanted): IF a release artifact's `<rev>` ends in `-dirty`, THEN the release gate shall fail.
 - **[REQ-0042-10]** (Unwanted): IF no spec names an exporter for a given `uas-*` binary, THEN that binary shall open no metrics or trace connection.
@@ -93,3 +93,4 @@ cargo nextest run -p uas-cli conventions -j 2
 - Status moved to complete on 2026-10-11: every package of plan 0042 landed and the Test block ran green (the three commands exit 0, `conventions` 6 passed, the ebpfd and release-notes rows as expected).
 - Plan 0042 (PR #127) found that `UAS_WAVE_OPEN_PRS` is read with no clap argument and that REQ-0042-09 had no Test row; both are fixed in this amendment, 2026-10-10.
 - Out of scope: the content of log records and any redaction rule. Spec 0013 D5 covers the one secret the substrate handles.
+- Amended 2026-10-11: opening words of the flagged requirement bullets reworded to begin with a standard EARS keyword; no change of meaning (spec 0052 P6).
