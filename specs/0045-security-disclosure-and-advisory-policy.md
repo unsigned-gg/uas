@@ -1,5 +1,5 @@
 ---
-status: planned
+status: in-progress
 created: 2026-10-10
 tags: [security, advisories, sbom, disclosure, release, ci]
 priority: high
@@ -9,7 +9,7 @@ depends_on: [0002-verification-gates-and-evidence, 0003-branch-model-and-promoti
 
 # 0045-security-disclosure-and-advisory-policy
 
-> **Status**: planned, **Priority**: high, **Created**: 2026-10-10
+> **Status**: in-progress, **Priority**: high, **Created**: 2026-10-10
 
 ## Overview
 

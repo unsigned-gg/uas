@@ -170,7 +170,7 @@ audit: ## Check dependencies for known advisories
 	cargo audit
 
 sbom: ## Write a CycloneDX SBOM (*.cdx.json)
-	cargo cyclonedx --format json
+	cargo cyclonedx --format json --spec-version 1.5
 
 sbom-check: ## Validate the SBOMs in SBOM_DIR (spec 0055 D10)
 	scripts/sbom-check.sh "$(SBOM_DIR)"
