@@ -151,7 +151,7 @@ pub const DEFAULT_RECLAIM_TIMEOUT: Duration = Duration::from_secs(5);
 /// Writes `1` to `cgroup.kill`, polls `cgroup.events` until `populated 0` (bounded by
 /// `timeout`), then `rmdir`s every descendant cgroup deepest first and the slot cgroup last.
 /// A missing cgroup, `cgroup.kill` or `cgroup.events` is not an error. A cgroup still
-/// populated at `timeout` returns [`FreezerError::Timeout`] and removes nothing.
+/// populated at `timeout` returns [`FreezerError::ReclaimTimeout`] and removes nothing.
 ///
 /// Refuses a symlink and any cgroup that equals or contains the caller's own cgroup.
 pub fn reclaim_cgroup(slot_cgroup: &Path, timeout: Duration) -> Result<(), FreezerError> {
@@ -213,10 +213,7 @@ fn reclaim_cgroup_guarded(
             Err(e) => return Err(io(&events_path, e)),
         }
         if start.elapsed() >= timeout {
-            return Err(FreezerError::Timeout {
-                path: events_path,
-                expected: 0,
-            });
+            return Err(FreezerError::ReclaimTimeout { path: events_path });
         }
         thread::sleep(Duration::from_millis(5));
     }
@@ -733,7 +730,7 @@ mod reclaim_tests {
         fs::write(slot.join("cgroup.events"), "populated 1\nfrozen 0\n").unwrap();
         let t = Instant::now();
         let err = reclaim_cgroup_guarded(&slot, Duration::from_millis(100), None).unwrap_err();
-        assert!(matches!(err, FreezerError::Timeout { .. }));
+        assert!(matches!(err, FreezerError::ReclaimTimeout { .. }));
         assert!(t.elapsed() < Duration::from_secs(2));
         assert!(slot.exists());
         fs::remove_dir_all(&base).unwrap();
