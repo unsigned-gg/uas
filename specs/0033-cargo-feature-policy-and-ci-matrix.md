@@ -5,6 +5,7 @@ tags: [cargo, features, ci, gates, uas-engine]
 priority: high
 depends_on: [0001-cas-architecture-and-crate-layout, 0004-dependency-and-licence-policy, 0005-ci-cache-and-runners, 0026-cortex-pool-member-adapter]
 ---
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
 
 # 0033-cargo-feature-policy-and-ci-matrix
 

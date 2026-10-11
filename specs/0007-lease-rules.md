@@ -5,6 +5,7 @@ tags: [domain, lease, slot, rules]
 priority: high
 depends_on: [0001-cas-architecture-and-crate-layout]
 ---
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
 
 # 0007-lease-rules
 

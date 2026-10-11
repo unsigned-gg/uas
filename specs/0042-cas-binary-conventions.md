@@ -5,6 +5,7 @@ tags: [cli, daemon, config, logging, exit-codes, version]
 priority: high
 depends_on: [0001-cas-architecture-and-crate-layout, 0002-verification-gates-and-evidence, 0014-ebpf-priority-clamping-and-audit-probes, 0025-wave-execution-on-the-custody-chain, 0036-slot-arbitration-across-processes]
 ---
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
 
 # 0042-cas-binary-conventions
 

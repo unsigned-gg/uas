@@ -5,6 +5,7 @@ tags: [sandbox, router, reverie, memory, unix-socket, phase-2]
 priority: high
 depends_on: [0001-cas-architecture-and-crate-layout, 0008-soma-cortex-saga-reverie-integration, 0010-landlock-ruleset-and-abi-probe, 0011-network-namespace-isolation, 0013-llm-gateway-socket-proxy]
 ---
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
 
 # 0032-reverie-access-from-a-jailed-slot
 

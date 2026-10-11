@@ -5,6 +5,7 @@ tags: [pool, slots, arbitration, concurrency, flock, phase-3]
 priority: high
 depends_on: [0001-cas-architecture-and-crate-layout, 0002-verification-gates-and-evidence, 0007-lease-rules, 0015-slot-pool-cgroup-freezer-and-gitoxide, 0025-wave-execution-on-the-custody-chain]
 ---
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
 
 # 0036-slot-arbitration-across-processes
 
