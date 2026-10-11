@@ -4,7 +4,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
-use uas_domain::SlotId;
+use uas_domain::{LimitEvents, SlotId};
 use uas_pool::freezer::{
     current_process_cgroup_path, CgroupFreezer, CpuCap, Freezer, FreezerState, ResourceLimits,
     SignalFreezer,
@@ -117,6 +117,8 @@ fn cgroup_freezer_creates_child_directory_and_writes_limits() {
         cpu_period_us: Some(100_000),
         memory_high_bytes: Some(128 * 1024 * 1024),
         memory_max_bytes: Some(256 * 1024 * 1024),
+        memory_swap_max_bytes: None,
+        pids_max: None,
     };
 
     let cap = freezer.configure_limits(&limits).expect("configure limits");
@@ -162,6 +164,8 @@ fn cgroup_freezer_records_uncapped_and_warns_when_cpu_controller_absent() {
         cpu_period_us: Some(100_000),
         memory_high_bytes: None,
         memory_max_bytes: None,
+        memory_swap_max_bytes: None,
+        pids_max: None,
     };
 
     let cap = freezer
@@ -379,4 +383,157 @@ fn reclaim_kills_and_removes_nested_live_cgroup() {
         "sleep should have been killed: {status:?}"
     );
     assert!(!grand.exists() && !slot.exists());
+}
+
+// ---------------------------------------------------------------------------
+// Memory, swap and pids limits and the limit events (spec 0041 D4, D5)
+// ---------------------------------------------------------------------------
+
+const LIMIT_FILES: [&str; 5] = [
+    "cpu.max",
+    "memory.max",
+    "memory.high",
+    "memory.swap.max",
+    "pids.max",
+];
+
+fn slot_dir_with(temp: &TempDirGuard, slot: &str, files: &[&str]) -> (PathBuf, SlotId) {
+    let base = temp.path().join("uas-base");
+    let dir = base.join(format!("slot-{slot}"));
+    fs::create_dir_all(&dir).expect("create slot dir");
+    for f in files {
+        fs::write(dir.join(f), b"max\n").expect("pre-create control file");
+    }
+    (base, SlotId::new(slot).expect("valid slot id"))
+}
+
+fn resolved_like_limits() -> ResourceLimits {
+    ResourceLimits {
+        cpu_quota_us: Some(200_000),
+        cpu_period_us: Some(100_000),
+        memory_high_bytes: Some(11_596_411_699),
+        memory_max_bytes: Some(14_495_514_624),
+        memory_swap_max_bytes: Some(0),
+        pids_max: Some(4096),
+    }
+}
+
+#[test]
+fn limits_write_all_five_files_in_the_creating_call() {
+    let temp = TempDirGuard::new("limits-all");
+    let (base, id) = slot_dir_with(&temp, "a", &LIMIT_FILES);
+    let dir = base.join("slot-a");
+
+    let freezer = CgroupFreezer::with_limits(&base, id, &resolved_like_limits()).expect("create");
+
+    let read = |f: &str| fs::read_to_string(dir.join(f)).expect("read control file");
+    assert_eq!(read("cpu.max"), "200000 100000\n");
+    assert_eq!(read("memory.max"), "14495514624\n");
+    assert_eq!(read("memory.high"), "11596411699\n");
+    assert_eq!(read("memory.swap.max"), "0\n");
+    assert_eq!(read("pids.max"), "4096\n");
+    freezer.destroy().expect("destroy");
+}
+
+#[test]
+fn limits_default_pids_is_4096_and_swap_is_zero() {
+    let d = ResourceLimits::default();
+    assert_eq!(d.pids_max, Some(4096));
+    assert_eq!(d.memory_swap_max_bytes, Some(0));
+}
+
+#[test]
+fn limits_missing_pids_file_warns_and_leaves_the_rest_written() {
+    let temp = TempDirGuard::new("limits-missing");
+    let files: Vec<&str> = LIMIT_FILES
+        .iter()
+        .copied()
+        .filter(|f| *f != "pids.max")
+        .collect();
+    let (base, id) = slot_dir_with(&temp, "b", &files);
+    let dir = base.join("slot-b");
+
+    let freezer = CgroupFreezer::with_limits(&base, id, &resolved_like_limits())
+        .expect("a missing controller must not fail creation");
+
+    assert!(!dir.join("pids.max").exists(), "missing file stays missing");
+    assert_eq!(
+        fs::read_to_string(dir.join("memory.max")).unwrap(),
+        "14495514624\n"
+    );
+    assert_eq!(
+        fs::read_to_string(dir.join("memory.high")).unwrap(),
+        "11596411699\n"
+    );
+    assert_eq!(
+        fs::read_to_string(dir.join("memory.swap.max")).unwrap(),
+        "0\n"
+    );
+    assert_eq!(
+        fs::read_to_string(dir.join("cpu.max")).unwrap(),
+        "200000 100000\n"
+    );
+    freezer.destroy().expect("destroy");
+}
+
+#[test]
+fn limits_from_resolved_carries_memory_swap_and_pids() {
+    use uas_pool::limits::{resolve, LimitOverrides};
+    let r = resolve(&LimitOverrides::default(), Some(54 << 30), 2, &|_| None).expect("resolve");
+    let l = ResourceLimits::from(&r);
+    assert_eq!(l.memory_max_bytes, r.memory_max_bytes);
+    assert_eq!(l.memory_high_bytes, r.memory_high_bytes);
+    assert_eq!(l.memory_swap_max_bytes, Some(0));
+    assert_eq!(l.pids_max, Some(r.pids_max));
+}
+
+#[test]
+fn limits_events_parse_oom_kill_and_pids_max() {
+    let temp = TempDirGuard::new("limits-events");
+    let (base, id) = slot_dir_with(&temp, "c", &[]);
+    let dir = base.join("slot-c");
+    fs::write(
+        dir.join("memory.events"),
+        "low 0\nhigh 0\nmax 9\noom 4\noom_kill 3\n",
+    )
+    .unwrap();
+    fs::write(dir.join("pids.events"), "max 7\n").unwrap();
+
+    let freezer = CgroupFreezer::new(&base, id).expect("create");
+    assert_eq!(
+        freezer.read_limit_events(),
+        LimitEvents {
+            oom_kill: 3,
+            pids_max_hits: 7
+        }
+    );
+    assert_eq!(freezer.limit_events(), Some(freezer.read_limit_events()));
+    assert_eq!(freezer.cgroup_path().as_deref(), Some(dir.as_path()));
+    freezer.destroy().expect("destroy");
+}
+
+#[test]
+fn limits_events_missing_files_read_zero() {
+    let temp = TempDirGuard::new("limits-events-missing");
+    let (base, id) = slot_dir_with(&temp, "d", &[]);
+    let freezer = CgroupFreezer::new(&base, id).expect("create");
+    assert_eq!(freezer.read_limit_events(), LimitEvents::default());
+    assert_eq!(freezer.read_limit_events(), LimitEvents::default());
+    freezer.destroy().expect("destroy");
+}
+
+#[test]
+fn limits_hard_write_error_fails_creation_and_names_the_file() {
+    use std::os::unix::fs::PermissionsExt;
+    let temp = TempDirGuard::new("limits-hard-error");
+    let (base, id) = slot_dir_with(&temp, "e", &LIMIT_FILES);
+    let mem_max = base.join("slot-e").join("memory.max");
+    fs::set_permissions(&mem_max, fs::Permissions::from_mode(0o444)).unwrap();
+    if fs::OpenOptions::new().write(true).open(&mem_max).is_ok() {
+        return; // privileged user ignores the mode; the fixture cannot fail here
+    }
+
+    let err = CgroupFreezer::with_limits(&base, id, &resolved_like_limits())
+        .expect_err("a hard write error must fail creation");
+    assert!(err.to_string().contains("memory.max"), "got: {err}");
 }

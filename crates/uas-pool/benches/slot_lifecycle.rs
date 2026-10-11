@@ -147,6 +147,8 @@ fn bench_slot_lifecycle(c: &mut Criterion) {
             cpu_period_us: Some(100_000),
             memory_high_bytes: None,
             memory_max_bytes: None,
+            memory_swap_max_bytes: None,
+            pids_max: None,
         };
 
         b.iter(|| {
