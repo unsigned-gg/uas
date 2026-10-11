@@ -154,6 +154,7 @@ impl Worker {
                     .pids_max_hits
                     .saturating_sub(cgroup.baseline.pids_max_hits),
             };
+            // `classify` judges the `oom_kill` delta whatever the exit code: an exit 0 with a delta is `Killed(Oom)`.
             audit.outcome = WorkerOutcome::classify(exit_code(&status), &audit.limit_events);
         }
         if let Some(mut tracking) = self.tracking.take() {

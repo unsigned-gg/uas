@@ -118,3 +118,18 @@ fn limits_events_signal_death_is_128_plus_signal() {
     let (_, audit) = run("kill -9 $$", &dir, LimitEvents::default()).expect("run");
     assert_eq!(audit.outcome, WorkerOutcome::Exited(137));
 }
+
+#[test]
+fn limits_events_sigkill_with_oom_delta_is_killed_oom() {
+    let dir = fake_cgroup("oom_kill 0\n", "max 0\n");
+    let script = format!(
+        "echo 'oom_kill 1' > {}/memory.events; kill -9 $$",
+        dir.display()
+    );
+    let (status, audit) = run(&script, &dir, LimitEvents::default()).expect("run");
+    assert_eq!(
+        std::os::unix::process::ExitStatusExt::signal(&status),
+        Some(9)
+    );
+    assert_eq!(audit.outcome, WorkerOutcome::Killed(KillReason::Oom));
+}
