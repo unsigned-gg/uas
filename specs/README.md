@@ -37,7 +37,7 @@ Methodology: LeanSpec. The reference copy is in `../vendor/leanspec/`.
 | [0030](0030-a2a-multi-agent-interop.md) | A2A multi-agent interop | planned | high |
 | [0031](0031-mcp-security-baseline.md) | MCP security baseline | planned | high |
 | [0032](0032-reverie-access-from-a-jailed-slot.md) | Reverie access from a jailed slot | planned | high |
-| [0033](0033-cargo-feature-policy-and-ci-matrix.md) | Cargo feature policy and CI matrix | planned | high |
+| [0033](0033-cargo-feature-policy-and-ci-matrix.md) | Cargo feature policy and CI matrix | in-progress | high |
 | [0034](0034-tool-pinning-beyond-cargo.md) | Tool pinning beyond cargo | planned | high |
 | [0035](0035-cas-acp-transport-scope.md) | uas-acp transport scope | planned | high |
 | [0036](0036-slot-arbitration-across-processes.md) | Slot arbitration across processes | planned | high |
