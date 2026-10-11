@@ -44,15 +44,15 @@ Methodology: LeanSpec. The reference copy is in `../vendor/leanspec/`.
 | [0037](0037-repository-migration-to-uas.md) | Repository migration to uas | planned | high |
 | [0038](0038-uas-operator-and-crds.md) | uas-operator and CRDs | planned | high |
 | [0039](0039-k8s-dependency-and-ci-plan.md) | k8s dependency and CI plan | planned | high |
-| [0040](0040-pool-restart-and-orphan-reclamation.md) | Pool restart and orphan reclamation | planned | high |
-| [0041](0041-slot-memory-pids-and-disk-limits.md) | Slot memory, pids and disk limits | planned | high |
-| [0042](0042-cas-binary-conventions.md) | uas binary conventions | in-progress | high |
-| [0043](0043-seccomp-syscall-filter-for-slot-workers.md) | seccomp syscall filter for slot workers | planned | high |
+| [0040](0040-pool-restart-and-orphan-reclamation.md) | Pool restart and orphan reclamation | in-progress | high |
+| [0041](0041-slot-memory-pids-and-disk-limits.md) | Slot memory, pids and disk limits | in-progress | high |
+| [0042](0042-cas-binary-conventions.md) | uas binary conventions | complete | high |
+| [0043](0043-seccomp-syscall-filter-for-slot-workers.md) | seccomp syscall filter for slot workers | complete | high |
 | [0044](0044-reverie-client-degradation.md) | Reverie client degradation | planned | high |
 | [0045](0045-security-disclosure-and-advisory-policy.md) | Security disclosure and advisory policy | planned | high |
 | [0046](0046-saga-team-and-topology-files.md) | Saga team and topology files | planned | high |
 | [0047](0047-slot-build-cache-retention.md) | Slot build cache retention | planned | high |
-| [0048](0048-licence-and-publication.md) | Licence and publication | planned | high |
+| [0048](0048-licence-and-publication.md) | Licence and publication | in-progress | high |
 | [0049](0049-cpm-migration-to-saga.md) | CPM migration to saga | planned | high |
 | [0050](0050-build-handoff-pipeline.md) | Build handoff pipeline | in-progress | high |
 | [0051](0051-repository-guards.md) | Repository guards | planned | high |
