@@ -158,7 +158,7 @@ the first use.
 
 ### Considered, no uas pin (grill sheet 2026-10-10)
 
-Each row: ruled: Christian, grill sheet 2026-10-10 answer <n>, read 2026-10-11.
+Each row: ruled: Christian, grill sheet 2026-10-10 answer <n>, read 2026-10-11. Principles (answer 1a): stars are a weak signal and manifests are the source of truth, in `cerebral-work/cerebral-docs` `agentic-systems/guides/hyperscaler-library-selection-principles.md` at 39b0919 [reported: research lane w1X:p1, mesh 2026-10-11; commit verified on GitHub by w25:p1]. That commit also fixed two citations and added verdict lines to 24 dossiers.
 
 | Library | Answer | Verdict |
 |---|---|---|
