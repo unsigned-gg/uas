@@ -91,6 +91,13 @@ pub enum FreezerError {
         expected: u32,
     },
 
+    /// A slot cgroup was still populated after the reclaim timeout.
+    #[error("reclaim timeout: {path} still populated after cgroup.kill")]
+    ReclaimTimeout {
+        /// Path to cgroup.events.
+        path: PathBuf,
+    },
+
     /// Failed to parse a cgroup control or event file.
     #[error("parse error reading cgroup file {path}: {message}")]
     Parse {
