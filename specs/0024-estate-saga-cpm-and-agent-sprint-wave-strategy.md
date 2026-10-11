@@ -9,6 +9,8 @@ depends_on: [0001-cas-architecture-and-crate-layout, 0006-cas-engine-and-harness
 
 # 0024-estate-saga-cpm-and-agent-sprint-wave-strategy
 
+> **Superseded in part, 2026-10-11 (spec 0049 D6, lane-decided: integrating lane w25:p1):** CPM and wave planning move to saga under uas spec 0049. Saga spec 0040 (`cerebral-work/saga` `specs/0040-cpm-and-wave-execution.md`, PR 133, 51e4df8) restates them; the CPM and wave rules below are superseded there. Status stays `complete`.
+
 ## Requirements
 
 - **Ubiquitous:** The saga engine coordinator shall compute Critical Path Method (CPM) schedules over workflow step graphs before wave execution.

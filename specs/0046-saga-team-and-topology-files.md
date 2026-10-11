@@ -229,8 +229,8 @@ uas adds no code, make target or CHANGELOG line here (D5, D9, D10); the integrat
 - [ ] Once saga fails closed, verify the uas files against the contract: build saga at a known
       commit, run every Test row with `saga yggdrasil team show` on a scratch copy, and record
       the commit. Each fixture row must reject; the positive control must exit 0.
-- [ ] Write the follow-up migration spec for CPM: specs 0024 and 0025 and the `uas wave`
-      commands move to saga under the same ruling. It is out of this spec's scope.
+- [x] Write the follow-up migration spec for CPM: specs 0024 and 0025 and the `uas wave`
+      commands move to saga under the same ruling. Written as spec 0049, 2026-10-11.
 
 ## Test
 
