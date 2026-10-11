@@ -521,3 +521,19 @@ fn limits_events_missing_files_read_zero() {
     assert_eq!(freezer.read_limit_events(), LimitEvents::default());
     freezer.destroy().expect("destroy");
 }
+
+#[test]
+fn limits_hard_write_error_fails_creation_and_names_the_file() {
+    use std::os::unix::fs::PermissionsExt;
+    let temp = TempDirGuard::new("limits-hard-error");
+    let (base, id) = slot_dir_with(&temp, "e", &LIMIT_FILES);
+    let mem_max = base.join("slot-e").join("memory.max");
+    fs::set_permissions(&mem_max, fs::Permissions::from_mode(0o444)).unwrap();
+    if fs::OpenOptions::new().write(true).open(&mem_max).is_ok() {
+        return; // privileged user ignores the mode; the fixture cannot fail here
+    }
+
+    let err = CgroupFreezer::with_limits(&base, id, &resolved_like_limits())
+        .expect_err("a hard write error must fail creation");
+    assert!(err.to_string().contains("memory.max"), "got: {err}");
+}
