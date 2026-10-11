@@ -5,6 +5,7 @@ tags: [sandbox, security, test, phase-2]
 priority: high
 depends_on: [0010-landlock-ruleset-and-abi-probe, 0011-network-namespace-isolation, 0043-seccomp-syscall-filter-for-slot-workers]
 ---
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
 
 # 0012-sandbox-escape-suite
 

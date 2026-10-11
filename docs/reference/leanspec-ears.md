@@ -1,3 +1,4 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
 # LeanSpec EARS Requirements Guide
 
 This guide defines the Easy Approach to Requirements Syntax (EARS) for LeanSpec in this repository.

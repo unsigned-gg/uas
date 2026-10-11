@@ -5,6 +5,7 @@ tags: [uas, deltadb, crdt, worktree, phase-8, blackwall]
 priority: high
 depends_on: [0001-cas-architecture-and-crate-layout, 0002-verification-gates-and-evidence, 0003-branch-model-and-promotion, 0004-dependency-and-licence-policy, 0009-saga-compensation-runner-and-durability, 0010-landlock-ruleset-and-abi-probe, 0015-slot-pool-cgroup-freezer-and-gitoxide, 0022-custody-landing]
 ---
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
 
 # 0028-branchless-crdt-worktrees
 

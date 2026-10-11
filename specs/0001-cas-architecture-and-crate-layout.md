@@ -4,6 +4,7 @@ created: 2026-10-08
 tags: [architecture, workspace, layering, substrate]
 priority: high
 ---
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
 
 # 0001-cas-architecture-and-crate-layout
 

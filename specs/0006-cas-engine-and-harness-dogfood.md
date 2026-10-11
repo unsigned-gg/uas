@@ -5,6 +5,7 @@ tags: [engine, harness, dogfood, saga, substrate]
 priority: high
 depends_on: [0001-cas-architecture-and-crate-layout]
 ---
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
 
 # 0006-cas-engine-and-harness-dogfood
 

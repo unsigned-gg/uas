@@ -5,6 +5,7 @@ tags: [storage, rustfs, minikv, aistore, phase-6, s3]
 priority: medium
 depends_on: [0001-cas-architecture-and-crate-layout, 0004-dependency-and-licence-policy]
 ---
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
 
 # 0021-cas-storage-scope-and-phase
 
