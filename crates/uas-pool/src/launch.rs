@@ -4,16 +4,18 @@
 //! `uas-ebpfd`. [`Worker::finish`] waits for the worker and seals its receipt.
 //! No daemon socket means the worker still runs, unattested.
 
-use std::io::ErrorKind;
-use std::os::unix::process::CommandExt;
-use std::path::PathBuf;
+use std::fs::OpenOptions;
+use std::io::{ErrorKind, Write};
+use std::os::unix::process::{CommandExt, ExitStatusExt};
+use std::path::{Path, PathBuf};
 use std::process::{Child, Command, ExitStatus};
 use std::time::Duration;
 
-use uas_domain::AuditStatus;
+use uas_domain::{AuditStatus, LimitEvents, WorkerOutcome};
 use uas_ebpf::{clamp::enter_clamped_group, client::DaemonClient, EbpfError};
 
 use crate::error::PoolError;
+use crate::freezer::parse_event_counter;
 
 /// Where `uas-ebpfd` listens on a production host (spec 0014 D8).
 pub const DEFAULT_DAEMON_SOCKET: &str = "/run/uas/ebpf.sock";
@@ -61,6 +63,46 @@ pub struct WorkerAudit {
     pub cpu_cap: String,
     /// Why the worker ran without a track, when it did.
     pub degradation: Option<AuditDegradation>,
+    /// The `oom_kill` and `pids.max` counters that grew while the worker ran
+    /// (spec 0041 REQ-06). Zero when the worker had no slot cgroup.
+    pub limit_events: LimitEvents,
+    /// How the worker ended: an exit code, or killed by the OOM killer (REQ-07).
+    pub outcome: WorkerOutcome,
+}
+
+/// The slot cgroup a worker is enrolled in (spec 0041 REQ-02 and 08).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SlotCgroup {
+    /// The slot cgroup directory.
+    pub path: PathBuf,
+    /// The cumulative counters before the worker ran; a slot serves many workers.
+    pub baseline: LimitEvents,
+}
+
+/// Reads the two cumulative counters of the cgroup at `dir`. A missing or
+/// unparsable file reads as zero and is logged.
+fn read_events(dir: &Path) -> LimitEvents {
+    let read = |file: &str, key: &str| {
+        let path = dir.join(file);
+        std::fs::read_to_string(&path)
+            .ok()
+            .and_then(|t| parse_event_counter(&t, key))
+            .unwrap_or_else(|| {
+                tracing::warn!(path = ?path, "cgroup events file unreadable; counter read as zero");
+                0
+            })
+    };
+    LimitEvents {
+        oom_kill: read("memory.events", "oom_kill"),
+        pids_max_hits: read("pids.events", "max"),
+    }
+}
+
+/// The exit code of `status`; a death by signal is `128 + signal`.
+fn exit_code(status: &ExitStatus) -> i32 {
+    status
+        .code()
+        .unwrap_or_else(|| 128 + status.signal().unwrap_or(0))
 }
 
 /// The daemon connection that owns one worker's receipt window.
@@ -79,6 +121,7 @@ pub struct Worker {
     tracking: Option<Tracking>,
     cpu_cap: String,
     degradation: Option<AuditDegradation>,
+    cgroup: Option<SlotCgroup>,
 }
 
 impl Worker {
@@ -100,7 +143,19 @@ impl Worker {
             audit: AuditStatus::Unattested { dropped_events: 0 },
             cpu_cap: self.cpu_cap,
             degradation: self.degradation,
+            limit_events: LimitEvents::default(),
+            outcome: WorkerOutcome::Exited(exit_code(&status)),
         };
+        if let Some(cgroup) = &self.cgroup {
+            let now = read_events(&cgroup.path);
+            audit.limit_events = LimitEvents {
+                oom_kill: now.oom_kill.saturating_sub(cgroup.baseline.oom_kill),
+                pids_max_hits: now
+                    .pids_max_hits
+                    .saturating_sub(cgroup.baseline.pids_max_hits),
+            };
+            audit.outcome = WorkerOutcome::classify(exit_code(&status), &audit.limit_events);
+        }
         if let Some(mut tracking) = self.tracking.take() {
             let end = tracking.client.status().ok().map(|(_, dropped)| dropped);
             let grown = match (tracking.baseline, end) {
@@ -140,11 +195,29 @@ impl Worker {
 ///
 /// Only a failed spawn is an error. Every audit failure becomes a degradation,
 /// so the worker still runs.
+///
+/// With a `cgroup`, the child writes its own pid to `cgroup.procs` before
+/// `exec`, so the exec'd process already runs under the slot limits (spec 0041
+/// REQ-08, spec 0020 D3). Enrolment fails closed: if `cgroup.procs` cannot be
+/// opened or written, nothing is executed and the spawn is an error.
 pub fn spawn_worker(
     mut cmd: Command,
     cfg: &LaunchConfig,
     cpu_cap: String,
+    cgroup: Option<SlotCgroup>,
 ) -> Result<Worker, PoolError> {
+    if let Some(cgroup) = &cgroup {
+        let mut procs = OpenOptions::new()
+            .write(true)
+            .open(cgroup.path.join("cgroup.procs"))?;
+        // SAFETY: the hook runs in the child between fork and exec. It makes one
+        // write(2) of a constant to a descriptor opened before the fork and
+        // allocates nothing, which is what pre_exec requires.
+        #[allow(unsafe_code)]
+        unsafe {
+            cmd.pre_exec(move || procs.write_all(b"0"));
+        }
+    }
     // SAFETY: the hook runs in the child between fork and exec. It makes two raw
     // syscalls (setpgid, setpriority) that touch only the child, and it allocates
     // nothing, which is what pre_exec requires.
@@ -163,6 +236,7 @@ pub fn spawn_worker(
         tracking,
         cpu_cap,
         degradation,
+        cgroup,
     })
 }
 
