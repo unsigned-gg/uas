@@ -53,7 +53,7 @@ Methodology: LeanSpec. The reference copy is in `../vendor/leanspec/`.
 | [0046](0046-saga-team-and-topology-files.md) | Saga team and topology files | planned | high |
 | [0047](0047-slot-build-cache-retention.md) | Slot build cache retention | planned | high |
 | [0048](0048-licence-and-publication.md) | Licence and publication | in-progress | high |
-| [0049](0049-cpm-migration-to-saga.md) | CPM migration to saga | planned | high |
+| [0049](0049-cpm-migration-to-saga.md) | CPM migration to saga | in-progress | high |
 | [0050](0050-build-handoff-pipeline.md) | Build handoff pipeline | complete | high |
 | [0051](0051-repository-guards.md) | Repository guards | planned | high |
 | [0052](0052-spec-check-rule-set.md) | Spec-check rule set | planned | medium |
