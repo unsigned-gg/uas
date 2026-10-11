@@ -5,6 +5,7 @@ tags: [dependencies, licence, deny, pgt]
 priority: high
 depends_on: [0001-cas-architecture-and-crate-layout]
 ---
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
 
 # 0004-dependency-and-licence-policy
 

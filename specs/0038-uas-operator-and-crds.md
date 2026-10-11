@@ -5,6 +5,7 @@ tags: [k8s, operator, crd, pool, sandbox, uas]
 priority: high
 depends_on: [0001-cas-architecture-and-crate-layout, 0002-verification-gates-and-evidence, 0004-dependency-and-licence-policy, 0007-lease-rules, 0010-landlock-ruleset-and-abi-probe, 0011-network-namespace-isolation, 0012-sandbox-escape-suite, 0013-llm-gateway-socket-proxy, 0015-slot-pool-cgroup-freezer-and-gitoxide, 0022-custody-landing, 0032-reverie-access-from-a-jailed-slot, 0033-cargo-feature-policy-and-ci-matrix, 0036-slot-arbitration-across-processes, 0037-repository-migration-to-uas, 0042-cas-binary-conventions]
 ---
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
 
 # 0038-uas-operator-and-crds
 
