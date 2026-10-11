@@ -1,5 +1,5 @@
 ---
-status: planned
+status: in-progress
 created: 2026-10-10
 tags: [cargo, features, ci, gates, uas-engine]
 priority: high
@@ -62,7 +62,7 @@ This spec sets the policy. It adds no feature of its own.
 | D4 | A spec that introduces a feature must name it, say which crate declares it, and say what the default build loses without it. Specs 0026, 0028 and 0029 are retrofitted by their own authors, not here. | UAS lane w25:p1, 2026-10-10 |
 | D5 | The gate is a matrix, not `--all-features`. Each feature gets its own leg [asserted]: a combined build can pass while a single feature fails to compile alone, and `--all-features` cannot express two features that are mutually exclusive by construction. A combined leg may be added later for pairs specified to work together. | UAS lane w25:p1, 2026-10-10 |
 | D6 | The matrix runs `clippy` and `test` per feature, not the full `check`. `fmt` and `deny` are feature-independent, and `doc-test` is covered by the default leg. | UAS lane w25:p1, 2026-10-10 |
-| D7 | A declared feature with no matrix leg fails `make hygiene`. This is the enforcement half: without it the policy erodes exactly as the three current features did. | UAS lane w25:p1, 2026-10-10 |
+| D7 | A declared feature with no matrix leg fails `make hygiene`. This is the enforcement half: without it the policy erodes exactly as the one declared feature today (`cortex-grpc`; amended 2026-10-11, plan 0033 finding 4) did. | UAS lane w25:p1, 2026-10-10 |
 | D8 | `-j 2` applies to every matrix leg on a workstation, and CI keeps `JOBS=10`. The matrix multiplies build time, so the leg count is a cost the operator sees. | AGENTS.md rule 2; spec 0002 |
 
 ### Requirements (EARS)
