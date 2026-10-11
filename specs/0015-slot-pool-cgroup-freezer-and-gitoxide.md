@@ -1,5 +1,5 @@
 ---
-status: planned
+status: in-progress
 created: 2026-10-09
 tags: [pool, gitoxide, cgroup, freezer, ebpf, phase-3]
 priority: high
@@ -133,25 +133,25 @@ Each row names a command and the change that turns it red. Plan 0015 (`engineeri
 
 | Requirement | Command | Goes red when | State |
 |---|---|---|---|
-| REQ-0015-01 | `cargo nextest run -p uas-pool --test slot_lifecycle -j 2` | `max_slots` is 3, so a third `create_slot` succeeds and the ceiling case fails. | P4 adds the test |
-| REQ-0015-02 | `cargo nextest run -p uas-pool --test slot_lifecycle -j 2` | `reclaim_slot` skips `reset_clean`, so the modified `README.md` stays and the restore case fails. | P4 adds the test |
-| REQ-0015-03 | `cargo nextest run -p uas-pool freeze_writes_ -j 2` | `CgroupFreezer::freeze` no longer writes `1` to `cgroup.freeze`. | P2 adds the test |
-| REQ-0015-03, live | `make pool-live-test` | `freeze` writes nothing, so `cgroup.events` never reads `frozen 1`. | BLOCKED: the target is not in the `Makefile` yet, and the run needs a delegated cgroup v2 subtree (P6) |
-| REQ-0015-04 | `cargo nextest run -p uas-pool --test slot_lifecycle -j 2` | `pre_exec` no longer calls `enter_clamped_group`, so the nice 19 case fails. | P4 adds the test |
-| REQ-0015-04, live | `make pool-live-test` | The socket names no daemon, so the receipt is `Unattested`, not `Attested`. | BLOCKED: the target is not in the `Makefile` yet, and the run needs root and a loaded eBPF object (P7) |
+| REQ-0015-01 | `cargo nextest run -p uas-pool --test slot_lifecycle --build-jobs 2` | `max_slots` is 3, so a third `create_slot` succeeds and the ceiling case fails. | P4 adds the test |
+| REQ-0015-02 | `cargo nextest run -p uas-pool --test slot_lifecycle --build-jobs 2` | `reclaim_slot` skips `reset_clean`, so the modified `README.md` stays and the restore case fails. | P4 adds the test |
+| REQ-0015-03 | `cargo nextest run -p uas-pool freeze_writes_ --build-jobs 2` | `CgroupFreezer::freeze` no longer writes `1` to `cgroup.freeze`. | P2 adds the test |
+| REQ-0015-03, live | `make pool-live-test` | `freeze` writes nothing, so `cgroup.events` never reads `frozen 1`. | `make pool-live-test` landed 2026-10-11 (PR 209) and exits 0 on ceres with no `skipped:` line; the row runs there. |
+| REQ-0015-04 | `cargo nextest run -p uas-pool --test slot_lifecycle --build-jobs 2` | `pre_exec` no longer calls `enter_clamped_group`, so the nice 19 case fails. | P4 adds the test |
+| REQ-0015-04, live | `make pool-live-test` | The socket names no daemon, so the receipt is `Unattested`, not `Attested`. | BLOCKED: `make pool-live-test` runs no daemon case; the daemon leg is plan 0015 P7, which needs root and a loaded eBPF object. |
 | REQ-0015-05 | pending P9 | No row until the reword lands. | Waits on the operator (plan 0015 P9) |
-| REQ-0015-06 | `cargo nextest run -p uas-pool reap_ -j 2`, `cargo nextest run -p uas-pool --test reclaim -j 2` and `cargo nextest run -p uas-pool --test slot_lifecycle -j 2` | `reap` keeps an empty body, or `reclaim_slot` skips `reap` (the worker group lives on) or `reset_clean` (the dirty files stay). | P2 adds `reap_`, P3 adds `reclaim`, P4 adds `slot_lifecycle` |
-| REQ-0015-07 | `cargo nextest run -p uas-pool signal_group_ -j 2` | `SignalFreezer` signals the pid and not its group, so the forked child is not stopped. | P2 adds the test |
-| REQ-0015-08 | `cargo nextest run -p uas-pool --test slot_lifecycle -j 2` | The worker with no daemon socket fails, or its receipt is not `Unattested` with `AuditDegradation::NoSocket`. | P4 adds the test |
+| REQ-0015-06 | `cargo nextest run -p uas-pool reap_ --build-jobs 2`, `cargo nextest run -p uas-pool --test reclaim --build-jobs 2` and `cargo nextest run -p uas-pool --test slot_lifecycle --build-jobs 2` | `reap` keeps an empty body, or `reclaim_slot` skips `reap` (the worker group lives on) or `reset_clean` (the dirty files stay). | P2 adds `reap_`, P3 adds `reclaim`, P4 adds `slot_lifecycle` |
+| REQ-0015-07 | `cargo nextest run -p uas-pool signal_group_ --build-jobs 2` | `SignalFreezer` signals the pid and not its group, so the forked child is not stopped. | P2 adds the test |
+| REQ-0015-08 | `cargo nextest run -p uas-pool --test slot_lifecycle --build-jobs 2` | The worker with no daemon socket fails, or its receipt is not `Unattested` with `AuditDegradation::NoSocket`. | P4 adds the test |
 | All | `cargo test -p uas-pool -j 2` | Any `uas-pool` test fails. | Green at `1bf73c5` [reported: plan 0015 finding 1] |
 
 ```bash
-cargo nextest run -p uas-pool freeze_writes_ -j 2
-cargo nextest run -p uas-pool signal_group_ -j 2
-cargo nextest run -p uas-pool reap_ -j 2
-cargo nextest run -p uas-pool --test reclaim -j 2
-cargo nextest run -p uas-pool --test slot_lifecycle -j 2
-# make pool-live-test  (REQ-0015-03 and REQ-0015-04 live; BLOCKED)
+cargo nextest run -p uas-pool freeze_writes_ --build-jobs 2
+cargo nextest run -p uas-pool signal_group_ --build-jobs 2
+cargo nextest run -p uas-pool reap_ --build-jobs 2
+cargo nextest run -p uas-pool --test reclaim --build-jobs 2
+cargo nextest run -p uas-pool --test slot_lifecycle --build-jobs 2
+# make pool-live-test  (REQ-0015-03 live; REQ-0015-04 live stays BLOCKED on P7)
 cargo test -p uas-pool -j 2
 ```
 
