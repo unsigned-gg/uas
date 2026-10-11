@@ -6,7 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+
 ### Added
+
+- Spec 0027, the pi harness runner: UAS runs pi (`@earendil-works/pi-coding-agent`) in RPC mode inside a jailed slot, with a cleared env, per-role profiles, an in-slot shim to the spec 0013 LLM socket, and a `uas_ask` tool that relays a worker's question to the caller. The MCP surface and a `uas serve` daemon get their own spec.
 - Spec 0056, agent roster and tooling surface, with 13 EARS requirements: the persona roster (role, model, tool grants, write scope, the agent-file rules), the skills roster and the skill-versus-runbook rule, the Makefile's contract targets mapped to their owning specs, a deterministic `tooling-check` in `hygiene` (persona, skill, Makefile and teams.toml defects block a merge; the prompt linter stays on request), and the rule for adding a target. Findings: AGENTS.md and spec 0002 list five `hygiene` members where the Makefile has eight; the linter's banned-string list file exists in neither repo.
 - Spec 0057, work items and approval routes, with 16 EARS requirements: the work-item template and its Linear mapping, the `tasks/` non-binding keys (`read_paths` and `write_paths` are dropped silently by blackwall 1.2.0, reported), the approval routes as rows reconciled with land-on-green and the gated classes, the CODEOWNERS map with MAINTAINERS parity, and the `engineering/` tree's purpose and retention. Ruled by citation: a lane changes branch protection only on Christian's per-item go. Proposed for Christian: whether `suggestions.md` stays until the launch checklist and the fate of two stale files under `engineering/`.
 - Spec 0052 wave 6 (plan 0052 P9): `spec-check` warns when a plan package section lacks persona, files, done-when or red-first (R14, spec 0050 REQ-01), naming the plan, line and field; packages headed DONE or marked BLOCKED are exempt; the real tree prints no R14 warning (stripping every done-when from one plan draws one warning per open package; one stripped line draws one); four tests (xtask 105 to 109). Promotion to an error is plan 0052 P12, after a clean week.
@@ -95,6 +98,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Spec 0007, the lease rules: one live lease per slot, only the lease token renews a lease, a renewal extends by at least one second, and a draining slot keeps its worktree. `cas-domain` adds `check_slot_free`, `Lease::holds_slot_at`, `LeaseToken::matches`, and the errors `SlotLeased` and `TokenMismatch`.
 
 ### Changed
+
 - Spec 0050 wave 3 (plan 0050 P5): spec 0050 is complete in all three status copies after its Test block ran green (the registry-parity row now backed by spec 0052's R13; a planted registry mismatch is named); its P4 box points at spec 0052 R14 and plan 0052 P9; plan 0042 P8 regains the done-when line its landed-fact rewrite had dropped.
 - Spec 0052 wave 5, second half (plan 0052 P8): spec 0052 records plan link resolution (R12) and the status-parity error (R13) as live in PR #188 with the checker's message texts, the measured 0 of 52 mismatches, the first-row rule, Test rows against the real checker (a planted broken plan link, a planted registry mismatch, a renamed Status header), and the ticked boxes for P6 and P7; the tree prints only the two length warnings.
 - Spec 0053 wave 4 (plan 0053 P8): `RELEASING.md` points at spec 0053 for the CHANGELOG rule instead of restating it, so the two cannot drift (REQ-0053-15).
@@ -128,12 +132,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `cas-sandbox`, `cas-pool` and `cas-ebpf` deny `unsafe` instead of forbidding it. A block opts in with `#[allow(unsafe_code)]` and a `// SAFETY:` comment, which clippy enforces. Spec 0001 and spec 0004 record this ruling, the BPF program licence (`Dual MIT/GPL`, program object only) and the sudo `make ebpf-test` decision.
 
 ### Deprecated
+
 - Spec 0049 wave 1 (plan 0049 P1): the `uas wave` subcommands, `uas harness run --show-cpm`, `--wave` and `--max-concurrency`, the two `SagaFlowCoordinator` methods and the two `HarnessReport` fields are deprecated in favour of saga (spec 0049); `--help` and a single stderr line say so (the `--max-concurrency` notice fires only for a value other than its default of 3), and behaviour is unchanged until the removal PR after saga's parity step.
 
 ### Removed
+
 - Spec 0048 wave 5 (plan 0048 P11): the vendored `vendor/cortex`, `vendor/saga` and `vendor/soma` contracts (55 files) are gone; `crates/uas-engine/build.rs` reads `.contracts/` from `make fetch-contracts` (the pinned fetch) and a missing contract fails the `cortex-grpc` build with `run cargo xtask fetch-contracts`; `vendor/leanspec` stays with its LICENSE. No CI job builds `cortex-grpc` today and the runners hold no credential for the private contract repos, so a CI fetch is deferred until one does.
 
 ### Fixed
+
 - Spec 0051 wave 2 (plan 0051 P4): the lefthook commit hook fails closed when the gitleaks binary is missing, printing the install hint, instead of skipping the secret scan with a notice; AGENTS.md says lefthook runs gitleaks.
 - Spec 0051 wave 1 (plan 0051 P1, P2): guard-main-push now denies `git -C <dir> push` to main, every push to `development` (including force and `HEAD:` forms) and a bare `git push` while main or development is checked out, and no longer denies a branch name that merely contains `main`; after the critic round it also covers `HEAD` on a protected branch, quoted refs, `NAME=value` and `sudo` prefixes, `--all`, `--mirror` and `--repo=` (31 test rows; `--repo origin` with a space is not parsed); ci-gate wraps `make check` in `timeout -k 10 840` and fails closed with a one-line reason on a timeout (exit 124 or 137) or any failure, so a slow or hung check never lets a push through (`CI_GATE_TIMEOUT` for tests).
 - The cas-ebpf clamp test measures against its own nice value, so a niced parent no longer fails the control, and it fails when it runs at nice 19.
@@ -150,14 +157,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [0.1.0] - 2026-10-08
 
 ### Added
+
 - The repository, generated from `cerebral-work/rust-monorepo-template` (template `main` at `1366ed9`) and renamed with `make new-repo NAME=cas`: the crates `cas-domain` and `cas-cli`, the `xtask`, the gate targets, CI, moon, lefthook, the specs and the agent files.
 - Eight placeholder crates from the research design: `cas-engine`, `cas-pool`, `cas-sandbox`, `cas-ebpf`, `cas-router`, `cas-acp`, `cas-storage` and `cas-deck`. Each compiles and has a README that names its research section, phase and open questions.
 - Spec 0001 `cas-architecture-and-crate-layout` replaces the template architecture spec. It pins the nine research crates plus `cas-cli`, the downward dependency rule, the invariants, the failure matrix, the integration edges and the open gaps. Spec 0004 lists the evaluated dependencies and the two copyleft exclusions. README, AGENTS.md, the docs index and `engineering/` describe CAS.
 - `cas-domain`: the slot state machine, leases with a `LeaseLedger` port, evidence tiers and envelopes, plus a `cas demo` that walks a slot through its lifecycle.
 
 ### Changed
+
 - The promotion PR from `development` to `main` now merges on green CI, by operator ruling on 2026-10-08. AGENTS.md, CONTRIBUTING.md, the release skill and spec 0003 say so. Spec 0003 also names the real required check `rust / cargo`.
 
 ### Fixed
+
 - The `release` workflow installs a pinned `gh` 2.101.0 before release-plz. Before this, every push to `main` failed with `gh: command not found`, and no tag or release was made. The release-plz step now runs only on `main`.
 - The `release` job gets `pull-requests: read`. release-plz lists the pull requests of the released commit, and without this scope the call failed with 403 on `main`.

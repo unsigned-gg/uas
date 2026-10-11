@@ -32,6 +32,7 @@ Methodology: LeanSpec. The reference copy is in `../vendor/leanspec/`.
 | [0024](0024-estate-saga-cpm-and-agent-sprint-wave-strategy.md) | Estate saga CPM and agent sprint wave strategy | complete | high |
 | [0025](0025-wave-execution-on-the-custody-chain.md) | Wave execution on the custody chain | planned | high |
 | [0026](0026-cortex-pool-member-adapter.md) | Cortex pool-member adapter | planned | high |
+| [0027](0027-pi-harness-runner.md) | pi harness runner | planned | high |
 | [0028](0028-branchless-crdt-worktrees.md) | Branchless CRDT worktrees | planned | high |
 | [0029](0029-agent-identity-and-on-behalf-of-delegation.md) | Agent identity and on-behalf-of delegation | planned | high |
 | [0030](0030-a2a-multi-agent-interop.md) | A2A multi-agent interop | planned | high |
