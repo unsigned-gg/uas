@@ -155,6 +155,14 @@ pub trait Freezer: Send + Sync {
     fn limit_events(&self) -> Option<LimitEvents> {
         None
     }
+
+    /// Kill every worker process in this slot and wait up to `timeout` for the slot to empty.
+    ///
+    /// Unlike [`reclaim_cgroup`], this removes no directory: the slot serves the next worker.
+    fn reap(&self, timeout: Duration) -> Result<(), FreezerError> {
+        let _ = timeout;
+        Ok(())
+    }
 }
 
 /// Resolves the current process's cgroup path relative to `/sys/fs/cgroup`.
@@ -668,6 +676,73 @@ impl Freezer for CgroupFreezer {
     fn limit_events(&self) -> Option<LimitEvents> {
         Some(self.read_limit_events())
     }
+
+    /// Thaws, writes `1` to `cgroup.kill` and polls `cgroup.events` for `populated 0`.
+    ///
+    /// Removes no directory (spec 0015 finding 6). A missing `cgroup.kill` or
+    /// `cgroup.events` is not an error. A cgroup still populated at `timeout` returns
+    /// [`FreezerError::ReclaimTimeout`].
+    fn reap(&self, timeout: Duration) -> Result<(), FreezerError> {
+        // A frozen group must run to take the kill; a failed thaw must not stop the kill.
+        let _ = self.unfreeze();
+
+        let kill_path = self.slot_cgroup.join("cgroup.kill");
+        match OpenOptions::new()
+            .write(true)
+            .open(&kill_path)
+            .and_then(|mut f| f.write_all(b"1\n"))
+        {
+            Ok(()) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => {
+                return Err(FreezerError::Io {
+                    path: kill_path,
+                    source: e,
+                })
+            }
+        }
+
+        let events_path = self.slot_cgroup.join("cgroup.events");
+        let start = Instant::now();
+        loop {
+            match fs::read_to_string(&events_path) {
+                Ok(content) => {
+                    if !content.lines().any(|l| l.trim() == "populated 1") {
+                        return Ok(());
+                    }
+                }
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+                Err(e) => {
+                    return Err(FreezerError::Io {
+                        path: events_path,
+                        source: e,
+                    })
+                }
+            }
+            if start.elapsed() >= timeout {
+                return Err(FreezerError::ReclaimTimeout { path: events_path });
+            }
+            thread::sleep(Duration::from_millis(5));
+        }
+    }
+}
+
+/// Signals the process group led by `pid`, so a worker's children stop and resume with it.
+///
+/// `kill_process_group` reaches only a process that leads its own group; on `ESRCH` the pid
+/// is signalled alone. The caller's own group is never signalled: when the pid's group is
+/// ours, only the pid is.
+fn signal_worker_group(pid: rustix::process::Pid, sig: rustix::process::Signal) {
+    use rustix::process::{getpgid, getpgrp, kill_process, kill_process_group};
+
+    if getpgid(Some(pid)).is_ok_and(|pgid| pgid == pid && pgid != getpgrp()) {
+        match kill_process_group(pid, sig) {
+            Ok(()) => return,
+            Err(rustix::io::Errno::SRCH) => {}
+            Err(_) => return,
+        }
+    }
+    let _ = kill_process(pid, sig);
 }
 
 /// Fallback freezer implementing process suspension via POSIX signals (SIGSTOP / SIGCONT).
@@ -716,7 +791,7 @@ impl Freezer for SignalFreezer {
             if raw_pid > 1 {
                 let proc_pid = rustix::process::Pid::from_raw(raw_pid);
                 if let Some(pid_ref) = proc_pid {
-                    let _ = rustix::process::kill_process(pid_ref, rustix::process::Signal::STOP);
+                    signal_worker_group(pid_ref, rustix::process::Signal::STOP);
                 }
             }
         }
@@ -736,7 +811,7 @@ impl Freezer for SignalFreezer {
             if raw_pid > 1 {
                 let proc_pid = rustix::process::Pid::from_raw(raw_pid);
                 if let Some(pid_ref) = proc_pid {
-                    let _ = rustix::process::kill_process(pid_ref, rustix::process::Signal::CONT);
+                    signal_worker_group(pid_ref, rustix::process::Signal::CONT);
                 }
             }
         }
@@ -777,6 +852,29 @@ impl Freezer for SignalFreezer {
 
     fn configure_limits(&self, _limits: &ResourceLimits) -> Result<CpuCap, FreezerError> {
         Ok(CpuCap::Uncapped)
+    }
+
+    /// Sends `CONT` then `KILL` to each enrolled group, clears the pid list and thaws.
+    fn reap(&self, timeout: Duration) -> Result<(), FreezerError> {
+        let _ = timeout;
+        let mut pids = self
+            .pids
+            .lock()
+            .map_err(|_| FreezerError::Signal("lock poisoned".to_string()))?;
+
+        for &pid in pids.iter() {
+            let raw_pid = pid as i32;
+            if raw_pid > 1 {
+                if let Some(pid_ref) = rustix::process::Pid::from_raw(raw_pid) {
+                    signal_worker_group(pid_ref, rustix::process::Signal::CONT);
+                    signal_worker_group(pid_ref, rustix::process::Signal::KILL);
+                }
+            }
+        }
+
+        pids.clear();
+        self.state.store(STATE_THAWED, Ordering::SeqCst);
+        Ok(())
     }
 }
 
