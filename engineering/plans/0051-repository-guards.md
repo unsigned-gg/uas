@@ -1,17 +1,17 @@
 <!-- SPDX-License-Identifier: CC-BY-4.0 -->
 # Build plan: 0051-repository-guards
 
-Spec: `specs/0051-repository-guards.md` (status planned). Base: `origin/development` `8d80119`.
-Planner: `uas-planner`, 2026-10-11. Every path below was read in a worktree cut from that base.
+Spec: `specs/0051-repository-guards.md` (status planned). Base: `origin/development` `2a3d442` (the plan was first cut at `8d80119`; the two merges since touch only specs 0052 and 0053, the CHANGELOG and the spec index, none of the files this plan governs).
+Planner: `uas-planner`, 2026-10-11. Every path below was read in a worktree on that base, and the checks quoted as verified were re-run there after the rebase.
 Tiers: `verified` = I ran or read it at the path named; `reported` = the spec says it; `asserted` = my judgement.
 
 ## Findings the builders must know
 
 1. **The spec's concurrency test row cannot print 1 [verified]:** `grep -c 'cancel-in-progress: ${{ github.event_name == .pull_request. }}' .github/workflows/ci.yml` prints `0` at this base, because grep reads `${{` as a pattern, not text. With `grep -cF` and the quote written out it prints `1`; the control (the line removed) prints `0`. The standing checks below use the `-F` form.
-2. **Line numbers moved [verified]:** the sentence "Subjects follow Conventional Commits" in spec 0003 is on line 46, not 45. Spec 0005 lists the `ci.yml` jobs on line 82. Builders match by text, not by line.
+2. **Line numbers moved [verified at `2a3d442`]:** the sentence "Subjects follow Conventional Commits" in spec 0003 is on line 46, not 45. Spec 0005 lists the `ci.yml` jobs on line 82. Builders match by text, not by line.
 3. **The hook docs go stale and the spec's Plan does not list them [verified]:** `.claude/README.md` line 15 says the guard denies `main` or `master`, and lines 20 to 26 give a loop for the tests. `.claude/settings.json` line 24 repeats the "main/master" description. P1 and P3 fix them.
 4. **A label added after the PR opens never reaches a re-run [asserted, from how GitHub re-runs a job: it replays the original event payload]:** a fork-gate that reads `github.event.pull_request.labels` stays red after the maintainer labels the PR. The job must read the labels from the API at run time. Adding `labeled` to the `pull_request` types would work but re-runs every job on every label, and `labeler.yml` labels every PR. P5 reads the API and the maintainer re-runs the one job.
-5. **The label is not bound to a head SHA [verified by reading the ruled text; the consequence is asserted]:** D8 and REQ-0051-15 ask for a label. A fork author who pushes again after the label keeps a green fork-gate on unreviewed code. D8's first sentence (a maintainer pushes the head to a branch here, then CI runs there) is the control that is bound to the SHA. P5 builds the label as ruled. the operator decides whether the job must also find a branch here whose head equals the PR head. See Open.
+5. **The label alone is not bound to a head SHA, and the operator ruled on it [reported: AskUserQuestion, lane w25:p1, 2026-10-11 about 04:10Z, "Label plus head SHA"]:** the gate passes only when the label is present and a maintainer comment names the PR's current head SHA; a new push turns it red. This overrides the label-only text of D8 and REQ-0051-15, which P6 amends in spec 0051. P5 builds the ruled form.
 6. **No workflow here uses a hosted runner [verified]:** `grep -rn ubuntu .github/workflows` prints nothing. Every job runs in the self-hosted group `ent-default`. Whether the organisation has hosted minutes is `asserted` unknown. A required job that never gets a runner leaves every PR pending, so P7 waits for one green run first (the pattern of spec 0005 D2 for `ebpf-live`).
 7. **Making `fork-gate` required changes three texts together [verified]:** the branch protection (the operator), the spec 0003 protection table, and `want=` in spec 0050's Test row 4 (`secrets,rust / cargo,cargo-deny,hygiene,ebpf-live`, spec 0050 line 177). Until the protection changes, the table row says "no" so that row 4 stays true. P6 writes the row that way.
 8. **D7 can block builders [asserted]:** after P4 a commit on a host whose PATH lacks gitleaks fails. Here `gitleaks` resolves from a mise directory on the interactive PATH. The integrator confirms that builder shells have it, or the builder commits with `LEFTHOOK=0` and says why in the verdict (D2 allows it).
@@ -51,7 +51,7 @@ Tiers: `verified` = I ran or read it at the path named; `reported` = the spec sa
 
 ## Standing checks for the requirements that hold today
 
-Run from the repository root of any worktree. Today (verified at `8d80119`) the output reads as the `want` words say; each control goes red when its text is damaged.
+Run from the repository root of any worktree. Today (verified at `2a3d442`) the output reads as the `want` words say; each control goes red when its text is damaged.
 
 ```bash
 set -u
@@ -88,10 +88,10 @@ P3 runs in wave 1 although it runs the other two scripts: each builder's worktre
 ### P1: guard-main-push (wave 1)
 - **Persona:** `uas-builder`.
 - **Files, all exist [verified, `git ls-files`]:** `.claude/hooks/guard-main-push.sh` (match on lines 7 and 8, deny text on line 9, header on line 3), `.claude/hooks/tests/test-guard-main-push.sh` (rows on lines 30 to 39), `.claude/settings.json` (the `description` on line 24 only).
-- **Change, tests first:** add ten rows after line 39 in the existing `t <deny|allow> <branch> <command> <description>` form. Deny: `feat` `git -C /x push origin main`; `feat` `git push origin development`; `feat` `git push --force origin development`; `development` `git push`; `development` `git -C . push`; `development` `git push origin`. Allow: `feat` `git push origin feat/main-menu`; `feat` `git -C /x push origin feat/x`; `development` `git push origin feat/x`; `feat` `git -C /x push origin development # allow-direct-push`. The suite then holds 20 rows.
+- **Change, tests first:** line 36 of the test, `t allow feat 'git push origin development' 'push development'`, encodes the behaviour D5 removes. Flip it to `t deny feat 'git push origin development' 'push development'`. Then add nine rows after line 39 in the existing `t <deny|allow> <branch> <command> <description>` form. Deny: `feat` `git -C /x push origin main`; `feat` `git push --force origin development`; `development` `git push`; `development` `git -C . push`; `development` `git push origin`. Allow: `feat` `git push origin feat/main-menu`; `feat` `git -C /x push origin feat/x`; `development` `git push origin feat/x`; `feat` `git -C /x push origin development # allow-direct-push`. The suite then holds 10 + 9 = 19 rows, and the flipped row is one of the 19.
 - **Change, hook:** treat a push as ci-gate does (`ci-gate.sh` line 8: `git`, optional option words including `-C dir`, then `push` as a whole word). Deny when a word after `push` names `main`, `master` or `development` as a whole ref name, plain, with a `refs/heads/` prefix, after a `+` or after a `:` (so `HEAD:main` still denies). A name that only contains `main`, such as `feat/main-menu` or `main-menu`, is not a match. Deny a push with no refspec (bare, or the remote name alone) when the checked-out branch is `main` or `development`; when `-C dir` is present, read the branch of `dir`, else of the working directory. Keep the `# allow-direct-push` early exit and the single deny JSON. Say `main`, `master` or `development` in the deny text. Update the header comment on line 3 and the `settings.json` description to name `development`.
-- **Done-when:** `bash .claude/hooks/tests/test-guard-main-push.sh | tail -1 | grep -qx '20 passed, 0 failed' && bash .claude/hooks/tests/test-guard-main-push.sh >/dev/null && jq -e . .claude/settings.json >/dev/null` exits 0. These are the Test rows for REQ-0051-02, 03 and 04.
-- **Red-first:** add the ten rows and run the suite before the hook edit: it must print seven `FAIL` lines (the six new deny rows and the `feat/main-menu` allow row) and exit 1; the other three new rows and the ten old ones stay green. The `FAIL` set is read from lines 7 and 8 for the `development` and remote-only rows [asserted]; the `-C main`, `development` and `feat/main-menu` outcomes I ran [verified, spec F3]. After the fix, restore the old line 7 in a scratch copy of the hook and watch at least one of the ten rows fail again.
+- **Done-when:** `bash .claude/hooks/tests/test-guard-main-push.sh | tail -1 | grep -qx '19 passed, 0 failed' && bash .claude/hooks/tests/test-guard-main-push.sh >/dev/null && jq -e . .claude/settings.json >/dev/null` exits 0. These are the Test rows for REQ-0051-02, 03 and 04.
+- **Red-first:** flip line 36 and add the nine rows, then run the suite before the hook edit: it must print seven `FAIL` lines (the flipped `push development` row, the five new deny rows, and the `feat/main-menu` allow row) and exit 1; the other three new rows and the nine unchanged old rows stay green. The `FAIL` set is read from lines 7 and 8 for the `development` and remote-only rows [asserted]; the `-C main`, `development` and `feat/main-menu` outcomes I ran [verified, spec F3]. After the fix, restore the old line 7 in a scratch copy of the hook and watch at least one of the seven rows fail again.
 
 ### P2: ci-gate timeout (wave 1)
 - **Persona:** `uas-builder`.
@@ -114,7 +114,7 @@ P3 runs in wave 1 although it runs the other two scripts: each builder's worktre
 - **Files, all exist [verified]:** `lefthook.yml` (gitleaks command on lines 15 to 23, the regex on line 9), `AGENTS.md` (line 44, item 11).
 - **Change, lefthook:** in the missing-binary branch print to stderr that gitleaks is not installed, name the install step with the version CI pins (8.30.1, `ci.yml` line 37) and the release URL `https://github.com/gitleaks/gitleaks/releases/tag/v8.30.1`, then `exit 1`. Rewrite the comment on lines 16 and 17 (it says only a missing binary is tolerated). Add a comment above the `conventional` command: spec 0051 owns the subject regex. Leave the regex itself unchanged. ASCII only.
 - **Change, AGENTS.md:** item 11 reads "Enforced: the lefthook pre-commit stage and the CI `secrets` job run gitleaks." (finding in spec F13: `make` does not.)
-- **Done-when:** the script below, then the standing check for rows 08 and 09. It prints `rc=0` for the control, a non-zero `rc` plus one or more hint lines for the missing binary, and a non-zero `rc` for the staged key. Then `grep -c 'run gitleaks' AGENTS.md` and `grep -c '`make` and lefthook' AGENTS.md` print `1` and `0`.
+- **Done-when:** the script below, then the standing check for rows 08 and 09. It prints `rc=0` for the control, a non-zero `rc` plus one or more hint lines for the missing binary, and a non-zero `rc` for the staged key. Then `grep -cF '`make` and lefthook run gitleaks' AGENTS.md` and `grep -cF 'pre-commit stage and the CI `secrets` job run gitleaks' AGENTS.md` print `0` and `1`; today they print `1` and `0` [verified].
 
 ```bash
 set -u
@@ -126,38 +126,54 @@ echo "REQ-11, gitleaks off PATH: rc=$rc want non-zero; hint lines: $(printf '%s'
 printf 'aws_access_key_id = "%s%s"\nkey="%s%s"\n' AKIAIOSFODNN7 EXAMPLF ghp_ abcdefghijklmnopqrstuvwxyz0123456789 > leak.txt; git add leak.txt
 lefthook run pre-commit --force --commands gitleaks >/dev/null 2>&1; echo "REQ-10, staged fake key: rc=$? want non-zero"
 ```
-- **Red-first:** run the script on the unedited tree: the REQ-11 line prints `rc=0` and `0` hint lines [verified at this base; the edited copy printed `rc=1` and `1`]. After the edit, delete the `exit 1` in a scratch copy and the REQ-11 line goes back to `rc=0`.
+- **Red-first:** run the script on the unedited tree: the REQ-11 line prints `rc=0` and `0` hint lines [verified at this base; the edited copy printed `rc=1` and `1`]. After the edit, delete the `exit 1` in a scratch copy and the REQ-11 line goes back to `rc=0`. For the AGENTS.md legs, restore the old sentence in a scratch copy and the pair reads `1` and `0` again.
 
 ### P5: the fork-gate job (wave 2)
 - **Persona:** `uas-builder`.
 - **Files:** `.github/workflows/ci.yml` (exists; header comment on line 2, new job after `ebpf-live`).
-- **Change:** a job `fork-gate` with `name: fork-gate`, no `if:`, `runs-on: ubuntu-24.04`, `timeout-minutes: 5`, `permissions: {contents: read, pull-requests: read}` and one step. The step takes `GH_TOKEN` (`github.token`), `EVENT` (`github.event_name`), `HEAD_REPO` (`github.event.pull_request.head.repo.full_name`), `BASE_REPO` (`github.repository`) and `PR` (`github.event.pull_request.number`) from the environment and runs, under `set -euo pipefail`: exit 0 when `EVENT` is not `pull_request` or `HEAD_REPO` equals `BASE_REPO`; else read the PR labels with `gh api "repos/$BASE_REPO/issues/$PR/labels" --jq '.[].name'`, exit 0 when `grep -qxF fork-ci-approved` finds the label, else print an `::error::` line (a maintainer mirrors the head to a branch here, applies `fork-ci-approved`, re-runs this job) and exit 1. An empty `HEAD_REPO` (a deleted fork) is a fork and fails. Do not write the text `head.repo.full_name == github.repository` anywhere in the job (it would raise the guard count above 6). Do not add `labeled` to the triggers (finding 4). Rewrite the header comment on line 2 to list the required checks and say `fork-gate` becomes one once public. Keep every action pinned; this job uses none.
-- **Done-when:** the script below prints `0 1 0 0 1 1` on its first line and a count of at least 1 on its second, and the standing checks keep the guard count at 6 and the concurrency count at 1.
+- **Form chosen: a maintainer comment, not a mirror branch [reported ruling: label plus head SHA, recorded in a comment the job reads, or a mirror branch].** The comment needs one read call and no push. A mirror branch needs a push by a maintainer and a ref lookup, and it runs the fork's code on self-hosted runners, which is the thing the guard exists to stop. The comment is written by a maintainer with `gh pr comment <N> --body "fork-ci-approved: <40-character head sha>"`. The body is exactly that one line (trailing white space allowed). The job accepts a comment only when `author_association` is `OWNER` or `MEMBER`, so the fork author cannot approve their own PR.
+- **Change:** a job `fork-gate` with `name: fork-gate`, no `if:`, `runs-on: ubuntu-24.04`, `timeout-minutes: 5`, `permissions: {contents: read, pull-requests: read}` and one step. The step takes `GH_TOKEN` (`github.token`), `EVENT`, `HEAD_REPO` (`github.event.pull_request.head.repo.full_name`), `BASE_REPO` (`github.repository`) and `PR` (`github.event.pull_request.number`) from the environment and runs, under `set -euo pipefail`: exit 0 when `EVENT` is not `pull_request` or `HEAD_REPO` equals `BASE_REPO`. Otherwise read three things from the API, each into a variable first: the label names (`issues/$PR/labels`), the current head SHA (`pulls/$PR`, field `.head.sha`; never the event payload, which a re-run replays stale), and the comments (`issues/$PR/comments`, filtered by `jq` to maintainer comments whose trimmed body equals `fork-ci-approved: <current head sha>`). Pass only when the label `fork-ci-approved` is present (`grep -xF ... >/dev/null`, not `grep -q`, and not a pipe from `gh`, so no SIGPIPE under `pipefail`) and the filtered output is non-empty. Else print an `::error::` line that names the exact comment to post and exit 1. A failed API call fails the job (closed). A deleted fork (empty `HEAD_REPO`) is a fork. A new push changes the head SHA, so the old comment no longer matches and the gate is red again; a maintainer re-runs the one job after commenting. Do not write the text `head.repo.full_name == github.repository` in the job (it would raise the guard count above 6). Do not add `labeled` to the triggers (finding 4). Rewrite the header comment on line 2 to list the required checks and say `fork-gate` becomes one once public. This job uses no action.
+- **What this does not do, stated plainly:**
+  - Until P7 lands, a fork PR with no label gets a red `fork-gate` that does not block the merge. The five required checks skip on a fork PR and GitHub counts a skipped job as passed (spec F14, asserted), so the F14 hole stays open until P7 makes `fork-gate` required.
+  - Nothing in P5 gives a fork PR secrets or runs its code. The job runs on the `pull_request` event, whose token for a fork is read-only and holds no repository secrets. It uses no action, checks out nothing, and reads only labels, the head SHA and comments through the API.
+- **Done-when:** the script below prints `0 1 1 1 0 1 1 0 1 1` on its first line and a count of at least 1 on its second, and the standing checks keep the guard count at 6 and the concurrency count at 1.
 
 ```bash
 set -u
-c=.github/workflows/ci.yml; d=$(mktemp -d)
-run=$(yq '.jobs."fork-gate".steps[0].run' $c); mkdir $d/stub; printf '#!/bin/sh\nprintf "%%s" "$FAKE_LABELS"\n' > $d/stub/gh; chmod +x $d/stub/gh
-g() { env PATH="$d/stub:$PATH" EVENT="$1" HEAD_REPO="$2" BASE_REPO=o/r PR=7 FAKE_LABELS="$3" bash -c "$run" >/dev/null 2>&1; echo -n "$? "; }
-g push '' ''; g pull_request f/r ''; g pull_request f/r 'x
-fork-ci-approved'; g pull_request o/r ''; g pull_request '' ''; g pull_request f/r 'fork-ci-approved-not'; echo
+c=.github/workflows/ci.yml; d=$(mktemp -d); H=aaaa1111; L=fork-ci-approved
+run=$(yq '.jobs."fork-gate".steps[0].run' $c); mkdir $d/stub
+cat > $d/stub/gh <<'EOS'
+#!/bin/sh
+case "$*" in
+  *labels*) printf '%s' "$FAKE_LABELS" | jq -Rn '[inputs|select(length>0)|{name:.}]' -R ;;
+  *comments*) printf '%s' "$FAKE_COMMENTS" ;;
+  *pulls*) printf '{"head":{"sha":"%s"}}' "$FAKE_HEAD" ;;
+esac
+EOS
+chmod +x $d/stub/gh
+ok="[{\"author_association\":\"MEMBER\",\"body\":\"$L: $H\n\"}]"
+old="[{\"author_association\":\"MEMBER\",\"body\":\"$L: bbbb2222\"}]"
+none="[{\"author_association\":\"NONE\",\"body\":\"$L: $H\"}]"
+g() { env PATH="$d/stub:$PATH" EVENT="$1" HEAD_REPO="$2" BASE_REPO=o/r PR=7 FAKE_LABELS="$3" FAKE_COMMENTS="$4" FAKE_HEAD=$H bash -c "$run" >/dev/null 2>&1; echo -n "$? "; }
+g push '' '' '[]'; g pull_request f/r '' '[]'; g pull_request f/r $L '[]'; g pull_request f/r '' "$ok"; g pull_request f/r $L "$ok"
+g pull_request f/r $L "$old"; g pull_request f/r $L "$none"; g pull_request o/r '' '[]'; g pull_request '' '' '[]'; g pull_request f/r $L-not "$ok"; echo
 grep -c 'fork-gate' $c
 ```
-  The cases are, in order: a push, a fork PR with no label, a fork PR with the label, a same-repository PR, a deleted fork, a fork PR with a label that only starts like the real one. I ran this script against a draft of the job in a scratch copy of `ci.yml` and it printed `0 1 0 0 1 1` [verified]; today (no job) `yq` returns `null` and the first line is wrong, and `grep -c 'fork-gate'` prints `0` (spec F14).
-- **Red-first:** run the script before the edit and watch it fail. After the edit, change `grep -qxF` to `grep -qF` in a scratch copy and the last case flips from `1` to `0`. Remove the job in a scratch copy and the grep count returns to `0`.
+  The cases are, in order: a push; a fork PR with no label and no comment; the label alone; the comment alone; the label and a matching comment; the label and a comment for an older SHA (the new-push case); the label and a matching comment from a non-maintainer; a same-repository PR; a deleted fork with nothing; a label that only starts like the real one. The expected line is `0 1 1 1 0 1 1 0 1 1`. I ran this script against a draft of the job in a scratch copy of `ci.yml` and it printed that line [verified]. Today `yq` returns `null`, the first line is wrong, and `grep -c 'fork-gate'` prints `0` (spec F14).
+- **Red-first:** run the script before the edit and watch it fail. After the edit, change `grep -xF` to `grep -F` in a scratch copy and the last case flips from `1` to `0`. Change the comment filter to ignore the SHA and the old-SHA case flips from `1` to `0`. Remove the job in a scratch copy and the grep count returns to `0`.
 
 ### P6: specs 0003 and 0005 (wave 2)
 - **Persona:** `uas-engineer` (a spec amendment).
-- **Files, all exist [verified]:** `specs/0003-branch-model-and-promotion.md` (line 46 and the protection table, `ebpf-live` row on line 64), `specs/0005-ci-cache-and-runners.md` (line 82).
-- **Change:** line 46 becomes "Commits are signed. Subjects follow the Conventional Commits regex in spec 0051; Merge and Revert subjects stay allowed." Add a table row "Required check `fork-gate` | no, until plan 0048 P13 | no, until plan 0048 P13" after the `ebpf-live` row; it says "no" on purpose so spec 0050 Test row 4 stays true (finding 7). Add `fork-gate` to the `ci.yml` job list on spec 0005 line 82. The spec says the integrator commits the spec 0003 amendment on its own, so this package is one commit that touches nothing else.
-- **Done-when:** `grep -c 'regex in spec 0051' specs/0003-branch-model-and-promotion.md` prints `1`, `grep -c 'fork-gate' specs/0003-branch-model-and-promotion.md specs/0005-ci-cache-and-runners.md` prints `1` and `1`, and `make spec-check JOBS=2` exits 0 with no new error.
-- **Red-first:** the three greps print `0` before the edit. After it, delete the new table row in a scratch copy and the second grep prints `0` for spec 0003.
+- **Files, all exist [verified]:** `specs/0003-branch-model-and-promotion.md` (line 46 and the protection table, `ebpf-live` row on line 64), `specs/0005-ci-cache-and-runners.md` (line 82), `specs/0051-repository-guards.md` (D8, REQ-0051-15 and its Test row).
+- **Change:** line 46 becomes "Commits are signed. Subjects follow the Conventional Commits regex in spec 0051; Merge and Revert subjects stay allowed." Add a table row "Required check `fork-gate` | no, until plan 0048 P13 | no, until plan 0048 P13" after the `ebpf-live` row; it says "no" on purpose so spec 0050 Test row 4 stays true (finding 7). Add `fork-gate` to the `ci.yml` job list on spec 0005 line 82. Amend spec 0051 D8, REQ-0051-15 and the REQ-0051-15 Test row to the ruled form: the gate passes only with the label and a maintainer comment `fork-ci-approved: <head sha>` that equals the PR's current head SHA; the test row names the case table of P5. Record the ruling (lane w25:p1, 2026-10-11 about 04:10Z, label "Label plus head SHA"). Also replace the concurrency Test row with the fixed-string form (finding 1). The spec says the integrator commits the spec 0003 amendment on its own, so the integrator may split this package into one commit per spec.
+- **Done-when:** `grep -c 'regex in spec 0051' specs/0003-branch-model-and-promotion.md` prints `1`, `for f in specs/0003-branch-model-and-promotion.md specs/0005-ci-cache-and-runners.md; do grep -c 'fork-gate' $f; done` prints `1` then `1`, `grep -c 'Label plus head SHA' specs/0051-repository-guards.md` prints `1`, and `make spec-check JOBS=2` exits 0 with no new error.
+- **Red-first:** the greps print `0` before the edit. After it, delete the new table row in a scratch copy and the loop prints `0` for spec 0003. Revert the D8 wording in a scratch copy and the `Label plus head SHA` grep prints `0`.
 
 ### P7: fork-gate becomes a required check (BLOCKED, the operator's act)
 - **BLOCKED:** branch protection is the operator's (spec 0003; the repo setting is not a file). Spec 0051 D8 and plan 0048 P13 set the time: before the public cut. It also waits for one green `fork-gate` run on `development` (finding 6), and the same sitting updates `want=` in spec 0050 Test row 4 and the two `no, until plan 0048 P13` cells in spec 0003.
 - **Done-when, when it unblocks:** `gh api repos/unsigned-gg/uas/branches/development/protection --jq '.required_status_checks.contexts|join(",")'` prints a list holding `fork-gate`, and the `want=` string in spec 0050 line 177 is the same list. Today it prints `secrets,rust / cargo,cargo-deny,hygiene,ebpf-live`.
 - **Red-first:** the command's output lacks `fork-gate` until the change.
-- **Also needed:** a maintainer creates the label `fork-ci-approved` in the repository (a repository setting, not a file). Plan 0048 P13 does not name `fork-gate` as a prerequisite today (`grep -n fork-gate engineering/plans/0048-licence-and-publication.md` prints nothing); the integrator adds the line.
+- **Also needed:** a maintainer creates the label `fork-ci-approved` in the repository (a repository setting, not a file). Until P7 the F14 hole is open: a fork PR gets a red `fork-gate` that does not block the merge (see P5). Plan 0048 P13 does not name `fork-gate` as a prerequisite today (`grep -n fork-gate engineering/plans/0048-licence-and-publication.md` prints nothing); the integrator adds the line.
 
 ### P8: test F6 in a live session (BLOCKED, manual)
 - **BLOCKED:** needs a live Claude Code session, which a builder does not have. Spec Plan, last item: set a hook `timeout` of 1 with a `sleep 5` hook in a throwaway settings file and record whether the tool call runs. The integrator or the operator runs it and the result goes into spec 0051 F6 as an amendment (`uas-engineer`).
@@ -166,7 +182,7 @@ grep -c 'fork-gate' $c
 
 ## Open
 
-- Whether fork-gate must also find a branch here whose head SHA equals the PR head (finding 5). It needs a spec amendment and the operator's ruling; P5 builds the label as ruled.
+- None on the fork-gate form: the operator ruled label plus head SHA (finding 5). P6 amends spec 0051 to match.
 - Whether `git push origin HEAD` while on `development` should deny (finding 11). Not in the spec; no row added.
 - Whether the organisation has hosted runner minutes (finding 6). P7's "one green run first" is the test.
 - The label name `fork-ci-approved` is my choice; the spec only says "a label" [asserted]. the operator can rename it before P5.
