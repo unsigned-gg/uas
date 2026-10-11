@@ -95,7 +95,7 @@ async fn blocking<T: Send + 'static>(f: impl FnOnce() -> T + Send + 'static) -> 
 }
 
 fn spawn_blocking_worker(secs: u32, cfg: LaunchConfig) -> Worker {
-    spawn_worker(sleeper(secs), &cfg, "uncapped".into()).expect("spawn")
+    spawn_worker(sleeper(secs), &cfg, "uncapped".into(), None).expect("spawn")
 }
 
 #[tokio::test(flavor = "multi_thread")]
