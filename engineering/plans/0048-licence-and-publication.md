@@ -70,7 +70,7 @@ Tiers: `verified` = I ran or read it at the path named; `reported` = the spec sa
 | REQ-0048-18, 19 | P16 |
 | REQ-0048-17 | P17 (BLOCKED on P13) |
 
-15 of 19 requirements are closed by a package (01 to 06, 08, 11, 13 to 16, 18, 19); REQ-0048-17 is P17 and waits on P13. 09 holds by a command, 07 is not exercisable, 10 and 12 wait on Christian.
+14 of 19 requirements are closed by an unblocked package (01 to 06, 08, 11, 13 to 16, 18, 19). REQ-0048-17 has P17, blocked on P13. 09 holds by a command, 07 is not exercisable, 10 and 12 wait on Christian.
 
 ## Waves and the spec's command
 
