@@ -5,6 +5,7 @@ tags: [pool, cgroup, cpu-max, job-cap, nice, phase-3]
 priority: high
 depends_on: [0001-cas-architecture-and-crate-layout, 0002-verification-gates-and-evidence, 0014-ebpf-priority-clamping-and-audit-probes, 0015-slot-pool-cgroup-freezer-and-gitoxide, 0041-slot-memory-pids-and-disk-limits]
 ---
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
 
 # 0020-build-job-cap
 

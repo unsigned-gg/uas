@@ -1,3 +1,4 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
 # Runbooks
 
 Step-by-step procedures go here. Write each step as one instruction.

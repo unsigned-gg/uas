@@ -5,6 +5,7 @@ tags: [k8s, kube-rs, dependencies, pins, ci, k3d, publish]
 priority: high
 depends_on: [0004-dependency-and-licence-policy, 0005-ci-cache-and-runners, 0033-cargo-feature-policy-and-ci-matrix, 0034-tool-pinning-beyond-cargo, 0037-repository-migration-to-uas, 0038-uas-operator-and-crds]
 ---
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
 
 # 0039-k8s-dependency-and-ci-plan
 

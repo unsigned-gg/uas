@@ -5,6 +5,7 @@ tags: [sandbox, netns, kernel, phase-2]
 priority: high
 depends_on: [0010-landlock-ruleset-and-abi-probe, 0004-dependency-and-licence-policy]
 ---
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
 
 # 0011-network-namespace-isolation
 

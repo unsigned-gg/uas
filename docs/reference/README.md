@@ -1,3 +1,4 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
 # Reference
 
 Reference pages go here: commands, files and configuration.

@@ -5,6 +5,7 @@ tags: [engine, reverie, memory, degradation, outbox, http]
 priority: high
 depends_on: [0004-dependency-and-licence-policy, 0006-cas-engine-and-harness-dogfood, 0008-soma-cortex-saga-reverie-integration, 0009-saga-compensation-runner-and-durability, 0032-reverie-access-from-a-jailed-slot, 0033-cargo-feature-policy-and-ci-matrix, 0042-cas-binary-conventions]
 ---
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
 
 # 0044-reverie-client-degradation
 
