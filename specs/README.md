@@ -53,6 +53,7 @@ Methodology: LeanSpec. The reference copy is in `../vendor/leanspec/`.
 | [0047](0047-slot-build-cache-retention.md) | Slot build cache retention | planned | high |
 | [0048](0048-licence-and-publication.md) | Licence and publication | planned | high |
 | [0049](0049-cpm-migration-to-saga.md) | CPM migration to saga | planned | high |
+| [0050](0050-build-handoff-pipeline.md) | Build handoff pipeline | planned | high |
 
 
 ## How to add a spec
