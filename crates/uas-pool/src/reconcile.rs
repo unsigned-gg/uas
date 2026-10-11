@@ -133,12 +133,25 @@ fn reconcile_marker(
     marker_path: &Path,
     name: &OsString,
 ) -> Result<Outcome, PoolError> {
+    reconcile_marker_with(roots, control, marker_path, name, &|| {})
+}
+
+/// `after_lock` runs between taking the lock and the inode check; tests use it
+/// to replace the marker at that point.
+fn reconcile_marker_with(
+    roots: &ReconcileRoots,
+    control: &Path,
+    marker_path: &Path,
+    name: &OsString,
+    after_lock: &dyn Fn(),
+) -> Result<Outcome, PoolError> {
     let mut file = match try_own(marker_path) {
         Ok(Some(f)) => f,
         Ok(None) => return Ok(Outcome::Kept),
         Err(e) => return Err(step_failed(name, "lock marker", e)),
     };
 
+    after_lock();
     // The lock is on an inode. If the path now names a different inode, a new
     // marker replaced the one we locked and its owner is live.
     let locked = file
@@ -208,6 +221,13 @@ fn validate(roots: &ReconcileRoots, name: &OsString, marker: &SlotMarker) -> Res
     {
         return Err(refused(name, "worktree_dir has dot components"));
     }
+    match fs::symlink_metadata(&roots.worktree_root) {
+        Ok(m) if m.file_type().is_symlink() => {
+            return Err(refused(name, "worktree root is a symlink"));
+        }
+        Ok(_) => {}
+        Err(e) => return Err(step_failed(name, "stat worktree root", e)),
+    }
     let rel = dir
         .strip_prefix(&roots.worktree_root)
         .map_err(|_| refused(name, "worktree_dir is outside the worktree root"))?;
@@ -257,6 +277,10 @@ fn reclaim_cgroup(roots: &ReconcileRoots, marker: &SlotMarker) -> Result<(), Poo
 /// Worktree directory, branch ref, then the control directory last. The marker
 /// lives in the control directory, so a failed earlier step leaves the marker in
 /// place and the entry is retried at the next start (spec 0040 D4).
+///
+/// This deliberately deviates from the order in spec 0040 D3, which removes the
+/// control directory before the branch ref. It requests an amendment to D3 and
+/// REQ-0040-03.
 fn reclaim_filesystem(
     roots: &ReconcileRoots,
     control: &Path,
@@ -292,5 +316,51 @@ fn reclaim_filesystem(
         Ok(()) => Ok(()),
         Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(()),
         Err(e) => Err(step_failed(name, "remove control dir", e)),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn reconcile_keeps_a_marker_replaced_after_the_lock() {
+        let tmp = std::env::temp_dir().join(format!("uas-reconcile-inode-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&tmp);
+        let root = tmp.join("root");
+        let wt = root.join("wt");
+        let control = tmp.join("worktrees").join("slot-x");
+        fs::create_dir_all(&wt).unwrap();
+        fs::create_dir_all(&control).unwrap();
+        fs::write(wt.join("keep"), b"x").unwrap();
+        let marker = SlotMarker {
+            slot_id: "slot-x".into(),
+            worktree_dir: wt.clone(),
+            cgroup: "slot-slot-x".into(),
+            branch: "uas/x".into(),
+            pool_pid: 1,
+            provisioned_at: 1,
+        };
+        let body = serde_json::to_vec(&marker).unwrap();
+        let path = control.join(MARKER_NAME);
+        fs::write(&path, &body).unwrap();
+        let roots = ReconcileRoots {
+            common_git_dir: tmp.clone(),
+            worktree_root: root,
+            cgroup_root: None,
+        };
+
+        // A new owner publishes a fresh marker (plain rename) after we lock the old inode.
+        let fresh = control.join("fresh");
+        let swap = || {
+            fs::write(&fresh, &body).unwrap();
+            fs::rename(&fresh, &path).unwrap();
+        };
+        let name = OsString::from("slot-x");
+        let outcome = reconcile_marker_with(&roots, &control, &path, &name, &swap).unwrap();
+        assert!(matches!(outcome, Outcome::Kept));
+        assert!(wt.join("keep").is_file(), "worktree must stay");
+        assert!(path.is_file(), "new marker must stay");
+        let _ = fs::remove_dir_all(&tmp);
     }
 }
