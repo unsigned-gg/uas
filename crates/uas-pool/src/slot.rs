@@ -8,10 +8,13 @@ use std::path::PathBuf;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
-use uas_domain::{DomainError, Lease, LeaseToken, Slot, SlotId, SlotState, WorktreeRef};
+use uas_domain::{
+    DomainError, Lease, LeaseToken, ReconcileReport, Slot, SlotId, SlotState, WorktreeRef,
+};
 
 use crate::error::PoolError;
 use crate::freezer::{CgroupFreezer, CpuCap, Freezer, ResourceLimits, SignalFreezer};
+use crate::reconcile::{self, ReconcileRoots};
 
 /// Configuration options for the worker slot pool.
 #[derive(Debug, Clone)]
@@ -22,6 +25,9 @@ pub struct PoolConfig {
     pub idle_suspend_duration: Option<Duration>,
     /// Base directory for cgroup v2 hierarchy (None for signal fallback / mock).
     pub cgroup_base: Option<PathBuf>,
+    /// Roots to reconcile before the pool admits work (spec 0040 D2). `None`
+    /// skips reconciliation.
+    pub reconcile: Option<ReconcileRoots>,
 }
 
 impl Default for PoolConfig {
@@ -30,6 +36,7 @@ impl Default for PoolConfig {
             max_slots: 2,
             idle_suspend_duration: Some(Duration::from_secs(300)),
             cgroup_base: None,
+            reconcile: None,
         }
     }
 }
@@ -105,15 +112,36 @@ pub struct SweepReport {
 pub struct SlotPool {
     config: PoolConfig,
     slots: Mutex<BTreeMap<SlotId, ManagedSlot>>,
+    reconcile_report: ReconcileReport,
 }
 
 impl SlotPool {
     /// Initialize a slot pool with the given configuration.
+    ///
+    /// When `config.reconcile` is set, the leftovers of dead pools are
+    /// reclaimed here, before any slot can be created (spec 0040 D2, D4). A
+    /// failed reclaim never stops the pool; it is counted in the report.
     pub fn new(config: PoolConfig) -> Self {
+        let reconcile_report = config
+            .reconcile
+            .as_ref()
+            .map(reconcile::reconcile)
+            .unwrap_or_default();
         Self {
             config,
             slots: Mutex::new(BTreeMap::new()),
+            reconcile_report,
         }
+    }
+
+    /// Reconcile the slot remains under `roots` and return the counts.
+    pub fn reconcile(&self, roots: &ReconcileRoots) -> ReconcileReport {
+        reconcile::reconcile(roots)
+    }
+
+    /// The report of the reconciliation the constructor ran.
+    pub fn reconcile_report(&self) -> ReconcileReport {
+        self.reconcile_report
     }
 
     /// Total number of registered slots currently managed by the pool.

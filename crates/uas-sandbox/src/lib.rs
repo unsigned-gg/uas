@@ -6,8 +6,11 @@
 //! See `specs/0010-landlock-ruleset-and-abi-probe.md`.
 //!
 //! `unsafe` is denied, not forbidden (AGENTS.md rule 14). The blocks that opt
-//! in are `launcher::jail` (`pre_exec`) and `netns` (`pre_exec`, `unshare`,
-//! two `ioctl`s), each with a SAFETY comment.
+//! in are `launcher::jail` (`pre_exec`), the seccomp `pre_exec` in
+//! `launcher::launch_with`, `netns` (`pre_exec`, `unshare`, two `ioctl`s) and
+//! `seccomp`, each with a SAFETY comment. The child's `pre_exec` order is the
+//! `netns` hook (spec 0011), then Landlock (`launcher::jail`), then the seccomp
+//! filter last (spec 0043 D1).
 #![deny(unsafe_code)]
 
 pub mod abi;
@@ -17,6 +20,7 @@ pub mod ipc;
 pub mod launcher;
 pub mod netns;
 pub mod ruleset;
+pub mod seccomp;
 
 pub use abi::{probe, AbiReport, AbiStatus};
 pub use canon::canonical;
