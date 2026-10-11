@@ -44,7 +44,7 @@ The record belongs in Spec 0004 because it is the established dependency and lic
 
 ## Plan
 
-- [ ] Amend Spec 0004 to include `gitleaks` and `cargo-cyclonedx` in the CI tools table, alongside the existing `gh` and `bpf-linker` entries.
+- [ ] Amend Spec 0004 to include `gitleaks` and `cargo-cyclonedx` in the CI tools table, alongside the existing `gh` and `bpf-linker` entries. Spec 0055 build plan P1 wrote the `gitleaks` row and, as it was absent, the `cargo-cyclonedx` row (landed, PR #204).
 - [ ] Add a `Tool` table parser to `xtask/src/pin_check.rs` to read the Spec 0004 CI tools table.
 - [ ] Add a fixture entry point to `xtask` so tests can run against mock Makefiles and workflows.
 - [ ] Update `xtask/src/pin_check.rs` to extract `uses:` fields from YAML, `env:` version variables from YAML, and CLI invocations from `Makefile`.
