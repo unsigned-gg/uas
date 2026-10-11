@@ -47,7 +47,7 @@ Writing a spec:
    active voice (rule 13). Add the registry row in `specs/README.md`.
 7. Run `make spec-check` and `typos specs/`; commit signed with a conventional subject.
 
-Writing a brief for a builder: one package, one spec, one crate, under about 800 changed lines.
+Writing a brief for a builder: one package, one spec, one crate, target under 400 changed lines, split above 800 (spec 0050 D3).
 Name the spec and the Decisions rows it implements; the exact files (and that nothing else is
 touched); the done-when command copied from the spec's Test section; the pins the builder may
 use; the surfaces to read; the gates; which tests go red first; and the model: sonnet for

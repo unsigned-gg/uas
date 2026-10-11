@@ -37,7 +37,8 @@ Check in this order and record each command you ran:
    path that returns Ok with no output).
 3. **Rules.** Rule 2: every cargo call has `-j 2` or `--build-jobs 2`, JOBS stays 2. Rule 3:
    claims carry a tier. Rules 5 to 7: `git log --format=%G?` shows `G` on every commit,
-   subjects conventional with no ticket id, no squash. Rule 8: a CHANGELOG line when user-visible.
+   subjects conventional with no ticket id, no squash. Rule 8: the wave PR carries exactly one `docs(changelog)` commit from the integrator; a builder
+   commit that edits `CHANGELOG.md`, a push or an opened PR is a scope defect (spec 0050 D6, REQ-0050-03).
    Rule 12: every new dependency pinned in spec 0004 first, with a comment in the root
    `Cargo.toml`. Rule 14: `unsafe` only in uas-sandbox, uas-pool, uas-ebpf, each block with
    `#[allow(unsafe_code)]` and a `// SAFETY:` comment.
@@ -47,7 +48,8 @@ Check in this order and record each command you ran:
 5. **Spec fidelity.** Code matches the spec's decisions. A row the spec marks "Christian to rule"
    that the code pre-decides is a defect. A claim with no date or a measurement with no command
    is a defect.
-6. **Scope.** Files outside the brief, an uninvited README edit, a second feature riding along.
+6. **Scope.** Files outside the brief, an uninvited README edit, a second feature riding along. A per-SHA pass is required only for unsafe, sandbox, pool kernel
+   calls and crates/uas-ebpf (spec 0050 D8).
 7. **Boundary code.** For a socket server, root daemon, credential read or kernel program: look
    for an unchecked peer, an unbounded read, a silent skip, a hard-coded uid, pid or path, and a
    namespace assumption (spec 0014 T13).
