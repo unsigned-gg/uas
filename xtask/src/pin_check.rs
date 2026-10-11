@@ -189,13 +189,23 @@ pub fn parse_pins(spec: &str) -> Vec<(String, String)> {
     pins
 }
 
-/// True for `X.Y.Z` with digits only.
+/// True for `X.Y.Z` with digits only, optionally followed by `+` and a build
+/// string of ASCII letters, digits, `.` and `-`.
 fn is_exact_version(text: &str) -> bool {
-    let parts: Vec<&str> = text.split('.').collect();
+    let (core, build) = match text.split_once('+') {
+        Some((core, build)) => (core, Some(build)),
+        None => (text, None),
+    };
+    let parts: Vec<&str> = core.split('.').collect();
     parts.len() == 3
         && parts
             .iter()
             .all(|p| !p.is_empty() && p.bytes().all(|b| b.is_ascii_digit()))
+        && build.is_none_or(|b| {
+            !b.is_empty()
+                && b.bytes()
+                    .all(|c| c.is_ascii_alphanumeric() || c == b'.' || c == b'-')
+        })
 }
 
 /// The crate names a manifest declares directly.
@@ -455,5 +465,58 @@ default = []
         );
         assert!(ok.misses.is_empty(), "{:?}", ok.misses);
         assert_eq!(ok.checked, 1);
+    }
+
+    #[test]
+    fn parses_build_metadata_pin() {
+        let spec = "| Crate | Version |\n|---|---|\n| `toml` | 1.1.8+spec-1.1.0 | MIT |\n";
+        assert_eq!(
+            parse_pins(spec),
+            [("toml".to_owned(), "1.1.8+spec-1.1.0".to_owned())]
+        );
+    }
+
+    #[test]
+    fn flags_build_metadata_drift() {
+        let spec = "| Crate | Version |\n|---|---|\n| `toml` | 1.1.8+spec-1.1.0 |\n";
+        let manifests = ["[dependencies]\ntoml = \"1\"\n".to_owned()];
+        let got = check_repo(
+            spec,
+            &manifests,
+            &lock(&[("toml", "1.1.9+spec-1.1.0")]),
+            "[dependencies]\n",
+            "",
+        );
+        assert_eq!(got.checked, 1);
+        assert_eq!(
+            got.misses,
+            ["pin-check: toml pinned 1.1.8+spec-1.1.0 (specs/0004), Cargo.lock has 1.1.9+spec-1.1.0"]
+        );
+    }
+
+    #[test]
+    fn passes_build_metadata_at_pin() {
+        let spec = "| Crate | Version |\n|---|---|\n| `toml` | 1.1.8+spec-1.1.0 |\n";
+        let manifests = ["[dependencies]\ntoml = \"1\"\n".to_owned()];
+        let got = check_repo(
+            spec,
+            &manifests,
+            &lock(&[("toml", "1.1.8+spec-1.1.0")]),
+            "[dependencies]\n",
+            "",
+        );
+        assert_eq!(
+            got,
+            Report {
+                checked: 1,
+                misses: Vec::new()
+            }
+        );
+    }
+
+    #[test]
+    fn skips_prerelease_pin() {
+        let spec = "| Crate | Version |\n|---|---|\n| `toml` | 1.1.8-rc.1 |\n";
+        assert!(parse_pins(spec).is_empty());
     }
 }
