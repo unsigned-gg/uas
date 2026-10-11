@@ -9,6 +9,7 @@ depends_on: [0001-cas-architecture-and-crate-layout, 0008-soma-cortex-saga-rever
 
 # 0025-wave-execution-on-the-custody-chain
 **HELD 2026-10-10 (Christian, in session, lane w25:p1): wave execution is a saga domain; uas implements no more of it. The landed code stays as is, unarmed; the migration shape is to be ruled.**
+> **Moves to saga, 2026-10-11 (spec 0049 D6, lane-decided: integrating lane w25:p1):** saga spec 0040 (`cerebral-work/saga` `specs/0040-cpm-and-wave-execution.md`, PR 133, 51e4df8) restates the admission, not-ready, halt and compensation rows under uas spec 0049. Each moved rule here is superseded there. The HELD line above stays as Christian's words.
 
 ## Overview
 
@@ -264,7 +265,7 @@ exit 1 and run nothing. Only a person removes one.
 - [x] P13a, integrator: revert P12a (PR #89, merged 5f182db). It removes the executor merge, its halts and tests, and `merge_commit` from `uas-domain` and the event.
 - [x] P13b, landed in PR #95 (dc288d6), `uas-builder` sonnet: one package over `uas-engine` and `uas-cli` plus the one `uas-domain` field (the caller asked for one package; lane w25:p1, 2026-10-10). It adds D15's plan keys, the admission row, the merge step in `uas wave flow`, `uas wave merge-gate` and the readiness pre-read with `merge_commit`. Tests go red first against a fake `blackwall` and a fake `gh` that fails on `pr merge` and `pr checks`.
 - [x] P14 (CER-2796), landed in PR #96 (e6c570d), `uas-builder` sonnet: the D6 default model and `tasks/wave-smoke-build/task.toml` move to sonnet, with the test fixtures.
-- [ ] P15 (CER-2797), after P14, `uas-builder` sonnet: wrap the readiness pre-read in `timeout -k 5 30` and map its exits as D15 Pre-read says. Red-first tests for 124, 127 and a 40-hex pass.
+- [x] P15 (CER-2797), after P14, `uas-builder` sonnet: wrap the readiness pre-read in `timeout -k 5 30` and map its exits as D15 Pre-read says. Red-first tests for 124, 127 and a 40-hex pass.
 
 ## Test
 
@@ -290,8 +291,7 @@ UAS_WAVE_LIVE=1 UAS_WAVE_REPO=$L UAS_WAVE_PLAN=$L/.saga/plans/uas-wave-smoke.tom
 - Rejected: stacking a dependent Builder on its upstream world with `start --parent`. Its whole-file blob would carry the upstream edits onto a base without them: the revert trap in the custody rebasing SOP.
 - Rejected: opening the PR in the Builder step, as `land` does. It would precede the critic.
 - Rejected: the executor polls the checks and runs `gh pr merge` (P12a, landed 8315a6b). Christian's 2026-10-10 ruling gives merging to saga and blackwall (D15).
-- Rejected: one saga run with a gate between waves. That gate would wait on CI
-  and the merge, past the 600 s window (F18).
+- Rejected: one saga run with a gate between waves; it would wait on CI and the merge, past the 600 s window (F18).
 - P9c settled neither unknown. `blackwall show 7878209325ad` returned `NotFound`, though `list` prints that 12-character id [verified, run 7878209325ad], so whether `show` prints the base (custody-run skill against F4) is still open. `init` ran once, before any run, so whether it keeps earlier runs (D4) is still open.
 - Under `cargo nextest` the smoke's reconcile halted `VerifyFailed`, yet the smoke exited 0 because it passes on any outcome, while the same run reconciled outside nextest [verified, runs 7878209325ad and 0dbb7f02bf2d]; the cause is not proven [heuristic: the inherited nextest environment], and the receipt keeps no reconcile stderr (CER-2789).
 - Amends spec 0022 D1 and D9 (its D12 logs it), and adds `LandingFacts.merge_commit`, set only by the D15 pre-read (its amendment log). P9a builds 0023's `EVALUATOR_PATHS`.
