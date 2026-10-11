@@ -94,7 +94,7 @@ cargo nextest run -p uas-pool reconcile -j 2
 cargo nextest run -p uas-engine lost_slot -j 2
 ```
 
-The cgroup steps run under `make ebpf-test` on a workstation and are skipped where
+The cgroup steps run under `make pool-live-test` on a workstation and are skipped where
 `/sys/fs/cgroup/uas` cannot be created, with the skip printed (spec 0005 skip rule).
 
 ## Notes
