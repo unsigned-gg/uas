@@ -265,7 +265,7 @@ exit 1 and run nothing. Only a person removes one.
 - [x] P13a, integrator: revert P12a (PR #89, merged 5f182db). It removes the executor merge, its halts and tests, and `merge_commit` from `uas-domain` and the event.
 - [x] P13b, landed in PR #95 (dc288d6), `uas-builder` sonnet: one package over `uas-engine` and `uas-cli` plus the one `uas-domain` field (the caller asked for one package; lane w25:p1, 2026-10-10). It adds D15's plan keys, the admission row, the merge step in `uas wave flow`, `uas wave merge-gate` and the readiness pre-read with `merge_commit`. Tests go red first against a fake `blackwall` and a fake `gh` that fails on `pr merge` and `pr checks`.
 - [x] P14 (CER-2796), landed in PR #96 (e6c570d), `uas-builder` sonnet: the D6 default model and `tasks/wave-smoke-build/task.toml` move to sonnet, with the test fixtures.
-- [x] P15 (CER-2797), after P14, `uas-builder` sonnet: wrap the readiness pre-read in `timeout -k 5 30` and map its exits as D15 Pre-read says. Red-first tests for 124, 127 and a 40-hex pass.
+- [x] P15 (CER-2797), after P14, `uas-builder` sonnet: wrap the readiness pre-read in `timeout -k 5 30` and map its exits as D15 Pre-read says. Red-first tests for 124, 127 and a 40-hex pass. Ticked 2026-10-11 on reading `tests/wave_exec.rs` (`wave_preread_timeout_records_nothing` line 559, `wave_preread_gh_missing_is_executor_error` 583, `wave_preread_bounded_pass` 602), not on a run.
 
 ## Test
 
