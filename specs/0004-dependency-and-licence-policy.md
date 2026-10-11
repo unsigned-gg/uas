@@ -5,6 +5,7 @@ tags: [dependencies, licence, deny, pgt]
 priority: high
 depends_on: [0001-cas-architecture-and-crate-layout]
 ---
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
 
 # 0004-dependency-and-licence-policy
 
@@ -109,17 +110,9 @@ dependency. The token comes from the reverie GitHub App pattern.
 The licence gap is the CTO's to settle. Until he does, nobody
 redistributes pgt code or copies it into this repo.
 
-### rig
-
-Decision, the operator, 2026-10-08: rig is evaluated and pinned at 0.44.0 (MIT).
-The template does not include it. A repo adopts it when it needs model calls.
-It calls models through the LiteLLM gateway, not vendor APIs.
-
 ### toml
 
-Decision, the operator, 2026-10-09: `toml` is pinned at 0.8 (MIT OR Apache-2.0).
-Used in `uas-engine` and `uas-cli` to parse `.saga/flows/*.toml` macro-orchestration
-definitions and workflow templates.
+Superseded 2026-10-11: the 0.8 decision of 2026-10-09 gave way to 1.1.8, the version in use; see the `toml` row of the pin table (ruled: the operator, 2026-10-11, "Ratify 1.1.8").
 
 ### Vendored estate contracts and schemas
 
@@ -156,23 +149,31 @@ the first use.
 | `seccompiler` 0.5.0 | Apache-2.0 OR BSD-3-Clause (crates.io API, read 2026-10-11) | `uas-sandbox`: seccomp-BPF syscall filter | approved 2026-10-11, pinned, default features, no `libseccomp` link | spec 0043 D7; ruling 2026-10-11, lane w25:p1 |
 | `serde_json` 1.0.151 | MIT OR Apache-2.0 (crates.io API, read 2026-10-11) | JSON encoding in `uas-acp`, `uas-cli`, `uas-deck`, `uas-ebpf`, `uas-engine` and `uas-pool`; `uas-domain` in dev-dependencies only | pinned, in use; the root `Cargo.toml` requirement is `"1"` | pre-existing use found by the PR #138 critic; `uas-pool` added it in PR #138; ruled: integrating lane w25:p1, 2026-10-11 |
 | madstack (`pgray/madstack`: Axum, Maud, htmx) | MIT | `uas-deck`: operator dashboard | approved 2026-10-09 (the operator, epic list below) as its crate pins: axum 0.8.9, maud 0.27.0, tower-http 0.7.1, tokio-stream 0.1.19; htmx is not a crate; axum and maud in the root Cargo.toml since P4 (2026-10-10), tower-http and tokio-stream not yet | `repos/madstack.md` |
-| rig-core 0.44 | MIT | model calls through the LiteLLM gateway, on need | pinned at 0.44.0 by the decision above, not in the workspace | `0xPlaygrounds/rig` |
+| rig-core 0.44 | MIT | model calls through the LiteLLM gateway, not vendor APIs; the template excludes it, a repo adopts it on need | pinned at 0.44.0, not in the workspace | `0xPlaygrounds/rig`; evaluated, decision: the operator, 2026-10-08 |
 | `clap` 4.6.7 | MIT OR Apache-2.0 (`Cargo.toml` in the local registry, read 2026-10-10) | `uas-cli`, `uas-ebpf`: command-line parsing | approved 2026-10-10 for `derive` and `env`; `env` is approved by this amendment; in the workspace since before spec 0042, locked at 4.6.7 | spec 0042 D1, D2; plan 0042 P1; integrating lane w25:p1, 2026-10-10 |
 | `tracing-subscriber` 0.3.23 | MIT (`Cargo.toml` in the local registry, read 2026-10-10) | `uas-cli`, `uas-ebpf`: log output | approved 2026-10-10 for `env-filter` and `json`; `json` is approved by this amendment; locked at 0.3.23 | spec 0042 D1, D2; plan 0042 P1; integrating lane w25:p1, 2026-10-10 |
 | `tracing-serde` 0.2.0 | MIT (`Cargo.toml` in the local registry, read 2026-10-10) | pulled by the `json` feature of `tracing-subscriber`; no crate declares it | planned pin, approved by this amendment, not yet in `Cargo.lock` | spec 0042 D1, D2; plan 0042 P1; integrating lane w25:p1, 2026-10-10 |
+| `zerocopy` 0.8.62 | BSD-2-Clause OR Apache-2.0 OR MIT (`cargo info zerocopy`, read 2026-10-11) | `uas-ebpf` only: the structs shared between the BPF object and the daemon, replacing hand transmutes | planned, no `Cargo.toml` line yet | ruled: the operator, grill sheet 2026-10-10 answer 2a, read 2026-10-11; dossier `cortex/docs/research/hyperscaler-oss-survey-2026-10-09.md` Tier 1 (sweep `microopt-libraries-2026-10-10.md` line 16) |
+| `shuttle` 0.9.6 | Apache-2.0 (`cargo info shuttle`, read 2026-10-11) | dev-dependency only: the spec 0026 adapter and the `uas-pool` lease tests | planned, no `Cargo.toml` line yet | ruled: the operator, grill sheet 2026-10-10 answer 3a, read 2026-10-11; same dossier, Tier 1 |
+| `bytes` 1.12.1 | MIT (`cargo info bytes`, read 2026-10-11) | `uas-acp` only, on the `MAX_FRAME_BYTES` path | conditional on a frame-copy measurement; not pinned | ruled: the operator, grill sheet 2026-10-10 answer 8a, read 2026-10-11; `repos/tokio-rs.md:72-73,133` |
 
-The research does not state the aya licence. The `aya-rs/aya` workspace
-`Cargo.toml` declares `MIT OR Apache-2.0` (read 2026-10-08). Re-read it at the
-pin. A separate question remains: an eBPF program that calls GPL-only kernel
-helpers must declare a GPL-compatible licence in its `license` section (Linux
-kernel `Documentation/bpf/bpf_licensing.rst`). The root workspace is `Apache-2.0 OR MIT` (spec 0048 D1).
+### Considered, no uas pin (grill sheet 2026-10-10)
 
-Position, decided by the operator on 2026-10-09: the kernel-side BPF program
-object declares `Dual MIT/GPL` in its `license` section, as the aya template
-does. Only that program object carries it. Amended 2026-10-11 by spec 0048 D1
-(the operator): the userspace loader and every other crate are `Apache-2.0 OR MIT`,
-not proprietary, and the program package is `GPL-2.0-only OR MIT`. `deny.toml`
-still denies GPL crates.
+Each row: ruled: the operator, grill sheet 2026-10-10 answer <n>, read 2026-10-11. Principles (answer 1a): stars are a weak signal and manifests are the source of truth, in `cerebral-work/cerebral-docs` `agentic-systems/guides/hyperscaler-library-selection-principles.md` at 39b0919 [reported: research lane w1X:p1, mesh 2026-10-11; commit verified on GitHub by w25:p1]. The commit touches 23 files: it adds that guide, changes one line of `linux-agent-runtime-control-taxonomy.md` and adds a `Verdict` line to each of 21 `repos/*.md` dossiers [verified 2026-10-11: `gh api repos/cerebral-work/cerebral-docs/commits/39b0919`].
+
+| Library | Answer | Verdict |
+|---|---|---|
+| `nom`, `rkyv` | 8a | Rejected: serde JSON-RPC is the contract (`communication/designs/rust-subsystem-crate-topology.md:23,53`; `agentic-systems/findings/marathon-crdt-p2p-and-hyperlight-vmm.md:25`) |
+| `mmap-sync`, SHM transport | 4a | Cortex spec 0009 owns it; no uas pin. rustix `net` and `mm` features wait for a uas spec that needs them |
+| `shellflip` | 5a | Watch. Adopt only when `uas-ebpfd` or the deck needs zero-downtime restart with fd passing |
+| `foundations` | 6a | Rejected: uas owns its seccomp and landlock jails |
+| io_uring, `tokio-uring`, `heph` | 7a | Closed by spec 0019 D2 (OS threads) |
+| `kube-rs`, `rust-spiffe` | 9c | Not for uas. the operator's candidate is saga on top of uas, relayed to the saga lead [reported: w25:p1 mesh message 07da62cd, 2026-10-11] |
+| `parseable`, `pingora`, `wirefilter`, `lol-html` | none | Not for uas (paas surfaces). lane-decided: w25:p1, 2026-10-11, on 9a's reasoning; not ruled |
+
+The research dossier pass and its two citation errors are with the research lane (answer 10a).
+
+The aya licence is not in the research; the `aya-rs/aya` workspace declares `MIT OR Apache-2.0` (read 2026-10-08), to be re-read at the pin. An eBPF program that calls GPL-only kernel helpers must declare a GPL-compatible licence (`Documentation/bpf/bpf_licensing.rst`). the operator, 2026-10-09: the BPF program object declares `Dual MIT/GPL` in its `license` section, as the aya template does; only that object carries it. Amended 2026-10-11 by spec 0048 D1 (the operator): the workspace and the userspace loader are `Apache-2.0 OR MIT`, the program package is `GPL-2.0-only OR MIT`, and `deny.toml` still denies GPL crates.
 
 ### UAS epic dependency list (approved 2026-10-09)
 
@@ -194,6 +195,7 @@ metadata, read 2026-10-09.
 | `seccompiler` | 0.5.0 | Apache-2.0 OR BSD-3-Clause | uas-sandbox | 2 | default features; no `libseccomp` link (spec 0043 D7; ruling 2026-10-11, lane w25:p1) |
 | `libc` | 0.2.190 | MIT OR Apache-2.0 | uas-sandbox | 2 | direct dependency: seccompiler keys rules by syscall number and rustix exports none (plan 0043 R1). Locked at 0.2.190 (spec 0043 D7; ruling 2026-10-11, lane w25:p1) |
 | `serde_json` | 1.0.151 | MIT OR Apache-2.0 | uas-acp, uas-cli, uas-deck, uas-ebpf, uas-engine, uas-pool; uas-domain (dev only) | in use | root requirement `"1"`, a caret held by `pin-check` (D3). Pre-existing use found by the PR #138 critic; `uas-pool` added it in PR #138 (ruled: integrating lane w25:p1, 2026-10-11) |
+| `toml` | 1.1.8+spec-1.1.0 | MIT OR Apache-2.0 | uas-cli, uas-engine | in use | root requirement `"1.1"`, a caret held by `pin-check` (D3); the cell carries the lock's build metadata because pin-check compares strings. Ratified 2026-10-11 (ruled: the operator, 2026-10-11, lane w25:p1 (AskUserQuestion), "Ratify 1.1.8"), superseding the 0.8 decision of 2026-10-09. Parses `.saga/flows/*.toml` |
 | `gix` | 0.88.0 | MIT OR Apache-2.0 | uas-pool | 3 | default-features off, minimal features; MSRV 1.88; fallback 0.87.1 |
 | `agent-client-protocol` | 2.2.0 | Apache-2.0 | uas-acp | 3 | MSRV 1.88; 3.x is under 14 days old. In use since spec 0016 (2026-10-10); transitive pull in D1 |
 | `tokio` | 1.53.1 | MIT | uas-router, uas-deck, uas-storage; uas-engine behind feature `cortex-grpc` (spec 0026; UAS lane amendment, the operator corrects it in place) | 4, 5, 6 | default-features off; `rt-multi-thread`, `macros`, `net`, `time`, `sync`. The uas-pool runtime stays open (spec 0001 gap 1). In use since spec 0013 (2026-10-09) in uas-router, plus `io-util` (a feature of the same crate, needed by `AsyncReadExt` and `AsyncWriteExt`; UAS lane amendment, the operator corrects it in place) |
@@ -266,6 +268,7 @@ Pin it by version and sha256 and record it here.
 | `gh` (cli/cli) | 2.101.0, published 2026-09-15 | MIT | `release.yml`: the release-plz action calls `gh` in its git-config step. The `ci-rust` image has no `gh`. | sha256 for `linux_amd64` and `linux_arm64` in `release.yml`. Checked 2026-10-08 against `gh_2.101.0_checksums.txt` and a local `sha256sum` of each tarball. |
 | `bpf-linker` (aya-rs/bpf-linker) | 0.11.1 (tag v0.11.1) | MIT OR Apache-2.0 [verified 2026-10-10, `gh api repos/aya-rs/bpf-linker/contents?ref=v0.11.1`: `LICENSE-MIT` and `LICENSE-APACHE`; `Cargo.toml` `license = "MIT OR Apache-2.0"`] | `ebpf-live` job: installed per run by `taiki-e/install-action` (pinned by SHA, `f7e5d7c`). It is a static release binary, so no LLVM build runs. | Musl `x86_64` tarball `sha256:e058a6aecc9e65fa4c977b298a8e4b738424d7629769fd352eed409fb57e16e8` [verified 2026-10-10: our `sha256sum` of the tarball equals `x86_64_linux_musl` in the install-action manifest `manifests/bpf-linker.json` at `f7e5d7c`]. |
 | Rust nightly (rustup channel) | `nightly-2026-10-06` | MIT OR Apache-2.0 [verified 2026-10-10: `COPYRIGHT.html` in the toolchain's `share/doc/rust` names MIT and Apache 2.0] | `ebpf-live` drift check and `make ebpf-build`, which build `uas-ebpf.o`. Channel in `crates/uas-ebpf/ebpf/rust-toolchain.toml` and `EBPF_TOOLCHAIN` in the Makefile. | rustc commit `ea137335b78829b4514bf1b4c16302f74fab8581` [verified 2026-10-10: `rustup run nightly-2026-10-06 rustc -vV`, `1.101.0-nightly (ea137335b 2026-10-05)`]. |
+| `cargo-semver-checks` (obi1kenobi) | 0.51.0 | Apache-2.0 OR MIT (`cargo info`, read 2026-10-11) | the semver gate of spec 0048 D13: pull-request CI on each published crate | planned; version fixed here, sha256 of the release binary recorded by plan 0048 P15 before the job lands. Ruled: the operator, lane w25:p1, 2026-10-11 (AskUserQuestion), "RELEASING.md, pre-1.0 semver, cargo-semver-checks gate" |
 
 The `gh` step is temporary. Remove it when the `ci-rust` image ships `gh`.
 
@@ -310,10 +313,6 @@ make toolchain-check
 
 ## Notes
 
-Open question: does pgt get a licence or stay internal-only? The answer
-decides whether instantiated repos may publish a crate that depends on it.
+Open question: does pgt get a licence or stay internal-only? The answer decides whether instantiated repos may publish a crate that depends on it.
 
-References:
-
-- `cerebral-work/pgt@54d90f5:Cargo.toml`
-- `cerebral-work/cortex@524a97b:deny.toml`
+References: `cerebral-work/pgt@54d90f5:Cargo.toml`; `cerebral-work/cortex@524a97b:deny.toml`.

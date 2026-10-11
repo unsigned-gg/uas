@@ -5,6 +5,7 @@ tags: [acp, transport, zed]
 priority: high
 depends_on: [0011-network-namespace-isolation, 0013-llm-gateway-socket-proxy, 0016-zed-agent-communication-protocol]
 ---
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
 
 # 0035-cas-acp-transport-scope
 

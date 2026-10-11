@@ -5,6 +5,7 @@ tags: [engine, saga, cpm, wave, orchestration]
 priority: high
 depends_on: [0001-cas-architecture-and-crate-layout, 0006-cas-engine-and-harness-dogfood, 0009-saga-compensation-runner-and-durability]
 ---
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
 
 # 0024-estate-saga-cpm-and-agent-sprint-wave-strategy
 

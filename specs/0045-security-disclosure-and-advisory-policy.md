@@ -5,6 +5,7 @@ tags: [security, advisories, sbom, disclosure, release, ci]
 priority: high
 depends_on: [0002-verification-gates-and-evidence, 0003-branch-model-and-promotion, 0004-dependency-and-licence-policy, 0005-ci-cache-and-runners, 0025-wave-execution-on-the-custody-chain, 0034-tool-pinning-beyond-cargo]
 ---
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
 
 # 0045-security-disclosure-and-advisory-policy
 
@@ -55,7 +56,7 @@ exception that expires. Releases stop while the gate is red. The SBOM ships with
 | D5 | A release is blocked while advisories fail on `main`. `release.yml` runs `cargo deny check advisories` before the release-plz step. `make release-notes` runs it first and refuses before it edits a file. | `main` already requires `cargo-deny` on the promotion PR (F3). `release.yml` does not wait for CI (F9), and the advisory database changes between the PR check and the push, so the step lives in the workflow. release-plz tags on the next green push, since it tags any untagged version. | integrating lane w25:p1 brief, 2026-10-10 |
 | D6 | The disclosure policy applies now, to the private repo. Going public changes nothing in this spec: D3's PVR clause turns on once the repo offers it. | the operator keeps uas private. | the operator, 2026-10-10 [reported: cortex lane w10:p0 relay, mesh ead30203] |
 | D7 | The tracked item of D1 is one Linear ticket on team CER titled `cargo audit: advisories on main`, not a GitHub issue. A red run comments on it if it is open and creates it if not. The step needs a Linear API key held as a repository secret; adding that secret is an operator-gated secret action, and `audit.yml` references no secret today. | Linear is the tracker of record. | ruled: the operator, lane w25:p1, 2026-10-11 about 00:05Z; a GitHub issue was first proposed by uas-engineer, 2026-10-10 |
-| D8 | The crates.io crate `uas` 0.1.0 is not built from this workspace (F10). "Latest release on `main`" does not cover it, its repository link is private, and its README names no contact. | A reporter who finds the crate cannot reach `SECURITY.md`. | the operator to rule: publish a README with the reporting address, or keep it as a name hold |
+| D8 | The crates.io crate `uas` 0.1.0 is not built from this workspace (F10). "Latest release on `main`" does not cover it, its repository link is private, and its README names no contact. | A reporter who finds the crate cannot reach `SECURITY.md`. | Ruled: the operator, 2026-10-11, lane w25:p1 (AskUserQuestion), "Confirm, the crate is the vehicle" (spec 0048 D6): the crate is the publication vehicle, not a name hold; its README names the reporting address of D3 |
 
 ### Requirements (EARS)
 
@@ -109,7 +110,7 @@ Passing means exit 0: each failing fixture fails inside its test, `valid.toml` p
   D1's shared ignore list closes the gap F7 shows.
 - Spec 0004 lines 197-198 already reject `syntect` and `yrs` over unmaintained advisories. D2
   is the route if one of them is ever taken with no fix.
-- Parked for the operator: D8 and the licence mismatch of F10 (crate `MIT OR Apache-2.0`,
+- Parked for the operator: the licence mismatch of F10 (D8 is ruled; crate `MIT OR Apache-2.0`,
   workspace `LicenseRef-Proprietary`), which is spec 0004's subject. D3's acknowledgement
   target is ruled: 5 business days.
 - Parked: enabling PVR is an operator step at go-public time; this spec does not track it.
@@ -117,3 +118,4 @@ Passing means exit 0: each failing fixture fails inside its test, `valid.toml` p
   confirmed in 0.19.9 source. Aligning the local version is spec 0034's subject.
 - Out of scope: CVE assignment, a GitHub security advisory per fix, and signing the SBOM.
 - Spec 0046 D9 (`toml` in `xtask`) was dropped by the saga ruling of 2026-10-10. The `advisory-check` parse therefore cites spec 0004's `### toml` section directly, and the Plan item carries the amendment that names `xtask`. Ruled: integrating lane w25:p1, 2026-10-11.
+- Amended 2026-10-11 (source: spec 0048 D6, ruled by the operator the same day; plan 0048 P12): D8 points at spec 0048 D6, which makes the crate the publication vehicle. D8 is closed by that ruling.

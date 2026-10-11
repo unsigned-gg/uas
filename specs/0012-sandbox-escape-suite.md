@@ -5,6 +5,7 @@ tags: [sandbox, security, test, phase-2]
 priority: high
 depends_on: [0010-landlock-ruleset-and-abi-probe, 0011-network-namespace-isolation, 0043-seccomp-syscall-filter-for-slot-workers]
 ---
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
 
 # 0012-sandbox-escape-suite
 
@@ -43,7 +44,7 @@ Landlock and the launcher alone, and once with the network namespace added
 when the host can create one (`netns::isolate` on `/bin/true` succeeds).
 Without a namespace the network rows are reported as `skipped`, as spec
 0011 rules. Where `/proc/sys/kernel/seccomp/actions_avail` lacks `errno`, the
-eleven seccomp rows are reported as `skipped` and the skip is printed
+twelve seccomp rows are reported as `skipped` and the skip is printed
 (REQ-0043-08). Every attack prints `check=<name> result=<value>`; the parent
 asserts the matrix.
 
@@ -83,7 +84,8 @@ asserts the matrix.
 | `raw_socket` | `socket(AF_INET, SOCK_RAW, IPPROTO_ICMP)` | `EPERM` | seccomp (spec 0043), also capability; cannot tell the mechanisms apart |
 | `io_uring` | `io_uring_setup` | `EPERM` | seccomp (spec 0043) |
 | `open_by_handle` | `open_by_handle_at` on a workspace handle | `EPERM` | seccomp (spec 0043), also capability; cannot tell the mechanisms apart |
-| `clone3_enosys` | `clone3` with a zeroed argument struct | `ENOSYS` | seccomp (spec 0043); glibc falls back to `clone` |
+| `clone3_enosys` | `clone3` with a zeroed argument struct | `ENOSYS` | seccomp (spec 0043 D2: a second program, apart from the `EPERM` list); glibc falls back to `clone` |
+| `x32_syscall` | `getpid` with syscall number bit 30 set (x32 ABI) | `signal31` (killed by `SIGSYS`); `skipped` off `x86_64` | seccomp (spec 0043 D2, D3) |
 
 A host without `sudo`, `ping` or `$HOME/.ssh` reports `absent` for that
 row and the parent accepts it. The parent also checks that no file appeared
@@ -135,6 +137,11 @@ The PR body says which host ran it and which rows were skipped. Also run
 The suite deliberately runs every attack in one worker. A per-attack worker
 would be cleaner to read but would take seconds per row and hide
 interactions between rows, such as the staged `/tmp` binary.
+
+Amended 2026-10-11 (source: `crates/uas-sandbox/tests/escapes.rs` at `origin/development`,
+spec 0043 PR #142): the matrix gained the `x32_syscall` row, so the seccomp rows number
+twelve. The filter is two programs (0043 D2): one returns `EPERM` for the deny list and
+carries the x32 kill, one returns `ENOSYS` for `clone3` alone.
 
 Spec 0043 also lists this spec in its `depends_on`; the dependence is
 mutual and `make spec-check` has no cycle test.
