@@ -5,6 +5,7 @@ tags: [cortex, pool, adapter, grpc, uas-engine, lease]
 priority: high
 depends_on: [0001-cas-architecture-and-crate-layout, 0004-dependency-and-licence-policy, 0007-lease-rules, 0008-soma-cortex-saga-reverie-integration, 0019-pool-runtime-decision]
 ---
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
 
 # 0026-cortex-pool-member-adapter
 

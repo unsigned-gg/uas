@@ -5,6 +5,7 @@ tags: [saga, agents, contract]
 priority: high
 depends_on: [0002-verification-gates-and-evidence, 0024-estate-saga-cpm-and-agent-sprint-wave-strategy, 0025-wave-execution-on-the-custody-chain, 0037-repository-migration-to-uas]
 ---
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
 
 # 0046-saga-team-and-topology-files
 

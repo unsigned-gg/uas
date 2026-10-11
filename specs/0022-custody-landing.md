@@ -5,6 +5,7 @@ tags: [custody, blackwall, saga, orlog, receipt, landing, phase-9]
 priority: high
 depends_on: [0002-verification-gates-and-evidence, 0003-branch-model-and-promotion, 0008-soma-cortex-saga-reverie-integration, 0009-saga-compensation-runner-and-durability, 0014-ebpf-priority-clamping-and-audit-probes, 0015-slot-pool-cgroup-freezer-and-gitoxide]
 ---
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
 
 # 0022-custody-landing
 

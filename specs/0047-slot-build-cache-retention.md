@@ -5,6 +5,7 @@ tags: [pool, cache, cargo, sccache, rust-analyzer, landlock, disk, phase-3]
 priority: high
 depends_on: [0002-verification-gates-and-evidence, 0005-ci-cache-and-runners, 0010-landlock-ruleset-and-abi-probe, 0011-network-namespace-isolation, 0015-slot-pool-cgroup-freezer-and-gitoxide, 0020-build-job-cap, 0028-branchless-crdt-worktrees, 0036-slot-arbitration-across-processes, 0041-slot-memory-pids-and-disk-limits]
 ---
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
 
 # 0047-slot-build-cache-retention
 
