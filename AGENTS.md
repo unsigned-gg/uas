@@ -41,7 +41,7 @@ A crate depends only on crates in lower layers. Add a Cargo dependency only when
 8. **Write the changelog.** Add one line under `## [Unreleased]` in `CHANGELOG.md` for each user-visible PR. Never edit a released section. See specs/0053-changelog-and-commit-text-policy.md.
 9. **Merge the promotion PR on green.** The promotion PR carries `development` to `main`. A lane merges it when CI is green, with a merge commit pinned to the head SHA. Agents never approve it. Then check that `main` matches `development` and that the `release` run is green. Spec 0003 has the operator ruling.
 10. **Never push to `main`.** Enforced by the hook `guard-main-push.sh`.
-11. **No secrets in the repo.** Enforced: `make` and lefthook run gitleaks.
+11. **No secrets in the repo.** Enforced: the lefthook pre-commit stage and the CI `secrets` job run gitleaks.
 12. **Pin every external dependency** and record it in spec 0004 before first use. Enforced: copyleft licences are denied by `deny.toml`, and `make pin-check` binds the spec 0004 tables to the lockfiles.
 13. **Write prose in short sentences.** Use active voice. Use ASCII only in files.
 14. **Keep `unsafe` out, except where syscalls need it.** The workspace forbids `unsafe`. `uas-sandbox`, `uas-pool` and `uas-ebpf` deny it instead: a block opts in with `#[allow(unsafe_code)]` and a `// SAFETY:` comment, and clippy rejects an unsafe block with no SAFETY comment. Spec 0001 records the ruling.

@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: complete
 created: 2026-10-10
 tags: [cli, daemon, config, logging, exit-codes, version]
 priority: high
@@ -9,7 +9,7 @@ depends_on: [0001-cas-architecture-and-crate-layout, 0002-verification-gates-and
 
 # 0042-cas-binary-conventions
 
-> **Status**: in-progress, **Priority**: high, **Created**: 2026-10-10
+> **Status**: complete, **Priority**: high, **Created**: 2026-10-10
 
 ## Overview
 
@@ -61,12 +61,12 @@ Measured 2026-10-10 on ceres at development `bd31291`, debug build.
 
 ## Plan
 
-- [ ] `uas-ebpfd`: add `version = VERSION` to the command, set `.with_writer(std::io::stderr)`, default filter `info`.
-- [ ] `uas`: default filter `warn` when `RUST_LOG` is unset; `UAS_LOG_FORMAT` switch.
-- [ ] Workspace: move the stamp from `crates/uas-cli/build.rs` to a shared `build-rev` helper used by every binary crate.
-- [ ] Workspace `Cargo.toml`: add `env` to the `clap` features (line 33 has `derive` only), then `env = "UAS_WAVE_REPO"` on `--repo`, `env = "UAS_WAVE_STATE_DIR"` on `--state-dir`, and a new `--open-prs` flag with `env = "UAS_WAVE_OPEN_PRS"` on `wave step`, since that variable has no argument today (plan 0042 finding 3; ruled by the integrating lane 2026-10-10 as within REQ-0042-02, not a new decision).
-- [ ] `make release-notes`: refuse a `-dirty` rev.
-- [ ] Spec 0038: `uas-operator` cites this spec for its flags, logging and exit codes.
+- [x] `uas-ebpfd`: add `version = VERSION` to the command, set `.with_writer(std::io::stderr)`, default filter `info`.
+- [x] `uas`: default filter `warn` when `RUST_LOG` is unset; `UAS_LOG_FORMAT` switch.
+- [x] Workspace: move the stamp from `crates/uas-cli/build.rs` to a shared `build-rev` helper used by every binary crate.
+- [x] Workspace `Cargo.toml`: add `env` to the `clap` features (line 33 has `derive` only), then `env = "UAS_WAVE_REPO"` on `--repo`, `env = "UAS_WAVE_STATE_DIR"` on `--state-dir`, and a new `--open-prs` flag with `env = "UAS_WAVE_OPEN_PRS"` on `wave step`, since that variable has no argument today (plan 0042 finding 3; ruled by the integrating lane 2026-10-10 as within REQ-0042-02, not a new decision).
+- [x] `make release-notes`: refuse a `-dirty` rev.
+- [x] Spec 0038: `uas-operator` cites this spec for its flags, logging and exit codes.
 
 ## Test
 
@@ -90,5 +90,6 @@ cargo nextest run -p uas-cli conventions -j 2
 - The `uas demo` command prints no lease token (`main.rs` line 172); D3 keeps that, since a token is not a result.
 - Clap's `env` attribute needs the `env` feature of `clap`; the workspace manifest enables `derive` only, and the Plan adds `env`. Spec 0004 has no `clap` row to amend.
 - Status moved to in-progress on 2026-10-10: plan 0042's packages P1, P3 to P9 landed in PRs #129 to #132 on unsigned-gg/uas; P2 (the spec 0038 citation) rides in PR #119.
+- Status moved to complete on 2026-10-11: every package of plan 0042 landed and the Test block ran green (the three commands exit 0, `conventions` 6 passed, the ebpfd and release-notes rows as expected).
 - Plan 0042 (PR #127) found that `UAS_WAVE_OPEN_PRS` is read with no clap argument and that REQ-0042-09 had no Test row; both are fixed in this amendment, 2026-10-10.
 - Out of scope: the content of log records and any redaction rule. Spec 0013 D5 covers the one secret the substrate handles.
