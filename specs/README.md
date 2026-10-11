@@ -25,7 +25,7 @@ Methodology: LeanSpec. The reference copy is in `../vendor/leanspec/`.
 | [0017](0017-fastcache-prefix-hashing-and-affinity-routing.md) | FastCache prefix hashing and affinity routing | planned | high |
 | [0018](0018-mad-stack-operator-deck-and-settle-queue.md) | MAD stack operator deck and settle queue | planned | high |
 | [0019](0019-pool-runtime-decision.md) | Pool runtime decision | complete | high |
-| [0020](0020-build-job-cap.md) | Build job cap | planned | high |
+| [0020](0020-build-job-cap.md) | Build job cap | complete | high |
 | [0021](0021-cas-storage-scope-and-phase.md) | uas-storage scope and phase | planned | medium |
 | [0022](0022-custody-landing.md) | Custody landing | planned | high |
 | [0023](0023-test-time-compute-and-verifiable-reward.md) | Test-time compute and verifiable reward | planned | medium |
