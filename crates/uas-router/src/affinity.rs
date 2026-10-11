@@ -27,6 +27,15 @@ pub enum RouterError {
     /// A replica id was empty.
     #[error("invalid replica id: must not be empty")]
     InvalidReplicaId,
+    /// A request body was not a usable chat-completions payload.
+    #[error("malformed request payload: {0}")]
+    InvalidPayload(String),
+    /// The upstream replica did not answer before the deadline.
+    #[error("upstream did not respond in time")]
+    UpstreamTimeout,
+    /// The upstream replica closed the stream before the completion ended.
+    #[error("upstream closed the stream mid-completion")]
+    StreamTerminated,
 }
 
 /// A replica identifier. Never empty.
@@ -159,6 +168,30 @@ impl AffinityTable {
 mod tests {
     use super::*;
     use crate::prefix::PrefixInput;
+
+    #[test]
+    fn router_error_display_names_each_variant() {
+        assert_eq!(
+            RouterError::NoHealthyReplicas.to_string(),
+            "no replicas registered"
+        );
+        assert_eq!(
+            RouterError::InvalidReplicaId.to_string(),
+            "invalid replica id: must not be empty"
+        );
+        assert_eq!(
+            RouterError::InvalidPayload("not json".into()).to_string(),
+            "malformed request payload: not json"
+        );
+        assert_eq!(
+            RouterError::UpstreamTimeout.to_string(),
+            "upstream did not respond in time"
+        );
+        assert_eq!(
+            RouterError::StreamTerminated.to_string(),
+            "upstream closed the stream mid-completion"
+        );
+    }
 
     fn rid(i: usize) -> ReplicaId {
         ReplicaId::new(format!("replica-{i}")).expect("non-empty")

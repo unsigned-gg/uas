@@ -12,6 +12,8 @@
 #![forbid(unsafe_code)]
 
 pub mod affinity;
+pub mod health;
+pub mod multiplexer;
 pub mod prefix;
 pub mod uds_proxy;
 
