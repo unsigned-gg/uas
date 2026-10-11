@@ -62,36 +62,31 @@ No check lands red against the tree at its wave: P4 only warns; P7's two errors 
 
 ## Packages
 
-### P1: header, comment numbers, rule-change line (wave 1)
+### P1: header, comment numbers, rule-change line (wave 1) (DONE 2026-10-11, #175)
 - **Persona:** `uas-builder`.
 - **Files, all exist [verified]:** `xtask/src/spec_check.rs` (header lines 2 to 19; the `// Rule 1:` comment line 88; the doc comments at lines 564 and 580).
 - **Change:** replace the numbered list in the header with a pointer to spec 0052 and twelve lines `//! R01 file names` to `//! R12 relative links`, one per rule name, using the spec's IDs. Add the procedure line `//! Changing a rule: amend the spec 0052 tables, add a unit test that fails without the change.` Change the three `Rule N:` comments to `R01`, `R12`, `R11` in that order (the old `Rule 8` is links, now R12; the old `Rule 7` is the README, now R11). No code change.
 - **Done-when:** `test "$(grep -c 'Rule [0-9]*:' xtask/src/spec_check.rs)" = 0 && test "$(grep -c '^//! R[0-9][0-9] ' xtask/src/spec_check.rs)" = 12 && test "$(grep -c 'unit test that fails without the change' xtask/src/spec_check.rs)" = 1 && test "$(grep -c 'spec 0052' xtask/src/spec_check.rs)" -ge 1 && make fmt-check clippy JOBS=2 && cargo nextest run -p xtask -j 2` exits 0. This is Test row REQ-0052-14 plus the twelve-line and procedure checks.
 - **Red-first:** the first `test` prints 3 at the base and fails. After the edit, put one `Rule 8:` back and watch it fail again; restore.
 
-### P2: point specs 0001 and 0002 at the rule set (wave 1)
+### P2: point specs 0001 and 0002 at the rule set (wave 1) (DONE 2026-10-11, #175)
 - **Persona:** `uas-engineer`.
 - **Files, all exist [verified]:** `specs/0001-cas-architecture-and-crate-layout.md` line 65 (`xtask/` also exists, it holds `spec-check`), `specs/0002-verification-gates-and-evidence.md` line 40 (the `make hygiene` row). Keep each file's line count: 0001 and 0002 are far under 300.
 - **Change:** add to each line a link `[spec 0052](0052-spec-check-rule-set.md)` as the owner of the rule list. Do not touch the `make hygiene` target list in 0002 (spec 0052 Notes: not fixed here).
 - **Done-when:** `test "$(grep -l '0052-spec-check-rule-set' specs/0001-*.md specs/0002-*.md | wc -l)" = 2 && make spec-check JOBS=2` exits 0. The link must resolve, so R12 backs the second leg.
 - **Red-first:** the first leg counts 0 before the edit. After it, break the link target in one file (`0052-spec-check-rule-sett.md`) and watch `make spec-check` print `broken link` and exit 1; restore.
 
-### P2b: registry rows for 0040 and 0043 (wave 1, conditional)
-- **Persona:** `uas-engineer`.
-- **Precheck:** run the loop in the done-when. If it prints 0 lines, plan 0050 P4 has landed; skip this package and say so. Plan 0050 P4 owns the full status move (all three copies).
-- **Files, exist [verified]:** `specs/README.md` rows 0040 and 0043 (Status cell, third column).
-- **Change:** set both Status cells to `in-progress`, the value the frontmatter holds [asserted: the waves landed, so the frontmatter is the truth; the third copy, body line 12, is plan 0050's].
-- **Done-when:** `bash -c 'for f in specs/0*.md; do s=$(awk "NR>1&&/^---/{exit} /^status:/{print \$2}" "$f"); r=$(grep -F "($(basename "$f"))" specs/README.md | awk -F"|" "{gsub(/ /,\"\",\$4);print \$4}"); [ "$s" = "$r" ] || echo "$f"; done | wc -l'` prints `0`, then `make spec-check JOBS=2` exits 0.
-- **Red-first:** the loop prints 2 before the edit. After it, set one cell back and watch it print 1; restore.
+### P2b: registry rows for 0040 and 0043 (DONE, moot)
+- No longer needed: the registry and the frontmatter now agree on every spec, so `make spec-check JOBS=2` passes without this package.
 
-### P3: the five missing tests (wave 2)
+### P3: the five missing tests (wave 2) (DONE 2026-10-11, #178)
 - **Persona:** `uas-builder`.
 - **Files, exist [verified]:** `xtask/src/spec_check.rs`, test module only (after line 686). Use the `Tmp`, `spec` and `readme` helpers already there.
 - **Change:** five tests named `keyword_warning_on_non_ears_bullet`, `duplicate_key_fails`, `unclosed_frontmatter_fails`, `list_and_scalar_type_errors` and `missing_h1_fails`. Each asserts the exact message stem from spec 0052's table (R09, R02, R02, R02, R04), and the first asserts the warning text, not only the count.
 - **Done-when:** `test "$(cargo nextest run -p xtask --color never -j 2 -E 'test(/keyword_warning_on|duplicate_key_fails|unclosed_frontmatter|list_and_scalar|missing_h1_fails/)' 2>&1 | grep -c '^ *PASS ')" = 5 && cargo nextest run -p xtask -j 2` exits 0. The filter style and the PASS count were run on two existing tests and printed 2 [verified].
 - **Red-first:** for each test, comment out the `report.errors.push` (or warnings push) it covers and watch that test, and only that test, fail; restore all five. Spec Test rows REQ-0052-03, 05 and 09 name the plants.
 
-### P4: keyword parser fix and the legacy EARS block (wave 3)
+### P4: keyword parser fix and the legacy EARS block (wave 3) (DONE 2026-10-11, #182)
 - **Persona:** `uas-builder`.
 - **Files, exist [verified]:** `xtask/src/spec_check.rs` (`is_ears_prefix` near line 402, `check_ears_requirements` line 437, `check_spec` line 280, tests).
 - **Change, parser:** after the bold label is stripped, also strip a leading parenthesis `(Pattern)` and an optional `:`. The bullet `- **[REQ-0099-01]** (Ubiquitous): The system shall run.` then draws no R09 warning; `- **[REQ-0099-01]** (Ubiquitous): Systems shall run.` still does.
@@ -100,21 +95,21 @@ No check lands red against the tree at its wave: P4 only warns; P7's two errors 
 - **Done-when:** `cargo nextest run -p xtask --color never -j 2 -E 'test(/house_form|legacy_ears/)' && make spec-check JOBS=2 && test "$(cargo xtask spec-check 2>/dev/null | grep -c '^warning:')" -ge 3` exits 0. The `-ge 3` leg is red before the change (2 length warnings) and goes green once the legacy blocks speak. The unit tests plant: the house bullet in a modern tree (no warning), `Systems shall run.` and `will` for `shall` and `may` in a legacy tree (a warning each, exit 0), and a backticked `may` (none).
 - **Red-first:** run the tests before the parser edit: the house-form test fails. Revert only the legacy call and watch the legacy tests fail.
 
-### P5: spec 0052 amendment for P4, and its own two bullets (wave 3)
+### P5: spec 0052 amendment for P4, and its own two bullets (wave 3) (DONE 2026-10-11, #184)
 - **Persona:** `uas-engineer`.
 - **Files, exist:** `specs/0052-spec-check-rule-set.md` only. The file is 215 lines.
 - **Change:** R07, R08 and R09 Mode becomes `all (legacy: block, warning)`; the sentence "R07 to R09 skip fenced lines" gains the legacy block; replace F6's "about 290" with the checker's count from P4's verdict; rewrite REQ-0052-01 and REQ-0052-13 so they open with `The` (the two bullets in this file that R09 will warn on, finding 2).
 - **Done-when:** `make spec-check JOBS=2 2>&1 | grep '^warning: specs/0052' | wc -l` prints `0`, and `make spec-check JOBS=2` exits 0.
 - **Red-first:** after P4 landed, the count is 2 before the edit.
 
-### P6: clear the legacy warnings in the other specs (wave 4)
+### P6: clear the legacy warnings in the other specs (wave 4) (DONE 2026-10-11, #185)
 - **Persona:** `uas-engineer`.
 - **Files, exist [verified]:** the specs the checker names. At the base the mirror script lists 0009, 0014, 0019, 0021, 0022, 0023, 0025, 0026, 0033, 0039, 0042, 0044, 0045, 0047, 0048, 0049, 0050, 0053 (18 files; 0052 is P5). Re-derive the list from `cargo xtask spec-check` output at dispatch; some of these have open spec PRs, so fetch first.
 - **Change:** reword only the opening words of each flagged bullet to begin with The, When, While, If or Where, and the `may` in 0014 line 57 to `can`. No change of meaning, no change of requirement ID. About 46 lines change (45 R09 bullets and the one R08 line), 92 in the diff.
 - **Done-when:** `test "$(make spec-check JOBS=2 2>&1 | grep '^warning:' | grep -vc 'lines is over')" = 0 && make spec-check JOBS=2` exits 0. Only the length warnings (0004, 0025) may remain.
 - **Red-first:** the count is 46 before the edit (45 R09 bullets after P5 clears spec 0052's two, plus the 1 R08 at spec 0014 line 57); re-measure with the checker from P4.
 
-### P7: R12 over plans and R13 status parity (wave 4)
+### P7: R12 over plans and R13 status parity (wave 4) (DONE 2026-10-11, #188)
 - **Persona:** `uas-builder`.
 - **Needs:** P2b done or plan 0050 P4 landed (finding 5).
 - **Files, exist [verified]:** `xtask/src/spec_check.rs` (`check` line 69, `check_links` line 565, `check_spec`, `check_readme` line 581, the `readme()` helper).
@@ -123,21 +118,21 @@ No check lands red against the tree at its wave: P4 only warns; P7's two errors 
 - **Done-when:** `cargo nextest run -p xtask --color never -j 2 -E 'test(/plan_links|status_parity/)' && make spec-check JOBS=2` exits 0. Tests plant: `[x](nope.md)` in a plan (error), `[x](../../specs/0001-cas-architecture-and-crate-layout.md)` (passes), a README row `in-progress` against frontmatter `planned` (error naming both), a README with no `Status` column (error), and the unplanted tree (exit 0 with the existing tests).
 - **Red-first:** run both new tests before the code; they fail. With R13 in place, revert P2b's rows and watch `make spec-check` print the two lines and exit 1 (the same two the loop names).
 
-### P8: spec 0052 amendment for R12 over plans and R13 (wave 4)
+### P8: spec 0052 amendment for R12 over plans and R13 (wave 4) (DONE 2026-10-11, #189)
 - **Persona:** `uas-engineer`.
 - **Files, exist:** `specs/0052-spec-check-rule-set.md`.
 - **Change:** table R13 gets Mode `README`, severity error, the message of P7; R12 gets "and `engineering/plans/*.md`"; add the "no `Status` column" message; add a Notes line that body line 12 is unchecked (finding 1) and that plans cite files in code spans (finding 3). Keep the file under 300 lines.
 - **Done-when:** `make spec-check JOBS=2` exits 0 and `grep -c 'differs from the specs/README.md row' specs/0052-spec-check-rule-set.md` prints at least 1.
 - **Red-first:** the grep prints 0 before the edit.
 
-### P9: R14 plan package shape as a warning (wave 5)
+### P9: R14 plan package shape as a warning (wave 5) (DONE 2026-10-11, #192)
 - **Persona:** `uas-builder`.
 - **Files, exist:** `xtask/src/spec_check.rs`.
 - **Change:** for each `engineering/plans/*.md` other than `README.md`, split at `### P<n>` headings outside fences. A package passes if its section holds the word BLOCKED, or the word DONE in its heading, or all four labels `**Persona`, `**Files`, `**Done-when`, `**Red-first` (case-insensitive, text may follow inside the bold). Otherwise: `warning: engineering/plans/<file>:<line>: package P12 lacks Done-when`, one per package naming the first missing label. Spec 0052 R14 says "the spec line that blocks it"; the check looks for the word, as spec 0050 Test row 1 does [asserted].
 - **Done-when:** `cargo nextest run -p xtask --color never -j 2 -E 'test(/plan_shape/)' && test "$(cargo xtask spec-check 2>/dev/null | grep -c 'engineering/plans')" = 0` exits 0. Tests plant a package without Done-when (a warning), the same with BLOCKED (none), a DONE heading (none). The second leg proves today's eight plans stay clean.
 - **Red-first:** the plant test fails before the code. Strip `Done-when` from a copy of plan 0049 and run the checker on the copy: it warns once per package.
 
-### P10: spec 0052 amendment for R14 (wave 5)
+### P10: spec 0052 amendment for R14 (wave 5) (DONE 2026-10-11, #193)
 - **Persona:** `uas-engineer`.
 - **Files, exist:** `specs/0052-spec-check-rule-set.md`.
 - **Change:** R14 row becomes built with the message of P9 and the DONE exemption; D12 and REQ-0052-16 gain the DONE clause.
