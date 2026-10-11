@@ -36,7 +36,7 @@ Measured 2026-10-11 on `origin/development` ebc7be8. Paths are relative to the r
   nine are within 40 to 110. `grep -nP '[^\x00-\x7F]'` finds nothing in any of them. Each holds
   `## Boundaries`, `## Tools and policy`, `## Escalation`, `## Output` in that order and one
   `Forbidden:` line, and each Output section states the 15-line cap.
-- **F3 [verified]:** `.saga/teams.toml` lines 22 to 32 name 6 of the 9 in the `uas-estate` gang:
+- **F3 [verified]:** `.saga/teams.toml` lines 19 to 27 name 7 of the 9 in the `uas-estate` gang:
   foreman, architect, builder (twice), ebpf-builder, engineer, critic, prober. Planner and
   k8s-builder are not in it. The README says `--model` wins over a persona's `model:` line
   (lines 33 to 35).
@@ -53,7 +53,7 @@ Measured 2026-10-11 on `origin/development` ebc7be8. Paths are relative to the r
   `.claude/skills/` holds 5 symlinks to them. `docs/runbooks/README.md` says "No runbooks yet."
 - **F7 [verified]:** `Makefile` lines 15 to 17 list 32 names in `.PHONY`; 32 targets are defined
   (the two sets are equal); each defines a `##` help text. Line 49 gives `hygiene` 8 members. The
-  `AGENTS.md` row (line 56) lists 5; spec 0002 line 39 lists 4. `ci.yml` lines 84 and 85 run all 8.
+  `AGENTS.md` row (line 56) lists 5; spec 0002 line 40 lists 4. `ci.yml` lines 84 and 85 run all 8.
 - **F8 [verified]:** the Make inputs are `JOBS ?= 2` (line 8), `NEXTEST_PROFILE`, `ORG`,
   `EBPF_TOOLCHAIN`, `SUDO`, and per target `VERSION`, `NAME`, `BASE`, `HEAD`, `PR_BODY_FILE`,
   `HEAD_REF`. The `xtask` targets take no `JOBS`: spec 0052 F2.
@@ -106,8 +106,8 @@ Every target in `.PHONY` is contract. Owner is the spec whose row decides the ta
 
 | Targets | Owner | Inputs |
 |---|---|---|
-| `check`, `ci`, `smoke`, `template-check`, `fmt-check`, `clippy`, `test`, `doc-test`, `typos`, `machete` | 0002 (gate table, lines 38 to 42) | `JOBS`, `NEXTEST_PROFILE` |
-| `hygiene` | 0002 (line 39), each other member under its owner below | `JOBS` |
+| `check`, `ci`, `smoke`, `template-check`, `fmt-check`, `clippy`, `test`, `doc-test`, `typos`, `machete` | 0002 (gate table, lines 39 to 43) | `JOBS`, `NEXTEST_PROFILE` |
+| `hygiene` | 0002 (line 40), each other member under its owner below | `JOBS` |
 | `spec-check` | 0052 | none |
 | `toolchain-check`, `pin-check`, `pgt-install`, `deny` | 0004 (0002 names `deny` in `check`) | none |
 | `oss-check`, `spdx-check`, `fetch-contracts` | 0048 | none |
@@ -135,7 +135,7 @@ decide the target, so this spec owns it (F7 lists no other owner).
 | D6 | `tooling-check` is a shell recipe of about 40 lines, in the style of `hook-test`, not an `xtask`. It has no banned-string list (F5). If paas publishes one, it becomes a variable of the recipe. | No Rust is needed for awk and grep checks; F6 of the linter has no source here. | lane-decided: uas-engineer, 2026-10-11 |
 | D7 | A skill is a procedure an agent follows for a recurring kind of work, with a "Use when" trigger. A procedure for an operator with no agent trigger is a runbook under `docs/runbooks/`. A rule or a contract is a spec. | `docs/runbooks/` is empty and the skills are agent-facing (F6). | lane-decided: uas-engineer, 2026-10-11 |
 | D8 | A new Make target ships with its `.PHONY` entry, a `##` help text and one row in the Make surface table above (or an amended row of its owner). `tooling-check` enforces the first and the row. | F7 shows the sets equal today; nothing keeps them equal. | lane-decided: uas-engineer, 2026-10-11 |
-| D9 | Documentation tables that list `hygiene` members (`AGENTS.md` line 56, spec 0002 line 39) are corrected to the Makefile's 8, by a builder in Plan P3. | F7: they list 5 and 4. | lane-decided: uas-engineer, 2026-10-11 |
+| D9 | Documentation tables that list `hygiene` members (`AGENTS.md` line 56, spec 0002 line 40) are corrected to the Makefile's 8, by a builder in Plan P3. P3 takes that fix over from spec 0002 line 105 and spec 0052 line 228, which each leave it to the other (amendment list in Notes). | F7: they list 5 and 4. | lane-decided: uas-engineer, 2026-10-11 |
 
 ### Requirements (EARS)
 
@@ -151,13 +151,13 @@ decide the target, so this spec owns it (F7 lists no other owner).
 - **[REQ-0056-10]** (Unwanted behavior): IF a target defined in the Makefile is missing from `.PHONY`, lacks a `##` help text, or has no row in the Make surface table of this spec, THEN `make tooling-check` shall exit non-zero naming the target.
 - **[REQ-0056-11]** (Event-driven): WHEN a pull request adds a Make target, it shall add the `.PHONY` entry, the help text and one row to the Make surface table, or amend the row of the spec that owns the target.
 - **[REQ-0056-12]** (Ubiquitous): The `make hygiene` row of `AGENTS.md` shall name every member of the Makefile `hygiene` target.
-- **[REQ-0056-13]** (State-driven): WHILE a target is defined as `xtask`-backed, the Make surface table shall list no `JOBS` input for it.
+- **[REQ-0056-13]** (Ubiquitous): The owner cell of each row of the Make surface table shall be non-empty and shall be This or name only specs that exist in `specs/`.
 
 ## Plan
 
 - [ ] P1, one builder, `Makefile` only: add `tooling-check` (E1 to E6, REQ-0056-01 to 06, 08, 09, 10), add it to `.PHONY` and to `hygiene`, with one planted-defect test per row of the Test table. Red first: run the new recipe before the persona checks exist.
 - [ ] P2, the integrating lane: record the linter step of REQ-0056-07 in `.claude/agents/README.md` (Lint section), after D5 is confirmed.
-- [ ] P3, one builder, docs only: correct the `hygiene` rows of `AGENTS.md` and spec 0002 (D9, REQ-0056-12).
+- [ ] P3, one builder, docs only: correct the `hygiene` rows of `AGENTS.md` and spec 0002, and amend spec 0002 line 105 and spec 0052 line 228 to name this spec as the owner (D9, REQ-0056-12).
 - [ ] P4, the status moves per spec 0050 D14: `in-progress` with P1, `complete` when the Test command exits 0 on `development`.
 
 ## Test
@@ -177,10 +177,10 @@ A row goes red when the check it names is removed from the command.
 | REQ-0056-07 | Process rule, no automated check: the reviewer reads the PR body for a `TOTALS:` line. Evidence tier `asserted` until P2 lands. |
 | REQ-0056-08 | `make tooling-check` is absent today: `make: *** No rule to make target`. Red until P1. After P1, remove it from the `hygiene` line: `make -n hygiene` no longer prints its recipe. |
 | REQ-0056-09 | Rename a skill directory: `FAIL skill name`. Break a symlink: `FAIL skill link`. Edit a description to start "Run": `FAIL skill trigger`. |
-| REQ-0056-10 | Add `foo: ## x` to the Makefile without `.PHONY`: `FAIL not in .PHONY: foo`. Add it to `.PHONY`: `FAIL no row: foo`. Remove a `##`: `FAIL no help text`. |
+| REQ-0056-10 | Add `foo: ## x` to the Makefile without `.PHONY`: `FAIL not in .PHONY: foo`. Add it to `.PHONY`: `FAIL no row: foo`. Remove a `##`: `FAIL no help text`. Delete the `hook-test` row from the Make table while D6 prose still names the target: `FAIL no row: hook-test` (the check reads the table only). |
 | REQ-0056-11 | Same plants as REQ-0056-10, seen from the PR side: the PR cannot go green. |
-| REQ-0056-12 | Today: red. The command in the last block of this section prints `missing oss-check spdx-check hook-test`. Green after P3. |
-| REQ-0056-13 | Read the table: `spec-check`, `toolchain-check`, `pin-check`, `text-check` rows show `none` or env names. Process rule. |
+| REQ-0056-12 | Today: red. The command in the last block of this section prints three lines: `missing oss-check`, `missing spdx-check`, `missing hook-test`. Green after P3. |
+| REQ-0056-13 | Blank the owner cell of the `hook-test` row: `FAIL owner cell`. Write `9999` in it: `FAIL owner spec 9999`. |
 
 The command below runs today on `development` plus this spec. It is the body of P1 in shell
 form, so the builder's recipe has a proven starting point.
@@ -220,12 +220,18 @@ for d in .agents/skills/*/; do
   grep -q '^description: Use when' "$d/SKILL.md" || { echo "FAIL skill trigger: $s"; bad=1; }
   [ "$(readlink ".claude/skills/$s")" = "../../.agents/skills/$s" ] || { echo "FAIL skill link: $s"; bad=1; }
 done
+tbl=$(awk '/^\| Targets \| Owner/{f=1} f&&/^$/{exit} f' specs/0056-agent-roster-and-tooling.md | sed 1,2d)
 ph=$(sed -n '/^\.PHONY/,/^$/p' Makefile | tr -d '\\' | sed 's/^\.PHONY://' | tr -s ' \t' '\n' | grep -v '^$')
 for t in $(grep -oE '^[a-zA-Z0-9_-]+:( |$)' Makefile | tr -d ': '); do
   echo "$ph" | grep -qx "$t" || { echo "FAIL not in .PHONY: $t"; bad=1; }
   grep -qE "^$t:.*## " Makefile || { echo "FAIL no help text: $t"; bad=1; }
-  grep -qF "\`$t\`" specs/0056-agent-roster-and-tooling.md || { echo "FAIL no row: $t"; bad=1; }
+  echo "$tbl" | grep -qF "\`$t\`" || { echo "FAIL no row: $t"; bad=1; }
 done
+while IFS= read -r row; do
+  own=$(echo "$row" | awk -F'|' '{print $3}')
+  case "$own" in *This*|*[0-9][0-9][0-9][0-9]*) ;; *) echo "FAIL owner cell: $row"; bad=1;; esac
+  for n in $(echo "$own" | grep -oE '[0-9]{4}'); do ls specs/$n-*.md >/dev/null 2>&1 || { echo "FAIL owner spec $n"; bad=1; }; done
+done <<< "$tbl"
 for t in $ph; do grep -qE "^$t:" Makefile || { echo "FAIL phony without target: $t"; bad=1; }; done
 [ "$bad" = 0 ] && echo OK
 ```
@@ -247,3 +253,5 @@ done
 - Skills reach Claude Code through symlinks (AGENTS.md lines 63 to 66). A skill added without
   the symlink is invisible to `/skills`.
 - Open, for another lane: whether paas will publish `tests/agents.test.sh` (F5). Not blocking.
+- Amendments this spec requires of others, done in P3: spec 0002 line 105 and spec 0052 line 228
+  say the `hygiene` drift belongs to a 0052 note or a 0002 amendment; both change to name spec 0056.
