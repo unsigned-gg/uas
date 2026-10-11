@@ -1,16 +1,16 @@
 <!-- SPDX-License-Identifier: CC-BY-4.0 -->
 # Build plan: 0052-spec-check-rule-set
 
-Spec: `specs/0052-spec-check-rule-set.md` (status planned). Base: `origin/development` `2a3d442`.
+Spec: `specs/0052-spec-check-rule-set.md` (status planned). Base: `origin/development` `4b284ac`.
 Planner: `uas-planner`, 2026-10-11. Every path below was read in a worktree cut from that base.
 Tiers: `verified` = I ran or read it at the path named; `reported` = the spec says it; `asserted` = my judgement.
 
 ## Findings the builders must know
 
-1. **Two specs mismatch, not three [verified]:** a bash loop comparing `status:` in each `specs/0*.md` frontmatter with the third cell of its `specs/README.md` row prints exactly two lines at `2a3d442`: 0040 (frontmatter `in-progress`, README `planned`) and 0043 (same). Spec 0041 is `planned` in both, so it is not an R13 mismatch (it lags spec 0050 D14, a different rule). Control: the loop prints nothing for the 50 specs that agree. Plan 0050 (branch `origin/plan/spec-0050`, its finding 1) also moves the statuses of 0040 to 0043 and 0048, in three places: frontmatter, body line 12 (`> **Status**:`) and the README row. R13 compares only the first and the last, so the body line stays unchecked.
+1. **Two specs mismatch, not three [verified]:** a bash loop comparing `status:` in each `specs/0*.md` frontmatter with the third cell of its `specs/README.md` row prints exactly two lines at the base: 0040 (frontmatter `in-progress`, README `planned`) and 0043 (same). Spec 0041 is `planned` in both, so it is not an R13 mismatch (it lags spec 0050 D14, a different rule). Control: the loop prints nothing for the 50 specs that agree. Plan 0050 (branch `origin/plan/spec-0050`, its finding 1) also moves the statuses of 0040 to 0043 and 0048, in three places: frontmatter, body line 12 (`> **Status**:`) and the README row. R13 compares only the first and the last, so the body line stays unchecked.
 2. **The keyword fix alone clears nothing [verified by a throwaway script that mirrors the checker, not by the checker]:** with `is_ears_prefix` fixed for `**[REQ-NNNN-NN]** (Pattern):`, the legacy `### Requirements (EARS)` blocks of 19 of the 52 specs still hold 46 bullets that draw the R09 warning. They start with `Every`, `Each`, `After`, `A change`, or a code span (the checker strips code spans before it looks), for example 0033 REQ-01 and 0052 REQ-01. Plus 1 R08 warning: spec 0014 line 57, `it may read`. R07 would raise 0 (every legacy spec has a block with `shall`; only 0024, which is modern, has none). 557 lines with `shall` in all. The spec's "about 290" and "one modal word" were estimates; 46 and 1 are the numbers. 46 one-line rewordings is small enough for one PR (P6). The throwaway script is not the checker: P4 replaces my count with the checker's own, and P6 works from the checker's output, not from my line list.
-3. **R12 over plans is nearly inert today [verified]:** the six plan files hold zero relative markdown links (a script with the checker's link logic found 0 targets). Plans cite files in code spans, which R12 skips. P7 lands green, and also protects almost nothing until plan authors use links. The spec's rationale (D7) assumes links.
-4. **R14 would warn once on today's plans [verified by script]:** 55 packages in plans 0040 to 0049, 54 hold all four labels or BLOCKED. The one that warns is 0048 P12, a package marked `DONE`. The rule has no DONE exemption; P9 adds one, and P10 states it in the spec (finding for the spec, below).
+3. **R12 over plans is nearly inert today [verified]:** the eight plan files (0040 to 0043, 0048 to 0051) hold zero relative markdown links (a script with the checker's link logic found 0 targets). Plans cite files in code spans, which R12 skips. P7 lands green, and also protects almost nothing until plan authors use links. The spec's rationale (D7) assumes links.
+4. **R14 would warn once on today's plans [verified by script]:** 68 packages in plans 0040 to 0043 and 0048 to 0051, 67 hold all four labels or BLOCKED. The one that would warn is 0048 P12, a package marked `DONE`; plans 0050 and 0051 are clean. The rule has no DONE exemption; P9 adds one, and P10 states it in the spec (finding for the spec, below).
 5. **`repository_specs_pass_check` runs the checker on the real tree [verified, `spec_check.rs` line 1021]:** once R12 over plans and R13 exist, `make test` fails for any branch whose spec status and registry row disagree. So P7 (R13) cannot land before the registry is clean (P2b or plan 0050 P4).
 6. **The unit-test README helper has no Status column [verified, `readme()` near line 640]:** it writes `| [name](name) | t |`. R13 needs a `Status` header cell. P7 changes the helper to four columns (`planned` in both fixtures) and makes a missing `Status` header an error, so deleting the column cannot silence R13.
 7. **Builders do not write CHANGELOG lines [reported, spec 0050 D6]:** D10 asks for a CHANGELOG line with each rule change. The integrator writes it; no package edits `CHANGELOG.md`.
@@ -67,7 +67,7 @@ No check lands red against the tree at its wave: P4 only warns; P7's two errors 
 - **Files, all exist [verified]:** `xtask/src/spec_check.rs` (header lines 2 to 19; the `// Rule 1:` comment line 88; the doc comments at lines 564 and 580).
 - **Change:** replace the numbered list in the header with a pointer to spec 0052 and twelve lines `//! R01 file names` to `//! R12 relative links`, one per rule name, using the spec's IDs. Add the procedure line `//! Changing a rule: amend the spec 0052 tables, add a unit test that fails without the change.` Change the three `Rule N:` comments to `R01`, `R12`, `R11` in that order (the old `Rule 8` is links, now R12; the old `Rule 7` is the README, now R11). No code change.
 - **Done-when:** `test "$(grep -c 'Rule [0-9]*:' xtask/src/spec_check.rs)" = 0 && test "$(grep -c '^//! R[0-9][0-9] ' xtask/src/spec_check.rs)" = 12 && test "$(grep -c 'unit test that fails without the change' xtask/src/spec_check.rs)" = 1 && test "$(grep -c 'spec 0052' xtask/src/spec_check.rs)" -ge 1 && make fmt-check clippy JOBS=2 && cargo nextest run -p xtask -j 2` exits 0. This is Test row REQ-0052-14 plus the twelve-line and procedure checks.
-- **Red-first:** the first `test` prints 3 at `2a3d442` and fails. After the edit, put one `Rule 8:` back and watch it fail again; restore.
+- **Red-first:** the first `test` prints 3 at the base and fails. After the edit, put one `Rule 8:` back and watch it fail again; restore.
 
 ### P2: point specs 0001 and 0002 at the rule set (wave 1)
 - **Persona:** `uas-engineer`.
@@ -109,10 +109,10 @@ No check lands red against the tree at its wave: P4 only warns; P7's two errors 
 
 ### P6: clear the legacy warnings in the other specs (wave 4)
 - **Persona:** `uas-engineer`.
-- **Files, exist [verified]:** the specs the checker names. At `2a3d442` the mirror script lists 0009, 0014, 0019, 0021, 0022, 0023, 0025, 0026, 0033, 0039, 0042, 0044, 0045, 0047, 0048, 0049, 0050, 0053 (18 files; 0052 is P5). Re-derive the list from `cargo xtask spec-check` output at dispatch; some of these have open spec PRs, so fetch first.
-- **Change:** reword only the opening words of each flagged bullet to begin with The, When, While, If or Where, and the `may` in 0014 line 57 to `can`. No change of meaning, no change of requirement ID. About 47 lines change, 94 in the diff.
+- **Files, exist [verified]:** the specs the checker names. At the base the mirror script lists 0009, 0014, 0019, 0021, 0022, 0023, 0025, 0026, 0033, 0039, 0042, 0044, 0045, 0047, 0048, 0049, 0050, 0053 (18 files; 0052 is P5). Re-derive the list from `cargo xtask spec-check` output at dispatch; some of these have open spec PRs, so fetch first.
+- **Change:** reword only the opening words of each flagged bullet to begin with The, When, While, If or Where, and the `may` in 0014 line 57 to `can`. No change of meaning, no change of requirement ID. About 46 lines change (45 R09 bullets and the one R08 line), 92 in the diff.
 - **Done-when:** `test "$(make spec-check JOBS=2 2>&1 | grep '^warning:' | grep -vc 'lines is over')" = 0 && make spec-check JOBS=2` exits 0. Only the length warnings (0004, 0025) may remain.
-- **Red-first:** the count is 47 before the edit (as measured by the checker in P4; re-measure).
+- **Red-first:** the count is 46 before the edit (45 R09 bullets after P5 clears spec 0052's two, plus the 1 R08 at spec 0014 line 57); re-measure with the checker from P4.
 
 ### P7: R12 over plans and R13 status parity (wave 4)
 - **Persona:** `uas-builder`.
@@ -134,7 +134,7 @@ No check lands red against the tree at its wave: P4 only warns; P7's two errors 
 - **Persona:** `uas-builder`.
 - **Files, exist:** `xtask/src/spec_check.rs`.
 - **Change:** for each `engineering/plans/*.md` other than `README.md`, split at `### P<n>` headings outside fences. A package passes if its section holds the word BLOCKED, or the word DONE in its heading, or all four labels `**Persona`, `**Files`, `**Done-when`, `**Red-first` (case-insensitive, text may follow inside the bold). Otherwise: `warning: engineering/plans/<file>:<line>: package P12 lacks Done-when`, one per package naming the first missing label. Spec 0052 R14 says "the spec line that blocks it"; the check looks for the word, as spec 0050 Test row 1 does [asserted].
-- **Done-when:** `cargo nextest run -p xtask --color never -j 2 -E 'test(/plan_shape/)' && test "$(cargo xtask spec-check 2>/dev/null | grep -c 'engineering/plans')" = 0` exits 0. Tests plant a package without Done-when (a warning), the same with BLOCKED (none), a DONE heading (none). The second leg proves today's six plans stay clean.
+- **Done-when:** `cargo nextest run -p xtask --color never -j 2 -E 'test(/plan_shape/)' && test "$(cargo xtask spec-check 2>/dev/null | grep -c 'engineering/plans')" = 0` exits 0. Tests plant a package without Done-when (a warning), the same with BLOCKED (none), a DONE heading (none). The second leg proves today's eight plans stay clean.
 - **Red-first:** the plant test fails before the code. Strip `Done-when` from a copy of plan 0049 and run the checker on the copy: it warns once per package.
 
 ### P10: spec 0052 amendment for R14 (wave 5)
@@ -154,4 +154,4 @@ No check lands red against the tree at its wave: P4 only warns; P7's two errors 
 
 - **Registry versus plan 0050 P4:** if plan 0050 P4 lands first, P2b is skipped; if P2b lands first, plan 0050 P4 edits the README rows again, harmlessly.
 - **Counts:** 46 and 1 come from a script that mirrors the checker; P4's verdict replaces them.
-- **I ran no package.** Paths, line numbers and counts were read at `2a3d442`; the P3 filter style was run on existing tests only.
+- **I ran no package.** Paths, line numbers and counts were read at `4b284ac`; the P3 filter style was run on existing tests only.
