@@ -18,7 +18,7 @@ only in the comment block and the code of `xtask/src/spec_check.rs`. Specs 0001 
 checker but state no rule. This spec owns the rule set: what each rule checks, whether it warns
 or fails, the line caps, and how a rule changes. the operator ruled on 2026-10-11 about 03:10Z that
 this spec is drafted (AskUserQuestion, lane w25:p1, label "Spec-check rule set") [reported:
-integrating lane brief]. Content decisions are the integrating lane's unless marked proposed.
+integrating lane brief]. Content decisions are the integrating lane's.
 
 The checker is accurate about what it checks. Three things it does not check matter more than any
 rule it has: the EARS checks skip the layout 47 of 48 specs use (F5), the keyword check
@@ -67,7 +67,7 @@ control: it exits 0 with two warnings.
 
 ## Design
 
-Twelve rules, numbered here. The code comment numbers stop being the reference (D11).
+Twelve rules enforced today, R01 to R12, and two decided and not built, R13 and R14. The code comment numbers stop being the reference (D11).
 
 | ID | Checks | Mode | Severity | Message stem (exact, after `specs/<file>:<line>: `) |
 |---|---|---|---|---|
@@ -83,6 +83,8 @@ Twelve rules, numbered here. The code comment numbers stop being the reference (
 | R10 | Line count: over 300 warns, over 400 fails | all | both | `318 lines is over 300; consider splitting`; `401 lines is over the 400-line limit; split into sub-spec files` |
 | R11 | `specs/README.md` exists and links every spec once and no missing file | README | error | `specs/README.md:1: 0099-plant.md is not listed`; `... is listed 2 times`; `lists 0098-ghost.md but the file does not exist`; `file is missing` |
 | R12 | Relative links in specs and the README resolve | all | error | `broken link `nope.md`` |
+| R13 | Frontmatter `status` equals the Status column of the README row (D12) | README | error | not built; message fixed when built |
+| R14 | Plan packages hold Persona, Files, Done-when, Red-first or BLOCKED (D12) | plans | warning | not built; message fixed when built |
 
 Mode, modern or legacy, is set by an H2 named `Requirements`. Modern sections are Requirements,
 Design, Tasks, Verification, Notes. Legacy sections are Overview, Design, Plan, Test, Notes. The
@@ -107,14 +109,15 @@ stderr, then `spec-check: ok (N warning(s))` or `spec-check: N error(s)`.
 | D1 | This spec owns the rule set: table R01 to R12 and the modal list. The code and this table must agree; a mismatch is a defect in whichever is stale. | The rules live in a comment today, and the comment has a count error (F1). | lane-decided: integrating lane brief, 2026-10-11 |
 | D2 | Severities stay as the table shows. Structure, registry, links, the `shall` count and the 400-line cap fail the build. The 300-line cap, the modal check and the keyword check warn. | A warning that blocks every PR on a style point costs more than it saves; the structural rules protect the registry and the gate. | lane-decided: integrating lane brief, uas-engineer, 2026-10-11 |
 | D3 | The caps stay 300 and 400, and the 300 warning stays advisory. Specs 0004 (318) and 0025 (301) keep their warning: this spec does not touch either file. Spec 0004 splits before it reaches 400. Spec 0025 may drop under 300 when spec 0049 amends it; nothing here depends on that. | Moving the cap hides the next long spec. Two warnings in 48 specs show the cap does its job (F3). Spec 0004 grows with every pin (assumed ~20 lines a wave, `asserted`). | lane-decided: integrating lane, uas-engineer, 2026-10-11 |
-| D4 | The legacy layout is the house layout and stays. Keep both modes. No deprecation date for the legacy. | 47 of 48 specs and the spec template use it (F4, F5). A deprecation date would force 47 rewrites for no new check. Modern mode keeps its one user until spec 0049 removes that user's file from uas. | proposed, for the integrating lane; uas-engineer, 2026-10-11 |
-| D5 | Close the enforcement hole instead: run R07 to R09 on the `### Requirements (EARS)` block of legacy specs. Order: (1) fix `is_ears_prefix` to accept `**[REQ-NNNN-NN]** (Pattern):` (F6); (2) turn the three checks on for the block as warnings; (3) promote R07 to an error once the repository is clean. The repository holds one modal word in about 430 bullets (approximate scan, 2026-10-11). Step 3 has no date; the integrating lane sets it. | Today the EARS rules protect one spec (F4, F5). The cost is one parser fix, then warnings. | proposed, for the integrating lane; uas-engineer, 2026-10-11 |
-| D6 | Plans (`engineering/plans/*.md`) get no structural check: no section, EARS or length rule. | Plans are working files deleted or marked done when packages land (F10). | lane-decided: uas-engineer, 2026-10-11 |
-| D7 | Plans do get link resolution (R12 only), over `engineering/plans/*.md`. | Today a broken link in a plan passes (F7), and plans cite specs by file name. One call to the existing link function. | proposed, for the integrating lane; uas-engineer, 2026-10-11 |
+| D4 | The legacy layout is the house layout and stays. Keep both modes. No deprecation date for the legacy. | 47 of 48 specs and the spec template use it (F4, F5). A deprecation date would force 47 rewrites for no new check. Modern mode keeps its one user until spec 0049 removes that user's file from uas. | lane-decided: integrating lane w25:p1, 2026-10-11; proposed by uas-engineer |
+| D5 | Close the enforcement hole instead: run R07 to R09 on the `### Requirements (EARS)` block of legacy specs. Order: (1) fix `is_ears_prefix` to accept `**[REQ-NNNN-NN]** (Pattern):` (F6); (2) turn the three checks on for the block as warnings; (3) promote R07 to an error once the repository is clean. The repository holds one modal word in about 430 bullets (approximate scan, 2026-10-11). Step 3 becomes an error on a date the lane sets after one clean week of warnings. | Today the EARS rules protect one spec (F4, F5). The cost is one parser fix, then warnings. | lane-decided: integrating lane w25:p1, 2026-10-11; proposed by uas-engineer |
+| D6 | Plans (`engineering/plans/*.md`) get no section, EARS or length rule. The only plan checks are D7 (links) and D12 (package shape, warning). | Plans are working files deleted or marked done when packages land (F10). | lane-decided: uas-engineer, 2026-10-11 |
+| D7 | Plans do get link resolution (R12 only), over `engineering/plans/*.md`. | Today a broken link in a plan passes (F7), and plans cite specs by file name. One call to the existing link function. | lane-decided: integrating lane w25:p1, 2026-10-11; proposed by uas-engineer |
 | D8 | R09 stays a warning, now and after D5. | It misfires on the house form (F6), and a keyword style point does not justify failing a PR. | lane-decided: uas-engineer, 2026-10-11 |
 | D9 | The modal list stays the four words above. Adding a word follows D10. | Only `shall` lines are scanned; a longer list raises false positives on prose such as "may be empty". | lane-decided: uas-engineer, 2026-10-11 |
 | D10 | A rule change ships in one PR with three parts: an amendment of the table above, a unit test in `xtask/src/spec_check.rs` that goes red without the change, and a CHANGELOG line. | Today a rule can change with no spec and no test (F1, F9). | lane-decided: integrating lane brief, 2026-10-11 |
 | D11 | The code comment block stops carrying a numbered list. It points at this spec and keeps one line per rule name. That is a code change, left to a builder (Plan). | Two numbering schemes already disagree (F1). | lane-decided: uas-engineer, 2026-10-11 |
+| D12 | Two more rules (spec 0050 Plan P4, proposed there for the operator, taken by the lane here). R13: the frontmatter `status` of each spec shall equal the Status column of its `specs/README.md` row; a mismatch is an error. R14: each package in `engineering/plans/*.md` shall hold a Persona, Files, Done-when and Red-first, or the word BLOCKED with the spec line that blocks it (spec 0050 REQ-0050-01); a missing part is a warning first, an error on a date the lane sets after one clean week. Spec 0050's Plan box for P4 points here. | The registry status and the frontmatter drift apart today (the checker reads only the README links, R11). A plan without a done-when cannot be dispatched. | lane-decided: integrating lane w25:p1, 2026-10-11 (0050 P4) |
 
 ### Requirements (EARS)
 
@@ -132,23 +135,32 @@ stderr, then `spec-check: ok (N warning(s))` or `spec-check: N error(s)`.
 - **[REQ-0052-12]** (Unwanted behavior): IF a relative link in a spec or in `specs/README.md` does not resolve to an existing path, THEN the checker shall report an error naming the target (R12).
 - **[REQ-0052-13]** (Ubiquitous): A change to a rule, a severity, a cap or the modal list shall ship with an amendment of this spec's tables and a unit test in `xtask/src/spec_check.rs` that fails without the change (D10).
 - **[REQ-0052-14]** (Ubiquitous): The comment block of `spec_check.rs` shall name this spec as the owner of the rule list and shall carry no second numbering of the rules (D11).
+- **[REQ-0052-15]** (Unwanted behavior): IF a spec's frontmatter `status` differs from the Status column of its `specs/README.md` row, THEN the checker shall report an error naming both values (R13).
+- **[REQ-0052-16]** (Unwanted behavior): IF a package in a plan file under `engineering/plans/` lacks a Persona, Files, Done-when or Red-first and is not marked BLOCKED with a spec line, THEN the checker shall print a warning naming the plan and the package (R14).
+- **[REQ-0052-17]** (Event-driven): WHEN a link in a plan file under `engineering/plans/` does not resolve, the checker shall report an error naming the target (R12 over plans, D7).
 
 ## Plan
 
 Package 1, one builder, one PR, no behaviour change (D10, D11):
 
 - [ ] Replace the numbered list in the `spec_check.rs` header with a pointer to this spec (REQ-0052-14).
-- [ ] Add the five missing tests: keyword warning, duplicate key, unclosed frontmatter, list or scalar type error, missing H1 (REQ-0052-03, 05, 09). Each goes red when its check is removed.
 - [ ] Point spec 0001 line 65 and spec 0002 line 40 at this spec.
 
-Package 2, only after the integrating lane rules D5:
+Package 2, the five missing tests (F9), one builder, tests only. Each goes red when its check is removed:
+
+- [ ] Keyword warning, duplicate key, unclosed frontmatter, list or scalar type error, missing H1 (REQ-0052-03, 05, 09).
+
+Package 3, ruled D5 (D4 keeps both layouts):
 
 - [ ] Fix `is_ears_prefix` for `**[REQ-NNNN-NN]** (Pattern):`, with a test on the house form (F6).
 - [ ] Run R07 to R09 on the legacy `### Requirements (EARS)` block as warnings, and clear the repository's warnings.
+- [ ] After one clean week, the lane dates the promotion of R07 to an error.
 
-Package 3, only after the integrating lane rules D7:
+Package 4, ruled D7 and D12 (0050 P4):
 
-- [ ] Run R12 over `engineering/plans/*.md`, with a test that plants a broken link.
+- [ ] Run R12 over `engineering/plans/*.md`, with a test that plants a broken link (REQ-0052-17).
+- [ ] R13 status parity, with a test that plants a mismatch (REQ-0052-15).
+- [ ] R14 plan package shape as a warning, with a test on a package that lacks a done-when (REQ-0052-16).
 
 ## Test
 
@@ -172,6 +184,9 @@ when the check named in it is removed from the code.
 | REQ-0052-12 | `[x](nope.md)` in a spec or in the README: ``error: ...: broken link `nope.md` ``. Controls that pass: an https URL, a bare `#frag`, `0001-...md#nothing`, a link inside a fence. `../NOPE.md` fails and `../AGENTS.md` passes. |
 | REQ-0052-13 | Not exercisable by a plant. Review check: a diff that touches a table row above or a rule constant must also touch the other two parts. `git diff --stat origin/development -- specs/0052-spec-check-rule-set.md xtask/src/spec_check.rs` lists both files. |
 | REQ-0052-14 | `grep -c 'Rule [0-9]*:' xtask/src/spec_check.rs` prints 0 and `grep -c 'spec 0052' xtask/src/spec_check.rs` prints at least 1. Red today: the first prints 3 (F1) and the second prints 0. |
+| REQ-0052-15 | Not built. Plant: README row says `in-progress`, frontmatter says `planned`. Red-first: the checker exits 0 today, since it reads only README links (`check_readme`, line 581). Green: exit 1 naming both values; control: the unplanted tree exits 0. |
+| REQ-0052-16 | Not built. Plant: a plan package with no `Done-when`. Red-first: exit 0 today (F7). Green: a `warning:` naming plan and package; a package marked BLOCKED with a spec line draws none. |
+| REQ-0052-17 | Not built. Plant: `[x](nope.md)` in a plan. Passes today (F7). Green: ``broken link `nope.md` ``, exit 1; a link to `../../specs/0001-cas-architecture-and-crate-layout.md` passes. |
 
 ```bash
 make spec-check JOBS=2 && s="$(mktemp -d)" && git archive HEAD | tar -x -C "$s" \
@@ -194,6 +209,8 @@ red with the exact H1 message; the scratch copy lives outside the repository.
   Makefile (line 49) also runs `pin-check` and `oss-check`. Not fixed here; a spec 0002 amendment.
 - Spec 0048 REQ-0048-04 checks the SPDX line by shell, not by the checker (F7). Moving it into the
   checker is a rule change under D10 and has no ruling.
-- Specs 0050 and 0051 are drafted in parallel lanes and are not on `development`. The README row
-  for this spec will conflict with theirs on integration; keep all three.
+- Spec 0050 is on branch `docs/spec-0050-build-handoff-pipeline`, not on `development`, so it is cited
+  here and not in `depends_on`. Its REQ-0050-01 at d2656bd names Persona, Files, Done-when and
+  Red-first, with no separate Change field. Spec 0051 is on `development`. This spec's README row can
+  conflict with 0050's on integration; keep both.
 - Caveat: F6's count comes from a throwaway script, not from the checker, and is approximate.
