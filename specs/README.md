@@ -1,3 +1,4 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
 # Specs
 
 This directory holds the LeanSpec registry. Every spec is one file.

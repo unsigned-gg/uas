@@ -5,6 +5,7 @@ tags: [deck, axum, maud, htmx, settle, madstack, phase-5]
 priority: high
 depends_on: [0001-cas-architecture-and-crate-layout, 0004-dependency-and-licence-policy, 0008-soma-cortex-saga-reverie-integration, 0009-saga-compensation-runner-and-durability]
 ---
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
 
 # 0018-mad-stack-operator-deck-and-settle-queue
 

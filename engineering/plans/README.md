@@ -1,3 +1,4 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
 # Build plans
 
 One file per spec, written by `uas-planner` (see `.claude/agents/README.md`, "Build handoff").

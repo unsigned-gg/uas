@@ -5,6 +5,7 @@ tags: [pool, runtime, tokio, heph, threads, phase-3]
 priority: high
 depends_on: [0001-cas-architecture-and-crate-layout, 0004-dependency-and-licence-policy, 0013-llm-gateway-socket-proxy, 0014-ebpf-priority-clamping-and-audit-probes, 0015-slot-pool-cgroup-freezer-and-gitoxide]
 ---
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
 
 # 0019-pool-runtime-decision
 
