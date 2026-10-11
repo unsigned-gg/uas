@@ -4,6 +4,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use std::time::Duration;
 
 use uas_domain::{LimitEvents, SlotId};
 use uas_pool::freezer::{
@@ -271,6 +272,188 @@ fn signal_freezer_suspends_and_resumes_worker_process() {
     // Clean up child process
     let _ = child.kill();
     let _ = child.wait();
+}
+
+/// Spawns `sh -c 'sleep 30 & echo $!; wait'` as its own group leader and returns the shell
+/// and the pid of the `sleep` it forked.
+fn spawn_group_with_forked_child() -> (std::process::Child, u32) {
+    use std::io::{BufRead, BufReader};
+    use std::os::unix::process::CommandExt;
+
+    let mut shell = Command::new("sh")
+        .args(["-c", "sleep 30 & echo $!; wait"])
+        .process_group(0)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .spawn()
+        .expect("spawn group leader");
+    let mut line = String::new();
+    BufReader::new(shell.stdout.take().expect("piped stdout"))
+        .read_line(&mut line)
+        .expect("read child pid");
+    let child = line.trim().parse().expect("child pid");
+    (shell, child)
+}
+
+/// Field 3 of `/proc/<pid>/stat`, or `None` when the process is gone.
+fn proc_state(pid: u32) -> Option<char> {
+    let stat = fs::read_to_string(format!("/proc/{pid}/stat")).ok()?;
+    // The comm field is parenthesised and may hold spaces; the state follows the last `)`.
+    stat.rsplit_once(')')?.1.trim_start().chars().next()
+}
+
+/// Polls until `proc_state(pid)` satisfies `want`, up to two seconds.
+fn wait_for_state(pid: u32, want: impl Fn(Option<char>) -> bool) -> Option<char> {
+    for _ in 0..200 {
+        let s = proc_state(pid);
+        if want(s) {
+            return s;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    proc_state(pid)
+}
+
+fn kill_group_and_reap(shell: &mut std::process::Child, child: u32) {
+    let _ = rustix::process::kill_process_group(
+        rustix::process::Pid::from_raw(shell.id() as i32).expect("pid"),
+        rustix::process::Signal::KILL,
+    );
+    let _ = shell.wait();
+    if let Some(p) = rustix::process::Pid::from_raw(child as i32) {
+        let _ = rustix::process::kill_process(p, rustix::process::Signal::KILL);
+    }
+}
+
+#[test]
+fn signal_group_stops_a_forked_child() {
+    let freezer = SignalFreezer::new(SlotId::new("slot-grp").expect("valid slot id"));
+    let (mut shell, child) = spawn_group_with_forked_child();
+    freezer.add_pid(shell.id()).expect("add pid");
+
+    freezer.freeze().expect("freeze");
+    let stopped = wait_for_state(child, |s| s == Some('T'));
+    freezer.unfreeze().expect("unfreeze");
+    let resumed = wait_for_state(child, |s| s != Some('T'));
+
+    kill_group_and_reap(&mut shell, child);
+    assert_eq!(stopped, Some('T'), "the forked child must be stopped");
+    assert_ne!(resumed, Some('T'), "the forked child must be resumed");
+}
+
+#[test]
+fn reap_signal_kills_the_group() {
+    let freezer = SignalFreezer::new(SlotId::new("slot-reap").expect("valid slot id"));
+    let (mut shell, child) = spawn_group_with_forked_child();
+    freezer.add_pid(shell.id()).expect("add pid");
+    freezer.freeze().expect("freeze");
+
+    freezer.reap(Duration::from_secs(2)).expect("reap");
+
+    let mut status = None;
+    for _ in 0..200 {
+        status = shell.try_wait().expect("try_wait shell");
+        if status.is_some() {
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    let child_state = wait_for_state(child, |s| matches!(s, None | Some('Z')));
+    kill_group_and_reap(&mut shell, child);
+    assert!(
+        status.is_some_and(|s| !s.success()),
+        "the shell must have been killed, saw {status:?}"
+    );
+    assert!(
+        matches!(child_state, None | Some('Z')),
+        "the forked child must be dead, saw {child_state:?}"
+    );
+    assert!(freezer.pids().expect("pids").is_empty());
+    assert_eq!(freezer.state().expect("state"), FreezerState::Thawed);
+}
+
+// ---------------------------------------------------------------------------
+// cgroup file writes against a fake slot directory (Spec 0015 R3, R6)
+// ---------------------------------------------------------------------------
+
+fn fake_slot(temp: &TempDirGuard, files: &[(&str, &str)]) -> (CgroupFreezer, PathBuf) {
+    let base = temp.path().join("uas-base");
+    let dir = base.join("slot-fake");
+    fs::create_dir_all(&dir).expect("create slot dir");
+    for (name, body) in files {
+        fs::write(dir.join(name), body).expect("seed file");
+    }
+    let freezer = CgroupFreezer::new(&base, SlotId::new("fake").expect("valid slot id"))
+        .expect("create freezer");
+    (freezer, dir)
+}
+
+#[test]
+fn freeze_writes_one_to_cgroup_freeze() {
+    let temp = TempDirGuard::new("freeze-one");
+    let (freezer, dir) = fake_slot(
+        &temp,
+        &[
+            ("cgroup.freeze", ""),
+            ("cgroup.events", "populated 1\nfrozen 1\n"),
+        ],
+    );
+    freezer.freeze().expect("freeze");
+    assert_eq!(
+        fs::read_to_string(dir.join("cgroup.freeze")).unwrap(),
+        "1\n"
+    );
+}
+
+#[test]
+fn unfreeze_writes_zero_to_cgroup_freeze() {
+    let temp = TempDirGuard::new("freeze-zero");
+    let (freezer, dir) = fake_slot(
+        &temp,
+        &[
+            ("cgroup.freeze", ""),
+            ("cgroup.events", "populated 1\nfrozen 0\n"),
+        ],
+    );
+    freezer.unfreeze().expect("unfreeze");
+    assert_eq!(
+        fs::read_to_string(dir.join("cgroup.freeze")).unwrap(),
+        "0\n"
+    );
+}
+
+#[test]
+fn reap_cgroup_writes_kill_and_keeps_the_directory() {
+    let temp = TempDirGuard::new("reap-cg");
+    let (freezer, dir) = fake_slot(
+        &temp,
+        &[
+            ("cgroup.freeze", ""),
+            ("cgroup.kill", ""),
+            ("cgroup.events", "populated 0\nfrozen 0\n"),
+        ],
+    );
+    freezer.reap(Duration::from_secs(1)).expect("reap");
+    assert_eq!(
+        fs::read_to_string(dir.join("cgroup.kill")).unwrap().trim(),
+        "1"
+    );
+    assert!(dir.is_dir(), "the slot cgroup serves the next worker");
+}
+
+#[test]
+fn reap_cgroup_without_cgroup_kill_is_not_an_error() {
+    let temp = TempDirGuard::new("reap-nokill");
+    let (freezer, dir) = fake_slot(
+        &temp,
+        &[
+            ("cgroup.freeze", ""),
+            ("cgroup.events", "populated 0\nfrozen 0\n"),
+        ],
+    );
+    freezer.reap(Duration::from_secs(1)).expect("reap");
+    assert!(dir.is_dir());
 }
 
 // ---------------------------------------------------------------------------
