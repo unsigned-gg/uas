@@ -1,0 +1,29 @@
+unsigned.gg
+Copyright (c) 2026 unsigned.gg
+
+This repository combines several licences. Each part of the tree is under the
+licence named below. A file that carries an SPDX-License-Identifier line is
+under the licence that line names.
+
+Code, and non-code files outside vendor/
+  Licence:  Apache-2.0 OR MIT, at your option
+  Texts:    LICENSE-APACHE, LICENSE-MIT
+  Files:    the uas-* crates, xtask/, build-support/, scripts/, Makefile and
+            the other configuration files, except the paths named below.
+
+BPF program
+  Licence:  GPL-2.0-only OR MIT, at your option
+  Text:     crates/uas-ebpf/ebpf/LICENSE
+  Files:    crates/uas-ebpf/ebpf/, including its source and the object
+            uas-ebpf.o. The object declares the kernel licence string
+            "Dual MIT/GPL".
+
+Documentation and specifications
+  Licence:  CC-BY-4.0
+  Text:     LICENSE-DOCS
+  Files:    every *.md file under docs/, specs/ and engineering/.
+
+Third-party material
+  Licence:  the licence each directory states for itself
+  Files:    vendor/. Read the licence file and README inside each vendored
+            directory.
