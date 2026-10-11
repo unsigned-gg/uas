@@ -15,7 +15,7 @@ SBOM_DIR ?= sbom
 
 .PHONY: help build fmt fmt-check clippy test doc-test deny check ci hygiene typos machete \
 	spec-check toolchain-check pin-check text-check oss-check spdx-check hook-test smoke audit sbom sbom-check doc release-notes custody-check pgt-install new-repo template-check \
-	ebpf-build ebpf-test fetch-contracts pool-live-test
+	ebpf-build ebpf-test fetch-contracts pool-live-test features feature-leg
 
 help: ## List targets
 	awk 'BEGIN { FS = ":.*## " } /^[a-zA-Z0-9_-]+:.*## / { printf "  %-16s %s\n", $$1, $$2 }' $(MAKEFILE_LIST)
@@ -69,9 +69,30 @@ oss-check: ## No tailnet hostname or operator path, no removed vendor directory,
 	exit $$bad
 
 # Spec 0048 D9, REQ-0048-11. Not a prerequisite of check: the default build reads no contract. Run it before
-# 'cargo build -p uas-engine --features cortex-grpc'. It needs SSH read access to the private upstream repositories.
+# 'cargo build -p uas-engine --features cortex-grpc' and before 'make features', which builds the same feature.
+# It needs SSH read access to the private upstream repositories.
 fetch-contracts: ## Fetch the pinned estate contracts into .contracts/ (contracts.lock)
 	cargo xtask fetch-contracts
+
+# Spec 0033. One crate:feature pair per declared cargo feature. 'cargo xtask feature-check' reads this line.
+FEATURE_LEGS := uas-engine:cortex-grpc
+
+# Not a prerequisite of check or ci (the contracts are fetched on demand). Needs 'make fetch-contracts' first.
+feature-leg: ## Clippy and tests for one cargo feature (CRATE=<crate> FEATURE=<feature>)
+	crate="$${CRATE-}"; feature="$${FEATURE-}"
+	[[ "$$crate" =~ ^[a-z][a-z0-9-]*$$ && "$$feature" =~ ^[a-z][a-z0-9-]*$$ ]] || { echo "usage: make feature-leg CRATE=<crate> FEATURE=<feature>" >&2; exit 2; }
+	cargo clippy -p "$$crate" --features "$$feature" --all-targets --locked -j $(JOBS) -- -D warnings
+	cargo nextest run -p "$$crate" --features "$$feature" --locked --build-jobs $(JOBS) --profile $(NEXTEST_PROFILE)
+
+features: ## Clippy and tests once per declared cargo feature; needs make fetch-contracts first
+	failed=0
+	for leg in $(FEATURE_LEGS); do
+		if ! $(MAKE) --no-print-directory feature-leg CRATE="$${leg%%:*}" FEATURE="$${leg#*:}"; then
+			echo "features: FAILED $$leg" >&2
+			failed=1
+		fi
+	done
+	exit $$failed
 
 # Spec 0048 REQ-0048-04, D2, D10. Code: SPDX line in the first two lines with the right expression.
 # Markdown under docs, specs and engineering: CC-BY-4.0 tag in the first ten lines.
