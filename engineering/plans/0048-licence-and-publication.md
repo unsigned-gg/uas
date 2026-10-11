@@ -88,7 +88,7 @@ P7 and P8 start from a `development` that already holds P4 (the Markdown set shr
 
 ## Packages
 
-### P1: amend spec 0004 and `AGENTS.md` (wave 1)
+### P1: amend spec 0004 and `AGENTS.md` (wave 1) (DONE 2026-10-11, #152)
 - **Persona:** `uas-engineer` (spec amendment).
 - **Files:** `specs/0004-dependency-and-licence-policy.md` (exists, 307 lines); `AGENTS.md` (exists; the `vendor/` row, line 27).
 - **Change, commit 1 (licence, D1 and D2):** replace the requirement at line 55 with D1 (the root workspace `Apache-2.0 OR MIT`, the BPF program package `GPL-2.0-only OR MIT`, copyleft dependencies still denied); rewrite lines 15 to 18 ("The template is proprietary", with the holder `unsigned.gg`); amend the 2026-10-09 position and line 158 ("This repo is proprietary") to D1; amend the `aya-ebpf` row (line 180) so the package is `GPL-2.0-only OR MIT` and the object still declares `Dual MIT/GPL`. Line 56 ("WHILE building eBPF kernel probe objects ... dual MIT/GPL") stays true. Line numbers are at `8711ceb`; re-read before editing.
@@ -96,49 +96,49 @@ P7 and P8 start from a `development` that already holds P4 (the Markdown set shr
 - **Done-when:** `make spec-check pin-check JOBS=2 && ! grep -n 'LicenseRef-Proprietary' specs/0004-dependency-and-licence-policy.md && ! grep -n -i -E 'is proprietary|stay proprietary|template is proprietary' specs/0004-dependency-and-licence-policy.md && grep -q 'contracts.lock' specs/0004-dependency-and-licence-policy.md && grep -q 'fetch-contracts' AGENTS.md` exits 0. The greps are `asserted`: the spec's Plan names the edit and its Test table has no row for it.
 - **Red-first:** run the done-when before the edit and watch it exit 1 at the first `grep -n` (it prints lines 16, 55). After the edit, reintroduce one "proprietary" sentence and watch the second grep fail.
 
-### P2: tree hygiene and `oss-check` (wave 1)
+### P2: tree hygiene and `oss-check` (wave 1) (DONE 2026-10-11, #152)
 - **Persona:** `uas-builder`.
 - **Files, all exist [verified: `git grep -c` with the F16 pattern]:** `.agents/skills/custody-run/SKILL.md` (1), `.claude/agents/README.md` (2), `uas-architect.md` (3), `uas-builder.md` (2), `uas-ebpf-builder.md` (1), `uas-engineer.md` (1), `uas-foreman.md` (1), `uas-k8s-builder.md` (2), `uas-planner.md` (2), `uas-prober.md` (1), `.github/CODEOWNERS` (1), `blackwall.toml` (2), `crates/uas-ebpf/uas-ebpfd.service` (1), `engineering/cluster-survey-atlas.md` (1), `specs/0008` (1), `0013` (2), `0017` (1), `0022` (3), `0025` (1), `0029` (1), `0037` (4), `0038` (3), `0039` (3), `0046` (3), `0047` (2); and `Makefile`. Counts are lines per file, 45 in all.
 - **Change:** each match becomes a description of the thing: "the research surfaces", "the estate SOP on custody", "the shared checkout", "the tailnet" without a name. Do not reword a decision or a number. `uas-ebpfd.service` `Documentation=` points at `specs/0014-ebpf-priority-clamping-and-audit-probes.md` by repository path (no `file://` home path). `blackwall.toml` line 32: see finding 14. In `Makefile` add a target `oss-check` that runs `git grep -n -E -e "$$PATTERN"` with the F16 pattern held in a make variable, and fails (exit 1, files named by `git grep`) on any match; add it to the `hygiene` dependency list and `.PHONY`. Do not add the vendor-directory leg (finding 6). Write the pattern so the Makefile does not match itself (F16 says it is written so).
 - **Done-when:** `! git grep -n -E '\.ts\.net|/(home|Users)/[a-z]+/|/roo(t)/|~/(projects|\.agents|\.claude|vault|\.local|\.config|keys)|/tmp/research-surface(s)' && make oss-check hygiene JOBS=2` exits 0. This is the hostname/path leg of the spec's command, red today with 45 lines in 25 files. If finding 14 leaves the `blackwall.toml` line, the leg stays red and the verdict says so in its first line.
 - **Red-first:** before editing, `make oss-check` must exit non-zero and list the 25 files (positive control: the same `git grep` on `vendor/leanspec` prints nothing). After green, put a home path in a scratch tracked file and watch `make hygiene` fail naming it (spec Test, REQ-0048-08 guard); remove it.
 
-### P6: `LICENSE-DOCS` (wave 1)
+### P6: `LICENSE-DOCS` (wave 1) (DONE 2026-10-11, #152)
 - **Persona:** `uas-builder`.
 - **Files:** `LICENSE-DOCS` (new, repository root).
 - **Change:** the CC-BY-4.0 legal code, verbatim, plain text. Fetch it to a file, do not pipe it anywhere: `https://raw.githubusercontent.com/spdx/license-list-data/main/text/CC-BY-4.0.txt` or the Creative Commons canonical page. Put the source URL and the `sha256sum` of what you saved in the verdict. No holder line is needed in the legal text.
 - **Done-when:** `test -f LICENSE-DOCS && grep -q 'Attribution 4.0 International' LICENSE-DOCS` exits 0. This turns the `LICENSE-DOCS` part of the five-file leg green (REQ-0048-03). The greps are `asserted`.
 - **Red-first:** run the command before saving the file and watch `test -f` exit 1. The text is boilerplate, so this package adds about 400 lines by design.
 
-### P3: workspace manifests and the licence gate (wave 2, needs P1)
+### P3: workspace manifests and the licence gate (wave 2, needs P1) (DONE 2026-10-11, #153)
 - **Persona:** `uas-builder`.
 - **Files, all exist:** `Cargo.toml` (line 12 `license`, line 13 `authors`); `deny.toml` (lines 21 to 23, the `[licenses.private]` table); `Makefile` (the `deny` target, line 41).
 - **Change:** `license = "Apache-2.0 OR MIT"` and `authors = ["unsigned.gg"]` in `[workspace.package]`. In `deny.toml`, `ignore = false` and delete the comment "This repo is proprietary and unpublished. Do not check its own licence." The allow list does not change (F10, F17). `make deny` keeps `cargo deny check` and adds `cargo deny --manifest-path crates/uas-ebpf/ebpf/Cargo.toml check --config deny.toml licenses`. No `publish` change (finding 9).
 - **Done-when:** `make deny JOBS=2 && grep -qx 'license = "Apache-2.0 OR MIT"' Cargo.toml && test -z "$(grep -L 'license.workspace = true' crates/*/Cargo.toml xtask/Cargo.toml)" && ! grep -rn libbpf Cargo.lock crates/uas-ebpf/ebpf/Cargo.lock && test "$(grep -c '^name = "aya"' Cargo.lock)" = 1` exits 0. REQ-0048-01, 05, 06. If `cargo deny` cannot reach the advisory database on the host, also run `cargo deny --offline check licenses` and say so.
 - **Red-first (spec Test rows REQ-0048-01 and 05, measured F10):** on a scratch copy, set only `ignore = false` and watch `cargo deny check licenses` exit 4 with 11 rejections, the first naming `uas-domain v0.1.0`. With the D1 licence it exits 0. Set one crate to `license = "GPL-2.0-only"` and watch exit 4; set `ignore = true` again and watch that GPL crate pass unseen (the reason for D8). Remove the BPF leg from `make deny`, set the BPF package to `GPL-2.0-only` in a scratch copy and watch `make deny` pass wrongly. Restore each.
 
-### P4: root licence files, notice, contributing (wave 2, needs P1)
+### P4: root licence files, notice, contributing (wave 2, needs P1) (DONE 2026-10-11, #153)
 - **Persona:** `uas-builder`.
 - **Files:** `LICENSE-APACHE` (new, about 200 lines), `LICENSE-MIT` (new), `NOTICE` (new); `LICENSE` (exists, 16 lines, delete); `docs/IP_NOTICE.md` (exists, 31 lines, delete); `CONTRIBUTING.md` (exists, 45 lines); `README.md` (lines 7 and 8); `crates/uas-ebpf/README.md` (line 37); `_typos.toml` (only if finding 7 shows a hit).
 - **Change:** `LICENSE-APACHE` is the Apache-2.0 text verbatim. `LICENSE-MIT` is the MIT text with `Copyright (c) 2026 unsigned.gg`. `NOTICE` names `unsigned.gg` as the copyright holder and maps each licence to its files: code and non-code files outside `vendor/` to `Apache-2.0 OR MIT` (`LICENSE-APACHE`, `LICENSE-MIT`); `crates/uas-ebpf/ebpf/` to `GPL-2.0-only OR MIT` (`crates/uas-ebpf/ebpf/LICENSE`); `*.md` under `docs/`, `specs/` and `engineering/` to `CC-BY-4.0` (`LICENSE-DOCS`); `vendor/` to its own READMEs (D2, F12). `CONTRIBUTING.md` gains a "Developer Certificate of Origin" section: the DCO 1.1 text, the rule that every commit carries a `Signed-off-by:` trailer matching its author, `git commit -s`, no CLA, and that commits stay GPG-signed (D5). The README sentences name the new licences and point at `LICENSE-APACHE`, `LICENSE-MIT` and `NOTICE`.
 - **Done-when:** `test -f LICENSE-APACHE -a -f LICENSE-MIT -a -f NOTICE && test ! -e LICENSE -a ! -e docs/IP_NOTICE.md && grep -q unsigned.gg NOTICE && ! git grep -q -E 'Christian M\. Todie / cerebral\.work|All rights reserved' -- ':!specs' ':!vendor' ':!engineering' ':!CHANGELOG.md' && grep -q 'Signed-off-by' CONTRIBUTING.md && make typos` exits 0. These are the REQ-0048-03 legs of the spec's command; they are red today (F11, F18, F19).
 - **Red-first:** run the command first and watch it fail at `test -f`. After green, restore `LICENSE` and watch the removal leg fail; delete the DCO section and watch the `Signed-off-by` grep fail (the spec's control: `grep -c -i commit CONTRIBUTING.md` printing 2 shows the file is readable). Licence text sources: SPDX `license-list-data`; save to a file, record URL and `sha256sum`, and compare the Apache and MIT bodies with a registry crate's copy ignoring the copyright line.
 
-### P5: the BPF program package (wave 2, needs P1)
+### P5: the BPF program package (wave 2, needs P1) (DONE 2026-10-11, #153)
 - **Persona:** `uas-builder` (finding 5: not `uas-ebpf-builder`).
 - **Files:** `crates/uas-ebpf/ebpf/LICENSE` (new, GPL-2.0 text about 340 lines plus the MIT text); `crates/uas-ebpf/ebpf/Cargo.toml` (exists; line 8 `license`, new `authors`); `crates/uas-ebpf/ebpf/src/main.rs` (exists; one line added at the top).
 - **Change:** `license = "GPL-2.0-only OR MIT"` and `authors = ["unsigned.gg"]`. `LICENSE` offers either licence, with a short header stating the choice and `Copyright (c) 2026 unsigned.gg` on the MIT part. `main.rs` line 1 becomes `// SPDX-License-Identifier: GPL-2.0-only OR MIT`. The `LICENSE` static at `main.rs` lines 328 to 330 and the committed object stay exactly as they are.
 - **Done-when:** `grep -qx 'license = "GPL-2.0-only OR MIT"' crates/uas-ebpf/ebpf/Cargo.toml && test -f crates/uas-ebpf/ebpf/LICENSE && head -n 2 crates/uas-ebpf/ebpf/src/main.rs | grep -qx '// SPDX-License-Identifier: GPL-2.0-only OR MIT' && cargo deny --manifest-path crates/uas-ebpf/ebpf/Cargo.toml check --config deny.toml licenses && strings crates/uas-ebpf/ebpf/uas-ebpf.o | grep -cx 'Dual MIT/GPL' | grep -qx 1 && make ebpf-build JOBS=2 && git diff --exit-code -- crates/uas-ebpf/ebpf/` exits 0. That covers REQ-0048-02, the BPF part of 03 and 05, and finding 4. Run the toolchain check from `uas-ebpf-builder.md` first; if `make ebpf-build` cannot run, report it and leave the drift proof to CI.
 - **Red-first (spec Test row REQ-0048-02):** set the package licence to `GPL-2.0-only` and watch the `cargo deny` command exit 4 naming `uas-ebpf-ebpf v0.1.0`; restore. Change the `LICENSE` static in `main.rs` without rebuilding and watch the `strings` count print 0 after a rebuild (the control that the check reads the object); restore.
 
-### P7: SPDX line on the code files (wave 3, needs P5)
+### P7: SPDX line on the code files (wave 3, needs P5) (DONE 2026-10-11, #156)
 - **Persona:** `uas-builder`.
 - **Files:** the 128 tracked `.rs` and `.sh` files outside `vendor/` and outside `crates/uas-ebpf/ebpf/` that lack the tag; list them with the command in finding 2 at the start. Nothing else is edited.
 - **Change:** `// SPDX-License-Identifier: Apache-2.0 OR MIT` as line 1 of each `.rs` file; `# SPDX-License-Identifier: Apache-2.0 OR MIT` as line 2 of each `.sh` file, under its shebang. A script does the insert and is not committed. `//!` module docs stay valid after a plain comment.
 - **Done-when:** `test -z "$(git ls-files -z -- '*.rs' '*.sh' ':!vendor' | xargs -0 grep -L 'SPDX-License-Identifier')" && make fmt-check clippy JOBS=2` exits 0. The first half is the code SPDX leg; `make test JOBS=2` also exits 0 (a comment changes no behaviour, and `build-support/build_rev.rs` is included by other files).
 - **Red-first:** the first half prints 128 names before the change (129 less the BPF file P5 tagged). After green, delete the tag from one file and watch it listed.
 
-### P8: tag on the Markdown files (wave 3, needs P4)
+### P8: tag on the Markdown files (wave 3, needs P4) (DONE 2026-10-11, #159)
 - **Persona:** `uas-builder`.
 - **Files:** every tracked `*.md` under `docs/`, `specs/` and `engineering/` without the tag, found by `git ls-files 'docs/*.md' 'specs/*.md' 'engineering/*.md' | while read -r f; do head -n 10 "$f" | grep -q 'SPDX-License-Identifier: CC-BY-4.0' || echo "$f"; done`. 64 files: docs 8, specs 48 (the registry README and spec 0048 included), engineering 8 (this plan's own file already carries it and is not counted).
 - **Change:** `<!-- SPDX-License-Identifier: CC-BY-4.0 -->` on line 1; in a file that starts with `---`, on the line after the closing `---` (D10, F20).
@@ -170,7 +170,7 @@ P7 and P8 start from a `development` that already holds P4 (the Markdown set shr
 - **Persona:** `uas-engineer`.
 - **DONE 2026-10-11:** Christian confirmed D6 ("Confirm, the crate is the vehicle", lane w25:p1, AskUserQuestion); spec 0045 D8 now points at it. Was blocked because spec 0048 line 84 (D6) was `proposed, Christian to rule`, and the Plan says "Only once Christian confirms D6, spec 0045 D8 points at it". Spec 0045 line 58 (D8) is also his row. Unblocks when Christian rules D6. Files then: `specs/0045-security-disclosure-and-advisory-policy.md` only. Done-when: `grep -q 'spec 0048' specs/0045-security-disclosure-and-advisory-policy.md && make spec-check` exits 0 (`asserted`).
 
-### P14: conduct, owners and maintainers (wave 6)
+### P14: conduct, owners and maintainers (wave 6) (DONE 2026-10-11, #159)
 - **Persona:** `uas-builder`.
 - **Files:** `MAINTAINERS.md` (new); `.github/CODEOWNERS` and `CODE_OF_CONDUCT.md` (exist; edit only if a check below fails). Both existing files predate this plan (spec F22).
 - **Change:** `MAINTAINERS.md` lists humans and areas only (Christian: all areas; the BPF program under `crates/uas-ebpf/ebpf/` and the sandbox `crates/uas-sandbox/` called out as their own lines; other named humans only as `.github/CODEOWNERS` comments already record them). No team, bot or alias. Carry the SPDX tag of REQ-0048-04. The CoC must name the spec 0045 D3 address; it does today.

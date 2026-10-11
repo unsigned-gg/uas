@@ -93,7 +93,7 @@ check, and CI never trusts that a local gate ran.
 | D5 | guard-main-push gains four fixes: it matches `git -C dir push` like ci-gate, it denies a push whose target is `development` as well as `main` and `master`, it denies a bare `git push` while `development` is checked out (line 8 tests only `main`), and it matches the target as a whole ref name so `feat/main-menu` passes. | lane-decided |
 | D6 | The hook tests become a Make target `hook-test`, listed in `hygiene`, so the CI `hygiene` job runs them. The job's image already runs `jq` (ci.yml line 120). | lane-decided |
 | D7 | The gitleaks tolerance stays while the repository is private, because the CI `secrets` job scans every reachable commit. A missing binary now fails the commit hook with a non-zero exit and names the install step. It lands with the plan 0051 build. Ruled: Christian, label "Fail closed now", AskUserQuestion in lane w25:p1, 2026-10-11 about 03:25Z. | ruled |
-| D8 | Once public, a fork PR gets no self-hosted job (F12 stays). A required job `fork-gate` on a hosted runner fails a fork PR until a maintainer pushes the head to a branch in this repository, then CI runs on that branch. This closes F14. Ruled: Christian, label "Required fork-gate job", same interview and time. The job always runs, fails a fork PR until a maintainer applies a label, and lands before the public cut as a plan 0048 P13 prerequisite. | ruled |
+| D8 | Once public, a fork PR gets no self-hosted job (F12 stays). A required job `fork-gate` on a hosted runner fails a fork PR until a maintainer approves it. This closes F14. Ruled: Christian, label "Required fork-gate job", same interview and time. The job always runs and lands before the public cut as a plan 0048 P13 prerequisite. Amended 2026-10-11 (Christian, label "Label plus head SHA", lane w25:p1, about 04:10Z): the gate passes only with the label `fork-ci-approved` and a maintainer comment `fork-ci-approved: <head sha>` that equals the PR's current head SHA. The label alone is not enough, and a new push turns the gate red again. | ruled |
 | D9 | `AGENTS.md` line 44 is corrected to name lefthook and the CI `secrets` job, not `make` (F13). | lane-decided |
 
 ### Requirements (EARS)
@@ -112,7 +112,7 @@ check, and CI never trusts that a local gate ran.
 - **[REQ-0051-12]** (Event-driven): WHEN files change under `crates/<name>/`, the affected-crate script shall run cargo with `-j 2` for those packages only, and for the whole workspace when a workspace-level path changes or no base ref exists.
 - **[REQ-0051-13]** (Ubiquitous): The `hygiene` target shall run the three hook test scripts, and a failing script shall fail the target.
 - **[REQ-0051-14]** (Unwanted): IF a pull request comes from a fork, THEN the CI workflow shall run no self-hosted job on it.
-- **[REQ-0051-15]** (Optional): WHERE the repository is public, a required `fork-gate` job shall always run and fail a fork PR until a maintainer applies a label.
+- **[REQ-0051-15]** (Optional): WHERE the repository is public, a required `fork-gate` job shall always run and fail a fork PR until a maintainer applies the label `fork-ci-approved` and comments `fork-ci-approved: <head sha>` naming the PR's current head SHA; a new push shall turn the gate red again (amended 2026-10-11, D8).
 
 ## Plan
 
@@ -144,8 +144,8 @@ Rows marked "red today" fail on the current tree and pass after the Plan item la
 | REQ-0051-12 | Stage a `specs/` file only: the script prints `no crate changes`. Stage `Cargo.lock`: it prints `full workspace`. |
 | REQ-0051-13 | Red today: F2. After D6, break one test row and `make hygiene` exits non-zero. |
 | REQ-0051-14 | Text-level control, not a live fork: `grep -c 'head.repo.full_name == github.repository' .github/workflows/ci.yml` prints 6. In a scratch copy delete one such line and the count prints 5, so the grep goes red. |
-| REQ-0051-14 (concurrency) | Text-level: `grep -c 'cancel-in-progress: ${{ github.event_name == .pull_request. }}' .github/workflows/ci.yml` prints 1; delete the line in a scratch copy and it prints 0. |
-| REQ-0051-15 | Text-level, red today: `grep -c 'fork-gate' .github/workflows/ci.yml` prints 0 until the job lands (F14). After it lands, remove the job in a scratch copy and the count returns to 0. |
+| REQ-0051-14 (concurrency) | Text-level: `grep -cF "cancel-in-progress: \${{ github.event_name == 'pull_request' }}" .github/workflows/ci.yml` prints 1 (fixed-string match, because `${{` is not literal in a pattern; plan 0051 finding 1, 2026-10-11); delete the line in a scratch copy and it prints 0. |
+| REQ-0051-15 | Text-level, red today: `grep -c 'fork-gate' .github/workflows/ci.yml` prints 0 until the job lands (F14). After it lands, remove the job in a scratch copy and the count returns to 0. The behaviour is the ten-case table of plan 0051 P5: label alone, comment alone, a comment for an older SHA and a non-maintainer comment all fail; label plus a matching maintainer comment passes. |
 
 ```bash
 for t in test-guard-main-push test-ci-gate test-lint-on-edit; do bash .claude/hooks/tests/$t.sh | tail -1; done
