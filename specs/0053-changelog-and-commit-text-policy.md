@@ -102,7 +102,7 @@ lane w25:p1, "CHANGELOG and commit/PR text policy") that this spec is drafted.
 
 - **[REQ-0053-01]** (Ubiquitous): The repository shall carry one bullet in `## [Unreleased]` of
   CHANGELOG.md for each user-visible PR, under a heading of the D3 set (0053 D1, 0053 D3).
-- **[REQ-0053-02]** (Ubiquitous): `## [Unreleased]` shall hold each of the headings Added,
+- **[REQ-0053-02]** (Ubiquitous): The `## [Unreleased]` section shall hold each of the headings Added,
   Changed, Deprecated, Removed, Fixed and Security at most once, in that order (0053 D3), and `text-check` shall fail a PR for this only when the merge base's headings met it.
 - **[REQ-0053-03]** (Event-driven): WHEN a PR changes a file outside the exempt list of 0053 D6,
   `text-check` shall fail unless head's `[Unreleased]` section holds a line that base's lacks.
@@ -113,13 +113,13 @@ lane w25:p1, "CHANGELOG and commit/PR text policy") that this spec is drafted.
   name the first differing line (0053 D4).
 - **[REQ-0053-06]** (Event-driven): WHEN `make release-notes` runs, it shall insert the new
   version heading directly under `## [Unreleased]` and rewrite no released line (0053 D4).
-- **[REQ-0053-07]** (Ubiquitous): `release-plz.toml` shall keep `changelog_update = false`, so
+- **[REQ-0053-07]** (Ubiquitous): The `release-plz.toml` file shall keep `changelog_update = false`, so
   no tool other than `make release-notes` writes CHANGELOG.md (0053 D4).
 - **[REQ-0053-08]** (Unwanted behavior): IF CHANGELOG.md holds a line that starts with
   `<<<<<<<`, `=======`, `>>>>>>>` or `|||||||`, THEN `text-check` shall fail (0053 D8).
 - **[REQ-0053-09]** (Event-driven): WHEN a CHANGELOG conflict is resolved, the resolver shall
   keep every bullet from both sides and no marker line (0053 D8).
-- **[REQ-0053-10]** (Ubiquitous): A commit subject shall carry no ticket ID; the PR body shall
+- **[REQ-0053-10]** (Ubiquitous): The commit subject shall carry no ticket ID; the PR body shall
   carry a line `Part of CER-N` or `Part of spec NNNN` (0053 D7).
 - **[REQ-0053-11]** (Unwanted behavior): IF a non-merge, non-revert subject in `base..head`
   matches the ticket pattern of 0053 D7, THEN `text-check` shall fail and print the SHA.
@@ -127,9 +127,9 @@ lane w25:p1, "CHANGELOG and commit/PR text policy") that this spec is drafted.
   `warn:` for a PR body that lacks a template section or the `Part of` line and shall exit 0.
 - **[REQ-0053-13]** (Ubiquitous): The integrating lane shall write the CHANGELOG line as a
   `docs(changelog)` commit in the PR before it is marked ready (0053 D2, 0050 D6).
-- **[REQ-0053-14]** (Ubiquitous): `text-check` shall read the PR body from a file the workflow
+- **[REQ-0053-14]** (Ubiquitous): The `text-check` job shall read the PR body from a file the workflow
   writes from an environment variable, never from text interpolated into a shell command.
-- **[REQ-0053-15]** (Ubiquitous): `RELEASING.md` shall link to this spec for the CHANGELOG
+- **[REQ-0053-15]** (Ubiquitous): The `RELEASING.md` file shall link to this spec for the CHANGELOG
   rule and shall not restate it (0053 D11, 0048 D13).
 
 - **[REQ-0053-16]** (Event-driven): WHEN `text-check` has run seven days on pull requests into
@@ -262,3 +262,4 @@ become its unit tests.
   CHANGELOG.md, and the `.claude/` and `.agents/` precedence (REQ-18, F14, row 21); D4 and D5 diff from the merge base
   (finding 5); D3 and REQ-02 apply only when the merge base's headings were valid, and Deprecated sits between Changed
   and Fixed (findings 4 and 6); D10 counts seven required checks (finding 8). Rows 1 to 18 are unchanged.
+- Amended 2026-10-11: opening words of the flagged requirement bullets reworded to begin with a standard EARS keyword; no change of meaning (spec 0052 P6).
