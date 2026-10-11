@@ -22,7 +22,8 @@ pub use freezer::{
     SignalFreezer,
 };
 pub use launch::{
-    spawn_worker, AuditDegradation, LaunchConfig, Worker, WorkerAudit, DEFAULT_DAEMON_SOCKET,
+    spawn_worker, AuditDegradation, LaunchConfig, SlotCgroup, Worker, WorkerAudit,
+    DEFAULT_DAEMON_SOCKET,
 };
 pub use reconcile::ReconcileRoots;
 pub use slot::{HostProbe, ManagedSlot, PoolConfig, SlotPool, SweepReport};
