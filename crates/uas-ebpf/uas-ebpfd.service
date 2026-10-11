@@ -3,7 +3,7 @@
 # The binary comes from `cargo build -p uas-ebpf --release -j 2` -> target/release/uas-ebpfd.
 [Unit]
 Description=Unsigned Agent Substrate eBPF clamping and audit daemon
-Documentation=file://<home>/projects/cerebral/uas/specs/0014-ebpf-priority-clamping-and-audit-probes.md
+Documentation=https://github.com/unsigned-gg/uas/blob/development/specs/0014-ebpf-priority-clamping-and-audit-probes.md
 After=local-fs.target
 
 [Service]
