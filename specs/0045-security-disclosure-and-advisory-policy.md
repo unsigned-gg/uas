@@ -117,3 +117,4 @@ Passing means exit 0: each failing fixture fails inside its test, `valid.toml` p
   confirmed in 0.19.9 source. Aligning the local version is spec 0034's subject.
 - Out of scope: CVE assignment, a GitHub security advisory per fix, and signing the SBOM.
 - Spec 0046 D9 (`toml` in `xtask`) was dropped by the saga ruling of 2026-10-10. The `advisory-check` parse therefore cites spec 0004's `### toml` section directly, and the Plan item carries the amendment that names `xtask`. Ruled: integrating lane w25:p1, 2026-10-11.
+- Amended 2026-10-11 (source: `specs/0048-licence-and-publication.md` D6 and `engineering/plans/0048-licence-and-publication.md` P12): spec 0048 has landed, but its D6 is still "proposed, Christian to rule", so D8 does not point at 0048 D6 yet and P12 stays blocked. D8 stays Christian's row.
