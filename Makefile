@@ -13,7 +13,7 @@ EBPF_TOOLCHAIN ?= nightly-2026-10-06
 SUDO ?= sudo
 
 .PHONY: help build fmt fmt-check clippy test doc-test deny check ci hygiene typos machete \
-	spec-check toolchain-check pin-check oss-check smoke audit sbom doc release-notes custody-check pgt-install new-repo template-check \
+	spec-check toolchain-check pin-check oss-check hook-test smoke audit sbom doc release-notes custody-check pgt-install new-repo template-check \
 	ebpf-build ebpf-test
 
 help: ## List targets
@@ -46,7 +46,14 @@ check: fmt-check clippy test doc-test deny ## Full gate: fmt, clippy, test, doc-
 ci: ## What the CI rust job runs
 	$(MAKE) NEXTEST_PROFILE=ci fmt-check clippy test doc-test
 
-hygiene: typos machete spec-check toolchain-check pin-check oss-check ## Typos, unused deps, specs, toolchain, pins, tree hygiene
+hygiene: typos machete spec-check toolchain-check pin-check oss-check hook-test ## Typos, unused deps, specs, toolchain, pins, tree hygiene, hook tests
+
+# Spec 0051 D6, REQ-0051-13. The three named scripts must exist; any extra test-*.sh runs too.
+hook-test: ## Run the Claude Code hook tests
+	@for n in guard-main-push ci-gate lint-on-edit; do \
+	  test -f .claude/hooks/tests/test-$$n.sh || { echo "hook-test: missing .claude/hooks/tests/test-$$n.sh" >&2; exit 1; }; \
+	done
+	@for t in .claude/hooks/tests/test-*.sh; do echo "hook-test: $$t"; bash "$$t" || exit 1; done
 
 # Spec 0048 REQ-0048-08, pattern leg (the vendor-directory leg arrives with plan P11).
 # Each alternative is written so that this text does not match its own pattern.

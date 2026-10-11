@@ -11,6 +11,7 @@ cat > "$STUB/make" <<'EOF'
 #!/bin/sh
 echo reached > "$CIGATE_MARKER"
 echo "stub make output: $*"
+sleep "${STUB_MAKE_SLEEP:-0}"
 exit "${STUB_MAKE_RC:-0}"
 EOF
 chmod +x "$STUB/make"
@@ -57,6 +58,28 @@ fi
 v reached 0 0 'git push' 'passing gate'
 if [ -z "$LAST_OUT" ]; then pass=$((pass+1)); else
   fail=$((fail+1)); printf 'FAIL [passing gate prints nothing] got: %s\n' "$LAST_OUT"
+fi
+
+# run the hook on a push with a given stub sleep and timeout; sets LAST_OUT. Counts nothing.
+slow() {
+  jq -nc '{tool_input:{command:"git push"}}' > "$STUB/in.json"
+  LAST_OUT=$(PATH="$STUB:$PATH" STUB_MAKE_RC=0 STUB_MAKE_SLEEP="$1" CI_GATE_TIMEOUT=1 CIGATE_MARKER="$STUB/m" CLAUDE_PROJECT_DIR="$STUB" bash "$HOOK" < "$STUB/in.json")
+}
+# a make that outlives the timeout must deny and name the timeout
+t0=$(date +%s); slow 5; t1=$(date +%s)
+if printf '%s' "$LAST_OUT" | grep -q '"permissionDecision":"deny"' && printf '%s' "$LAST_OUT" | grep -qi 'timeout'; then
+  pass=$((pass+1))
+else
+  fail=$((fail+1)); printf 'FAIL [slow gate denies naming the timeout] got: %s\n' "$LAST_OUT"
+fi
+# ...and return promptly, not after the stub's 5 s
+if [ $((t1-t0)) -lt 4 ]; then pass=$((pass+1)); else
+  fail=$((fail+1)); printf 'FAIL [slow gate returns in under 4 s] took %ss\n' $((t1-t0))
+fi
+# control: same short timeout, fast make, no output
+slow 0
+if [ -z "$LAST_OUT" ]; then pass=$((pass+1)); else
+  fail=$((fail+1)); printf 'FAIL [fast gate under short timeout prints nothing] got: %s\n' "$LAST_OUT"
 fi
 
 printf '\n%d passed, %d failed\n' "$pass" "$fail"
