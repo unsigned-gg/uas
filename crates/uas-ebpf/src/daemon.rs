@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 //! The `uas-ebpfd` server (spec 0014 D8, ruling R3).
 //!
 //! One reader task watches the probe handle's event descriptor. It drains the

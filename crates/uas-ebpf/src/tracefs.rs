@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 //! Reads the sched tracepoint field offsets from tracefs at load (spec 0014 D13, T16).
 //!
 //! The field offsets differ by kernel. On 6.6 `child_pid` sits at 44; on 6.18 it sits

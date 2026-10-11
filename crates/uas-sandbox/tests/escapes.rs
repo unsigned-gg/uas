@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 //! Spec 0012 gate: `cargo test -p uas-sandbox -j 2 --test escapes`.
 //!
 //! The worker is this test binary, re-executed with `helper_attacks` as the only

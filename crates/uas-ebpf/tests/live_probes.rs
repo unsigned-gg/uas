@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 //! Spec 0014 live probe gate. Operator-run on ceres: `make ebpf-test`.
 //!
 //! The cases load the real kernel program, so they need `CAP_BPF` and

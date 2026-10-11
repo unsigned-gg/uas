@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 //! Checks the committed BPF object against its recorded SHA-256 (spec 0014 D3).
 //!
 //! The kernel program is built outside the workspace with nightly and

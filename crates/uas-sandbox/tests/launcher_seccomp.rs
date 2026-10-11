@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 //! Spec 0043 D1 and REQ-0043-01 gate for the launcher wiring:
 //! `cargo test -p uas-sandbox -j 2 --test launcher_seccomp`.
 //!

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 //! The process-group clamp, measured on a real child (spec 0014 D4, ruling R2).
 //!
 //! Lowering priority needs no privilege, so this gate runs unprivileged in CI.

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 //! `cargo xtask pin-check` (spec 0004 D3).
 //!
 //! The `| Crate | Version |` tables in `specs/0004-dependency-and-licence-policy.md` bind the

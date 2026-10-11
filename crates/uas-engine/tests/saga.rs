@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 //! Integration test suite for Saga compensation runner and cleanup handlers.
 //!
 //! Verification gate for CER-2677.

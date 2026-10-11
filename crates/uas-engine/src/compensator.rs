@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 //! Saga compensator interfaces and implementations for rolling back failed steps.
 
 use std::sync::{Arc, Mutex};
