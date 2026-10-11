@@ -89,6 +89,7 @@ The integrator owns the single `CHANGELOG.md` line under `## [Unreleased]` for t
 ### P8: `UAS_WAVE_OPEN_PRS` declared on a clap argument (DONE 2026-10-10, #132)
 - **Was blocked on:** a ruling, given by the integrating lane on 2026-10-10 as within REQ-0042-02; P8 then landed in #132. The text below records the question as it stood. REQ-0042-02 requires the variable on a clap argument, and none exists (finding 3). The proposed shape is `--open-prs` (bool flag, `env = "UAS_WAVE_OPEN_PRS"`) on `Step`, which the executor reads at `wave_flow.rs` line 584. A builder would have to choose the subcommands that carry it and whether `1` stays the only true value (clap booleans parse `true`). Spec 0025 D16 owns the semantics. Unblocks when the integrator rules on the flag, or amends REQ-0042-02 to exempt `UAS_WAVE_OPEN_PRS`.
 - **Persona (ruled):** `uas-builder`, file `crates/uas-cli/src/main.rs` plus `crates/uas-cli/src/wave_flow.rs`, wave after P6 (same file).
+- **Done-when:** `cargo nextest run -p uas-cli open_prs -j 2` exits 0 (includes `open_prs_flag_overrides_env`, red first in #132) and `./target/debug/uas wave step --help | grep -q 'open-prs'` exits 0.
 
 ## Dependency summary
 
