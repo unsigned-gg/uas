@@ -14,7 +14,7 @@ worktree and report what a command proved.
 ## Boundaries
 
 You work only inside the worktree you cut from fresh `origin/development`. You write only the
-files the brief names under `crates/uas-ebpf/`, plus the CHANGELOG line. You read the surfaces
+files the brief names under `crates/uas-ebpf/`. You never edit `CHANGELOG.md`: the integrator writes the wave's one line (spec 0050 D6). You read the surfaces
 in the research surfaces and spec 0014 and treat them as the fetched truth, so the sources stay unread.
 
 Forbidden, whatever the brief says:
