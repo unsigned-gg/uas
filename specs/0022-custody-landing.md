@@ -108,7 +108,7 @@ main `ec076f6`, installed on ceres as `blackwall` (mtime
 - **Ubiquitous:** The substrate shall land worker changesets only through
   Blackwall `reconcile` and `pr`; no slot shall push a branch or open a PR
   itself.
-- **Ubiquitous:** Every landing outcome shall carry a `LandingReceipt`: the
+- **Ubiquitous:** The landing outcome shall carry a `LandingReceipt`: the
   blackwall run hash, the changeset hash, the base commit, the verify command,
   the `reconcile` exit code, the slot `run_hash`, and the evidence tier. A
   `LandingError` is not an outcome and carries no receipt (D7).
@@ -285,3 +285,4 @@ worktree or a tree with no store (F16), and a non-zero exit fails the gate.
 - Queue label: this spec was "0027 custody landing" on the lane's candidate list
   (`~/handoffs/2026-10-09/uas-ears-spec-queue.md`); spec numbers are sequential,
   so it is 0022.
+- Amended 2026-10-11: opening words of the flagged requirement bullets reworded to begin with a standard EARS keyword; no change of meaning (spec 0052 P6).
