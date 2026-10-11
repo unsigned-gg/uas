@@ -50,7 +50,7 @@ Sources: `specs/0048-licence-and-publication.md` D7, D9, D13, D14 and REQ-0048-0
   `gh api repos/unsigned-gg/uas/branches/development/protection --jq .required_status_checks.contexts`.
   Proof: it lists `secrets`, `rust / cargo`, `cargo-deny`, `hygiene`, `ebpf-live`, `fork-gate`
   and `text-check` (spec 0053 D10 counts seven).
-- [ ] **fork-gate is required.** Plan 0051 P7, the operator's act. Proof: `fork-gate` is in the
+- [x] **fork-gate is required** (done for `development` 2026-10-11, protection read back; `main` at the cut)**.** Plan 0051 P7, the operator's act. Proof: `fork-gate` is in the
   list above, and `gh api repos/unsigned-gg/uas/labels/fork-ci-approved` returns 200. Until this
   is ticked, the fork-PR hole of spec 0051 D8 is open and the cut waits.
 - [ ] **text-check is required after its seven days.** Lane checks that `text-check` ran
