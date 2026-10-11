@@ -3,7 +3,7 @@ status: planned
 created: 2026-10-09
 tags: [pool, gitoxide, cgroup, freezer, ebpf, phase-3]
 priority: high
-depends_on: [0001-cas-architecture-and-crate-layout, 0004-dependency-and-licence-policy, 0007-lease-rules, 0010-landlock-ruleset-and-abi-probe, 0011-network-namespace-isolation, 0014-ebpf-priority-clamping-and-audit-probes, 0040-pool-restart-and-orphan-reclamation]
+depends_on: [0001-cas-architecture-and-crate-layout, 0004-dependency-and-licence-policy, 0007-lease-rules, 0010-landlock-ruleset-and-abi-probe, 0011-network-namespace-isolation, 0014-ebpf-priority-clamping-and-audit-probes, 0040-pool-restart-and-orphan-reclamation, 0041-slot-memory-pids-and-disk-limits]
 ---
 
 # 0015-slot-pool-cgroup-freezer-and-gitoxide
@@ -42,7 +42,7 @@ This spec defines the worker slot manager in `uas-pool` (Phase 3, CER-2682):
 |---|---|---|
 | D1 | Slot concurrency limit: `uas-pool` enforces a strict capacity limit (`max_slots`, default 2 on host ceres). Requests exceeding capacity are rejected or placed in a bounded queue. | UAS lane, 2026-10-09 |
 | D2 | Worktree isolation via `gix`: Worktrees share the base repository object store. `gix` creates ephemeral checkouts in `/workspace/slots/<slot-id>`. It resets dirty files on reclaim without invoking `git` CLI sub-processes. | UAS lane, 2026-10-09 |
-| D3 | Process suspension and resource quota via cgroup v2: `uas-pool` creates `/sys/fs/cgroup/uas/slot-<id>`. It writes `1` to `cgroup.freeze` to suspend workers, and `0` to thaw them. It configures CPU quotas via `cpu.max` (defaulting to 2 CPUs: 200,000us / 100,000us per Spec 0020 D3). | Spec 0020 & UAS lane, 2026-10-09 |
+| D3 | Process suspension and resource quota via cgroup v2: `uas-pool` creates `/sys/fs/cgroup/uas/slot-<id>`. It writes `1` to `cgroup.freeze` to suspend workers, and `0` to thaw them. It configures CPU quotas via `cpu.max` (defaulting to 2 CPUs: 200,000us / 100,000us per Spec 0020 D3). The cgroup also carries the memory, pids and swap limits of spec 0041. | Spec 0020 & UAS lane, 2026-10-09 |
 | D4 | Graceful freezer fallback: If cgroup v2 is not writable, `uas-pool` falls back to POSIX `SIGSTOP` and `SIGCONT` signals sent to the worker process group. | UAS lane, 2026-10-09 |
 | D5 | Runtime choice: `uas-pool` uses standard OS threads with `std::sync` primitives for slot management. Thread blocking operations handle synchronous `gix` disk operations and cgroup file I/O. | UAS lane, 2026-10-09; ruled in spec 0019 (D2, Option A, the operator, 2026-10-10 [reported, relayed by the integrator, mesh e42efbc2]) |
 | D6 | eBPF clamping and audit integration: Slot worker spawn sets `enter_clamped_group` in `pre_exec` (sets process group and `nice 19`). Post-spawn registers PID via `DaemonClient::track(child_pid, own_pid)` over UDS. Execution streams `ExecEvent` records into `AuditReceipt` with `run_hash`. Daemon unavailability yields `unattested` audit receipt without failing worker execution. | Spec 0014 & UAS lane, 2026-10-09 |
@@ -72,7 +72,7 @@ stateDiagram-v2
    - Post-spawn: connects to `uas-ebpfd` via `/run/uas/ebpf.sock` and calls `track(child_pid, own_pid)`.
    - Background thread consumes `EventStream` to build execution transcript digest (`run_hash`).
 4. **`Suspended`**: Process execution halted via `cgroup.freeze` (or `SIGSTOP`). Memory and file descriptors remain intact.
-5. **`Reclaiming`**: Worker reaped. `AuditReceipt` (with `run_hash`, `dropped_events`, and `cpu_cap` per Spec 0020) sealed and returned to caller. In-process `gix` restores index and removes untracked files.
+5. **`Reclaiming`**: Worker reaped. `AuditReceipt` (with `run_hash`, `dropped_events`, `cpu_cap` per Spec 0020, and `oom_kill` and `pids_max_hits` per spec 0041, whose `Killed(Oom)` outcome a non-zero `oom_kill` selects) sealed and returned to caller. In-process `gix` restores index and removes untracked files.
 6. **`Reconciling`**: The start state. Before the first `allocate`, the pool reclaims orphaned slot remains from an earlier run (spec 0040 D2), then enters `Idle`.
 
 ### Cgroup v2 Freezer Interface
@@ -149,3 +149,4 @@ cargo test -p uas-pool -j 2
 - **Resource Protection**: Host throttling is preserved because active slots never exceed the configured worker cap.
 - **Audit Resilience**: If `uas-ebpfd` is not running, workers execute successfully with `PRIO_PGRP` clamping while marking audit receipts `unattested`.
 - **Spec 0040**: Spec 0040 also lists this spec in its `depends_on`; the dependence is mutual and `make spec-check` has no cycle test.
+- **Spec 0041**: Spec 0041 also lists this spec in its `depends_on`; the dependence is mutual and `make spec-check` has no cycle test.
