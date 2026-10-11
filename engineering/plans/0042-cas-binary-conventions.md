@@ -1,3 +1,4 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
 # Build plan: 0042-cas-binary-conventions
 
 Spec: `specs/0042-cas-binary-conventions.md` (status planned). Base: `origin/development` `7b984d0`.

@@ -5,6 +5,7 @@ tags: [migration, rename, uas, unsigned-gg, repository, cutover]
 priority: high
 depends_on: [0001-cas-architecture-and-crate-layout, 0003-branch-model-and-promotion, 0004-dependency-and-licence-policy, 0005-ci-cache-and-runners, 0022-custody-landing, 0025-wave-execution-on-the-custody-chain]
 ---
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
 
 # 0037-repository-migration-to-uas
 

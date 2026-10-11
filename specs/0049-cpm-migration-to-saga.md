@@ -5,6 +5,7 @@ tags: [saga, cpm, wave, migration, custody]
 priority: high
 depends_on: [0008-soma-cortex-saga-reverie-integration, 0022-custody-landing, 0024-estate-saga-cpm-and-agent-sprint-wave-strategy, 0025-wave-execution-on-the-custody-chain, 0046-saga-team-and-topology-files]
 ---
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
 
 # 0049-cpm-migration-to-saga
 

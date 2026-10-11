@@ -5,6 +5,7 @@ tags: [ci, cache, runners, release, codeql]
 priority: high
 depends_on: [0002-verification-gates-and-evidence, 0003-branch-model-and-promotion]
 ---
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
 
 # 0005-ci-cache-and-runners
 

@@ -5,6 +5,7 @@ tags: [soma, cortex, saga, reverie, integration, service-edges]
 priority: high
 depends_on: [0001-cas-architecture-and-crate-layout, 0006-cas-engine-and-harness-dogfood]
 ---
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
 
 # 0008-soma-cortex-saga-reverie-integration
 
