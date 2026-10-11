@@ -37,7 +37,7 @@ Evidence from 2026-10-08:
 | Target | Runs | Use |
 |---|---|---|
 | `make check` | `fmt-check clippy test doc-test deny` | Before every push. House SOP. |
-| `make hygiene` | `typos machete spec-check toolchain-check` | Before every push. |
+| `make hygiene` | `typos machete spec-check toolchain-check pin-check oss-check`; [spec 0052](0052-spec-check-rule-set.md) owns the `spec-check` rules | Before every push. |
 | `make smoke` | Builds the CLI, runs `uas --version`, greps the domain crate for I/O | Before every PR. |
 | `make ci` | `fmt-check clippy test doc-test` with `NEXTEST_PROFILE=ci` | What the CI `rust` job runs. |
 | `make template-check` | `check`, `spec-check`, `smoke`, then the rename probe | Template repo only. |
@@ -100,6 +100,9 @@ Nextest profile `ci` retries once and does not stop at the first failure.
 
 Open question: add `cargo audit` and semver checks to `make check`. Today
 `audit` runs weekly in CI only.
+
+Amended 2026-10-11: the `make hygiene` row now matches the Makefile, and spec 0052
+owns the `spec-check` rules (plan 0052 P2).
 
 References:
 
