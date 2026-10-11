@@ -170,9 +170,67 @@ pub fn check(root: &Path) -> Report {
                 &text,
                 &mut report,
             );
+            if name != "README.md" {
+                check_plan_shape(&format!("engineering/plans/{name}"), &text, &mut report);
+            }
         }
     }
     report
+}
+
+/// R14 (spec 0052 D12): each `### P<n>` package in a plan holds a Persona,
+/// Files, Done-when and Red-first label. A package whose heading carries the
+/// word DONE, or whose section carries the word BLOCKED, is exempt. Warning only.
+fn check_plan_shape(rel: &str, text: &str, report: &mut Report) {
+    const LABELS: [(&str, &str); 4] = [
+        ("**persona", "Persona"),
+        ("**files", "Files"),
+        ("**done-when", "Done-when"),
+        ("**red-first", "Red-first"),
+    ];
+    let raw: Vec<&str> = text.lines().collect();
+    let lines = classify(&raw, 1);
+    let is_package = |l: &Line| {
+        !l.inside
+            && l.text
+                .strip_prefix("### P")
+                .is_some_and(|r| r.starts_with(|c: char| c.is_ascii_digit()))
+    };
+    let mut i = 0;
+    while i < lines.len() {
+        if !is_package(&lines[i]) {
+            i += 1;
+            continue;
+        }
+        let head = &lines[i];
+        let mut end = i + 1;
+        while end < lines.len()
+            && (lines[end].inside
+                || !(lines[end].text.starts_with("## ") || lines[end].text.starts_with("### ")))
+        {
+            end += 1;
+        }
+        let section = &lines[i..end];
+        i = end;
+        let body = section
+            .iter()
+            .map(|l| l.text)
+            .collect::<Vec<_>>()
+            .join("\n");
+        if contains_word(head.text, "DONE") || contains_word(&body, "BLOCKED") {
+            continue;
+        }
+        let lower = body.to_lowercase();
+        if let Some((_, name)) = LABELS.iter().find(|(key, _)| !lower.contains(key)) {
+            let id = head.text["### ".len()..]
+                .split(|c: char| !c.is_ascii_alphanumeric())
+                .next()
+                .unwrap_or("P");
+            report
+                .warnings
+                .push(format!("{rel}:{}: package {id} lacks {name}", head.no));
+        }
+    }
 }
 
 /// Return the 4-digit number if `name` is `NNNN-kebab-slug.md`.
@@ -1300,6 +1358,67 @@ mod tests {
             "# p\n\n[x](../../specs/0001-first.md#design) [u](https://x.test) `[c](nope.md)`\n",
         );
         assert!(t.errors().is_empty(), "{:?}", t.errors());
+    }
+
+    fn plan_pkg(heading: &str, labels: &[&str]) -> String {
+        let mut s = format!("# p\n\n{heading}\n");
+        for l in labels {
+            s.push_str(&format!("- **{l}:** x\n"));
+        }
+        s
+    }
+
+    fn plan_warnings(body: &str) -> Vec<String> {
+        let t = good();
+        fs::create_dir_all(t.0.join("engineering/plans")).unwrap();
+        t.write("engineering/plans/0001-p.md", body);
+        check(&t.0).warnings
+    }
+
+    #[test]
+    fn plan_shape_complete_package_is_clean() {
+        let w = plan_warnings(&plan_pkg(
+            "### P1: a",
+            &["Persona", "Files, exist", "Done-when", "Red-first"],
+        ));
+        assert!(w.is_empty(), "{w:?}");
+    }
+
+    #[test]
+    fn plan_shape_missing_field_warns_once_naming_file_line_and_field() {
+        let w = plan_warnings(&plan_pkg("### P12: a", &["Persona", "Files", "Red-first"]));
+        assert_eq!(
+            w,
+            ["engineering/plans/0001-p.md:3: package P12 lacks Done-when"]
+        );
+    }
+
+    #[test]
+    fn plan_shape_done_and_blocked_packages_are_exempt() {
+        let w = plan_warnings(&plan_pkg("### P1: a (DONE 2026-10-11, #1)", &["Persona"]));
+        assert!(w.is_empty(), "{w:?}");
+        let w = plan_warnings(&plan_pkg("### P2: a (BLOCKED)", &["Persona"]));
+        assert!(w.is_empty(), "{w:?}");
+        let w = plan_warnings(&format!(
+            "{}- Blocked by the spec line 12: BLOCKED.\n",
+            plan_pkg("### P3: a", &["Persona"])
+        ));
+        assert!(w.is_empty(), "{w:?}");
+    }
+
+    #[test]
+    fn plan_shape_ignores_fenced_headings_readme_and_ends_at_next_heading() {
+        let t = good();
+        fs::create_dir_all(t.0.join("engineering/plans")).unwrap();
+        t.write("engineering/plans/README.md", "### P1: a\n");
+        t.write(
+            "engineering/plans/0001-p.md",
+            "# p\n\n```\n### P1: a\n```\n\n### P2: a\n- **Persona:** x\n- **Files:** x\n- **Done-when:** x\n- **Red-first:** x\n\n## Later\n\n### P3: b\n- **Persona:** x\n- **Files:** x\n- **Done-when:** x\n",
+        );
+        assert_eq!(
+            check(&t.0).warnings,
+            ["engineering/plans/0001-p.md:15: package P3 lacks Red-first"]
+        );
     }
 
     #[test]
