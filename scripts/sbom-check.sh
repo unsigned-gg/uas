@@ -11,6 +11,7 @@ set -euo pipefail
 dir="$1"
 if [ $# -eq 2 ]; then
   want="$2"
+  case "$want" in ''|*[!0-9]*) echo "usage: sbom-check.sh <dir> [expected-count]" >&2; exit 2 ;; esac
 else
   want="$(cargo metadata --no-deps --format-version 1 | jq '.packages | length')"
 fi

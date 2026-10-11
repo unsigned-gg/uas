@@ -44,5 +44,6 @@ expect missing-file 1 "sbom-check: count 1 want 2: $tmp/missing"  "$tmp/missing"
 expect spec-1.3     1 "sbom-check: invalid: $tmp/old/a.cdx.json"  "$tmp/old"  1
 expect no-component 1 "sbom-check: no components: $tmp/nocomp"    "$tmp/nocomp" 1
 expect no-such-dir  1 "sbom-check: count 0 want 1: $tmp/none"     "$tmp/none" 1
+expect bad-count    2 "usage: sbom-check.sh <dir> [expected-count]"  "$tmp/none" abc
 
 exit "$r"
