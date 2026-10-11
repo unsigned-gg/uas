@@ -31,7 +31,7 @@ Tiers: `verified` = I ran or read it at the path named; `reported` = the spec sa
 | `AGENTS.md` line 44 (D9) | P4 |
 | `lefthook.yml` comment naming this spec owner of the regex (D4) | P4 |
 | gitleaks fails closed with an install hint (D7) | P4 |
-| `fork-gate` job (D8), spec 0003 table row | P5 (job), P6 (table), P7 (required status, BLOCKED) |
+| `fork-gate` job (D8), spec 0003 table row | P5 (job), P6 (table), P7 (required status, DONE 2026-10-11) |
 | Test F6 in a live session, record the result | P8 (BLOCKED, manual) |
 | Bypass logging | none: D2 builds none. No package adds logging |
 
@@ -169,8 +169,9 @@ grep -c 'fork-gate' $c
 - **Done-when:** `grep -c 'regex in spec 0051' specs/0003-branch-model-and-promotion.md` prints `1`, `for f in specs/0003-branch-model-and-promotion.md specs/0005-ci-cache-and-runners.md; do grep -c 'fork-gate' $f; done` prints `1` then `1`, `grep -c 'Label plus head SHA' specs/0051-repository-guards.md` prints `1`, and `make spec-check JOBS=2` exits 0 with no new error.
 - **Red-first:** the greps print `0` before the edit. After it, delete the new table row in a scratch copy and the loop prints `0` for spec 0003. Revert the D8 wording in a scratch copy and the `Label plus head SHA` grep prints `0`.
 
-### P7: fork-gate becomes a required check (BLOCKED, Christian's act)
-- **BLOCKED:** branch protection is Christian's (spec 0003; the repo setting is not a file). Spec 0051 D8 and plan 0048 P13 set the time: before the public cut. It also waits for one green `fork-gate` run on `development` (finding 6), and the same sitting updates `want=` in spec 0050 Test row 4 and the two `no, until plan 0048 P13` cells in spec 0003.
+### P7: fork-gate becomes a required check (DONE 2026-10-11, Christian's act)
+- **Done 2026-10-11:** Christian ruled "Add fork-gate to the required checks now" (AskUserQuestion, lane w25:p1, about 05:25Z) and the integrating lane applied it to `development`. `gh api repos/unsigned-gg/uas/branches/development/protection --jq '.required_status_checks.contexts'` read back six contexts ending in `fork-gate` on 2026-10-11. Spec 0003 and spec 0050 row 4 were amended the same day.
+- **Was BLOCKED:** branch protection is Christian's (spec 0003; the repo setting is not a file). Spec 0051 D8 and plan 0048 P13 set the time: before the public cut. It also waits for one green `fork-gate` run on `development` (finding 6), and the same sitting updates `want=` in spec 0050 Test row 4 and the two `no, until plan 0048 P13` cells in spec 0003.
 - **Done-when, when it unblocks:** `gh api repos/unsigned-gg/uas/branches/development/protection --jq '.required_status_checks.contexts|join(",")'` prints a list holding `fork-gate`, and the `want=` string in spec 0050 line 177 is the same list. Today it prints `secrets,rust / cargo,cargo-deny,hygiene,ebpf-live`.
 - **Red-first:** the command's output lacks `fork-gate` until the change.
 - **Also needed:** a maintainer creates the label `fork-ci-approved` in the repository (a repository setting, not a file). Until P7 the F14 hole is open: a fork PR gets a red `fork-gate` that does not block the merge (see P5). Plan 0048 P13 does not name `fork-gate` as a prerequisite today (`grep -n fork-gate engineering/plans/0048-licence-and-publication.md` prints nothing); the integrator adds the line.

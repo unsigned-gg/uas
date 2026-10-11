@@ -68,7 +68,7 @@ Measured 2026-10-11 at `origin/development` e0e903f. Tiers: `verified` names the
   `uas-k8s-builder.md` line 17 still let a builder write that line.
 - **F8 [verified]:** `gh api repos/unsigned-gg/uas/branches/development/protection --jq
   '.required_status_checks.contexts'` prints `secrets`, `rust / cargo`, `cargo-deny`,
-  `hygiene`, `ebpf-live`. Spec 0003 lines 60 to 64 list the same five. `ci.yml` also defines
+  `hygiene`, `ebpf-live`. Spec 0003 lines 60 to 64 list the same five. Amended 2026-10-11: `fork-gate` joined the list (six contexts, read back by the same command). `ci.yml` also defines
   `moon-affected`, which is not required. `required_signatures.enabled` and
   `required_linear_history.enabled` print `false`, so signing rests on AGENTS.md rule 5 and
   the push hooks, not on the server.
@@ -109,7 +109,7 @@ Christian may override), `proposed: <for whom>`.
 | D6 | The integrating lane owns the CHANGELOG line: one `docs(changelog)` commit per wave PR, under `## [Unreleased]`. A builder writes none. The three builder personas drop their CHANGELOG clause. | One writer cannot conflict with itself; 25 of 25 recent changelog commits are `docs(changelog)` commits, and plan 0048 gives the line to the integrator (F7, reported). | `lane-decided` |
 | D7 | The in-house `uas-critic` re-reads the merged wave branch once the draft PR is open and before it is marked ready, and never before the draft exists. It returns numbered defects with file and line, or no defects plus what it checked. The lane applies each item (a defect in a builder file goes back to that builder) and records the pass in the PR body. | F6: #154 and #157 show a critic pass recorded between draft and ready; #156 shows a draft and a later pass promised. | `lane-decided` |
 | D8 | A per-SHA critic pass on a builder branch is optional. It is required for a package that touches `unsafe`, the sandbox, the pool's kernel calls or `crates/uas-ebpf`. | README step 3 and line 15 ask for it on every SHA; the trail shows a wave-level pass only (F6). | `lane-decided: integrating lane w25:p1, 2026-10-11` |
-| D9 | The lane marks the PR ready and lands it when all five required checks read SUCCESS on the head: `secrets`, `rust / cargo`, `cargo-deny`, `hygiene`, `ebpf-live`. The merge is a merge commit pinned to the head sha. `moon-affected` is advisory. Red stops the wave. | AGENTS.md rules 7 and 9, approval routes; spec 0003 table; F8. | `ruled` by spec 0003 and the lane approval route |
+| D9 | The lane marks the PR ready and lands it when all six required checks read SUCCESS on the head: `secrets`, `rust / cargo`, `cargo-deny`, `hygiene`, `ebpf-live`, `fork-gate` (amended 2026-10-11, Christian, lane w25:p1 about 05:25Z). The merge is a merge commit pinned to the head sha. `moon-affected` is advisory. Red stops the wave. | AGENTS.md rules 7 and 9, approval routes; spec 0003 table; F8. | `ruled` by spec 0003 and the lane approval route |
 | D10 | After the PR state reads MERGED, the lane removes the wave's worktrees, prunes, and deletes the local builder and wave branches. It reads the state from `gh pr view <n> --json state`, never from the merge button. A branch whose PR is open or closed unmerged stays. | F12: nothing in the repo says it, and a worktree removed before MERGED loses unlanded work. | `lane-decided` |
 | D11 | Conflicts resolve with merge commits only. Merging `origin/development` into the wave branch is routine. In `CHANGELOG.md` keep every line from both sides; in `specs/README.md` keep one row per spec in number order. A scripted resolution drops the whole `|||||||` base section. No conflict or diff3 marker reaches a pushed commit. | F11. | `lane-decided` |
 | D12 | A verdict block is 15 lines or fewer, bad news first, with a tier on each claim. A builder returns STATUS, SHA, FILES, CHECKS, TESTS, SCOPE, OPEN. A critic returns VERDICT, numbered DEFECTS, CHECKED, UNCHECKED. A planner returns PLAN, SPEC, BLOCKED, PINS, FIRST, OPEN. An engineer returns STATUS, SHA, SPEC, DECIDES, PINS, BRIEFS, OPEN. | The persona Output sections already say so; D12 makes them the contract. | `lane-decided` |
@@ -134,7 +134,7 @@ Christian may override), `proposed: <for whom>`.
   The PR shall not be marked ready before that pass (0050 D7).
 - **[REQ-0050-07]** (Ubiquitous): The wave PR shall carry exactly one `docs(changelog)` commit from
   the integrating lane (0050 D6).
-- **[REQ-0050-08]** (Event-driven): WHEN all five required checks read SUCCESS on the head, the lane
+- **[REQ-0050-08]** (Event-driven): WHEN all six required checks read SUCCESS on the head, the lane
   shall land the PR with a merge commit pinned to that head (0050 D9).
 - **[REQ-0050-09]** (Unwanted behavior): IF any required check is red or pending, THEN the lane shall
   not merge, and shall not mark a pending check as passed (0050 D9).
@@ -173,7 +173,7 @@ t=$(mktemp); sed 's/[Dd]one-when/x/g;s/BLOCKED/x/g' engineering/plans/0043-*.md 
 echo "1 plans lacking done-when: $(for f in engineering/plans/0*.md; do chk "$f"; done | wc -l); control: $(chk "$t" | wc -l)"
 echo "2 changelog commits in branch: $(git log --no-merges --format=%s origin/development..HEAD | grep -c '^docs(changelog)'); control a9d2d1c: $(git show --format=%s --name-only a9d2d1c | grep -c '^docs(changelog)')"
 for f in specs/0*.md; do s=$(basename "$f" .md); a=$(sed -n 's/^status: //p' "$f" | head -1); b=$(grep "($s.md)" specs/README.md | awk -F'|' '{gsub(/ /,"",$4); print $4}'); [ "$a" = "$b" ] || echo "3 status mismatch $s: $a vs $b"; done
-got=$(gh api repos/unsigned-gg/uas/branches/development/protection --jq '.required_status_checks.contexts|join(",")'); want="secrets,rust / cargo,cargo-deny,hygiene,ebpf-live"
+got=$(gh api repos/unsigned-gg/uas/branches/development/protection --jq '.required_status_checks.contexts|join(",")'); want="secrets,rust / cargo,cargo-deny,hygiene,ebpf-live,fork-gate"
 [ "$got" = "$want" ] && echo "4 required checks ok" || echo "4 RED: $got"
 printf '<<<<<<< a\n||||||| b\n' > "$t"; pat='^(<<<<<<< |>>>>>>> |\|\|\|\|\|\|\| )'
 echo "5 markers in tree: $(git grep -cE "$pat" -- CHANGELOG.md specs | wc -l); control: $(grep -cE "$pat" "$t")"
@@ -198,7 +198,7 @@ Run from the repo root of a clone with `gh` signed in. Read the lines, not the e
 | 1 | Plans with a package that has no done-when and no BLOCKED | `0`; the stripped control prints the packages it catches, more than 0 | `0` while the control stays above 0 | REQ-0050-01 |
 | 2 | `docs(changelog)` commits in the wave branch | `1` here (the integrator's line); control a9d2d1c prints `1` | `1` on a wave branch; `0` or `2` is red | REQ-0050-07 |
 | 3 | Frontmatter status against the registry row | two lines: 0040 and 0043 (F10) | no line | REQ-0050-12 |
-| 4 | The five required checks, names and API order | `4 required checks ok` | still ok; a sixth, a missing name or a changed order prints `4 RED` | REQ-0050-08, 09 |
+| 4 | The six required checks, names and API order (amended 2026-10-11: `fork-gate` added, Christian, lane w25:p1 about 05:25Z) | `4 required checks ok` | still ok; a seventh, a missing name or a changed order prints `4 RED` | REQ-0050-08, 09 |
 | 5 | Conflict markers in `CHANGELOG.md` and `specs/` | `0`; control prints `2` | `0` | REQ-0050-11 |
 | 6 | A worktree whose PR reads MERGED | control prints `MERGED`; no `RED` line | no `RED` line. Control run once by hand: a worktree on a branch named `build/spec-0041-wave5` printed `6 RED` | REQ-0050-10 |
 | 7 | A verdict block over 15 lines | planted 16 lines prints `RED` | `ok` on the real block | REQ-0050-02 |
