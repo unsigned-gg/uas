@@ -145,21 +145,21 @@ P7 and P8 start from a `development` that already holds P4 (the Markdown set shr
 - **Done-when:** the spec's Markdown leg prints nothing and `make spec-check JOBS=2` exits 0: `test -z "$(git ls-files 'docs/*.md' 'specs/*.md' 'engineering/*.md' | while read -r f; do head -n 10 "$f" | grep -q 'SPDX-License-Identifier: CC-BY-4.0' || echo "$f"; done)" && make spec-check`. Red today: 65 files. Spec 0025 reaches 301 lines and spec-check warns; the warning is expected (F20), an error is not.
 - **Red-first:** the loop prints the file list before the change. After green, remove the tag from one spec and watch it listed and `spec-check` still pass.
 
-### P9: `spdx-check` in `make hygiene` (wave 4, needs P7 and P8)
+### P9: `spdx-check` in `make hygiene` (wave 4, needs P7 and P8) (DONE 2026-10-11, #177)
 - **Persona:** `uas-builder`.
 - **Files:** `Makefile` (exists; new target `spdx-check`, the `hygiene` dependency list, `.PHONY`).
 - **Change:** `spdx-check` fails, naming the file, when a tracked `.rs` or `.sh` outside `vendor/` lacks an `SPDX-License-Identifier` line in its first two lines; when the expression is not `GPL-2.0-only OR MIT` under `crates/uas-ebpf/ebpf/` or not `Apache-2.0 OR MIT` elsewhere; or when a tracked `*.md` under `docs/`, `specs/` or `engineering/` lacks `SPDX-License-Identifier: CC-BY-4.0` in its first ten lines. Shell in the recipe, no new dependency.
 - **Done-when:** `make spdx-check hygiene JOBS=2` exits 0.
 - **Red-first (spec Test row REQ-0048-04 guard):** remove the tag from one `.rs` file and one spec and watch both listed; put `Apache-2.0 OR MIT` in `crates/uas-ebpf/ebpf/src/main.rs` and watch it fail; put `GPL-2.0-only OR MIT` in an `xtask` file and watch it fail. Restore each.
 
-### P10: contract fetch (wave 4, needs P1 and P7)
+### P10: contract fetch (wave 4, needs P1 and P7) (DONE 2026-10-11, #180)
 - **Persona:** `uas-builder`.
 - **Files:** `xtask/src/fetch_contracts.rs` (new); `xtask/src/main.rs` (exists; `mod`, dispatch arm, usage line); `xtask/Cargo.toml` (exists; `sha2 = { workspace = true }`); `contracts.lock` (new, one line per fetched file: sha256, upstream commit, repository, upstream path, destination); `.gitignore` (exists; add `.contracts/`); `crates/uas-engine/build.rs` (exists; line 9 reads `vendor/cortex/proto`).
 - **Change:** `cargo xtask fetch-contracts [--lock <path>]` reads the lock, fetches each commit with `git` (a throwaway repository, `git fetch --depth 1 origin <commit>`, `git show <commit>:<path>`), hashes the bytes with `sha2`, and writes the file into `.contracts/` only when the hash matches; on a mismatch it exits non-zero, names the file and leaves it out (REQ-0048-11). The lock starts from the README pins (finding 13) and lists the 52 non-README files now under `vendor/cortex` (7), `vendor/soma` (23) and `vendor/saga` (22); each hash is computed from upstream, then compared with the vendored copy, and a difference is reported. `build.rs` reads `.contracts/cortex/proto` and, when `pool.proto`, `lane.proto` or `peer.proto` is absent, fails with the text `run cargo xtask fetch-contracts`. The default build does not read the directory. Pure functions (lock parse, hash compare) carry unit tests in `xtask`.
 - **Done-when:** `cargo nextest run -p xtask fetch_contracts -j 2 && cargo xtask fetch-contracts && cargo build -p uas-engine --features cortex-grpc --locked -j 2 && make check JOBS=2` exits 0, then the builder removes `.contracts/`, runs the same `cargo build` and pastes its output: the build must fail and the output must hold `cargo xtask fetch-contracts` (`asserted`; the spec has no row for it). The fetch needs read access to the private upstream repositories as the invoking user.
 - **Red-first (spec Test row REQ-0048-11):** change one sha256 character in a scratch lock and run `cargo xtask fetch-contracts --lock <scratch>`; it exits non-zero and names the file, and `.contracts/` lacks that file; with the true value it exits 0. Remove the compare from the code and watch the unit test go red. Positive control for finding 13: the cortex commit resolves before the others are judged.
 
-### P11: remove the vendored contracts and guard them (wave 5, needs P9 and P10)
+### P11: remove the vendored contracts and guard them (wave 5, needs P9 and P10) (DONE 2026-10-11, #186)
 - **Persona:** `uas-builder`.
 - **Files:** `vendor/cortex/`, `vendor/soma/`, `vendor/saga/` (exist, 8, 24 and 23 tracked files; delete); `Makefile` (the `oss-check` target).
 - **Change:** `git rm -r` the three directories. `vendor/leanspec/` stays. `oss-check` also fails when any of the three paths exists (REQ-0048-08).
@@ -177,21 +177,21 @@ P7 and P8 start from a `development` that already holds P4 (the Markdown set shr
 - **Done-when:** `test -f MAINTAINERS.md -a -f .github/CODEOWNERS && grep -c -i -E 'ebpf|sandbox' MAINTAINERS.md && grep -c 'version 2.1' CODE_OF_CONDUCT.md && grep -q "$(grep -o -E '[a-z.]+@[a-z.]+' SECURITY.md | head -1)" CODE_OF_CONDUCT.md && make hygiene JOBS=2` exits 0 (`asserted`: the spec Test rows REQ-0048-13 and 14 are the source).
 - **Red-first:** run the first `test -f` before writing the file and watch it exit 1; delete the contact line of the CoC in a scratch copy and watch the grep fail.
 
-### P15: RELEASING.md and the semver gate (wave 6)
+### P15: RELEASING.md and the semver gate (wave 6) (DONE 2026-10-11, #181)
 - **Persona:** `uas-builder`.
 - **Files:** `RELEASING.md` (new); a workflow job in `.github/workflows/` (new file `semver.yml`); `specs/0004-dependency-and-licence-policy.md` (the `cargo-semver-checks` row of the CI tools table gets the sha256 of the release binary; read it from the release page and a local `sha256sum`, both recorded).
 - **Change:** `RELEASING.md` per REQ-0048-15. The job installs `cargo-semver-checks` 0.51.0 pinned by version and sha256 (spec 0004 CI tools rule), runs it per published crate, and prints `skipped: no published crate` and exits 0 while every crate sets `publish = false` (spec F2). It is not a required check until a crate publishes.
 - **Done-when:** `test -f RELEASING.md && grep -rn 'semver-checks' .github/workflows && make pin-check spec-check JOBS=2` exits 0, and the REQ-0048-16 scratch control (pristine copy as baseline, one `pub fn` removed) exits non-zero locally with `cargo semver-checks --baseline-root`.
 - **Red-first:** run the scratch control on the unchanged copy (exit 0), then on the planted break (non-zero); remove the planted break.
 
-### P16: README disclaimer and the vendor LICENSE check (wave 6)
+### P16: README disclaimer and the vendor LICENSE check (wave 6) (DONE 2026-10-11, #186)
 - **Persona:** `uas-builder`.
 - **Files:** `README.md` (exists); `Makefile` (the `oss-check` target, which P11 already edits; P16 lands after P11 or rebases onto it).
 - **Change:** one README paragraph per REQ-0048-18. `oss-check` fails, naming the directory, when a `vendor/` subdirectory has no `LICENSE` (D16).
 - **Done-when:** `grep -c -i -E 'pre-1.0|no stability|not for production' README.md && make oss-check JOBS=2` exits 0.
 - **Red-first:** `mkdir vendor/x && touch vendor/x/f` and watch `oss-check` fail naming `vendor/x`; with `vendor/leanspec` alone it passes (the control). Remove the scratch directory.
 
-### P17: the launch checklist (drafted; execution blocked on P13)
+### P17: the launch checklist (drafted; execution blocked on P13) (DONE 2026-10-11, #190)
 - **Persona:** `uas-engineer`.
 - **BLOCKED:** needs the cut date and the repository name (P13). The file can be drafted before, but the go item is the operator's and the docs build command is not named by any spec; the builder names it and says it is `asserted`.
 - **Files:** `engineering/plans/0048-launch-checklist.md` (new). Items, each a `- [ ]` line with its command: `make hygiene` and `make oss-check` green; a secret scan of the whole tree (the scanner and its command named in the file); licence files and SPDX complete (the fenced spec command exits 0); the docs build green; the operator's explicit sign-off on the operator names (spec D7, Notes); then the operator's go. Announcement is out of the file: a parked decision (spec D14).
