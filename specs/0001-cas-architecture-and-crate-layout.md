@@ -63,7 +63,8 @@ section 6).
 | `uas-cli` | Binary `uas`. Kept from the template, see Decisions. | n/a |
 
 `xtask/` also exists. It holds `spec-check` and `toolchain-check`. It is not a
-UAS crate and sits outside the layering.
+UAS crate and sits outside the layering. [Spec 0052](0052-spec-check-rule-set.md) owns the
+`spec-check` rule list.
 
 ### Layering
 
@@ -261,3 +262,4 @@ draft, no approver):
   integration design with PR-only landing: changesets reconcile to feature branches,
   open PRs targeting `development`, and merge on green with merge commits. Direct push
   to `main` remains forbidden.
+- Amended 2026-10-11: the `spec-check` rule list moved to spec 0052 (plan 0052 P2).
