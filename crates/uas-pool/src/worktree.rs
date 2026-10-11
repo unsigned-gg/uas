@@ -4,12 +4,14 @@
 //! eliminating external `git` CLI invocations and avoiding lock collisions
 //! on `.git/config` via shared ODB references.
 
+use std::fs::File;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicBool;
 
 use uas_domain::{SlotId, WorktreeRef};
 
 use crate::error::PoolError;
+use crate::marker::{self, SlotMarker};
 
 /// An ephemeral git worktree managed directly via in-process Gitoxide (`gix`).
 ///
@@ -26,6 +28,8 @@ pub struct WarmWorktree {
     branch_name: String,
     worktree_ref: WorktreeRef,
     torn_down: bool,
+    /// Open, locked slot marker (spec 0040 D1); dropped last in teardown.
+    marker: Option<File>,
 }
 
 fn repo_open_opts() -> gix::open::Options {
@@ -66,6 +70,33 @@ impl WarmWorktree {
             .tree_id()
             .map_err(|e| PoolError::Gitoxide(format!("failed to get tree from commit: {e}")))?;
 
+        let common_git_dir = base_repo.common_dir().to_path_buf();
+        let worktree_git_dir = common_git_dir.join("worktrees").join(slot_id.as_str());
+
+        std::fs::create_dir_all(&worktree_git_dir)
+            .map_err(|e| PoolError::Gitoxide(format!("failed to create worktree git dir: {e}")))?;
+
+        // Spec 0040 D1: the locked marker exists before the branch ref and the
+        // worktree directory, so a crash after this point is reclaimable.
+        let provisioned_at = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs())
+            .unwrap_or_default();
+        let marker_file = marker::create_locked(
+            &worktree_git_dir,
+            &SlotMarker {
+                slot_id: slot_id.as_str().to_string(),
+                worktree_dir: worktree_dir.clone(),
+                cgroup: format!("slot-{}", slot_id.as_str()),
+                branch: branch_name.clone(),
+                pool_pid: std::process::id(),
+                provisioned_at,
+            },
+        )
+        .map_err(|e| PoolError::Gitoxide(format!("failed to write slot marker: {e}")))?;
+        std::fs::create_dir_all(&worktree_dir)
+            .map_err(|e| PoolError::Gitoxide(format!("failed to create worktree dir: {e}")))?;
+
         let branch_ref_name = format!("refs/heads/{}", branch_name);
         base_repo
             .reference(
@@ -77,14 +108,6 @@ impl WarmWorktree {
             .map_err(|e| {
                 PoolError::Gitoxide(format!("failed to create branch {branch_name}: {e}"))
             })?;
-
-        let common_git_dir = base_repo.common_dir().to_path_buf();
-        let worktree_git_dir = common_git_dir.join("worktrees").join(slot_id.as_str());
-
-        std::fs::create_dir_all(&worktree_git_dir)
-            .map_err(|e| PoolError::Gitoxide(format!("failed to create worktree git dir: {e}")))?;
-        std::fs::create_dir_all(&worktree_dir)
-            .map_err(|e| PoolError::Gitoxide(format!("failed to create worktree dir: {e}")))?;
 
         let dot_git_file = worktree_dir.join(".git");
         let canonical_worktree_git_dir = worktree_git_dir
@@ -173,6 +196,7 @@ impl WarmWorktree {
             branch_name,
             worktree_ref,
             torn_down: false,
+            marker: Some(marker_file),
         })
     }
 
@@ -288,6 +312,10 @@ impl WarmWorktree {
                 let _ = r.delete();
             }
         }
+
+        // 4. Release the marker lock last (the control directory removal above
+        // already deleted the file).
+        drop(self.marker.take());
 
         Ok(())
     }
