@@ -1,0 +1,135 @@
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
+# Build plan: 0053-changelog-and-commit-text-policy
+
+Spec: `specs/0053-changelog-and-commit-text-policy.md` (status planned, 239 lines). Base: `origin/development` `2a3d442`.
+Planner: `uas-planner`, 2026-10-11. Every path below was read in a worktree cut from that base.
+Tiers: `verified` = I ran or read it at the path or command named; `reported` = the spec says it; `asserted` = my judgement.
+
+## Findings the builders must know
+
+1. **A release-roll PR fails the check as the spec states it [verified]:** I ran the spec Test block's own functions on a scratch worktree after `make release-notes VERSION=9.9.9`. `git status --porcelain` shows `CHANGELOG.md`, `Cargo.lock` and `Cargo.toml` changed; the verdict is `FAIL-nolog` with `code=2 added=0`. The roll leaves `[Unreleased]` empty (Makefile `release-notes` target, awk inserts the version heading directly under it) and D6 says a manifest-only PR is not exempt. Every release PR (skill `release`, branch `chore/release-x.y.z`) would be blocked, and once `text-check` is required there is no way around it. P1 amends D6; P4 implements the amendment.
+2. **D6 contradicts itself on agent files [verified]:** D6 exempts "any `*.md` other than CHANGELOG.md" and also says `.claude/` and `.agents/` are not exempt because agent files are user-visible. Agent files are `.md` files. Run on a scratch worktree, a PR that changes only `.claude/agents/uas-planner.md` gives `code=0`, so the Test block treats it as exempt. P1 states the precedence (the `.claude/` and `.agents/` rule wins); P4 implements it.
+3. **The Test block runs green today [verified]:** `bash` of the spec's fenced block at `2a3d442` prints `ok` for rows 1 to 18. Rows 17 and 18 test literal heading lists, not the real file, so they do not prove P2. P4 and P5 must run the heading rule on the real `CHANGELOG.md`.
+4. **`[Unreleased]` today [verified]:** lines 8 to 122 of `CHANGELOG.md` (the spec's 8 to 118 is the older base). Seven headings: Added 10, Changed 44, Fixed 53, Changed 57, Added 65, Changed 105, Fixed 113. Next heading is `## [0.1.0] - 2026-10-08` at line 123. Bullets per block: 32, 7, 2, 6, 38, 6, 8; 99 in all (`awk` count; 106 bullets in the whole file). Every non-blank line in the section is a heading or a bullet; none is indented. P2 lists the edits.
+5. **Base must be the merge base [asserted, reasoned from the code]:** the D4 suffix test compares base's released tail with head. If the base ref is the tip of `development` and a release roll merged after the branch was cut, the tip holds a heading the branch lacks, and the suffix test fails a PR that did nothing wrong. A false failure resets the seven-day clock of D10. P4 resolves `git merge-base <base> <head>` and reads base files from it. The spec Test block diffs against the tip, which equals the merge base in its scratch worktree, so its rows still hold.
+6. **REQ-02 on the real file would turn the job red on day one [asserted]:** if `text-check` fails on duplicate headings, every PR branched before P2 lands would fail until it merges `development`. P1 scopes the rule to "no new violation": it applies only when the merge base's `[Unreleased]` headings are valid. P2 lands before the job exists, so the tree is clean when P6 lands.
+7. **The 0051 regex runs first, locally [verified]:** `lefthook.yml` line 8 `commit-msg` runs at commit time. Spec 0051 REQ-08 binds that stage only; CI runs no subject regex. So the order is: lefthook (type and shape) at `git commit`, then `text-check` in CI (ticket ID in the subject, and the body). `text-check` does not re-test the type; it adds the ID rule that `feat(x): CER-123 add` slips past, and it catches a commit made with `LEFTHOOK=0`. Spec Test row 10 shows the 0051 regex accepting that subject.
+8. **The required-check count is explained [reported + verified]:** D10 counts six required checks. `gh api repos/unsigned-gg/uas/branches/development/protection --jq .required_status_checks.contexts` lists `secrets`, `rust / cargo`, `cargo-deny`, `hygiene` first. Spec 0051 D8 adds `fork-gate` and this spec adds `text-check`, which makes six [asserted: the arithmetic; I did not read the rest of the list]. The context name of a job in the reusable workflow is `rust / cargo`; a plain job such as `text-check` is registered as `text-check`.
+9. **Branch protection is not a lane act in this repo [verified]:** spec 0003 lines 58 to 64 tabulate the required checks per branch. Changing them is the branch-protection act the lead named. P7 prepares it and waits.
+10. **`xtask` has no test harness for git yet [verified]:** `xtask/src/*.rs` hold `#[cfg(test)]` modules (`spec_check.rs` line 616, `pin_check.rs` line 273) with a temp-directory helper, and no `xtask/tests/` directory exists. `run(root: &Path) -> ExitCode` is the shape of the three existing commands; `text-check` needs arguments, so its `run` takes the argument list too. `xtask/Cargo.toml` depends on `anyhow` only; the spec's `std` and `git` only holds, so no spec 0004 pin is needed.
+11. **`RELEASING.md` does not exist [verified]:** `ls RELEASING.md` fails and `git grep RELEASING -- specs` hits only spec 0048 (D13, REQ-0048-15). REQ-0053-15 waits on that file.
+12. **CI facts a builder needs [verified, `.github/workflows/ci.yml`]:** the fork guard is `if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository`; self-hosted jobs use `runs-on: {group: ent-default, labels: [ci-rust]}`; `actionlint 1.7.12` is installed locally, `typos` too. `release-plz.toml` line 7 is `changelog_update = false` and `.agents/skills/release/SKILL.md` line 60 says never edit a released section.
+
+## Plan items to packages
+
+| Spec 0053 Plan item | Package |
+|---|---|
+| P1 `xtask/src/text_check.rs` and the `main.rs` arm | P4 (logic, wiring, unit tests), P5 (integration tests with planted controls) |
+| P2 `make text-check` and the CI job | P6 |
+| P3 pointers: AGENTS.md rules 6 and 8, CONTRIBUTING.md, PR template | P3 |
+| P3 `RELEASING.md` link (REQ-15) | P8, BLOCKED |
+| P4 heading cleanup (F1) | P2 |
+| P5 required status after seven days; flip the body checks | P7, BLOCKED |
+| Not in the spec's Plan: the amendments of findings 1, 2, 5, 6 | P1 |
+
+## Requirement coverage
+
+| Requirement | Closed by |
+|---|---|
+| REQ-0053-01 | P4 (the check enforces it, with REQ-03) |
+| REQ-0053-02 | P2 (clean the file), P4 (the heading rule, no new violation) |
+| REQ-0053-03, 04 | P4, P5 |
+| REQ-0053-05 | P4, P5 |
+| REQ-0053-06 | no package: `make release-notes` already inserts above the released sections (Test rows 5 and 14 pass today); P5 pins it with a test that runs the roll |
+| REQ-0053-07 | no package: already true (`release-plz.toml` line 7, Test row 13); P5 asserts it |
+| REQ-0053-08 | P4, P5 |
+| REQ-0053-09, 13 | no package: process rules (D8, D2). The reviewer reads the PR commits, as the spec says. P3 states D2 in `CONTRIBUTING.md` |
+| REQ-0053-10, 11 | P4, P5; P3 repeats the rule in the docs |
+| REQ-0053-12 | P4, P5 |
+| REQ-0053-14 | P6 (body and ref through environment variables and a file) |
+| REQ-0053-15 | P8, BLOCKED on `RELEASING.md` |
+| REQ-0053-16 | P7, BLOCKED on seven days and the branch-protection act |
+
+13 of 16 requirements are closed by a package or already true with a pinning test (01 to 08, 10 to 12, 14). 09 and 13 are process rules with no command. 15 and 16 are BLOCKED.
+
+## Waves
+
+| Wave | Packages | Disjoint because | State after the wave |
+|---|---|---|---|
+| 1 | P1, P2, P3 | P1: `specs/0053-...md`. P2: `CHANGELOG.md`. P3: `AGENTS.md`, `CONTRIBUTING.md`, `.github/pull_request_template.md` | Spec carries the amendments. `[Unreleased]` has three headings, in order. Docs point at the spec. No check exists yet |
+| 2 | P4 | `xtask/src/text_check.rs` (new), `xtask/src/main.rs` | `cargo xtask text-check` works locally. Runs green on the tree because P2 landed |
+| 3 | P5, P6 | P5: `xtask/tests/text_check.rs` (new). P6: `Makefile`, `.github/workflows/ci.yml` | Job exists, non-required. The seven-day clock starts when P6 merges |
+| 4 | P7, P8 | not builder work; both BLOCKED | Required check and `RELEASING.md` link |
+
+Ordering for "the job never lands red against the tree": P2 (clean headings) before P4 (the rule), P4 before P6 (the job), and the roll exemption (P1) before P4 so a release PR passes from the first run. The job runs on `pull_request` only and compares a PR with its base, so it is never red against `development` itself. P4 and P6 are code PRs and need a CHANGELOG line each; the integrator writes it as a `docs(changelog)` commit before marking the PR ready (D2, REQ-13). P6's PR runs the new job on itself, and it passes only because the integrator's line is there, which is the first live proof.
+
+## Packages
+
+### P1: amend spec 0053 (wave 1)
+- **Persona:** `uas-engineer` (spec amendment).
+- **Files:** `specs/0053-changelog-and-commit-text-policy.md` (exists, 239 lines; the cap is 300 for a warning, 400 for an error, so stay under 300).
+- **Change:** (a) D6: add the release-roll exemption: a PR is exempt when head's `[Unreleased]` section has no bullet and head's `CHANGELOG.md` has a `## [x.y.z]` heading directly after `## [Unreleased]` that base lacks (the shape `make release-notes` writes; finding 1). The D4 suffix test still runs on it. (b) D6: say that `.claude/` and `.agents/` paths are tested first and are never exempt, even `.md` files (finding 2). (c) D5 and D4: base means the merge base of `--base` and `--head` (finding 5). (d) REQ-02/D3: the heading rule fails only when the merge base's headings were valid (finding 6). (e) New REQ-0053-17 for the roll exemption and one for the precedence, with Test rows 19 (roll PR passes), 20 (a roll that also edits a released line fails), 21 (agent `.md` only needs a line) written in the same shell style, each runnable now. Keep the existing rows 1 to 18 unchanged. (f) Add facts F13 (the roll PR fails) and F14 (the `.md` precedence clash) to the Facts list, each with the command that shows it.
+- **Done-when:** `make spec-check JOBS=2 && bash <(awk '/^```bash/{c++; if(c==1){p=1;next}} /^```/{p=0} p' specs/0053-changelog-and-commit-text-policy.md)` exits 0, and `grep -c 'REQ-0053-1[78]' specs/0053-changelog-and-commit-text-policy.md` prints at least 2. The second command extracts and runs the Test block (finding 3 shows it runs green today), so the new rows 19 to 21 must print `ok`.
+- **Red-first:** before the edit the `grep -c` prints 0. After green, change row 19's expected word from `PASS` to `FAIL-nolog` in a scratch copy and watch the block exit 1 with `row 19: RED`; restore. Row 19 itself must fail against the old D6 logic: run the old `verdict` on a rolled scratch tree and see `FAIL-nolog` (finding 1) before you write the exemption into the shell.
+
+### P2: clean the seven `[Unreleased]` headings (wave 1)
+- **Persona:** `uas-engineer` (text edit). One commit, `docs(changelog): merge duplicate Unreleased headings`; nothing else in the PR (spec P4).
+- **Files:** `CHANGELOG.md` (exists). No other file. Line numbers are at `2a3d442`; re-measure with the awk command before editing.
+- **Exact edits:** keep the first `### Added` (line 10), `### Changed` (line 44) and `### Fixed` (line 53); delete the four later heading lines (57, 65, 105, 113) and move their bullets, in their present order, to the end of the matching first block. Result: Added = bullets of lines 10 to 43 then 65 to 104 (32 + 38 = 70); Changed = lines 44 to 52, then 57 to 64, then 105 to 112 (7 + 6 + 6 = 19); Fixed = lines 53 to 56, then 113 to 122 (2 + 8 = 10). One blank line between a block and the next heading, none inside a block. Add no bullet, remove no bullet, reword none. Order is Added, Changed, Fixed, which is the D3 order.
+- **Done-when:** `test "$(awk '/^## \[0/{exit} /^## \[Unreleased\]/{u=1} u&&/^### /{print $2}' CHANGELOG.md | tr '\n' ' ')" = 'Added Changed Fixed ' && test "$(awk '/^## \[0/{exit} /^## \[Unreleased\]/{u=1} u&&/^- /{n++} END{print n}' CHANGELOG.md)" = 99 && git diff --stat origin/development | tail -1 | grep -q '1 file changed' && diff <(git show origin/development:CHANGELOG.md | grep '^- ' | sort) <(grep '^- ' CHANGELOG.md | sort) && make typos JOBS=2` exits 0. The last leg is the multiset check: every bullet survived, none was reworded. The `1 file changed` leg proves nothing else was touched.
+- **Red-first:** run the first leg before the edit: it prints `Added Changed Fixed Changed Added Changed Fixed` and fails. After green, delete one bullet in a scratch copy and watch the bullet count leg print 98 and the `diff` leg print a `<` line; restore. [asserted: I did not run the edit.]
+
+### P3: pointers in AGENTS.md, CONTRIBUTING.md and the PR template (wave 1)
+- **Persona:** `uas-engineer`.
+- **Files, all exist:** `AGENTS.md` (rule 6 line 39, rule 8 line 41), `CONTRIBUTING.md` (the rules list, the line `Add one line under ...` is line 35 and the Pull requests paragraph follows), `.github/pull_request_template.md` (`Part of CER-N` is the last line; the file holds the five sections in order).
+- **Change:** AGENTS.md rule 6 and rule 8 each end with `See specs/0053-changelog-and-commit-text-policy.md.` and no other change. Rule 8 keeps "Never edit a released section." CONTRIBUTING.md line 35 gets the same pointer, and the "Pull requests" paragraph says the integrating lane writes the CHANGELOG line as a `docs(changelog)` commit and a builder writes none (D2, REQ-13). The PR template gets one HTML comment line above `Part of CER-N`: `<!-- One line under [Unreleased] in CHANGELOG.md for a user-visible change: see spec 0053. -->`. Do not add a section to the template: the check counts exactly the five of F9, in order, and the sample body of Test row 16 is `sed -n 1,28p` of this file.
+- **Done-when:** `test "$(grep -c 'specs/0053-changelog-and-commit-text-policy' AGENTS.md CONTRIBUTING.md | awk -F: '{s+=$2} END{print s}')" -ge 3 && grep -q 'spec 0053' .github/pull_request_template.md && test "$(grep -c '^## ' .github/pull_request_template.md)" = 5 && make oss-check typos JOBS=2` exits 0. The five-section count is the control that the template shape did not change.
+- **Red-first:** all three greps print 0 before the edit [asserted: `git grep -c 0053 -- AGENTS.md CONTRIBUTING.md .github` prints nothing at the base; builder confirms]. After green, add a `## Notes` heading to a scratch copy of the template and watch the section count print 6 and the command fail; restore.
+
+### P4: `cargo xtask text-check` (wave 2)
+- **Persona:** `uas-builder`.
+- **Depends on:** P1 (amended rules and Test rows 19 to 21) and P2 (clean headings), both merged.
+- **Files:** `xtask/src/text_check.rs` (new, line 1 `// SPDX-License-Identifier: Apache-2.0 OR MIT`), `xtask/src/main.rs` (exists; the `mod` list, the `match` arm near line 26, the usage line and the doc comment list). `xtask/Cargo.toml` is untouched: `std` and the `git` binary only (D5; no spec 0004 pin).
+- **Change:** `cargo xtask text-check --base <ref> [--head <ref>=HEAD] [--body-file <path>] [--head-ref <name>]`. Exit 0 pass, 1 fail, 2 usage. Output, one line per finding: `text-check: FAIL <kind>: <detail>` with kind one of `nolog`, `released`, `marker`, `ticket`, `headings`, and `text-check: warn: <detail>` for the body. Pure functions first, each unit-tested: `exempt(path)` (finding 2 precedence: `.claude/` and `.agents/` first, then `docs/`, `specs/`, `engineering/`, `tests/` at any depth, any `*.md` other than `CHANGELOG.md`), `needs_log(files, head_ref)` (dependabot head ref exempt), `roll_shape(base_text, head_text)`, `added_unreleased(base, head)`, `released_tail_ok(base, head)` (D4 suffix, reports the first differing line), `markers(text)` (`<<<<<<<`, `=======`, `>>>>>>>`, `|||||||` at line start, D8), `ticket_in_subject(subject)` with the key list in one constant (D7, `Merge` and `Revert` subjects skipped), `body_warnings(body)` (five template sections in order and one line matching `^Part of (CER-[0-9]+|spec [0-9]{4})$`), `heading_order(unreleased)` (Added, Changed, Deprecated, Removed, Fixed, Security, each once; applied only when the merge base's headings were valid). Git glue: `git merge-base`, `git diff --name-only <mb> <head>`, `git show <mb>:CHANGELOG.md`, `git show <head>:CHANGELOG.md`, `git log --no-merges --format=%H%x09%s <mb>..<head>`. Without `--body-file` the body checks are skipped and a `warn: no body` line prints. Without `--head-ref` no dependabot exemption applies. The body checks stay `warn:` and exit 0 (D9, REQ-12).
+- **Done-when:** `cargo nextest run -p xtask text_check -j 2 && make fmt-check clippy JOBS=2 && cargo xtask text-check --base origin/development --head origin/development` exits 0. The last leg is the positive control on an empty diff. Unit tests cover spec Test rows 1, 2, 3, 4, 6, 7 to 9, 11, 12, 15 to 18 and the new rows 19 to 21 as pure-function cases.
+- **Red-first:** write the unit tests against stub functions that return "pass" for everything and watch rows 1, 4, 6, 7 and the ticket, marker and released cases go red (the spec's own sentence: a check that passes every PR turns rows 1, 4 and 6 red). Then fill the functions. After green: make `exempt` return true for every path and watch the `nolog` test fail; make `ticket_in_subject` ignore the key `VES` and watch the `VES-1` case fail; restore each. [Size risk, asserted: about 300 to 380 changed lines with tests. If a diff passes 400, move the `#[cfg(test)]` module to `xtask/src/text_check_tests.rs` in the same package and say so in the verdict.]
+
+### P5: integration tests with planted controls (wave 3)
+- **Persona:** `uas-builder`.
+- **Depends on:** P4 merged.
+- **Files:** `xtask/tests/text_check.rs` (new; no `xtask/tests/` directory exists today, finding 10).
+- **Change:** build a temporary git repository per case (isolate config with `GIT_CONFIG_GLOBAL` and `GIT_CONFIG_NOSYSTEM` pointing at an empty file and no signing configured, so no flag is needed to avoid signing; the repository is a throwaway fixture, never the real one). Seed it with a copy of the real `CHANGELOG.md`, `release-plz.toml`, `.github/pull_request_template.md` and a stub crate path, commit as the base, branch, apply the mutation, commit, and run the binary through `env!("CARGO_BIN_EXE_xtask")`. Cases, one per spec row and each paired with a control: row 1 (code file only) exits 1 `nolog`; row 2 (code plus one `[Unreleased]` bullet) exits 0; row 3 (README only) exits 0; row 4 (bullet plus an edited released line) exits 1 `released`; row 6 (a `<<<<<<<` line) exits 1 `marker`; subject `feat(uas): CER-123 add x` exits 1 `ticket` and prints the SHA; subject `docs(spec): SHA-256 note` exits 0; body file with no sections exits 0 with 6 `warn:` lines and the full template body gives 0 (rows 15, 16); the roll case after the real `make release-notes`-equivalent awk (row 19) exits 0, and the same roll with one released line edited (row 20) exits 1; `.claude/agents/x.md` only (row 21) exits 1 `nolog`; a branch whose base moved on with a merged roll (finding 5) still exits 0; heading violation present in base and head exits 0, new violation exits 1 `headings`. Add `release-plz.toml` has `changelog_update = false` (REQ-07) as a plain assertion.
+- **Done-when:** `cargo nextest run -p xtask --test text_check -j 2 && make fmt-check clippy JOBS=2` exits 0.
+- **Red-first:** break the binary's behavior three ways in a scratch copy of `text_check.rs`: make `released_tail_ok` return true, make `needs_log` return false, make the merge-base resolve to the base tip; the tests for rows 4, 1 and the moved-base case go red respectively. Restore. This is the control against a test that cannot fail.
+
+### P6: `make text-check` and the CI job (wave 3)
+- **Persona:** `uas-builder`.
+- **Depends on:** P4 merged. P2 merged earlier.
+- **Files, both exist:** `Makefile` (the `.PHONY` list at line 15 and the `spec-check` to `pin-check` target group near lines 64 to 71), `.github/workflows/ci.yml`.
+- **Change, Makefile:** target `text-check` with `BASE ?= origin/development`. The recipe passes the PR body file and head ref through the environment, never through make expansion, so a hostile branch name or body cannot reach a shell word: `cargo xtask text-check --base "$(BASE)" --head "$${HEAD:-HEAD}" $${BODY_FILE:+--body-file "$$BODY_FILE"} $${HEAD_REF:+--head-ref "$$HEAD_REF"}`. Add it to `.PHONY` and give it a `##` help line. It is not part of `hygiene` (D5: that job also runs on push, which has no base).
+- **Change, CI:** a job `text-check` in `ci.yml`: `if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository`; `runs-on: {group: ent-default, labels: [ci-rust]}`; `timeout-minutes: 10`; `actions/checkout` with the same pinned SHA as the other jobs, `ref: ${{ github.event.pull_request.head.sha }}` and `fetch-depth: 0`; a step with `env: PR_BODY: ${{ github.event.pull_request.body }}`, `HEAD_REF: ${{ github.event.pull_request.head.ref }}`, `BASE_REF: ${{ github.base_ref }}`; the `run:` block writes the body with `printf '%s' "$PR_BODY" > "$RUNNER_TEMP/pr-body.md"` and calls `make text-check BASE="origin/$BASE_REF" HEAD=HEAD BODY_FILE="$RUNNER_TEMP/pr-body.md"` with `HEAD_REF` exported. Add a comment like the `moon-affected` job: informational until spec 0053 D10 flips it. No `${{ }}` expression inside any `run:` line (REQ-14). Leave the header comment on line 2 alone: the job is not required yet. Mind the 0051 fork guard: the job is skipped for a fork PR, and a skipped required check reports success, so spec 0051's `fork-gate` stays the fork control [asserted].
+- **Done-when:** `actionlint .github/workflows/ci.yml && make text-check BASE=origin/development HEAD=origin/development && test "$(sed -n '/^  text-check:/,/^  [a-z-]*:$/p' .github/workflows/ci.yml | grep -A12 '^        run:' | grep -c '\${{')" = 0 && test "$(grep -c 'github.event.pull_request.body' .github/workflows/ci.yml)" = 1 && make hygiene JOBS=2` exits 0. The last two `grep`s are Test row "14" of the spec's table in text form: the body expression appears once and only in an `env:` block. The `sed` range ends at the next job key; if the job is last in the file the range runs to the end, which is still correct.
+- **Red-first:** before the edit `make text-check` prints `No rule to make target` and `grep -c 'github.event.pull_request.body'` prints 0. After green, move `${{ github.event.pull_request.head.ref }}` into the `run:` line of a scratch copy and watch the `${{` count leg print 1 and fail; restore. Run `make text-check BASE=origin/development HEAD=origin/development` against a scratch tree with a planted `<<<<<<<` line in `CHANGELOG.md` and a base ref that differs, and watch it exit 1.
+- **Clock:** the seven-day rule (P7) starts when this package's PR merges to `development`, and the integrator records that date in the PR.
+
+### P7: make `text-check` required (wave 4, BLOCKED)
+- **BLOCKED on two things [reported: spec D10, REQ-0053-16]:** (1) seven days after P6 merges with no false failure; (2) Christian's branch-protection act, which is his and is not delegated by this plan. The integrator does neither on its own authority.
+- **Evidence command, run on day 7:** `gh run list -R unsigned-gg/uas --workflow CI --event pull_request --created '>=<P6 merge date>' --limit 200 --json databaseId,conclusion,headBranch` then, for each run with a `failure`, `gh run view <id> -R unsigned-gg/uas --log-failed | grep 'text-check:'`. A failure is false when the PR was right and the check was wrong (for example a roll PR, a moved base, a heading rule on an old branch). The integrator reads each failure; a count of failures is not the answer. Control: the same command filtered to the `hygiene` job must return rows, or the filter is broken.
+- **Persona once unblocked:** the act is Christian's. A follow-up `uas-engineer` package edits the `ci.yml` line 2 comment (required checks list), the spec 0003 table (add a row `Required check text-check`) and spec 0005 where it lists the checks, so that the docs match the protection.
+- **Done-when:** `gh api repos/unsigned-gg/uas/branches/development/protection --jq '.required_status_checks.contexts | index("text-check")'` prints a number, not `null`, and the same read on `main` agrees with spec 0003.
+- **The body-check flip** (REQ-12): when the lane rules the body checks fail, remove the advisory exit in `text_check.rs` and flip the unit tests that expect `warn:` to expect `FAIL body`. D10 sets no date for that, so no package carries one.
+
+### P8: `RELEASING.md` link (wave 4, BLOCKED)
+- **BLOCKED on spec 0048 plan landing `RELEASING.md`** [verified missing; reported: REQ-0048-15, D13].
+- **Persona:** `uas-engineer`. **Files:** `RELEASING.md` (new in 0048; this package only adds one line).
+- **Change:** the CHANGELOG paragraph links `specs/0053-changelog-and-commit-text-policy.md` and does not restate the rule (D11, REQ-15).
+- **Done-when:** `grep -c 'specs/0053-changelog-and-commit-text-policy' RELEASING.md` prints 1 and `! grep -qi 'one line under' RELEASING.md` exits 0 (the second leg proves the rule was not copied).
+- **Red-first:** both legs are red the moment the file exists without the line: count 0.
+
+## Open
+
+- The lead should decide, or tell the integrator to decide, the roll exemption (P1 a): the structural rule in this plan is my recommendation; the alternative is exempting head refs that begin `chore/release-`, which is spoofable like the dependabot one. Neither is in the spec today.
+- The ticket-ID key list (F12) is reported, not read from Linear. P4 holds it in one constant; I did not re-read Linear.
+- `text-check` allows a ticket ID in a commit body; the spec bans it only in subjects (D7). Unchanged.
+- I did not run any package's done-when to green: the plan edits no code. Findings 1, 2 and 3 were run on a scratch worktree of `2a3d442` with the spec's own shell functions, and the worktree is gone.
+- I did not read `.github/workflows/_rust.yml` or the full required-check list beyond the first four contexts.
