@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
-//! Compiles the vendored Cortex pool protos for the feature `cortex-grpc` (spec 0026 P1). With
+//! Compiles the fetched Cortex pool protos for the feature `cortex-grpc` (spec 0026 P1). With
 //! the feature off it does nothing, so a default build needs neither `protox` nor `tonic`.
 
 #[cfg(feature = "cortex-grpc")]
@@ -7,13 +7,22 @@ fn generate() -> Result<(), Box<dyn std::error::Error>> {
     use std::{env, fs, path::PathBuf};
 
     let out = PathBuf::from(env::var("OUT_DIR")?);
-    let vendored = PathBuf::from(env::var("CARGO_MANIFEST_DIR")?).join("../../vendor/cortex/proto");
-    // The vendored files are flat; their imports name `cortex/mesh/v1/` (spec 0026 F7).
+    // `cargo xtask fetch-contracts` writes these under the ignored `.contracts/` (spec 0048 D9).
+    let fetched =
+        PathBuf::from(env::var("CARGO_MANIFEST_DIR")?).join("../../.contracts/cortex/proto");
+    // The fetched files are flat; their imports name `cortex/mesh/v1/` (spec 0026 F7).
     let include = out.join("proto");
     let dest = include.join("cortex/mesh/v1");
     fs::create_dir_all(&dest)?;
     for name in ["pool.proto", "lane.proto", "peer.proto"] {
-        let from = vendored.join(name);
+        let from = fetched.join(name);
+        if !from.is_file() {
+            return Err(format!(
+                "{} is missing: run cargo xtask fetch-contracts",
+                from.display()
+            )
+            .into());
+        }
         println!("cargo:rerun-if-changed={}", from.display());
         fs::copy(&from, dest.join(name))?;
     }
