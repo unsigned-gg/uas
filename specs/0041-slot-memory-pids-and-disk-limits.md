@@ -45,19 +45,19 @@ D3). The kernel enforces them; the pool observes `memory.events` and reports.
 
 | ID | Decision | Rationale | Source |
 |---|---|---|---|
-| D1 | `ResourceLimits::default()` sets `memory_max_bytes` to one quarter of `MemTotal` read from `/proc/meminfo`, with a floor of 2 GiB and a ceiling of 16 GiB, and `memory_high_bytes` to 80 percent of that, and writes `memory.swap.max` as 0. On ceres that is `memory.max` 13.5 GiB and `memory.high` 10.8 GiB per slot, with no swap. | Two slots (F8) at a quarter each leave half the host for the harnesses, the editor and the kernel page cache. `memory.high` throttles before `memory.max` kills. Without `memory.swap.max` 0 the ceiling is a trigger for swapping (F9), and a swapping slot thrashes the disk every other slot uses. | proposed: integrating lane w25:p1, 2026-10-10; the fraction awaits Christian |
+| D1 | The pool's default `memory_max_bytes` is `MemTotal`, read from `/proc/meminfo`, divided by twice `host_max_slots` (spec 0036 D1): half the host stays reserved and the rest is split by the host slot count. There is no ceiling. The floor is 2 GiB and is a refusal, not a clamp: when the formula gives less, `allocate` returns the new `PoolError::MemoryLow`. `memory_high_bytes` is 80 percent of the max, and `memory.swap.max` is written as 0. On ceres (54 GiB, F4; 2 slots, F8) that is `memory.max` 13.5 GiB and `memory.high` 10.8 GiB per slot, with no swap. | The reserved half covers the harnesses, the editor and the kernel page cache. Splitting by `host_max_slots` follows spec 0036 instead of assuming two slots. `memory.high` throttles before `memory.max` kills. Without `memory.swap.max` 0 the ceiling is a trigger for swapping (F9), and a swapping slot thrashes the disk every other slot uses. | ruled: Christian, lane w25:p1, 2026-10-11 about 00:10Z (the formula, the 2 GiB floor as a refusal, no ceiling); first proposed by integrating lane w25:p1, 2026-10-10 as a quarter clamped to 2 to 16 GiB |
 | D2 | `ResourceLimits` gains `pids_max: Option<u32>`, default `4096`, written to `pids.max`. | F6: a fork bomb is a slot's failure, not the host's. 4096 clears any `cargo` build with `-j 2`. | integrating lane w25:p1, 2026-10-10 |
 | D3 | Disk has no per-slot quota. Project quotas need a filesystem mount option and root; the slot's output is reclaimed by spec 0015 at `Reclaiming` (F7). Instead the pool keeps a floor: a slot is not provisioned when the worktree root's filesystem has less than `min_free_bytes` (default 20 GiB) free, and `allocate` returns `PoolError::DiskLow`. | A quota would be enforced by a mount the operator has not made. A floor is enforceable from user space with `statvfs`. | integrating lane w25:p1, 2026-10-10 |
 | D4 | The limits are written before the first `exec` in the slot, in the same call as `cpu.max`. A missing controller file logs at `warn` and leaves that one limit unset, as `cpu.max` does today (`freezer.rs` lines 272-273). | One write path, one failure mode. | integrating lane w25:p1, 2026-10-10 |
 | D5 | At `Reclaiming` the pool reads `memory.events` and `pids.events` of the slot cgroup and records `oom_kill` and `pids_max_hits` on the `AuditReceipt`. A non-zero `oom_kill` makes the worker outcome `Killed(Oom)`, distinct from `Exited(code)`. A non-zero `pids.events max` changes no outcome: the kernel kills nothing at `pids.max`, it fails `fork` with `EAGAIN`, so the worker's own exit code stands and the counter says why. | A verifier reading `exit 137` cannot tell an OOM from an operator kill; the receipt must say which (spec 0002). `pids.max` is a refusal, not a kill (cgroup v2 documentation; research lane, mesh 9d7c6d4b). | integrating lane w25:p1, 2026-10-10 |
 | D6 | Limits are per slot, not per worker process: a slot's whole process tree shares one `memory.max` and one `pids.max`. | The cgroup is the slot; spec 0015 D3. | integrating lane w25:p1, 2026-10-10 |
-| D7 | Operators override every default with `PoolConfig` fields and the environment twins `UAS_SLOT_MEMORY_MAX`, `UAS_SLOT_PIDS_MAX` and `UAS_MIN_FREE_BYTES` (bytes, decimal). Precedence follows spec 0042. | One way to tune, named in one place. | integrating lane w25:p1, 2026-10-10 |
+| D7 | Operators override every default with `PoolConfig` fields and the environment twins `UAS_SLOT_MEMORY_MAX`, `UAS_SLOT_PIDS_MAX` and `UAS_MIN_FREE_BYTES` (bytes, decimal). Precedence follows spec 0042. Every pool start logs at `info` the `memory_max_bytes` in force and its source: `formula`, `env` or `config` (a D8 `spec.limits` value reaches the pool as `config`). | One way to tune, named in one place. The start log shows which source won. | integrating lane w25:p1, 2026-10-10; the start log ruled: Christian, lane w25:p1, 2026-10-11 about 00:10Z |
 | D8 | A slot provisioned through the spec 0038 `WorkerSlot` CRD carries its limits in `spec.limits` (`memory_max_bytes`, `memory_high_bytes`, `pids_max`); `uas-operator` passes them into `PoolConfig`, and they beat the environment twins of D7. A `WorkerSlot` with no `limits` gets the D1 and D2 defaults. | Without them an operator cannot size slots declaratively (plan author, mesh a10df88d). The CRD field is the flag of spec 0042 D1 for a slot. | integrating lane w25:p1, 2026-10-10; the schema row awaits spec 0038's amendment |
 
 ### Requirements (EARS)
 
 - **[REQ-0041-01]** (Event-driven): WHEN `uas-pool` configures a slot cgroup, it shall write `memory.max`, `memory.high`, `memory.swap.max` and `pids.max` before the first `exec` in that slot.
-- **[REQ-0041-02]** (Ubiquitous): The `uas-pool` default `memory_max_bytes` shall be one quarter of `MemTotal`, clamped to the range 2 GiB to 16 GiB, the default `memory_high_bytes` shall be 80 percent of `memory_max_bytes`, and the default `memory.swap.max` shall be 0.
+- **[REQ-0041-02]** (Ubiquitous): The `uas-pool` default `memory_max_bytes` shall be `MemTotal` divided by twice `host_max_slots`, with no upper clamp, the default `memory_high_bytes` shall be 80 percent of `memory_max_bytes`, and the default `memory.swap.max` shall be 0.
 - **[REQ-0041-03]** (Ubiquitous): The `uas-pool` default `pids_max` shall be 4096.
 - **[REQ-0041-04]** (Unwanted): IF the filesystem holding the worktree root has less than `min_free_bytes` free, THEN `uas-pool` shall refuse `allocate` with `PoolError::DiskLow` and provision nothing.
 - **[REQ-0041-05]** (Unwanted): IF a limit's controller file is absent, THEN `uas-pool` shall log the missing file at `warn`, leave that limit unset, and continue.
@@ -66,10 +66,12 @@ D3). The kernel enforces them; the pool observes `memory.events` and reports.
 - **[REQ-0041-08]** (Ubiquitous): The `uas-pool` crate shall apply memory and pids limits to the slot cgroup as a whole, never to an individual worker process.
 - **[REQ-0041-09]** (Ubiquitous): The `uas-domain` crate shall define the `Killed(Oom)` outcome and the two receipt counters with no I/O imports.
 - **[REQ-0041-10]** (Event-driven): WHEN a `WorkerSlot` carries `spec.limits`, `uas-operator` shall pass those values into `PoolConfig`, and `uas-pool` shall apply them in place of the defaults and the environment twins.
+- **[REQ-0041-11]** (Unwanted): IF no override sets `memory_max_bytes` and `MemTotal` divided by twice `host_max_slots` is below 2 GiB, THEN `uas-pool` shall refuse `allocate` with `PoolError::MemoryLow` and provision nothing.
+- **[REQ-0041-12]** (Event-driven): WHEN a pool starts, `uas-pool` shall log at `info` the `memory_max_bytes` in force and its source, one of `formula`, `env` or `config`.
 
 ## Plan
 
-- [ ] `uas-pool`: `pids_max` on `ResourceLimits`; `MemTotal` read and the clamp in `Default`.
+- [ ] `uas-pool`: `pids_max` on `ResourceLimits`; the default `memory_max_bytes` from `MemTotal` and `host_max_slots`, `PoolError::MemoryLow`, and the `info` start log of the value and its source.
 - [ ] `uas-pool`: write `pids.max` in `configure_limits`; read `memory.events` and `pids.events` at reclaim.
 - [ ] `uas-pool`: `statvfs` floor in `allocate`; `PoolError::DiskLow`.
 - [ ] `uas-domain`: `WorkerOutcome::Killed(Oom)` and the two receipt counters.
@@ -81,9 +83,11 @@ D3). The kernel enforces them; the pool observes `memory.events` and reports.
 | Requirement | Negative Control |
 |---|---|
 | REQ-0041-01 | A fake freezer records writes; the test asserts `memory.max`, `memory.high` and `pids.max` are written before `exec`. Goes red if any write is removed. |
-| REQ-0041-02 | A unit test feeds `MemTotal` of 4 GiB, 54 GiB and 256 GiB and expects 2 GiB, 13.5 GiB and 16 GiB. Goes red if the clamp is dropped. |
+| REQ-0041-02 | A unit test feeds a fake `MemTotal` of 6 GiB, 54 GiB and 256 GiB with `host_max_slots` 2 and expects a refusal, 13.5 GiB and 64 GiB, with `memory.high` 10.8 GiB and 51.2 GiB for the last two. Goes red if the 16 GiB ceiling is kept: 256 GiB then gives 16 GiB. |
 | REQ-0041-04 | A fake `statvfs` reports 1 GiB free; `allocate` returns `DiskLow`. Goes red if the check is removed. |
 | REQ-0041-07 | Under `make ebpf-test`, a worker runs `python3 -c "x=bytearray(2**31)"` in a slot with `memory.max` 256 MiB; the receipt shows `oom_kill 1` and `Killed(Oom)`. Goes red if the outcome is `Exited(137)`. A second worker forks past `pids.max` 64; the receipt shows `pids_max_hits` above 0 and the outcome `Exited(code)`. Goes red if the outcome is a `Killed` variant. |
+| REQ-0041-11 | A fake `MemTotal` of 6 GiB with `host_max_slots` 2 gives 1.5 GiB; `allocate` returns `MemoryLow` and creates no slot cgroup. Goes red if the floor clamps up to 2 GiB or the check is removed: `allocate` then succeeds. |
+| REQ-0041-12 | A test starts a pool with no override, with `UAS_SLOT_MEMORY_MAX` set, and with a `PoolConfig` value; the captured `info` line names `formula`, `env` and `config` in turn. Goes red if the line or its source field is removed. |
 
 ```bash
 cargo nextest run -p uas-pool limits -j 2
