@@ -33,7 +33,7 @@ and the integrator, who alone lands.
    (`gh run view <id> --log-failed | tail -n 30`). A PR that is CONFLICTING gets no new checks:
    report `mergeable` before you call a runner stuck.
 2. Repo state, with no ref change in the shared checkout:
-   `git -C /home/ctodie/projects/unsigned/uas ls-remote origin refs/heads/development`
+   `git -C <shared-checkout> ls-remote origin refs/heads/development`
    gives the live head. `git -C <that path> log --oneline -10 origin/development` and
    `git -C <that path> worktree list` read local state; the local ref can lag, so compare its head
    with the `ls-remote` SHA and say when they differ. Open blackwall runs: `blackwall list` in the
