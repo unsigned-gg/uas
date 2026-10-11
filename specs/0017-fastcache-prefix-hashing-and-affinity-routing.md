@@ -1,5 +1,5 @@
 ---
-status: planned
+status: in-progress
 created: 2026-10-09
 tags: [router, fastcache, prefix-hash, affinity, rendezvous, sse, phase-4]
 priority: high
@@ -28,7 +28,7 @@ Facts, measured and recorded 2026-10-09:
   `http://llm` and in-cluster at `http://llm.llm:4000`.
 - **Approved Crates [verified]:** Spec 0004 approves `sha2` 0.11.0 and
   `futures-util` 0.3.34 for `uas-router`. `tokio` 1.53.1 is in use.
-- **Domain Purity [verified]:** `uas-router` depends on `uas-domain` for
+- **Domain Purity [verified 2026-10-11: `crates/uas-router/Cargo.toml` lists only `thiserror`, `sha2` and `tokio`]:** `uas-router` does not depend on `uas-domain`; the earlier text said it did, for
   session identifiers and slot leases. It performs asynchronous network I/O.
 - **Cognitive Tag Conventions [reported]:** Reasoning models emit thinking
   tokens wrapped in `<think>...</think>` XML-like blocks.
@@ -166,22 +166,22 @@ so a row stays red until its tests exist. The last row runs every test in the cr
 
 | Requirement | Command | Today (2026-10-11) |
 |---|---|---|
-| REQ-0017-01 | `cargo nextest run -p uas-router prefix:: -j 2` | exit 0, 5 tests pass |
-| REQ-0017-02 | `cargo nextest run -p uas-router affinity:: -j 2` | exit 0, 11 tests pass |
-| REQ-0017-03 | `cargo nextest run -p uas-router multiplexer:: -j 2` | exit 4, no tests to run |
-| REQ-0017-04 | `cargo nextest run -p uas-router health:: -j 2` | exit 4, no tests to run |
-| REQ-0017-05 | `cargo nextest run -p uas-router --test failover -j 2` | exit 101, no test target `failover` |
-| all | `cargo test -p uas-router -j 2` | exit 0, 26 tests pass |
+| REQ-0017-01 | `cargo nextest run -p uas-router prefix:: --build-jobs 2` | exit 0, 5 tests pass |
+| REQ-0017-02 | `cargo nextest run -p uas-router affinity:: --build-jobs 2` | exit 0, 12 tests pass |
+| REQ-0017-03 | `cargo nextest run -p uas-router multiplexer:: --build-jobs 2` | exit 4, no tests to run |
+| REQ-0017-04 | `cargo nextest run -p uas-router health:: --build-jobs 2` | exit 4, no tests to run |
+| REQ-0017-05 | `cargo nextest run -p uas-router --test failover --build-jobs 2` | exit 101, no test target `failover` |
+| all | `cargo test -p uas-router -j 2` | exit 0, 27 tests pass |
 
 The Today column is [verified 2026-10-11: each command run in a worktree at
 `origin/development` `eb149a0`].
 
 ```bash
-cargo nextest run -p uas-router prefix:: -j 2
-cargo nextest run -p uas-router affinity:: -j 2
-cargo nextest run -p uas-router multiplexer:: -j 2
-cargo nextest run -p uas-router health:: -j 2
-cargo nextest run -p uas-router --test failover -j 2
+cargo nextest run -p uas-router prefix:: --build-jobs 2
+cargo nextest run -p uas-router affinity:: --build-jobs 2
+cargo nextest run -p uas-router multiplexer:: --build-jobs 2
+cargo nextest run -p uas-router health:: --build-jobs 2
+cargo nextest run -p uas-router --test failover --build-jobs 2
 cargo test -p uas-router -j 2
 ```
 
