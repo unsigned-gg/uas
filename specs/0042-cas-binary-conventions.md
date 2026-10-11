@@ -1,5 +1,5 @@
 ---
-status: planned
+status: in-progress
 created: 2026-10-10
 tags: [cli, daemon, config, logging, exit-codes, version]
 priority: high
@@ -8,7 +8,7 @@ depends_on: [0001-cas-architecture-and-crate-layout, 0002-verification-gates-and
 
 # 0042-cas-binary-conventions
 
-> **Status**: planned, **Priority**: high, **Created**: 2026-10-10
+> **Status**: in-progress, **Priority**: high, **Created**: 2026-10-10
 
 ## Overview
 
@@ -88,5 +88,6 @@ cargo nextest run -p uas-cli conventions -j 2
 - Spec 0025 chose exit 2 for a not-ready step before this spec existed; D4 keeps it and gives it the general meaning, so no landed spec changes.
 - The `uas demo` command prints no lease token (`main.rs` line 172); D3 keeps that, since a token is not a result.
 - Clap's `env` attribute needs the `env` feature of `clap`; the workspace manifest enables `derive` only, and the Plan adds `env`. Spec 0004 has no `clap` row to amend.
+- Status moved to in-progress on 2026-10-10: plan 0042's packages P1, P3 to P9 landed in PRs #129 to #132 on unsigned-gg/uas; P2 (the spec 0038 citation) rides in PR #119.
 - Plan 0042 (PR #127) found that `UAS_WAVE_OPEN_PRS` is read with no clap argument and that REQ-0042-09 had no Test row; both are fixed in this amendment, 2026-10-10.
 - Out of scope: the content of log records and any redaction rule. Spec 0013 D5 covers the one secret the substrate handles.

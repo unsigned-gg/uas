@@ -57,6 +57,12 @@ enum Command {
     },
 }
 
+/// `--open-prs` and `UAS_WAVE_OPEN_PRS`: only the value `1` is true (spec 0025 D16).
+#[allow(clippy::unnecessary_wraps)]
+fn open_prs_value(raw: &str) -> Result<bool, String> {
+    Ok(raw == "1")
+}
+
 #[derive(Debug, Subcommand)]
 enum WaveCommand {
     /// Write one saga flow per wave from a plan.
@@ -80,14 +86,26 @@ enum WaveCommand {
         #[arg(long)]
         step: String,
         /// The custody checkout. Defaults to `UAS_WAVE_REPO`, then the working directory.
-        #[arg(long)]
+        #[arg(long, env = "UAS_WAVE_REPO")]
         repo: Option<std::path::PathBuf>,
         /// The state directory. Defaults to `UAS_WAVE_STATE_DIR`, then under `XDG_STATE_HOME`.
-        #[arg(long)]
+        #[arg(long, env = "UAS_WAVE_STATE_DIR")]
         state_dir: Option<std::path::PathBuf>,
         /// The most steps in flight, as given to `wave flow`. 0 means the default of 3.
         #[arg(long, default_value_t = 0)]
         max_concurrency: usize,
+        /// Open a pull request per Builder (spec 0025 D16). `UAS_WAVE_OPEN_PRS=1` does the same;
+        /// the flag wins.
+        #[arg(
+            long,
+            env = "UAS_WAVE_OPEN_PRS",
+            num_args = 0..=1,
+            require_equals = true,
+            default_missing_value = "1",
+            value_name = "0|1",
+            value_parser = open_prs_value,
+        )]
+        open_prs: Option<bool>,
     },
     /// Resolve a Builder's PR and run `blackwall merge-gate` on it. Saga calls this as the
     /// `verify_cmd` of a generated merge step.
@@ -99,10 +117,10 @@ enum WaveCommand {
         #[arg(long)]
         builder: String,
         /// The custody checkout. Required unless `UAS_WAVE_REPO` is set; never the working directory.
-        #[arg(long)]
+        #[arg(long, env = "UAS_WAVE_REPO")]
         repo: Option<std::path::PathBuf>,
         /// The state directory. Defaults to `UAS_WAVE_STATE_DIR`, then under `XDG_STATE_HOME`.
-        #[arg(long)]
+        #[arg(long, env = "UAS_WAVE_STATE_DIR")]
         state_dir: Option<std::path::PathBuf>,
         /// The most steps in flight, as given to `wave flow`. 0 means the default of 3.
         #[arg(long, default_value_t = 0)]
@@ -1080,10 +1098,15 @@ fn harness_verify(receipt_path: &str) -> Result<VerificationReport> {
 }
 
 fn main() -> Result<()> {
-    tracing_subscriber::fmt()
-        .with_env_filter(EnvFilter::from_default_env())
-        .with_writer(std::io::stderr)
-        .init();
+    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("warn"));
+    let builder = tracing_subscriber::fmt()
+        .with_env_filter(filter)
+        .with_writer(std::io::stderr);
+    if std::env::var("UAS_LOG_FORMAT").is_ok_and(|v| v == "json") {
+        builder.json().init();
+    } else {
+        builder.init();
+    }
 
     let cli = Cli::parse();
     match cli.command {
@@ -1103,6 +1126,7 @@ fn main() -> Result<()> {
                 repo,
                 state_dir,
                 max_concurrency,
+                open_prs,
             } => {
                 let args = wave_flow::StepArgs {
                     flow,
@@ -1112,7 +1136,8 @@ fn main() -> Result<()> {
                     max_concurrency,
                 };
                 let cwd = std::env::current_dir()?;
-                let code = wave_flow::run_step(&args, &wave_flow::WaveEnv::from_process(), &cwd);
+                let env = wave_flow::WaveEnv::from_process().with_open_prs_flag(open_prs);
+                let code = wave_flow::run_step(&args, &env, &cwd);
                 std::process::exit(code);
             }
             WaveCommand::MergeGate {
