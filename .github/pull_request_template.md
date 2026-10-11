@@ -25,4 +25,5 @@ make hygiene
 
 <!-- How to undo this change in one step. -->
 
+<!-- One line under [Unreleased] in CHANGELOG.md for a user-visible change: see spec 0053. -->
 Part of CER-N
