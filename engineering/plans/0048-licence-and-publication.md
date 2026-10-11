@@ -27,7 +27,7 @@ Tiers: `verified` = I ran or read it at the path named; `reported` = the spec sa
 | Spec Plan item | Package |
 |---|---|
 | Pkg 1, spec 0004: line 55 requirement, 2026-10-09 position (lines 158 to 163), `aya-ebpf` row (line 180), lines 15 to 18 | P1 |
-| Pkg 1, spec 0045 D8 points at 0048 D6, "only once Christian confirms D6" | P12 (BLOCKED) |
+| Pkg 1, spec 0045 D8 points at 0048 D6, "only once Christian confirms D6" | P12 (done 2026-10-11) |
 | Pkg 1, `LICENSE-APACHE`, `LICENSE-MIT`, `NOTICE`, remove `LICENSE` and `docs/IP_NOTICE.md` | P4 |
 | Pkg 1, `LICENSE-DOCS` | P6 |
 | Pkg 1, `crates/uas-ebpf/ebpf/LICENSE` | P5 |
@@ -73,7 +73,7 @@ Tiers: `verified` = I ran or read it at the path named; `reported` = the spec sa
 | 3 | P7, P8 | P7: 128 code files. P8: 64 Markdown files | code SPDX, Markdown SPDX. First red: vendor |
 | 4 | P9, P10 | P9: `Makefile`. P10: `xtask/`, `build.rs`, `contracts.lock`, `.gitignore` | no new leg; `spdx-check` joins `hygiene`; REQ-0048-11 closes |
 | 5 | P11 | alone: `vendor/` and `Makefile` | vendor leg. The whole command exits 0 |
-| later | P12, P13 | BLOCKED | none |
+| later | P13 | BLOCKED | none |
 
 P7 and P8 start from a `development` that already holds P4 (the Markdown set shrinks by one) and P1 to P3. P10 follows P7 because P7 tags `xtask/src/*.rs` and `crates/uas-engine/build.rs`; P10 edits both. P11 follows P10 and P9 because both edit `Makefile` or its inputs. The integrator owns the single `CHANGELOG.md` line.
 
@@ -157,9 +157,9 @@ P7 and P8 start from a `development` that already holds P4 (the Markdown set shr
 - **Done-when:** `test ! -e vendor/cortex -a ! -e vendor/soma -a ! -e vendor/saga && make oss-check hygiene JOBS=2 && cargo xtask fetch-contracts && cargo build -p uas-engine --features cortex-grpc --locked -j 2` exits 0. This is the vendor leg, red today. After it the spec's whole fenced command should exit 0; the builder runs it end to end and pastes the result.
 - **Red-first:** before the removal `make oss-check` already passes the pattern leg; after adding the directory leg and before `git rm`, it must exit non-zero naming the directory. After green, `git checkout` one removed directory and watch it fail again; `git rm` it.
 
-### P12: spec 0045 D8 points at 0048 D6 (BLOCKED)
+### P12: spec 0045 D8 points at 0048 D6 (DONE 2026-10-11)
 - **Persona:** `uas-engineer`.
-- **BLOCKED:** spec 0048 line 84 (D6) is `proposed, Christian to rule`, and the Plan says "Only once Christian confirms D6, spec 0045 D8 points at it". Spec 0045 line 58 (D8) is also his row. Unblocks when Christian rules D6. Files then: `specs/0045-security-disclosure-and-advisory-policy.md` only. Done-when: `grep -q 'spec 0048' specs/0045-security-disclosure-and-advisory-policy.md && make spec-check` exits 0 (`asserted`).
+- **DONE 2026-10-11:** Christian confirmed D6 ("Confirm, the crate is the vehicle", lane w25:p1, AskUserQuestion); spec 0045 D8 now points at it. Was blocked because spec 0048 line 84 (D6) was `proposed, Christian to rule`, and the Plan says "Only once Christian confirms D6, spec 0045 D8 points at it". Spec 0045 line 58 (D8) is also his row. Unblocks when Christian rules D6. Files then: `specs/0045-security-disclosure-and-advisory-policy.md` only. Done-when: `grep -q 'spec 0048' specs/0045-security-disclosure-and-advisory-policy.md && make spec-check` exits 0 (`asserted`).
 
 ### P13: the public form (BLOCKED, Christian's acts)
 - **BLOCKED:** the cut date and the public repository name are not ruled (spec Notes, "Rulings needed"); creating the repository is Christian's act (spec 0037 D1). Whether `uas-operator` (spec 0038) publishes separately is not ruled. Covers REQ-0048-10 (one commit holding the tree of `main`, `make check` green there, a required DCO check) and REQ-0048-12 (the crates.io `uas` crate's `repository` URL returns 200; today 404). Also the CI credential for `cortex-grpc`, an operator-gated secret. No builder acts on any of it. Until then `gh api repos/unsigned-gg/uas --jq .private` must print `true` (REQ-0048-09).
