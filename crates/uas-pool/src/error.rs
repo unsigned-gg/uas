@@ -63,6 +63,24 @@ pub enum PoolError {
     /// eBPF audit client error.
     #[error("ebpf audit client error: {0}")]
     Ebpf(String),
+
+    /// The per-slot memory limit is below the 2 GiB floor (spec 0041 D1, D7).
+    #[error("per-slot memory {per_slot_bytes} bytes is below the {floor_bytes} byte floor")]
+    MemoryLow {
+        /// The per-slot memory limit the formula or the override gave.
+        per_slot_bytes: u64,
+        /// The floor it fell below.
+        floor_bytes: u64,
+    },
+
+    /// The worktree filesystem has less free space than the floor (spec 0041 D5).
+    #[error("{free_bytes} bytes free is below the {min_free_bytes} byte floor")]
+    DiskLow {
+        /// Free bytes on the filesystem.
+        free_bytes: u64,
+        /// The configured minimum.
+        min_free_bytes: u64,
+    },
 }
 
 /// Errors arising from cgroup v2 freezer operations.
