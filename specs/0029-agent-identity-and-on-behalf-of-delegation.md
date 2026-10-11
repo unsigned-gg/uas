@@ -162,6 +162,6 @@ removed proves nothing.
   (spec 0013 D5). REQ-0029-12 adds a check before that injection; it does not
   move the credential closer to the worker.
 - Reading: estate synthesis section 4.12
-  (`~/projects/cerebral/research/SYNTHESIS-ESTATE-AND-SUBSTRATE.md`), spec 0013
+  (`SYNTHESIS-ESTATE-AND-SUBSTRATE.md` in the cerebral research directory), spec 0013
   for the proxy, spec 0007 for leases, spec 0022 for custody landing, cortex
   spec 0005 for member join tokens.

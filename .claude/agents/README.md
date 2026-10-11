@@ -1,7 +1,7 @@
 # Agents for uas
 
 Repo-specific Claude Code subagents. They load at session start from this directory (restart or
-`/agents` to pick up a new file). The global set in `~/.claude/agents/` stays available: use
+`/agents` to pick up a new file). The global set in the user-level `agents/` directory under `.claude` stays available: use
 `surface-builder`, `prober`, `ci-watcher`, `verifier`, `prompt-linter` and `linear-filer` as they
 are. The global `builder` and `pr-reviewer` assume `origin/main`; here `uas-builder` and
 `uas-critic` replace them. Models follow Christian's rule of 2026-10-10: engineer and critic on
@@ -24,7 +24,7 @@ opus, foreman on sonnet, builders on sonnet (Christian, 2026-10-10, estate-wide;
 1. **In-lane waves (default).** The lane runs up to three subagents at once through the Agent
    tool: builders in sibling worktrees, then `uas-critic`, then the lane pushes with
    `git -C <worktree>`, opens the PR and lands on green. Surfaces are built once with
-   `surface-builder` into `/tmp/research-surfaces/uas/` and every agent reads them there.
+   `surface-builder` into the research surfaces and every agent reads them there.
 2. **Pane gang (on request).** `saga yggdrasil team apply uas-estate --cwd <repo>` splits a
    herdr tab into the `estate-cockpit` grid; the lane starts each pane with
    `herdr agent start <name> --kind claude --pane <id> -- --model <alias>` and briefs it. The
