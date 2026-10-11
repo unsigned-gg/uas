@@ -30,6 +30,7 @@ mod evaluator;
 mod ident;
 mod landing;
 mod lease;
+mod outcome;
 mod policy;
 mod reconcile;
 mod slot;
@@ -42,6 +43,7 @@ pub use landing::{
     AuditStatus, CostSource, HumanRaise, LandingFacts, LandingReceipt, LandingReceiptError,
 };
 pub use lease::{check_slot_free, Budget, Lease, LeaseId, LeaseLedger, LeaseToken, PrincipalRef};
+pub use outcome::{KillReason, LimitEvents, WorkerOutcome};
 pub use policy::{PolicyTier, SomaClassification};
 pub use reconcile::{LostSlot, ReconcileReport};
 pub use slot::{Slot, SlotId, SlotState, WorktreeRef};
