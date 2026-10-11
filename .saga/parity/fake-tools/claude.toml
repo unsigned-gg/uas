@@ -1,0 +1,6 @@
+# Canned answers of the fake `claude` (the Critic) for the wave smoke parity run.
+[[rule]]
+pat = "*"
+out = "VERDICT: NO DEFECTS\nreviewed\n"
+err = ""
+code = 0
