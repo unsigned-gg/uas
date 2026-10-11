@@ -117,9 +117,8 @@ It calls models through the LiteLLM gateway, not vendor APIs.
 
 ### toml
 
-Decision, Christian, 2026-10-09: `toml` is pinned at 0.8 (MIT OR Apache-2.0).
-Used in `uas-engine` and `uas-cli` to parse `.saga/flows/*.toml` macro-orchestration
-definitions and workflow templates.
+Decision, Christian, 2026-10-09: `toml` is pinned at 0.8 (MIT OR Apache-2.0). Amended 2026-10-11: the workspace uses 1.1.8 (root `Cargo.toml` `toml = "1.1"`, a caret; `Cargo.lock` 1.1.8+spec-1.1.0; `MIT OR Apache-2.0` read in the registry copy's `Cargo.toml`), so 0.8 was never applied and no pin-table row binds it. Christian to rule: ratify 1.1.8 or revert to 0.8.
+Used in `uas-engine` and `uas-cli` to parse `.saga/flows/*.toml` macro-orchestration definitions and workflow templates.
 
 ### Vendored estate contracts and schemas
 
