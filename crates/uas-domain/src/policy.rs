@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 //! Soma reflex policy tier classification and admission gates.
 //!
 //! Soma classifies incoming tasks into one of three policy tiers:

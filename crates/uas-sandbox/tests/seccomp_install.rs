@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 //! Spec 0043 D2/D4 gate for `seccomp::install`: `cargo nextest run -p uas-sandbox seccomp -j 2`.
 //!
 //! The worker is this test binary, re-executed with `seccomp_helper` as the only

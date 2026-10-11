@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 //! vLLM prefix-hash routing, FastCache affinity and load balancing for model calls.
 //!
 //! First code (spec 0013): the Unix-socket proxy that carries a jailed worker's

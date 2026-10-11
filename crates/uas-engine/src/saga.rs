@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 //! Saga flow execution coordinator and compensation runner.
 //!
 //! Bridges `.saga/flows/*.toml` definitions with [`crate::WorkflowSession`] executions,

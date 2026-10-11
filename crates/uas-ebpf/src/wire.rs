@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 //! The 168-byte `ExecEvent` record shared with the kernel program (spec 0014 D6).
 //!
 //! The layout is `#[repr(C)]` and little-endian. Offsets are fixed by the spec:

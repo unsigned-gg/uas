@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 // Build-time version stamp, shared by build scripts through `include!`.
 // Captures `git describe` into `UAS_BUILD_REV` so `--version` can print the
 // commit. The value is `unknown` when the build tree is not a git checkout.

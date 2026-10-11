@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: Apache-2.0 OR MIT
 # Before a `git push`, run `make check`. Deny the push when it fails (fail closed).
 # Bypass: SKIP_CI_GATE=1. Reads the Claude Code PreToolUse JSON on stdin. Always exits 0.
 [ "${SKIP_CI_GATE:-}" = "1" ] && exit 0

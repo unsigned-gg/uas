@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 //! Tests for the wave saga flows and the `uas wave step` shim (spec 0025 D2, the saga flows).
 //!
 //! The generator and the step config are included from the binary source, so their pure

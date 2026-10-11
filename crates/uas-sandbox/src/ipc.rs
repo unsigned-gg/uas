@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 //! The worker's IPC mount: where the gateway socket lives inside the workspace.
 //!
 //! Spec 0013. `uas-sandbox` owns only the place. The proxy that listens there is
