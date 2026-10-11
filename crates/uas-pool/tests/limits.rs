@@ -65,10 +65,37 @@ fn limits_create_slot_refuses_memory_low_and_creates_no_cgroup() {
 }
 
 #[test]
-fn limits_memory_low_is_ignored_without_a_cgroup_base() {
+fn limits_memory_low_refuses_without_a_cgroup_base() {
     let pool = SlotPool::with_host(PoolConfig::default(), host(Some(6 * G), 100 * G));
-    pool.create_slot(slot("a"))
-        .expect("no cgroup, no limit check");
+    let err = pool.create_slot(slot("a")).unwrap_err();
+    assert!(matches!(err, PoolError::MemoryLow { .. }), "got {err:?}");
+    assert_eq!(pool.slot_count(), 0);
+}
+
+#[test]
+fn limits_default_pool_checks_the_disk_floor() {
+    let pool = SlotPool::with_host(PoolConfig::default(), host(Some(54 * G), G));
+    let err = pool.create_slot(slot("a")).unwrap_err();
+    assert!(
+        matches!(err, PoolError::DiskLow { free_bytes, .. } if free_bytes == G),
+        "got {err:?}"
+    );
+}
+
+#[test]
+fn limits_freezer_error_fails_closed_with_a_cgroup_base() {
+    use std::os::unix::fs::PermissionsExt;
+    let tmp = TempDirGuard::new("limits-failclosed");
+    let base = cgroup_tree(&tmp, "a");
+    let file = base.join("slot-a").join("memory.max");
+    fs::set_permissions(&file, fs::Permissions::from_mode(0o444)).unwrap();
+    if fs::write(&file, "x").is_ok() {
+        return; // running as root: a read-only file does not fail the write
+    }
+    let pool = SlotPool::with_host(cgroup_config(base), host(Some(54 * G), 100 * G));
+    let err = pool.create_slot(slot("a")).unwrap_err();
+    assert!(matches!(err, PoolError::Freezer(_)), "got {err:?}");
+    assert_eq!(pool.slot_count(), 0);
 }
 
 #[test]
@@ -99,8 +126,7 @@ fn limits_disk_floor_override_and_memory_refusal_are_independent() {
         },
         ..PoolConfig::default()
     };
-    // 6 GiB host is below the memory floor, but no cgroup base: only the disk check runs.
-    let pool = SlotPool::with_host(cfg, host(Some(6 * G), G));
+    let pool = SlotPool::with_host(cfg, host(Some(54 * G), G));
     pool.create_slot(slot("a"))
         .expect("1 GiB free clears a 0.5 GiB floor");
 }
@@ -120,7 +146,7 @@ fn limits_disk_probe_error_surfaces() {
     let err = SlotPool::with_host(cfg, h)
         .create_slot(slot("a"))
         .unwrap_err();
-    assert!(matches!(err, PoolError::Spawn(_)), "got {err:?}");
+    assert!(matches!(err, PoolError::DiskProbe(_)), "got {err:?}");
 }
 
 #[test]
