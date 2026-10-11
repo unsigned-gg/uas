@@ -46,6 +46,18 @@ t allow feat 'git push origin feat/main-menu'             'branch name containin
 t allow feat 'git -C /x push origin feat/x'               'push feature via -C'
 t allow development 'git push origin feat/x'              'push feature while on development'
 t allow feat 'git -C /x push origin development # allow-direct-push' 'override marker with -C'
+t deny  development 'git push origin HEAD'               'HEAD while on development'
+t deny  main 'git push origin HEAD'                       'HEAD while on main'
+t deny  feat 'git push origin "main"'                     'double-quoted main'
+t deny  feat "git push origin 'main'"                     'single-quoted main'
+t deny  feat 'FOO=1 git push origin main'                 'env-prefixed push main'
+t deny  feat 'sudo git push origin main'                  'sudo push main'
+t deny  feat 'git push --all origin'                      'push --all'
+t deny  feat 'git push --mirror origin'                   'push --mirror'
+t deny  feat 'git push --repo=origin main'                'push --repo= main'
+t allow feat 'git push origin "feat/x"'                   'quoted feature branch'
+t allow feat 'FOO=1 git push origin feat/x'               'env-prefixed feature push'
+t allow feat 'git push origin HEAD'                       'HEAD while on feature'
 
 rm -rf "$WORK/repo"
 printf '\n%d passed, %d failed\n' "$pass" "$fail"
