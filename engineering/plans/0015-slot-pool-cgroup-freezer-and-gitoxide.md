@@ -101,7 +101,8 @@ The spec status moves to `in-progress` with the first landed wave (the integrato
 - **Done-when once ruled (option 1):** `cargo nextest run -p uas-pool cgroup_unusable -j 2`, a case that points `cgroup_base` at a read-only directory and expects `create_slot` to succeed with a `SignalFreezer`, plus the existing fail-closed test still green.
 - **Red-first:** the new case fails on the base with `PoolError::Freezer`.
 
-### P6: live freeze and thaw on a real cgroup, with latency (BLOCKED, needs a delegated subtree)
+### P6: live freeze and thaw on a real cgroup, with latency (wave 3, needs `make pool-live-test`, landed #209)
+- **Ruled 2026-10-11 (integrator):** the delegated subtree is the uid-owned user slice on ceres (no sudo) and `make pool-live-test` exists; this package adds its `freeze_live` leg, so `Makefile` joins its Files.
 - **Blocked on:** a delegated cgroup v2 subtree on the host (spec 0015 REQ-03 line 33, the freeze Plan bullet line 129, the test bullet line 134 and the Kernel Requirement note line 149 need a writable cgroup v2). On this host `app.slice` is not writable (finding 10), so the existing live test skips. A subtree is being arranged separately. The package also needs the make target both plan 0040 (P8) and plan 0041 (P8) hold BLOCKED: `make pool-live-test`, which does not exist at `1bf73c5` [verified: `grep -n 'pool-live' Makefile` prints nothing]. Until it exists the invocation is the plan 0041 P7 form, run as uid 1000 without sudo: `BIN=$(cargo test -p uas-pool --test freeze_live --no-run -j 2 --message-format=json 2>/dev/null | jq -r 'select(.reason=="compiler-artifact" and .target.name=="freeze_live") | .executable' | grep -v null | tail -n1); systemd-run --user --scope -q -p Delegate=yes "$BIN" --nocapture --test-threads=1`.
 - **Persona once unblocked:** `uas-builder`.
 - **Files:** `crates/uas-pool/tests/freeze_live.rs` (new). It reuses the delegated-tree setup of `tests/limits_live.rs` lines 19 to 70 by copy.
