@@ -26,7 +26,7 @@ halt and no compensation today (F10, F11), so the saga half is a build, not a po
 
 Measured 2026-10-10 on ceres. uas: `origin/development` 19c19ea (21:06 -0400), worktree
 `/tmp/uas-w49`, `uas` built there with `cargo build -p uas-cli -j 2`. Saga: `origin/development`
-2f9b23a (21:05 -0400) of `<home>/projects/platform/runtime/saga`, read with
+2f9b23a (21:05 -0400) of the local `cerebral-work/saga` checkout, read with
 `git show origin/development:<path>` or `git grep ... origin/development`, because that
 checkout's worktree is on `feat/yggdrasil-skald-trace` (ef0919e).
 
@@ -94,10 +94,10 @@ checkout's worktree is on `feat/yggdrasil-skald-trace` (ef0919e).
 - **F13 [verified]:** saga spec 0039 (commit 1a2efb0, status implemented 2026-10-11) took the
   team-checking half. Its Notes (line 188) say the uas lane drafts the CPM migration first and
   the saga lead lane reviews it against `crates/dagr/src/stats.rs`.
-- **F14 [verified]:** `<home>/.local/bin/saga` links to `<home>/projects/unsigned/saga/target/release/saga`.
-  `<home>/projects/unsigned/saga` and `<home>/projects/platform/runtime/saga` both link to
-  `<home>/projects/cerebral-work/saga` (`ls -ld`). `readlink -f <home>/.local/bin/saga` prints
-  `<home>/projects/cerebral-work/saga/target/release/saga`, built 2026-10-10 16:29 -0400
+- **F14 [verified]:** the installed `saga` binary is a symlink chain into the local `cerebral-work/saga` checkout's `target/release/saga`
+  (two alias directories both link to that checkout, `ls -ld`;
+  `readlink -f` on the binary resolves to
+  that checkout's `target/release/saga`), built 2026-10-10 16:29 -0400
   (`stat`). [asserted] It holds 962e476.
 - **F15 [verified]:** `gh api repos/unsigned-gg/uas --jq .private` prints `true`. clap exits 2
   for `uas wave` with no subcommand and for `uas no-such-cmd --help` ("unrecognized subcommand").
