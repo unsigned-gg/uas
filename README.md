@@ -7,6 +7,10 @@ model routing and an operator dashboard.
 **Status:** scaffold and domain; no runtime yet. Version 0.1.0. Private. Licensed
 `Apache-2.0 OR MIT` (see `LICENSE-APACHE`, `LICENSE-MIT` and `NOTICE`). The design is a draft from `cerebral-work/research@4068134`.
 
+**Support:** This project is pre-1.0.
+It makes no stability or support promise, and any interface may change without notice.
+Example code is not for production.
+
 ## Crates
 
 | Crate | Role | Phase |
