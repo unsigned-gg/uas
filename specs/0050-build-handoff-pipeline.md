@@ -5,6 +5,7 @@ tags: [process, agents, plans, waves, ci, changelog]
 priority: high
 depends_on: [0002-verification-gates-and-evidence, 0003-branch-model-and-promotion, 0005-ci-cache-and-runners, 0042-cas-binary-conventions, 0049-cpm-migration-to-saga]
 ---
+<!-- SPDX-License-Identifier: CC-BY-4.0 -->
 
 # 0050-build-handoff-pipeline
 
@@ -32,7 +33,7 @@ Measured 2026-10-11 at `origin/development` e0e903f. Tiers: `verified` names the
 - **F1 [verified]:** `.claude/agents/README.md` lines 36 to 58 give five steps: plan, dispatch,
   critic per SHA, merge and PR, next wave and status. Line 24 says "up to three subagents";
   lines 47 and 48 say three by the global rule, raised to five for this lane on 2026-10-10.
-  Command: `sed -n 24p,36,58p` on the file.
+  Command: `sed -n '24p;36p;58p' .claude/agents/README.md`.
 - **F2 [verified]:** `engineering/plans/README.md` is seven lines. It names the plan fields
   (packages, files, done-when, red-first, persona, wave) and says "at most three builders" and
   "deletes or marks a plan done". Command: `cat` on the file.
@@ -50,19 +51,24 @@ Measured 2026-10-11 at `origin/development` e0e903f. Tiers: `verified` names the
   merges of `origin/development` (PR #154, #156, #153, #157 via
   `gh pr view <n> --json commits`). Spec 0041 landed in five wave PRs: #147, #148, #150, #154,
   #157.
-- **F6 [verified]:** PR #154, #156 and #157 each have a `ready_for_review` event, so each was
-  a draft. The draft stood 29, 4 and 6 minutes before ready, and the PR merged 2 minutes later
-  (#154: created 02:03:45Z, ready 02:32:42Z, merged 02:34:55Z). Command:
-  `gh api repos/unsigned-gg/uas/issues/<n>/timeline --jq '.[].event'`. Each body has a
-  "Critic pass (in-house) and fixes" section (#154, #157) naming the defects found.
-- **F7 [verified]:** the last 25 non-merge commits that touch `CHANGELOG.md` all have the subject
-  `docs(changelog): ...` and none carries code. Command: `git log origin/development
-  --no-merges --format=%s -25 -- CHANGELOG.md`. Plan 0048 says "The integrator owns the single
-  `CHANGELOG.md` line". Yet `uas-builder.md` line 17, `uas-ebpf-builder.md` line 17 and
-  `uas-k8s-builder.md` line 17 let a builder write that line.
+- **F6 [verified]:** PR #154, #156 and #157 each have one `ready_for_review` event, so each was
+  a draft. The draft stood 29 minutes (#154), 4 minutes (#156) and 7 minutes (#157). They merged
+  2 minutes (#154), 52 seconds (#156) and 2 minutes (#157) after ready. Command:
+  `gh api repos/unsigned-gg/uas/issues/<n>/timeline --jq '.[].event'`. The bodies of #154 and #157
+  have a "Critic pass (in-house) and fixes" section naming the defects found. The body of #156
+  says "Critic pass follows" and holds no result, so the trail shows a recorded critic pass for
+  two of the three.
+- **F7 [verified]:** of the last 25 non-merge commits that touch `CHANGELOG.md`, all 25 have the
+  subject `docs(changelog): ...`; 24 change `CHANGELOG.md` alone and 1 also changes plan and spec
+  0048. Command: `git log --no-merges --format='%h %s' -25 origin/development -- CHANGELOG.md`
+  plus `git show --format= --name-only <sha>` per commit. All 25 are authored by Christian M. Todie.
+  [reported] The lane commits as the operator's identity, so authorship does not separate
+  integrator from builder; plan 0048 ("The integrator owns the single `CHANGELOG.md` line") and
+  the builder briefs are the source. `uas-builder.md` line 17, `uas-ebpf-builder.md` line 17 and
+  `uas-k8s-builder.md` line 17 still let a builder write that line.
 - **F8 [verified]:** `gh api repos/unsigned-gg/uas/branches/development/protection --jq
   '.required_status_checks.contexts'` prints `secrets`, `rust / cargo`, `cargo-deny`,
-  `hygiene`, `ebpf-live`. Spec 0003 lines 59 to 63 list the same five. `ci.yml` also defines
+  `hygiene`, `ebpf-live`. Spec 0003 lines 60 to 64 list the same five. `ci.yml` also defines
   `moon-affected`, which is not required. `required_signatures.enabled` and
   `required_linear_history.enabled` print `false`, so signing rests on AGENTS.md rule 5 and
   the push hooks, not on the server.
@@ -73,7 +79,7 @@ Measured 2026-10-11 at `origin/development` e0e903f. Tiers: `verified` names the
 - **F10 [verified]:** spec status lags the README rule (line 54 to 55). Spec 0041 is `planned` in
   frontmatter and registry after five landed waves. Specs 0040 and 0043 are `in-progress` in
   frontmatter and `planned` in the registry. `spec-check` does not compare the two. Spec 0042
-  moved to `in-progress` at its first landed wave (its Notes line 91).
+  moved to `in-progress` at its first landed wave (its Notes line 92).
 - **F11 [verified]:** commit 61bf3cd (`docs(changelog): drop two stale diff3 base markers left
   by a merge resolution`) fixed `|||||||` markers that a scripted conflict resolution left in
   `CHANGELOG.md`. Command: `git show 61bf3cd --stat`.
@@ -100,16 +106,16 @@ Christian may override), `proposed: <for whom>`.
 | D3 | A package is one builder, one worktree, one crate or file group. Target under 400 changed lines; a package that exceeds 800 is split. Each package has Persona, Files (existing or `new`), Change, Done-when and Red-first. Done-when is a command with an exit code from the spec Test section or a Makefile gate. A package with no runnable Done-when is BLOCKED and names the spec line. | The planner cuts packages, so its 400 governs; the engineer's 800 is the ceiling for a brief (F9). | `lane-decided` |
 | D4 | At most five agents run at once per lane, counting builders, critics and probers. A wave holds at most three builders, with disjoint files. The next wave is cut from the new `origin/development` after the wave PR lands. During a development hold, planning runs and dispatch waits (README lines 57, 58). | Five: Christian, 2026-10-10. Three per wave leaves room for a critic and a prober inside the cap (F9). | cap `ruled`; wave size `lane-decided` |
 | D5 | Builders commit signed and never push. The integrating lane merges builder branches into one wave branch with merge commits, pushes with `git -C`, and opens the PR as a draft. | Push hooks judge the shared checkout (README line 66); the draft starts CI while the critic reads (F5, F6). | `lane-decided` |
-| D6 | The integrating lane owns the CHANGELOG line: one `docs(changelog)` commit per wave PR, under `## [Unreleased]`. A builder writes none. The three builder personas drop their CHANGELOG clause. | One writer cannot conflict with itself; 25 of 25 recent changelog commits are the integrator's (F7). | `lane-decided` |
-| D7 | The in-house `uas-critic` re-reads the merged wave branch once the draft PR is open and before it is marked ready, and never before the draft exists. It returns numbered defects with file and line, or no defects plus what it checked. The lane applies each item (a defect in a builder file goes back to that builder) and records the pass in the PR body. | F6: every wave PR shows the critic pass between draft and ready. | `lane-decided` |
-| D8 | A per-SHA critic pass on a builder branch is optional. It is required for a package that touches `unsafe`, the sandbox, the pool's kernel calls or `crates/uas-ebpf`. | README step 3 and line 15 ask for it on every SHA; the trail shows the wave-level pass only (F6). | `lane-decided: integrating lane w25:p1, 2026-10-11` |
+| D6 | The integrating lane owns the CHANGELOG line: one `docs(changelog)` commit per wave PR, under `## [Unreleased]`. A builder writes none. The three builder personas drop their CHANGELOG clause. | One writer cannot conflict with itself; 25 of 25 recent changelog commits are `docs(changelog)` commits, and plan 0048 gives the line to the integrator (F7, reported). | `lane-decided` |
+| D7 | The in-house `uas-critic` re-reads the merged wave branch once the draft PR is open and before it is marked ready, and never before the draft exists. It returns numbered defects with file and line, or no defects plus what it checked. The lane applies each item (a defect in a builder file goes back to that builder) and records the pass in the PR body. | F6: #154 and #157 show a critic pass recorded between draft and ready; #156 shows a draft and a later pass promised. | `lane-decided` |
+| D8 | A per-SHA critic pass on a builder branch is optional. It is required for a package that touches `unsafe`, the sandbox, the pool's kernel calls or `crates/uas-ebpf`. | README step 3 and line 15 ask for it on every SHA; the trail shows a wave-level pass only (F6). | `lane-decided: integrating lane w25:p1, 2026-10-11` |
 | D9 | The lane marks the PR ready and lands it when all five required checks read SUCCESS on the head: `secrets`, `rust / cargo`, `cargo-deny`, `hygiene`, `ebpf-live`. The merge is a merge commit pinned to the head sha. `moon-affected` is advisory. Red stops the wave. | AGENTS.md rules 7 and 9, approval routes; spec 0003 table; F8. | `ruled` by spec 0003 and the lane approval route |
 | D10 | After the PR state reads MERGED, the lane removes the wave's worktrees, prunes, and deletes the local builder and wave branches. It reads the state from `gh pr view <n> --json state`, never from the merge button. A branch whose PR is open or closed unmerged stays. | F12: nothing in the repo says it, and a worktree removed before MERGED loses unlanded work. | `lane-decided` |
 | D11 | Conflicts resolve with merge commits only. Merging `origin/development` into the wave branch is routine. In `CHANGELOG.md` keep every line from both sides; in `specs/README.md` keep one row per spec in number order. A scripted resolution drops the whole `|||||||` base section. No conflict or diff3 marker reaches a pushed commit. | F11. | `lane-decided` |
 | D12 | A verdict block is 15 lines or fewer, bad news first, with a tier on each claim. A builder returns STATUS, SHA, FILES, CHECKS, TESTS, SCOPE, OPEN. A critic returns VERDICT, numbered DEFECTS, CHECKED, UNCHECKED. A planner returns PLAN, SPEC, BLOCKED, PINS, FIRST, OPEN. An engineer returns STATUS, SHA, SPEC, DECIDES, PINS, BRIEFS, OPEN. | The persona Output sections already say so; D12 makes them the contract. | `lane-decided` |
 | D13 | A plan is done when every unblocked package has landed. The package heading gains `(DONE <date>, #<PR>)`; the plan file stays as the record. | README line 54 and plan 0048 P12 already use the suffix. | `lane-decided` |
 | D14 | The spec status moves in the wave PR that lands the work: `planned` to `in-progress` with the first landed wave, `complete` when the plan is done and the spec Test command exits 0 on `development`. Frontmatter and registry change in the same commit. The move is a package in the plan that lands with the last wave. | F10: three specs disagree with the README rule today. | `lane-decided: integrating lane w25:p1, 2026-10-11` |
-| D15 | Relations. Spec 0003 supplies the branch model, merge commits and the required checks (lines 28, 43 to 47, 59 to 63, 69, 70). Spec 0042 supplies the binary conventions that `uas wave` followed (F13); spec 0038 has no part in this pipeline. Spec 0049 removes `uas wave` and the in-process wave loop; the steps of D5 to D11 do not call them. | F13; spec 0049 REQ-0049-01. | `lane-decided` |
+| D15 | Relations. Spec 0003 supplies the branch model, merge commits and the required checks (lines 29, 44 to 48, 60 to 64, 70, 71). Spec 0042 supplies the binary conventions that `uas wave` followed (F13); spec 0038 has no part in this pipeline. Spec 0049 removes `uas wave` and the in-process wave loop; the steps of D5 to D11 do not call them. | F13; spec 0049 REQ-0049-01. | `lane-decided` |
 
 ### Requirements (EARS)
 
@@ -120,14 +126,14 @@ Christian may override), `proposed: <for whom>`.
 - **[REQ-0050-03]** (Unwanted behavior): IF a builder pushes, opens a PR or edits `CHANGELOG.md`, THEN
   the critic shall report it as a scope defect (0050 D5, 0050 D6).
 - **[REQ-0050-04]** (State-driven): WHILE a lane runs agents, it shall run at most five at once, and
-  no wave shall hold more than three builders with overlapping files (0050 D4).
+  no wave shall hold more than three builders, whose files shall be disjoint (0050 D4).
 - **[REQ-0050-05]** (Event-driven): WHEN a wave's builders return, the integrating lane shall merge
   their branches into one wave branch with merge commits and open the PR as a draft (0050 D5).
 - **[REQ-0050-06]** (Event-driven): WHEN the draft PR is open, the critic shall re-read the merged
   wave branch and return numbered defects with file and line, or no defects with what it checked.
   The PR shall not be marked ready before that pass (0050 D7).
 - **[REQ-0050-07]** (Ubiquitous): Each wave PR shall carry exactly one `docs(changelog)` commit from
-  the integrating lane when the wave changes user-visible behavior (0050 D6).
+  the integrating lane (0050 D6).
 - **[REQ-0050-08]** (Event-driven): WHEN all five required checks read SUCCESS on the head, the lane
   shall land the PR with a merge commit pinned to that head (0050 D9).
 - **[REQ-0050-09]** (Unwanted behavior): IF any required check is red or pending, THEN the lane shall
@@ -146,7 +152,8 @@ Christian may override), `proposed: <for whom>`.
 ## Plan
 
 Each item is one builder package under D3. They touch `.claude/` and `engineering/`, so a builder
-brief names those files; the spec itself is the only file this PR changes.
+brief names those files; this PR changes three files: the spec, the registry row in `specs/README.md`, and the
+integrator's line in `CHANGELOG.md`.
 
 - [ ] P1 (`uas-builder`): shrink `.claude/agents/README.md` lines 36 to 58 to a pointer to this
       spec; fix line 24 to five. Shrink `engineering/plans/README.md` the same way.
@@ -154,9 +161,9 @@ brief names those files; the spec itself is the only file this PR changes.
       and `uas-k8s-builder.md` (D6), set the engineer's brief ceiling to D3. Run `prompt-linter`.
 - [ ] P3 (`uas-engineer`): reconcile statuses of specs 0040, 0041 and 0043 per D14, and add the
       status move as the last package of each plan (D14).
-- [ ] P4 (not ruled): extend `cargo xtask spec-check` to compare frontmatter status with
+- [ ] P4 (`proposed: Christian`): extend `cargo xtask spec-check` to compare frontmatter status with
       the registry row, and to check plan files against REQ-0050-01. Rows 1 and 3 below are the
-      manual forms until then.
+      manual forms until then. Christian rules whether it is built.
 
 ## Test
 
@@ -165,16 +172,24 @@ set -u
 chk() { awk '/^### P[0-9]+/{if(h&&!ok)print h; h=$2; ok=0} h&&/[Dd]one-when|BLOCKED/{ok=1} END{if(h&&!ok)print h}' "$1"; }
 t=$(mktemp); sed 's/[Dd]one-when/x/g;s/BLOCKED/x/g' engineering/plans/0043-*.md > "$t"
 echo "1 plans lacking done-when: $(for f in engineering/plans/0*.md; do chk "$f"; done | wc -l); control: $(chk "$t" | wc -l)"
-echo "2 changelog files in branch: $(git diff --name-only origin/development...HEAD | grep -cx CHANGELOG.md); control a9d2d1c: $(git show --format= --name-only a9d2d1c | grep -cx CHANGELOG.md)"
+echo "2 changelog commits in branch: $(git log --no-merges --format=%s origin/development..HEAD | grep -c '^docs(changelog)'); control a9d2d1c: $(git show --format=%s --name-only a9d2d1c | grep -c '^docs(changelog)')"
 for f in specs/0*.md; do s=$(basename "$f" .md); a=$(sed -n 's/^status: //p' "$f" | head -1); b=$(grep "($s.md)" specs/README.md | awk -F'|' '{gsub(/ /,"",$4); print $4}'); [ "$a" = "$b" ] || echo "3 status mismatch $s: $a vs $b"; done
-got=$(gh api repos/unsigned-gg/uas/branches/development/protection --jq '.required_status_checks.contexts|sort|join(",")'); want="cargo-deny,ebpf-live,hygiene,rust / cargo,secrets"
+got=$(gh api repos/unsigned-gg/uas/branches/development/protection --jq '.required_status_checks.contexts|join(",")'); want="secrets,rust / cargo,cargo-deny,hygiene,ebpf-live"
 [ "$got" = "$want" ] && echo "4 required checks ok" || echo "4 RED: $got"
 printf '<<<<<<< a\n||||||| b\n' > "$t"; pat='^(<<<<<<< |>>>>>>> |\|\|\|\|\|\|\| )'
 echo "5 markers in tree: $(git grep -cE "$pat" -- CHANGELOG.md specs | wc -l); control: $(grep -cE "$pat" "$t")"
 echo "6 control, merged build branch state: $(gh pr list --repo unsigned-gg/uas --head build/spec-0041-wave5 --state all --json state --jq '.[0].state')"
 git worktree list --porcelain | awk '/^branch /{sub("refs/heads/","",$2); print $2}' | while read -r b; do
   [ "$(gh pr list --repo unsigned-gg/uas --head "$b" --state all --json state --jq '.[0].state')" = MERGED ] && echo "6 RED worktree left after MERGED: $b"; done
-rm -f "$t"
+v=$(mktemp); seq 16 > "$v"
+echo "7 verdict over 15 lines (planted 16): $([ "$(wc -l < "$v")" -le 15 ] && echo ok || echo RED)"
+miss() { for p in "$@"; do git ls-files --error-unmatch -- "$p" >/dev/null 2>&1 || echo "$p"; done; }
+echo "8 absent files: real [$(miss crates/uas-pool/src/lib.rs)]; planted [$(miss crates/uas-pool/src/nope.rs)]"
+big() { awk -F'|' '/^\| [0-9]+ \|/{if (split($3,a,",")>3) print "wave" $2}' "$1"; }
+printf '| 1 | P1, P2, P3, P4 |\n' > "$v"
+echo "9 waves over three builders: $(for f in engineering/plans/0*.md; do big "$f"; done | wc -l); planted: $(big "$v" | wc -l)"
+echo "10 ready_for_review events: PR 154 $(gh api repos/unsigned-gg/uas/issues/154/timeline --jq '[.[]|select(.event=="ready_for_review")]|length'); PR 128 $(gh api repos/unsigned-gg/uas/issues/128/timeline --jq '[.[]|select(.event=="ready_for_review")]|length')"
+rm -f "$t" "$v"
 ```
 
 Run from the repo root of a clone with `gh` signed in. Read the lines, not the exit code.
@@ -182,17 +197,23 @@ Run from the repo root of a clone with `gh` signed in. Read the lines, not the e
 | # | Check | Today (2026-10-11) | Passes when | Covers |
 |---|---|---|---|---|
 | 1 | Plans with a package that has no done-when and no BLOCKED | `0`; the stripped control prints the packages it catches, more than 0 | `0` while the control stays above 0 | REQ-0050-01 |
-| 2 | CHANGELOG in the wave PR's diff | `0` on this docs branch (the integrator adds it); control a9d2d1c prints `1` | `1` on a wave branch | REQ-0050-07 |
+| 2 | `docs(changelog)` commits in the wave branch | `1` here (the integrator's line); control a9d2d1c prints `1` | `1` on a wave branch; `0` or `2` is red | REQ-0050-07 |
 | 3 | Frontmatter status against the registry row | two lines: 0040 and 0043 (F10) | no line | REQ-0050-12 |
-| 4 | The five required checks, exactly | `4 required checks ok` | still ok; a sixth or a missing name prints `4 RED` | REQ-0050-08, 09 |
+| 4 | The five required checks, names and API order | `4 required checks ok` | still ok; a sixth, a missing name or a changed order prints `4 RED` | REQ-0050-08, 09 |
 | 5 | Conflict markers in `CHANGELOG.md` and `specs/` | `0`; control prints `2` | `0` | REQ-0050-11 |
 | 6 | A worktree whose PR reads MERGED | control prints `MERGED`; no `RED` line | no `RED` line. Control run once by hand: a worktree on a branch named `build/spec-0041-wave5` printed `6 RED` | REQ-0050-10 |
+| 7 | A verdict block over 15 lines | planted 16 lines prints `RED` | `ok` on the real block | REQ-0050-02 |
+| 8 | A package file absent from `git ls-files` | real `[]`; planted prints the path | `[]` for every Files entry | REQ-0050-02 |
+| 9 | A wave table row with more than three builders | `0`; planted 4-builder row prints `1` | `0` | REQ-0050-04 |
+| 10 | `ready_for_review` events on a wave PR | PR 154 prints `1`; PR 128 (opened ready) prints `0` | `1` before merge | REQ-0050-05, 06 |
 
 Row 1 has no failing plan today, so its control proves the awk can go red. Rows 2 and 3 are red on a real failure: a wave branch with no changelog commit
-prints `0`, and the two status lines show row 3 fails today. Rows for REQ-0050-02 to 06 are
-reviewer checks: the critic reads `git log --format=%G?` on the wave branch (non-merge commits
-read `G`), `git diff --stat` against each package's files, and the PR timeline for
-`ready_for_review` after the critic section.
+prints `0`, and the two status lines show row 3 fails today. Row 10 proves a draft existed, not that the critic ran
+first; the critic section in the PR body is read by hand. REQ-0050-03 (a builder push or
+changelog edit), REQ-0050-13 (the hold) and REQ-0050-14 (the per-SHA pass) have no command that
+can go red: they are manual reviewer checks, along with `git log --format=%G?` on the wave branch
+(non-merge commits read `G`) and the deletion of a branch before MERGED (REQ-0050-10, row 6's
+manual control).
 
 ## Notes
 
