@@ -26,3 +26,6 @@
 .vscode/
 .zed/
 
+
+# Fetched estate contracts (cargo xtask fetch-contracts; pinned in contracts.lock)
+.contracts/
