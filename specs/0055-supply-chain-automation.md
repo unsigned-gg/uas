@@ -259,12 +259,12 @@ P1 and P2 replace the shell and become their unit tests.
 | 01, 02 | 17 (counts 3, 3, 0 for the three entries; a `major` in a group raises the third) |
 | 03, 04 | 2, 3 (row 1 is the clean control) |
 | 05 | manual, reviewer: the row of the PR carries the licence, the MSRV result and the ruling |
-| 06 | red today: `grep -c 'uas-ebpf/ebpf' .github/dependabot.yml` prints 0; green after P5 |
+| 06 | green since PR #204 (wave 1 P3): `grep -c 'uas-ebpf/ebpf' .github/dependabot.yml` prints 1 |
 | 07, 11 | manual, reviewer, until P5: `grep -n -A4 '^on:' .github/workflows/sbom.yml` |
 | 08, 09 | 4 to 10 |
 | 10 | manual, reviewer: the `sbom-check` step precedes `upload-artifact` in `sbom.yml` |
 | 12, 13 | `git grep -c 'gitleaks:allow' -- . ':!specs'` prints nothing; `ls .gitleaksignore` fails |
-| 14 | 15, 16 assert the message names both values; they compare the two files. Red today for the 0004 leg: `grep -c '^| .gitleaks. |' specs/0004-dependency-and-licence-policy.md` prints 0; green after P2 |
+| 14 | 15, 16 assert the message names both values; they compare the two files. Green since PR #204 (wave 1 P1) for the 0004 leg: `grep -c '^| .gitleaks. |' specs/0004-dependency-and-licence-policy.md` prints 1; green after P2 |
 | 15 | 11 to 14 |
 | 16 | manual, lane: a hit stops the author and goes to the operator gate (D15) |
 
