@@ -66,10 +66,10 @@ Facts, read 2026-10-10:
 
 ### Requirements (EARS)
 
-- **Ubiquitous:** UAS shall implement no rollout policy, no branch selection and
+- **Ubiquitous:** The UAS shall implement no rollout policy, no branch selection and
   no scalar metric of its own; those are saga's (`volva`, spec 0017) and the
   world model's.
-- **Ubiquitous:** One rollout branch shall map to one UAS slot lease: its own
+- **Ubiquitous:** The rollout branch shall map to one UAS slot lease: its own
   worktree, cgroup, Landlock ruleset, budget and audit receipt.
 - **Event-driven:** WHEN saga backtracks or prunes a branch, UAS shall release
   the lease and reclaim the slot (worktree reset, cgroup removed); nothing from
@@ -179,3 +179,4 @@ watching the negative control fail.
   `LandingInput` [verified, `git grep`, 2026-10-10]. Ticket CER-2784 (Triage, read
   2026-10-10) computes it from the base-to-head diff. Spec 0025 P9a keeps `land`
   unchanged.
+- Amended 2026-10-11: opening words of the flagged requirement bullets reworded to begin with a standard EARS keyword; no change of meaning (spec 0052 P6).

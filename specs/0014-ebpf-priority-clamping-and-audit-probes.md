@@ -42,7 +42,7 @@ Parent tickets: CER-2682, CER-2683. Nested pid namespace fix: CER-2773 (T14, D12
 - **Ubiquitous:** The `uas-ebpf` crate shall implement clean-room eBPF probes using Aya without copyleft dependencies.
 - **Ubiquitous:** The root daemon `uas-ebpfd` shall hold `CAP_BPF`, `CAP_PERFMON` and `CAP_SYS_NICE` while serving unprivileged clients over a UDS socket, and shall accept `track` only for a pid owned by the peer's uid.
 - **Ubiquitous:** The `uas-ebpf` loader shall configure `PIDNS_CONFIG` with the device and inode of `/proc/self/ns/pid` upon loading the eBPF object.
-- **Ubiquitous:** Before it attaches any program, the `uas-ebpf` loader shall parse the `format` files of the three sched tracepoints from tracefs and write five field offsets into `TP_OFFSETS` (D13).
+- **Ubiquitous:** The `uas-ebpf` loader shall, before it attaches any program, parse the `format` files of the three sched tracepoints from tracefs and write five field offsets into `TP_OFFSETS` (D13).
 - **Ubiquitous:** The probes shall read a tracepoint field only at the offset in its `TP_OFFSETS` slot, masked with `0xff`, and shall skip that read when the slot holds less than 8 (D13).
 - **Event-driven:** WHEN a worker slot spawns, `uas-pool` shall configure a dedicated process group and clamp priority to `nice 19`.
 - **Event-driven:** WHEN userspace calls `track(pid, ppid)`, `uas-ebpf` shall record the namespace pid and parent pid in `TRACK_REQUESTS`.
@@ -54,7 +54,7 @@ Parent tickets: CER-2682, CER-2683. Nested pid namespace fix: CER-2773 (T14, D12
 - **Event-driven:** WHEN a `track` succeeds, `uas-ebpfd` shall drain the ring buffer first, then open a receipt window for the pid, owned by the peer's uid and connection, with the pid as its only member (D14).
 - **Event-driven:** WHEN `uas-ebpfd` drains an `ExecEvent`, it shall place the event in the one window whose member set holds its `ppid`, else in the one whose set holds its `ns_pid`; an open window shall absorb it into its `RunHash` in delivery order and add a non-zero `ns_pid` to its set (D14).
 - **Event-driven:** WHEN the total of a `DROPPED_EVENTS` slot grows, `uas-ebpfd` shall add the delta to `dropped_events` of every open window (D14).
-- **Event-driven:** WHEN a peer sends `receipt` for a window it may read, `uas-ebpfd` shall drain the ring buffer, answer `{"receipt":{...}}` with the window's totals, and leave an open window open (D14).
+- **Event-driven:** WHEN a peer sends `receipt` for a window it is permitted to read (D14), `uas-ebpfd` shall drain the ring buffer, answer `{"receipt":{...}}` with the window's totals, and leave an open window open (D14).
 - **Event-driven:** WHEN a peer sends an accepted `untrack`, `uas-ebpfd` shall drain the ring buffer, then close the pid's window, which absorbs nothing more and stays readable (D14).
 - **Event-driven:** WHEN a peer sends an accepted `forget`, or the owning connection closes, `uas-ebpfd` shall discard the window and leave kernel tracking unchanged (D14).
 - **State-driven:** WHILE tracking worker processes, `uas-ebpfd` shall read the nice value of every tracked pid that execs and re-clamp it to `nice 19` using a non-zero `ns_pid`.
@@ -296,3 +296,4 @@ make ebpf-test JOBS=2
 - **Clean-Room Boundary:** Zero code is copied from `neutral-engineering/autonice`.
 - **Why not `tp_btf` or CO-RE now (D13):** aya `BtfTracePoint` reads typed fields through BTF and needs no format parsing, but it needs generated vmlinux bindings and a rewrite of the three probes. It is the later path.
 - **Committed Object Invariant:** `crates/uas-ebpf/ebpf/uas-ebpf.o` is committed in git. Unprivileged CI containers (`ci-rust`) build `uas-ebpf` without nightly or `bpf-linker` by embedding the pre-compiled artifact via `include_bytes!`.
+- Amended 2026-10-11: opening words of the flagged requirement bullets reworded to begin with a standard EARS keyword; no change of meaning (spec 0052 P6).

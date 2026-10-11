@@ -32,7 +32,7 @@ autonomous builder agents on host `ceres`, the substrate requires:
 ### Requirements (EARS)
 
 - **Ubiquitous:** The engine coordinator shall execute registered compensators in reverse dependency order upon workflow failure.
-- **Ubiquitous:** Each executed compensator shall produce a structured `CompensationReceipt` recording success and status reason.
+- **Ubiquitous:** The executed compensator shall produce a structured `CompensationReceipt` recording success and status reason.
 - **Event-driven:** WHEN a step activity fails, the session shall transition to `Compensating` and trigger cleanup.
 - **State-driven:** WHILE recovering from a restart, the engine shall reconstruct session state from event logs without re-executing activities.
 - **Unwanted behavior:** IF a compensation handler fails, THEN the engine shall record the error and continue remaining compensations.
@@ -123,3 +123,4 @@ References:
 - `specs/0006-cas-engine-and-harness-dogfood.md`
 - `specs/0008-soma-cortex-saga-reverie-integration.md`
 - `specs/0004-dependency-and-licence-policy.md`
+- Amended 2026-10-11: opening words of the flagged requirement bullets reworded to begin with a standard EARS keyword; no change of meaning (spec 0052 P6).

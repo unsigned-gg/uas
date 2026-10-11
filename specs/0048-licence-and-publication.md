@@ -101,21 +101,21 @@ and stays private; the vendored contracts decide its public form.
 - **[REQ-0048-01]** (Ubiquitous): The root `Cargo.toml` shall set `license = "Apache-2.0 OR MIT"` in `[workspace.package]`, and every root-workspace package shall inherit it with `license.workspace = true`.
 - **[REQ-0048-02]** (Ubiquitous): The package `crates/uas-ebpf/ebpf` shall set `license = "GPL-2.0-only OR MIT"`, and its object shall hold `Dual MIT/GPL` in its `license` section.
 - **[REQ-0048-03]** (Ubiquitous): The repository root shall hold `LICENSE-APACHE`, `LICENSE-MIT`, `LICENSE-DOCS`, `NOTICE`, `CODE_OF_CONDUCT.md` and a `CONTRIBUTING.md` that states the DCO sign-off rule, and no `LICENSE` or `docs/IP_NOTICE.md`; `crates/uas-ebpf/ebpf/LICENSE` shall hold the GPL-2.0 and MIT texts; `NOTICE` shall name `unsigned.gg` as the copyright holder and map each licence to its files.
-- **[REQ-0048-04]** (Ubiquitous): Every tracked `.rs` and `.sh` file outside `vendor/` shall carry an `SPDX-License-Identifier` line in its first two lines, `GPL-2.0-only OR MIT` under `crates/uas-ebpf/ebpf/` and `Apache-2.0 OR MIT` elsewhere, and every tracked `*.md` file under `docs/`, `specs/` and `engineering/` shall carry `SPDX-License-Identifier: CC-BY-4.0` in its first ten lines.
+- **[REQ-0048-04]** (Ubiquitous): The tracked `.rs` and `.sh` files outside `vendor/` shall each carry an `SPDX-License-Identifier` line in its first two lines, `GPL-2.0-only OR MIT` under `crates/uas-ebpf/ebpf/` and `Apache-2.0 OR MIT` elsewhere, and every tracked `*.md` file under `docs/`, `specs/` and `engineering/` shall carry `SPDX-License-Identifier: CC-BY-4.0` in its first ten lines.
 - **[REQ-0048-05]** (Unwanted): IF a root-workspace package or the BPF package declares a licence expression with no arm in the `deny.toml` allow list, THEN `make deny` shall exit non-zero and name the package.
-- **[REQ-0048-06]** (Ubiquitous): No userspace crate shall link libbpf or a GPL-licensed library; userspace shall reach the BPF program only as object bytes loaded through the `bpf` system call.
+- **[REQ-0048-06]** (Ubiquitous): The userspace crates shall not link libbpf or a GPL-licensed library; userspace shall reach the BPF program only as object bytes loaded through the `bpf` system call.
 - **[REQ-0048-07]** (Optional feature): WHERE a BPF program of type LSM or struct_ops, or one that calls a kfunc, is added, the program shall declare `Dual MIT/GPL` and its package shall stay `GPL-2.0-only OR MIT`.
 - **[REQ-0048-08]** (Unwanted): IF a tracked file holds a match for the F16 pattern, which covers tailnet hostnames, home directories under `/home`, `/Users` and `/root`, home-relative estate paths and the research surfaces, or lies under `vendor/cortex/`, `vendor/soma/` or `vendor/saga/`, THEN `make hygiene` shall exit non-zero and name the file.
 - **[REQ-0048-09]** (State-driven): WHILE the operator has not created the fresh public repository, this repository shall stay private, and no lane shall change its visibility or create a public copy.
 - **[REQ-0048-10]** (Event-driven): WHEN the fresh public repository is created, its history shall start with one commit holding the tree of `main`, `make check` shall pass on that commit, and a required check shall fail any pull request that holds a commit with no `Signed-off-by:` trailer matching its author.
 - **[REQ-0048-11]** (Unwanted): IF a file fetched by `cargo xtask fetch-contracts` does not match the commit and sha256 recorded in `contracts.lock`, THEN the fetch shall exit non-zero, name the file, and leave it out of `.contracts/`.
 - **[REQ-0048-12]** (Event-driven): WHEN the crates.io `uas` crate is next published after the public form exists, its licence shall have the arms `Apache-2.0` and `MIT` only, and its `repository` shall name a URL an anonymous reader can open.
-- **[REQ-0048-13]** (Ubiquitous): `CODE_OF_CONDUCT.md` shall be the Contributor Covenant 2.1, and its enforcement contact shall be the reporting address of spec 0045 D3.
+- **[REQ-0048-13]** (Ubiquitous): The `CODE_OF_CONDUCT.md` file shall be the Contributor Covenant 2.1, and its enforcement contact shall be the reporting address of spec 0045 D3.
 - **[REQ-0048-14]** (Ubiquitous): The repository shall hold `.github/CODEOWNERS` and a `MAINTAINERS.md` that names humans and areas, calls out the BPF program and the sandbox, and names no team or bot.
-- **[REQ-0048-15]** (Ubiquitous): `RELEASING.md` shall state pre-1.0 semver with a minor bump for a breaking change, the one-line-per-PR CHANGELOG rule, and that release-plz tags.
+- **[REQ-0048-15]** (Ubiquitous): The `RELEASING.md` file shall state pre-1.0 semver with a minor bump for a breaking change, the one-line-per-PR CHANGELOG rule, and that release-plz tags.
 - **[REQ-0048-16]** (Event-driven): WHEN a pull request is opened against `development` or `main`, CI shall run `cargo-semver-checks` on each published crate and shall fail the job on a breaking change that lacks the minor bump of REQ-0048-15.
 - **[REQ-0048-17]** (State-driven): WHILE `engineering/plans/0048-launch-checklist.md` holds an unticked item or no go from the operator, the repository shall stay private; WHILE docs or required CI are red on the public repository, no announcement shall be made.
-- **[REQ-0048-18]** (Ubiquitous): `README.md` shall state that the project is pre-1.0, makes no stability or support promise, and that example code is not for production.
+- **[REQ-0048-18]** (Ubiquitous): The `README.md` file shall state that the project is pre-1.0, makes no stability or support promise, and that example code is not for production.
 - **[REQ-0048-19]** (Event-driven): WHEN `make oss-check` runs, it shall exit non-zero and name any directory under `vendor/` that has no `LICENSE` file.
 
 ## Plan
@@ -239,3 +239,4 @@ the vendor leg, package 2 the hostname/path leg.
 - Open: the docs build command of the D14 checklist is not named by any spec; P17 names it.
 - Out of scope: trademark use of the name `uas`, an SBOM licence field (spec 0045 D4), and
   relicensing the vendored contracts.
+- Amended 2026-10-11: opening words of the flagged requirement bullets reworded to begin with a standard EARS keyword; no change of meaning (spec 0052 P6).
