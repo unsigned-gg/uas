@@ -41,7 +41,8 @@ control: it exits 0 with two warnings.
   takes only the command name: `cargo xtask spec-check --strict extra` ran and exited 0.
 - **F3 [verified]:** `make spec-check JOBS=2` exits 0 with two warnings: spec 0004 at 318
   lines and spec 0025 at 301. A warning never changes the exit code. Amended 2026-10-11 [verified:
-  `make spec-check JOBS=2` at 43c6423, wave 3 head]: the legacy checks of D5 add 47 warnings, 49 in all (F5).
+  `cargo xtask spec-check` at 8c79e16, wave 3 head]: the legacy checks of D5 brought it to 49
+  warnings (F5, F6); 47 after P5.
 - **F4 [verified]:** a spec is in modern mode if and only if it has an H2 `## Requirements`
   (`spec_check.rs` line 352). One of 51 specs does (0024). A legacy spec with a stray
   `## Requirements` H2 flips mode and fails with three errors (planted copy, 2026-10-11).
@@ -53,11 +54,13 @@ control: it exits 0 with two warnings.
 - **F6 [verified]:** in modern mode, the house bullet form `- **[REQ-0099-01]** (Ubiquitous): The
   system shall run.` draws the keyword warning, because `is_ears_prefix` (line 402) strips a bold
   label and then meets `(Ubiquitous)`. Bullets in the 50 house `### Requirements (EARS)` blocks:
-  about 470 with `shall`, of which about 290 would warn, by a throwaway script that mirrors the
-  function. Corrected 2026-10-11 [verified: `make spec-check JOBS=2` at 43c6423]: the checker with
-  the house-form fix (D5 step 1) prints 46 keyword warnings across 19 specs, 2 of them in this
-  spec, plus 1 modal warning at spec 0014 line 57 and the 2 length warnings. The false positive
-  itself was exact; the 290 was wrong.
+  about 470 with `shall`; the earlier estimate of how many would warn came from a throwaway script
+  that mirrors the function. Corrected 2026-10-11 [verified: `cargo xtask spec-check` at 8c79e16,
+  wave 3 head]: with the house-form fix (D5 step 1) the checker printed 46 keyword warnings across
+  19 specs, 2 of them in this spec, plus 1 modal warning at spec 0014 line 57 and the 2 length
+  warnings, 49 in all. After this spec's two bullets were reworded (P5, [verified] at the commit
+  that carries this text) it prints 44 keyword warnings across 18 specs, the 1 modal and the
+  2 length warnings, 47 in all. The false positive itself was exact; the earlier estimate was wrong.
 - **F7 [verified]:** the checker reads `specs/*.md` only. A broken link in
   `engineering/plans/9999-bad.md` passes. Files in a subdirectory of `specs/` and non-`.md`
   files are ignored. The SPDX line, link anchors, fenced links and fence content are not
@@ -173,7 +176,7 @@ Package 4, ruled D7 and D12 (0050 P4):
 ## Test
 
 Each row plants one violation in a scratch `git archive` copy of 8d80119 (the plants of F1 to F9 were run on 3e60a55 and re-checked at 8d80119 for the code lines) and runs `cargo xtask
-spec-check` there. The unplanted copy is the control: exit 0, two warnings (F3) before PR #182, 49 after. A row goes red
+spec-check` there. The unplanted copy is the control: exit 0, two warnings (F3) before PR #182, 47 after PR #182 and P5 (49 between the two). A row goes red
 when the check named in it is removed from the code.
 
 | Requirement | Plant, exact output, negative control |
@@ -220,3 +223,4 @@ red with the exact H1 message; the scratch copy lives outside the repository.
 - Spec 0050 is on `development` (8d80119). Its REQ-0050-01 names Persona, Files, Done-when and
   Red-first, with no separate Change field. Spec 0050 lines 164 to 166 still say "the operator rules whether it is built" until plan 0050 amends them (Plan, package 4).
 - F6's 2026-10-11 count comes from the checker itself. The earlier figure came from a throwaway script and was wrong.
+- Amendment log, 2026-10-11 (P5 count fix): last line of `cargo xtask spec-check` after this edit: `spec-check: ok (47 warning(s))`.
