@@ -13,7 +13,7 @@ EBPF_TOOLCHAIN ?= nightly-2026-10-06
 SUDO ?= sudo
 
 .PHONY: help build fmt fmt-check clippy test doc-test deny check ci hygiene typos machete \
-	spec-check toolchain-check pin-check oss-check hook-test smoke audit sbom doc release-notes custody-check pgt-install new-repo template-check \
+	spec-check toolchain-check pin-check oss-check spdx-check hook-test smoke audit sbom doc release-notes custody-check pgt-install new-repo template-check \
 	ebpf-build ebpf-test
 
 help: ## List targets
@@ -46,7 +46,7 @@ check: fmt-check clippy test doc-test deny ## Full gate: fmt, clippy, test, doc-
 ci: ## What the CI rust job runs
 	$(MAKE) NEXTEST_PROFILE=ci fmt-check clippy test doc-test
 
-hygiene: typos machete spec-check toolchain-check pin-check oss-check hook-test ## Typos, unused deps, specs, toolchain, pins, tree hygiene, hook tests
+hygiene: typos machete spec-check toolchain-check pin-check oss-check spdx-check hook-test ## Typos, unused deps, specs, toolchain, pins, tree hygiene, hook tests
 
 # Spec 0051 D6, REQ-0051-13. The three named scripts must exist; any extra test-*.sh runs too.
 hook-test: ## Run the Claude Code hook tests
@@ -61,6 +61,26 @@ OSS_PATTERN := \.ts\.net|/(home|Users)/[a-z]+/|/roo(t)/|~/(projects|\.agents|\.c
 
 oss-check: ## No tailnet hostname or operator path in tracked files (spec 0048 D7)
 	@if git grep -n -E -e '$(OSS_PATTERN)'; then echo "oss-check: tracked files above hold a hostname or operator path" >&2; exit 1; fi
+
+# Spec 0048 REQ-0048-04, D2, D10. Code: SPDX line in the first two lines with the right expression.
+# Markdown under docs, specs and engineering: CC-BY-4.0 tag in the first ten lines.
+spdx-check: ## Every code file and doc carries its SPDX tag (spec 0048 REQ-04)
+	@bad=0
+	code="$$(git ls-files -- '*.rs' '*.sh' ':!:vendor/*')" || { echo "spdx-check: git ls-files failed (not a git tree?)" >&2; exit 1; }
+	docs="$$(git ls-files -- 'docs/*.md' 'specs/*.md' 'engineering/*.md')" || { echo "spdx-check: git ls-files failed (not a git tree?)" >&2; exit 1; }
+	[ -n "$$code" ] || { echo "spdx-check: git ls-files lists no .rs or .sh files" >&2; exit 1; }
+	[ -n "$$docs" ] || { echo "spdx-check: git ls-files lists no Markdown under docs, specs or engineering" >&2; exit 1; }
+	while IFS= read -r f; do
+	  expr="$$(head -n 2 "$$f" | sed -n 's/.*SPDX-License-Identifier:[[:space:]]*\(.*[^[:space:]]\)[[:space:]]*$$/\1/p' | head -n 1)"
+	  case "$$f" in crates/uas-ebpf/ebpf/*) want='GPL-2.0-only OR MIT';; *) want='Apache-2.0 OR MIT';; esac
+	  if [ -z "$$expr" ]; then echo "spdx-check: $$f: no SPDX-License-Identifier line in the first two lines" >&2; bad=1
+	  elif [ "$$expr" != "$$want" ]; then echo "spdx-check: $$f: expression '$$expr', want '$$want'" >&2; bad=1; fi
+	done <<< "$$code"
+	while IFS= read -r f; do
+	  head -n 10 "$$f" | grep -q 'SPDX-License-Identifier: CC-BY-4.0' || { echo "spdx-check: $$f: no CC-BY-4.0 tag in the first ten lines" >&2; bad=1; }
+	done <<< "$$docs"
+	[ "$$bad" -eq 0 ] || exit 1
+	echo "spdx-check: ok"
 
 typos: ## Spell check
 	typos
