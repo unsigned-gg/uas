@@ -37,6 +37,7 @@ fn slot_pool_enforces_capacity_ceiling() {
         max_slots: 2,
         idle_suspend_duration: None,
         cgroup_base: None,
+        reconcile: None,
     };
     let pool = SlotPool::new(config);
 
@@ -170,6 +171,7 @@ fn sweep_auto_suspends_idle_slots_and_flags_expired_leases() {
         max_slots: 2,
         idle_suspend_duration: Some(Duration::from_millis(50)),
         cgroup_base: None,
+        reconcile: None,
     };
     let pool = SlotPool::new(config);
 
