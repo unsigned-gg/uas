@@ -1,2 +1,4 @@
+# spec 0055 D12: the rule set is the tool default, with no custom rule.
+# spec 0055 D13: an allowlist entry is an [[allowlists]] table whose description names a spec or ticket.
 [extend]
 useDefault = true
