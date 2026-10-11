@@ -73,7 +73,7 @@ exception that expires. Releases stop while the gate is red. The SBOM ships with
 
 ## Plan
 
-- [ ] `xtask`: an `advisory-check` subcommand. It parses `deny.toml` with the `toml` crate as a `toml::Table` and reads `[advisories] ignore`. It uses `toml = { workspace = true }` from spec 0046 D9, which follows the spec 0004 `### toml` amendment that names `xtask` (rule 12). If this item lands before spec 0046, it carries those two steps, spec 0004 first. Flags: `--today YYYY-MM-DD` (default: UTC date), `--config <path>` (default: `deny.toml`), `--ids` (print the ids, one per line). Fixtures under `xtask/tests/fixtures/advisory/`: `valid.toml`, `expired.toml`, `too-far.toml`, `bare-id.toml`, `no-ticket.toml` (D2).
+- [ ] `xtask`: an `advisory-check` subcommand. It parses `deny.toml` with the `toml` crate as a `toml::Table` and reads `[advisories] ignore`. It uses `toml = { workspace = true }` under spec 0004's `### toml` section, which this item first amends to name `xtask` (rule 12). Flags: `--today YYYY-MM-DD` (default: UTC date), `--config <path>` (default: `deny.toml`), `--ids` (print the ids, one per line). Fixtures under `xtask/tests/fixtures/advisory/`: `valid.toml`, `expired.toml`, `too-far.toml`, `bare-id.toml`, `no-ticket.toml` (D2).
 - [ ] `Makefile`: `hygiene` gains `advisory-check`; `audit` becomes `cargo audit --deny warnings` plus `--ignore` for each id from `cargo xtask advisory-check --ids`; `release-notes` runs `cargo deny check advisories` as its first line; `sbom` gains `--spec-version 1.5` (D1, D2, D4, D5).
 - [ ] `audit.yml`: pin `cargo-audit` by version; add `cargo xtask advisory-check` and the D7 Linear step on failure. The step waits on the operator adding the Linear API key as a repository secret.
 - [ ] `sbom.yml`: install `cargo-cyclonedx@0.5.9` (D4).
@@ -116,3 +116,4 @@ Passing means exit 0: each failing fixture fails inside its test, `valid.toml` p
 - ceres runs cargo-deny 0.19.0 and CI runs 0.19.9 (F5). The F5 and F6 runs used 0.19.0; F6 is
   confirmed in 0.19.9 source. Aligning the local version is spec 0034's subject.
 - Out of scope: CVE assignment, a GitHub security advisory per fix, and signing the SBOM.
+- Spec 0046 D9 (`toml` in `xtask`) was dropped by the saga ruling of 2026-10-10. The `advisory-check` parse therefore cites spec 0004's `### toml` section directly, and the Plan item carries the amendment that names `xtask`. Ruled: integrating lane w25:p1, 2026-10-11.
