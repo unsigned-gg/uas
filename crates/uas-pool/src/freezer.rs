@@ -735,7 +735,7 @@ impl Freezer for CgroupFreezer {
 fn signal_worker_group(pid: rustix::process::Pid, sig: rustix::process::Signal) {
     use rustix::process::{getpgid, getpgrp, kill_process, kill_process_group};
 
-    if getpgid(Some(pid)).is_ok_and(|pgid| pgid != getpgrp()) {
+    if getpgid(Some(pid)).is_ok_and(|pgid| pgid == pid && pgid != getpgrp()) {
         match kill_process_group(pid, sig) {
             Ok(()) => return,
             Err(rustix::io::Errno::SRCH) => {}
