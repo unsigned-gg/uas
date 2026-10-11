@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 //! Typed errors for the loader, the clamp and the daemon protocol (spec 0014).
 
 use thiserror::Error;

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 //! Data sources the deck reads. The traits keep the HTTP layer free of engine wiring.
 
 use std::sync::Arc;

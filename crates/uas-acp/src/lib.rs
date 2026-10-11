@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 //! Agent Communication Protocol server (JSON-RPC 2.0 over stdio) for Zed and IDE integration.
 //!
 //! Spec 0016, amended by A1. This crate serves `initialize`, `session/new` and the

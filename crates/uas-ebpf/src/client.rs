@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 //! A blocking client for `uas-ebpfd` (spec 0014 D8).
 //!
 //! `uas-pool` uses it to track each worker pid and to read the exec stream.

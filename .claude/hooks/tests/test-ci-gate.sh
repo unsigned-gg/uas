@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: Apache-2.0 OR MIT
 # Tests for ci-gate.sh. A stub `make` replaces the real gate.
 # The stub drops a marker file (gate reached) and exits with $STUB_MAKE_RC.
 # Run: bash .claude/hooks/tests/test-ci-gate.sh

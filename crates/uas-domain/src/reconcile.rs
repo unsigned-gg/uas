@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 //! Types for restart reconciliation (spec 0040). Pure data, no I/O.
 
 use std::fmt;

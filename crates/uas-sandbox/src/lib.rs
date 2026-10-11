@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 //! Landlock rulesets, namespace isolation and path canonicalisation for harness processes.
 //!
 //! Spec 0010 gives this crate its first code: a probe for the kernel's
