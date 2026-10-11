@@ -1,5 +1,5 @@
 ---
-status: planned
+status: in-progress
 created: 2026-10-11
 tags: [spec-check, xtask, ears, hygiene, rules]
 priority: medium
@@ -9,7 +9,7 @@ depends_on: [0001-cas-architecture-and-crate-layout, 0002-verification-gates-and
 
 # 0052-spec-check-rule-set
 
-> **Status**: planned, **Priority**: medium, **Created**: 2026-10-11
+> **Status**: in-progress, **Priority**: medium, **Created**: 2026-10-11
 
 ## Overview
 

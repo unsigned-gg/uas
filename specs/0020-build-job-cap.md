@@ -1,5 +1,5 @@
 ---
-status: planned
+status: complete
 created: 2026-10-10
 tags: [pool, cgroup, cpu-max, job-cap, nice, phase-3]
 priority: high
