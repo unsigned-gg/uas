@@ -57,7 +57,7 @@ Methodology: LeanSpec. The reference copy is in `../vendor/leanspec/`.
 | [0050](0050-build-handoff-pipeline.md) | Build handoff pipeline | complete | high |
 | [0051](0051-repository-guards.md) | Repository guards | in-progress | high |
 | [0052](0052-spec-check-rule-set.md) | Spec-check rule set | in-progress | medium |
-| [0053](0053-changelog-and-commit-text-policy.md) | CHANGELOG and commit text policy | planned | medium |
+| [0053](0053-changelog-and-commit-text-policy.md) | CHANGELOG and commit text policy | in-progress | medium |
 | [0054](0054-ci-pipeline-policy.md) | CI pipeline policy | planned | medium |
 | [0055](0055-supply-chain-automation.md) | Supply-chain automation | planned | medium |
 | [0056](0056-agent-roster-and-tooling.md) | Agent roster and tooling surface | planned | medium |
