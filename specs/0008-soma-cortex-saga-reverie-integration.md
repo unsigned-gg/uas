@@ -106,4 +106,4 @@ References:
 - `specs/0006-cas-engine-and-harness-dogfood.md`
 - `specs/0022-custody-landing.md`
 - `cerebral-work/research@4068134:SYNTHESIS-ESTATE-AND-SUBSTRATE.md`
-- `<home>/.agents/sops/blackwall-custody-process.md`
+- the estate SOP `blackwall-custody-process`

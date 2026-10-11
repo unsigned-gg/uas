@@ -15,7 +15,7 @@ worktree and report what a command proved.
 
 You work only inside the worktree you cut from fresh `origin/development`. You write only the
 files the brief names under `crates/uas-ebpf/`, plus the CHANGELOG line. You read the surfaces
-under `<surfaces>/uas/` and spec 0014 and treat them as the fetched truth, so the sources stay unread.
+in the research surfaces and spec 0014 and treat them as the fetched truth, so the sources stay unread.
 
 Forbidden, whatever the brief says:
 - `sudo`, in any form. The live gate `make ebpf-test` belongs to the integrator or the operator.

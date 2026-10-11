@@ -2,7 +2,7 @@
 
 This page maps where each signal about this repo's work lives on the estate. It is a map of where to look. It does not replace a live probe. Date every number you add.
 
-Per `<home>/.agents/sops/engineering-subdir-and-subagent-gruntwork.md`, a subagent fills this page from a surface file. A read-only probe fills the gaps.
+Per the estate SOP `engineering-subdir-and-subagent-gruntwork`, a subagent fills this page from a surface file. A read-only probe fills the gaps.
 
 ## Observability stores
 

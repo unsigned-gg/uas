@@ -15,7 +15,7 @@ depends_on: [0004-dependency-and-licence-policy, 0005-ci-cache-and-runners, 0033
 The Kube-rs Integration Plan v5 gives this repository a dependency set it has
 never had: `kube`, `k8s-openapi`, `schemars`, and two estate crates that do not
 exist on crates.io yet, `unsigned-k8s-core` and `unsigned-k8s-api` [reported: the
-plan, at `<surfaces>/uas-ears/kube-rs-plan.md`]. AGENTS.md rule 12
+plan, at `kube-rs-plan.md` in the research surfaces]. AGENTS.md rule 12
 says every external dependency is pinned and recorded in spec 0004 before first
 use. This spec says what is pinned, at which versions and why, what the licence
 check finds, how the two unpublished crates are reached before publication, how
@@ -43,7 +43,7 @@ repository's `deny.toml` copied in:
   Advisories, bans and sources pass. Command: `cargo deny check` and
   `cargo deny check licenses` in the throwaway crate.
 - **F6 [reported]:** The two estate crates are path dependencies into
-  `<home>/projects/unsigned/paas` first, where they are scaffolded, and are published
+  the `paas` checkout first, where they are scaffolded, and are published
   later; `kube 4.2.0` and `k8s-openapi 0.28.0` were chosen there to match the
   `vespertin` operator and were not checked against this repository before F1
   to F5 [research lane w1X:p22, mesh reply 2026-10-10 about 21:5xZ].
@@ -65,7 +65,7 @@ repository's `deny.toml` copied in:
 | D1 | Pin `kube` 4.2.0 with features `runtime` and `derive`, `k8s-openapi` 0.28.0 with feature `v1_36`, and `schemars` 1.2.2. `v1_36` is the newest feature any release offers and sits one minor behind the 1.37 cluster. That a one-minor skew is supported is this lane's reading of how `k8s-openapi` version features are used [asserted]; it is revisited when a release carries `v1_37`. | F1 to F4; integrating lane w25:p1, 2026-10-10, taking over from lane w10:pN, whose pane ended before round two |
 | D2 | `kube`'s MSRV equals the workspace floor exactly. The floor is not raised for it, and any bump of `kube` that raises its MSRV above 1.89 is a decision for spec 0004, not an incidental update. | F1; integrating lane w25:p1, 2026-10-10 |
 | D3 | Spec 0004 gains an allow entry for `CDLA-Permissive-2.0`, scoped by crate to `webpki-root-certs`, because F5 proves the set cannot pass without it. Spec 0004 line 205 already allows that licence for a wasm32 path; this is the Linux path, and the entry says so. | F5; integrating lane w25:p1, 2026-10-10 |
-| D4 | The two estate crates do **not** enter any manifest until they are published. A cargo path dependency must exist at resolve time even when optional, so a CI runner or another checkout without `<home>/projects/unsigned/paas` would fail `--locked` builds and `cargo deny` with the feature off; "path dependency behind a feature" does not work. While they are unpublished, a workstation that needs them uses a `[patch]` section in a local, untracked `.cargo/config.toml`, and the operator's CRD types stay in-tree (spec 0038 D6). | F6; spec 0038 D6; integrating lane w25:p1, 2026-10-10; corrects an earlier draft of this row that assumed a feature could hide a path dependency |
+| D4 | The two estate crates do **not** enter any manifest until they are published. A cargo path dependency must exist at resolve time even when optional, so a CI runner or another checkout without the `paas` checkout would fail `--locked` builds and `cargo deny` with the feature off; "path dependency behind a feature" does not work. While they are unpublished, a workstation that needs them uses a `[patch]` section in a local, untracked `.cargo/config.toml`, and the operator's CRD types stay in-tree (spec 0038 D6). | F6; spec 0038 D6; integrating lane w25:p1, 2026-10-10; corrects an earlier draft of this row that assumed a feature could hide a path dependency |
 | D4a | Two features, not one. `k8s` gates everything that builds from crates.io alone: `kube`, `k8s-openapi`, `schemars` and the in-tree CRD types, and it is ON in the CI matrix of spec 0033, so the operator's mocked-API tests run on every pull request. `k8s-estate` gates the two estate crates once published, and stays off in CI until then. Without this split no Kubernetes test would ever run in CI. | integrating lane w25:p1, 2026-10-10 |
 | D5 | The `k8s-e2e` job runs on the existing self-hosted runner group `ent-default` with the `ci-rust` image, which gains `k3d` and `kubectl`. No GitHub-hosted runner: spec 0005 has none, and one would change cost, secrets reach and the self-hosted assumption. Spec 0037 F7 notes the group's organisation could not be read, so the job may be re-homed after the transfer. | spec 0005; integrating lane w25:p1, 2026-10-10 |
 | D6 | Every Kubernetes-facing piece sits behind the cargo feature `k8s`, declared per spec 0033 in each crate that owns gated code, off by default. | spec 0033; integrating lane w25:p1, 2026-10-10 |
