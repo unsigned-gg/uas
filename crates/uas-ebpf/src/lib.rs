@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 //! Aya eBPF tracepoint programs: build-priority clamping and audit telemetry.
 //!
 //! Spec 0014 (CER-2719, CER-2720). The kernel program lives in `ebpf/` and is

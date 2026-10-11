@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 //! The slot operations `uas-acp` needs from the worker pool.
 
 use uas_domain::{Lease, LeaseToken, SlotId};

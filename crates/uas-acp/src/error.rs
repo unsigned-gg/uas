@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 //! Error type for the ACP server, and its JSON-RPC error codes.
 
 use agent_client_protocol::schema::v1::Error as RpcError;

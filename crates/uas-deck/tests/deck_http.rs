@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 //! HTTP tests for the deck. They run in-process on 127.0.0.1 with a raw HTTP/1.1 request.
 
 use std::net::SocketAddr;

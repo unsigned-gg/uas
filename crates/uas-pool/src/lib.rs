@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 //! Worker slot manager: warm worktree pool, cgroup v2 suspend and resume.
 //!
 //! Spec 0015 (CER-2722, CER-2723, CER-2724):

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: Apache-2.0 OR MIT
 # After an Edit or Write of a .rs file, run rustfmt on that file. Advisory: never blocks.
 # Bypass: SKIP_LINT=1. Reads the Claude Code PostToolUse JSON on stdin. Always exits 0.
 [ "${SKIP_LINT:-}" = "1" ] && exit 0

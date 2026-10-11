@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 //! The Unix-socket proxy between a jailed worker and the LLM gateway.
 //!
 //! Spec 0013. The worker speaks HTTP/1.1 to a socket inside its workspace. The

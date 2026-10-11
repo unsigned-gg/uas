@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 //! Worker slot pool management and lifecycle controller.
 //!
 //! CER-2723: Enforces host concurrency ceilings (`max_slots = 2`), coordinates

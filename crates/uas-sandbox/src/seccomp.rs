@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 //! The seccomp-BPF deny list for slot workers (spec 0043 D2, D3, D4, D5).
 //!
 //! Two programs, because a `seccompiler` filter has one match verdict: program A

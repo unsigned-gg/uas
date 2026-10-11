@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 //! In-memory adapter for the [`LeaseLedger`] port.
 
 use std::collections::BTreeMap;

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 //! The deck card. Every settle source maps to this one shape (spec 0018 D7).
 
 use uas_engine::SettleCard;

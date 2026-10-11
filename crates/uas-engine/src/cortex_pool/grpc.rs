@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 //! The tonic client of `cortex.mesh.v1.PoolWork` (spec 0026, Wire contract). It implements the
 //! sync [`PoolWork`] port over a private current-thread runtime. This is the only file that
 //! names a tonic or generated type; the port types carry none.

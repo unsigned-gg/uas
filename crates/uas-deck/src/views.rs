@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 //! Maud templates. Agent text is escaped. Only the static style is raw.
 
 use maud::{html, Markup, PreEscaped, DOCTYPE};
