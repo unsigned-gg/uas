@@ -144,7 +144,7 @@ audit: ## Check dependencies for known advisories
 	cargo audit
 
 sbom: ## Write a CycloneDX SBOM (*.cdx.json)
-	cargo cyclonedx --format json
+	cargo cyclonedx --format json --spec-version 1.5
 
 doc: ## Build API docs
 	cargo doc --workspace --no-deps -j $(JOBS)
