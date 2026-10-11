@@ -80,19 +80,19 @@ fn saga_compensation_runner_reverse_execution_and_receipts() {
 
     // First compensated step must be builder-impl
     assert_eq!(receipts[0].activity_id, "builder-impl");
-    assert_eq!(receipts[0].handler_name, "worktree_cleanup");
+    assert_eq!(receipts[0].handler_name, "lease_return");
     assert!(receipts[0].success);
-    assert!(receipts[0]
-        .details
-        .contains("/tmp/worktrees/slot-builder-1"));
+    assert!(receipts[0].details.contains("lease-slot-builder-1"));
 
     assert_eq!(receipts[1].activity_id, "builder-impl");
     assert_eq!(receipts[1].handler_name, "branch_prune");
     assert!(receipts[1].details.contains("blackwall/run-7f8a9b"));
 
     assert_eq!(receipts[2].activity_id, "builder-impl");
-    assert_eq!(receipts[2].handler_name, "lease_return");
-    assert!(receipts[2].details.contains("lease-slot-builder-1"));
+    assert_eq!(receipts[2].handler_name, "worktree_cleanup");
+    assert!(receipts[2]
+        .details
+        .contains("/tmp/worktrees/slot-builder-1"));
 
     // Next compensated step in reverse order: spec-check
     assert_eq!(receipts[3].activity_id, "spec-check");
