@@ -11,9 +11,10 @@ ORG ?= cerebral-work
 # Dated nightly for the eBPF object (spec 0005 D1). Pinned by commit hash in specs/0004.
 EBPF_TOOLCHAIN ?= nightly-2026-10-06
 SUDO ?= sudo
+SBOM_DIR ?= sbom
 
 .PHONY: help build fmt fmt-check clippy test doc-test deny check ci hygiene typos machete \
-	spec-check toolchain-check pin-check text-check oss-check spdx-check hook-test smoke audit sbom doc release-notes custody-check pgt-install new-repo template-check \
+	spec-check toolchain-check pin-check text-check oss-check spdx-check hook-test smoke audit sbom sbom-check doc release-notes custody-check pgt-install new-repo template-check \
 	ebpf-build ebpf-test fetch-contracts pool-live-test
 
 help: ## List targets
@@ -170,6 +171,9 @@ audit: ## Check dependencies for known advisories
 
 sbom: ## Write a CycloneDX SBOM (*.cdx.json)
 	cargo cyclonedx --format json
+
+sbom-check: ## Validate the SBOMs in SBOM_DIR (spec 0055 D10)
+	scripts/sbom-check.sh "$(SBOM_DIR)"
 
 doc: ## Build API docs
 	cargo doc --workspace --no-deps -j $(JOBS)
