@@ -57,6 +57,7 @@ Methodology: LeanSpec. The reference copy is in `../vendor/leanspec/`.
 | [0050](0050-build-handoff-pipeline.md) | Build handoff pipeline | planned | high |
 | [0051](0051-repository-guards.md) | Repository guards | planned | high |
 | [0052](0052-spec-check-rule-set.md) | Spec-check rule set | planned | medium |
+| [0053](0053-changelog-and-commit-text-policy.md) | CHANGELOG and commit text policy | planned | medium |
 
 
 ## How to add a spec
