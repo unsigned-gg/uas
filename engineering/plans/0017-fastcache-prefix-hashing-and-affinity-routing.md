@@ -67,7 +67,7 @@ The spec status moves to `in-progress` with the first landed wave: the integrato
 - **Persona:** `uas-engineer` (spec amendment).
 - **Files:** `specs/0004-dependency-and-licence-policy.md` (exists). Line 197 is the table row; line 150 is the matching prose entry. About 4 changed lines.
 - **Change:** add `uas-router` to the "Used by" cell of the `serde_json` row (line 197) and to the prose entry (line 150), with the text "request-body and SSE chunk parsing in uas-router, spec 0017 (UAS lane amendment, Christian corrects it in place)". Leave the version `1.0.151` and the root requirement `"1"` unchanged. Add nothing for `futures-util`: its row already names `uas-router`.
-- **Done-when:** `test "$(grep -c '^| .serde_json. .*uas-router' specs/0004-dependency-and-licence-policy.md)" = 1 && make spec-check JOBS=2 && make pin-check && make typos` exits 0.
+- **Done-when:** `test "$(grep -c '^| .serde_json. .*uas-router' specs/0004-dependency-and-licence-policy.md)" = 2 (the prose entry and the table row both match) && make spec-check JOBS=2 && make pin-check && make typos` exits 0.
 - **Red-first:** the first count prints 0 before the edit. After green, delete `uas-router` from the cell in a scratch copy and watch the count print 0.
 
 ### P2: amend spec 0017 so its Test rows and wording match the tree (wave 1)
