@@ -11,7 +11,9 @@ repository.workspace = true
 
 [dependencies]
 landlock = { workspace = true }
+libc = { workspace = true }
 rustix = { workspace = true }
+seccompiler = { workspace = true }
 thiserror = { workspace = true }
 
 [dev-dependencies]
