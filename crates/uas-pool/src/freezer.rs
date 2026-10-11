@@ -336,7 +336,10 @@ impl CgroupFreezer {
         };
 
         // Default limits: 2 CPUs of quota per Spec 0020 D3
-        let _ = freezer.configure_limits(limits);
+        if let Err(e) = freezer.configure_limits(limits) {
+            tracing::error!(slot_id = %freezer.slot_id, error = %e, "cgroup limit write failed; slot not created");
+            return Err(e);
+        }
 
         Ok(freezer)
     }
