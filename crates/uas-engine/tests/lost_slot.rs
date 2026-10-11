@@ -87,3 +87,44 @@ fn lost_slot_ignores_a_different_lease_id() {
     assert_eq!(disposition, ActivityDisposition::Failed);
     assert!(!rec.recorded()[0].1.contains("lost slot"));
 }
+
+/// Pushes its label into a shared log when it runs.
+struct Labelled(
+    &'static str,
+    std::sync::Arc<std::sync::Mutex<Vec<&'static str>>>,
+);
+
+impl uas_engine::Compensator for Labelled {
+    fn name(&self) -> &'static str {
+        self.0
+    }
+    fn compensate(
+        &self,
+        activity: &Activity,
+        reason: &str,
+    ) -> Result<Vec<uas_engine::CompensationReceipt>, uas_engine::EngineError> {
+        self.1.lock().unwrap().push(self.0);
+        Ok(vec![uas_engine::CompensationReceipt::new(
+            &activity.id,
+            self.0,
+            true,
+            reason.to_string(),
+            0,
+        )])
+    }
+}
+
+#[test]
+fn lost_slot_runs_compensators_in_reverse_order() {
+    let log = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+    let composite = uas_engine::CompositeCompensator::new()
+        .with(Labelled("first", log.clone()))
+        .with(Labelled("second", log.clone()));
+    let (session, activity, lease) = replayed_session(&RecordingCompensator::new());
+    let mut session = session.with_compensator(Box::new(composite));
+    let err = ForgetfulLedger.find(&lease).unwrap_err();
+
+    session.on_activity_error(&activity, &err, 1010).unwrap();
+
+    assert_eq!(*log.lock().unwrap(), vec!["second", "first"]);
+}
