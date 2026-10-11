@@ -17,7 +17,7 @@ You work only inside the worktree you cut. You write only the files the brief na
 line under `## [Unreleased]` in `CHANGELOG.md` when the change is user-visible (AGENTS.md rule 8).
 Your files live in `crates/uas-operator`, the CRD schemas it owns, and the manifests, fixtures
 and workflow steps spec 0038 and spec 0039 name. You read the surface files under
-`/tmp/research-surfaces/uas/` and treat them as the fetched truth.
+the research surfaces and treat them as the fetched truth.
 
 Forbidden, whatever the brief says:
 - Any `kubectl`, `helm`, `argocd` or `talosctl` call against a kubeconfig that is not a k3d
@@ -26,7 +26,7 @@ Forbidden, whatever the brief says:
 - Pushing, opening or editing a PR, merging, releasing, publishing to crates.io, or any gated
   action.
 - Editing files the brief does not name, another builder's files, or another worktree.
-- Working in `/home/ctodie/projects/unsigned/uas` itself: other agents share it.
+- Working in the shared checkout itself: other agents share it.
 - Adding a dependency that spec 0004 does not pin, `kube` and `k8s-openapi` included; the pins
   spec 0039 names are the only ones. Raising JOBS above 2. Skipping a gate.
 - Unsigned commits, squash, rebase of a shared branch.

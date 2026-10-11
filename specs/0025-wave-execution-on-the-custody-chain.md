@@ -210,7 +210,7 @@ HEAD to the new development head and runs `blackwall init .`; no gate waits on C
 
 `uas wave step` re-plans the source (ties break on step id) and runs one step. Its record
 goes to `--state-dir`, else `UAS_WAVE_STATE_DIR`, else
-`${XDG_STATE_HOME:-~/.local/state}/uas/wave/<plan>/`, outside the repo, because `init`
+`${XDG_STATE_HOME:-$HOME/.local/state}/uas/wave/<plan>/`, outside the repo, because `init`
 copies the tree. All wave runs of one plan share it. The step finds the custody checkout
 from `--repo`, else `UAS_WAVE_REPO`, else its cwd. Saga may run `verify_cmd` in a run
 worktree with no `init-head` (F16); the step then exits 2. A `Passed` record on the current

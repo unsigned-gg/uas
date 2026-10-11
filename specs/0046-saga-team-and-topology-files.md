@@ -68,7 +68,7 @@ vendor/saga Makefile 'specs/0004-*.md'` prints nothing, F3 and F8 pass again, an
   vendor/saga` and `grep -rliE 'topolog|yggdrasil' vendor/saga` both exit 1.
   [reported, `vendor/saga/README.md`] It was vendored from `unsigned-gg/saga@1e4be86`.
 - **F6 [verified]:** the schema is in `cerebral-work/saga@b526308` (branch `development`,
-  commit date 2026-10-10), checkout `/home/ctodie/projects/platform/runtime/saga`. Command:
+  commit date 2026-10-10), the `saga` checkout. Command:
   `git -C <checkout> rev-parse --short HEAD`. In `crates/saga-domain/src/yggdrasil.rs`:
   `NorseRole` line 20 (eight kebab-case roles: ratatoskr, mimir, brokkr, sindri, thjalfi,
   huginn, muninn, loki); `SplitDirection` line 774 (right, down); `SlotSpec` line 793 (role,
@@ -96,8 +96,8 @@ vendor/saga Makefile 'specs/0004-*.md'` prints nothing, F3 and F8 pass again, an
 - **F10 [verified]:** in scratch copies, `saga yggdrasil team show uas-estate` exited 0 for
   each of: persona `uas-ghost`, which has no file; slot 7 with role `sindri` on a `loki` slot;
   and the key misspelt `persnoa`, where the persona silently vanished from the row. The binary
-  is `~/.local/bin/saga`, built 2026-10-10 16:29 (`stat`), a link into
-  `/home/ctodie/projects/unsigned/saga`, which links to the F6 checkout. [asserted] The binary
+  is the installed `saga` binary, built 2026-10-10 16:29 (`stat`), a link into
+  the `saga` checkout, which links to the F6 checkout. [asserted] The binary
   behaves as b526308 does; its build commit is unproven. It prints no version (`saga --version`
   is rejected), and HEAD b526308 (18:52) is newer than it. `git diff --stat bc04f25 b526308 --
   <the four schema, loader and CLI files>` prints nothing; that narrows the gap but does not

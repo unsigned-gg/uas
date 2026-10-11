@@ -1,4 +1,4 @@
-# Blackwall custody config. SOP: ~/.agents/sops/blackwall-custody-process.md.
+# Blackwall custody config. SOP: the estate SOP blackwall-custody-process.
 # Chain: start (jailed) -> settle -> reconcile (runs [verify]) -> pr -> merge by hand.
 # Every key has a BLACKWALL_* environment twin that wins over this file.
 
@@ -29,4 +29,5 @@ max_tokens_per_run = 200000
 
 [observability]
 # Estate data-lake ingest edge (OPS-828): alloy-gateway OTLP over the tailnet.
-otlp_endpoint = "http://alloy-otlp.tail769bd2.ts.net:4318/v1/traces"
+# The endpoint is not tracked: blackwall reads it from BLACKWALL_OTLP_ENDPOINT
+# (set in the operator environment), so no otlp_endpoint key appears here.

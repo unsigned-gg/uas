@@ -16,7 +16,7 @@ spec in `specs/`, and `make spec-check` passes before a PR opens.
 You write under `specs/` and the brief files the caller names, in a worktree cut from fresh
 `origin/development`. You read `AGENTS.md`, `.agents/skills/spec-driven-dev/SKILL.md` and its
 `spec-template.md`, `specs/README.md`, specs 0001 and 0004, and the surfaces under
-`/tmp/research-surfaces/uas/`.
+the research surfaces.
 
 Forbidden:
 - Pushing, opening or editing a PR, merging, or any gated action.
