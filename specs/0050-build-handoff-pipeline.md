@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: complete
 created: 2026-10-11
 tags: [process, agents, plans, waves, ci, changelog]
 priority: high
@@ -9,7 +9,7 @@ depends_on: [0002-verification-gates-and-evidence, 0003-branch-model-and-promoti
 
 # 0050-build-handoff-pipeline
 
-> **Status**: in-progress, **Priority**: high, **Created**: 2026-10-11
+> **Status**: complete, **Priority**: high, **Created**: 2026-10-11
 
 ## Overview
 
@@ -155,15 +155,14 @@ Each item is one builder package under D3. They touch `.claude/` and `engineerin
 brief names those files; this PR changes three files: the spec, the registry row in `specs/README.md`, and the
 integrator's line in `CHANGELOG.md`.
 
-- [ ] P1 (`uas-builder`): shrink `.claude/agents/README.md` lines 36 to 58 to a pointer to this
+- [x] P1 (`uas-builder`): shrink `.claude/agents/README.md` lines 36 to 58 to a pointer to this
       spec; fix line 24 to five. Shrink `engineering/plans/README.md` the same way.
-- [ ] P2 (`uas-builder`): drop the CHANGELOG clause from `uas-builder.md`, `uas-ebpf-builder.md`
+- [x] P2 (`uas-builder`): drop the CHANGELOG clause from `uas-builder.md`, `uas-ebpf-builder.md`
       and `uas-k8s-builder.md` (D6), set the engineer's brief ceiling to D3. Run `prompt-linter`.
-- [ ] P3 (`uas-engineer`): reconcile statuses of specs 0040, 0041 and 0043 per D14, and add the
+- [x] P3 (`uas-engineer`): reconcile statuses of specs 0040, 0041 and 0043 per D14, and add the
       status move as the last package of each plan (D14).
-- [ ] P4 (`proposed: the operator`): extend `cargo xtask spec-check` to compare frontmatter status with
-      the registry row, and to check plan files against REQ-0050-01. Rows 1 and 3 below are the
-      manual forms until then. the operator rules whether it is built.
+- [x] P4 (moved): the checker rules are built under spec 0052 R13 (status parity) and R14 (plan
+      package shape), plan 0052 P9; amended by plan 0050 P5, 2026-10-11.
 
 ## Test
 
