@@ -126,7 +126,7 @@ The table lists each source and the path it takes once fetched:
 | Component | Upstream repository | Path in UAS | Licensor / Licence | Role in UAS |
 |---|---|---|---|---|
 | LeanSpec | `codervisor/leanspec` | `vendor/leanspec/` | MIT | LeanSpec methodology templates and skills |
-| Soma OS | `unsigned-gg/soma-os` | `.contracts/soma/schemas/` | BSL 1.1 (unsigned-gg) | JSON schemas for containment and dispatch |
+| Soma OS | `unsigned-gg/soma` | `.contracts/soma/schemas/` | BSL 1.1 (unsigned-gg) | JSON schemas for containment and dispatch |
 | Cortex Mesh | `cerebral-work/cortex` | `.contracts/cortex/proto/` | Proprietary (Cerebral) | Protocol Buffers for mesh RPC and messaging |
 | Saga Orchestrator | `unsigned-gg/saga` | `.contracts/saga/flows/`, `.contracts/saga/contracts/` | BSL 1.1 (unsigned-gg) | Workflow definitions and domain contract types |
 

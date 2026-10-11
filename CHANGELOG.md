@@ -88,6 +88,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Spec 0007, the lease rules: one live lease per slot, only the lease token renews a lease, a renewal extends by at least one second, and a draining slot keeps its worktree. `cas-domain` adds `check_slot_free`, `Lease::holds_slot_at`, `LeaseToken::matches`, and the errors `SlotLeased` and `TokenMismatch`.
 
 ### Changed
+- Spec 0048 wave 5 (plan 0048 P16): the README states the pre-1.0 support position; `oss-check` fails naming any `vendor/` subdirectory without a LICENSE file and is now one script with a failure flag so no leg is skipped; spec 0004 names `unsigned-gg/soma` for the soma contracts.
 - Spec 0051 wave 2 (plan 0051 P6): spec 0003 points at spec 0051 for the commit-subject regex and its protection table carries the fork-gate row (no, until plan 0048 P13); spec 0005's job list gains fork-gate; spec 0051 D8 and REQ-15 record the ruled head-SHA binding and the concurrency Test row uses a fixed-string match.
 - Spec 0050 wave 2 (plan 0050 P4): spec statuses follow their landed work in all three copies: 0042 and 0043 complete (their Test blocks run green here, live cgroup and network rows skipped), 0040, 0041 and 0048 in-progress; the landed packages in plans 0040 to 0043 and 0048 carry DONE suffixes and the stale BLOCKED text on 0042 P8 and 0043 P1 and P2 is gone.
 - Spec 0052 wave 1 (plan 0052 P1, P2): `xtask/src/spec_check.rs` lists its twelve rules R01 to R12 in its header with the rule-change procedure, and its three function comments carry the right rule numbers (no behaviour change); specs 0001 and 0002 point at spec 0052 as the owner of the spec-check rules.
@@ -116,6 +117,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Deprecated
 - Spec 0049 wave 1 (plan 0049 P1): the `uas wave` subcommands, `uas harness run --show-cpm`, `--wave` and `--max-concurrency`, the two `SagaFlowCoordinator` methods and the two `HarnessReport` fields are deprecated in favour of saga (spec 0049); `--help` and a single stderr line say so (the `--max-concurrency` notice fires only for a value other than its default of 3), and behaviour is unchanged until the removal PR after saga's parity step.
+
+### Removed
+- Spec 0048 wave 5 (plan 0048 P11): the vendored `vendor/cortex`, `vendor/saga` and `vendor/soma` contracts (54 files) are gone; `crates/uas-engine/build.rs` reads `.contracts/` from `make fetch-contracts` (the pinned fetch) and a missing contract fails the `cortex-grpc` build with `run cargo xtask fetch-contracts`; `vendor/leanspec` stays with its LICENSE. No CI job builds `cortex-grpc` today and the runners hold no credential for the private contract repos, so a CI fetch is deferred until one does.
 
 ### Fixed
 - Spec 0051 wave 2 (plan 0051 P4): the lefthook commit hook fails closed when the gitleaks binary is missing, printing the install hint, instead of skipping the secret scan with a notice; AGENTS.md says lefthook runs gitleaks.
