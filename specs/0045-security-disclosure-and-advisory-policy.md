@@ -1,5 +1,5 @@
 ---
-status: planned
+status: in-progress
 created: 2026-10-10
 tags: [security, advisories, sbom, disclosure, release, ci]
 priority: high

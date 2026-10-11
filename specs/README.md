@@ -49,7 +49,7 @@ Methodology: LeanSpec. The reference copy is in `../vendor/leanspec/`.
 | [0042](0042-cas-binary-conventions.md) | uas binary conventions | complete | high |
 | [0043](0043-seccomp-syscall-filter-for-slot-workers.md) | seccomp syscall filter for slot workers | complete | high |
 | [0044](0044-reverie-client-degradation.md) | Reverie client degradation | planned | high |
-| [0045](0045-security-disclosure-and-advisory-policy.md) | Security disclosure and advisory policy | planned | high |
+| [0045](0045-security-disclosure-and-advisory-policy.md) | Security disclosure and advisory policy | in-progress | high |
 | [0046](0046-saga-team-and-topology-files.md) | Saga team and topology files | planned | high |
 | [0047](0047-slot-build-cache-retention.md) | Slot build cache retention | planned | high |
 | [0048](0048-licence-and-publication.md) | Licence and publication | in-progress | high |
