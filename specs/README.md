@@ -20,7 +20,7 @@ Methodology: LeanSpec. The reference copy is in `../vendor/leanspec/`.
 | [0012](0012-sandbox-escape-suite.md) | Sandbox escape suite | complete | high |
 | [0013](0013-llm-gateway-socket-proxy.md) | LLM gateway socket proxy | complete | high |
 | [0014](0014-ebpf-priority-clamping-and-audit-probes.md) | eBPF priority clamping and audit probes | in-progress | high |
-| [0015](0015-slot-pool-cgroup-freezer-and-gitoxide.md) | Slot pool, cgroup freezer, and gitoxide worktrees | planned | high |
+| [0015](0015-slot-pool-cgroup-freezer-and-gitoxide.md) | Slot pool, cgroup freezer, and gitoxide worktrees | in-progress | high |
 | [0016](0016-zed-agent-communication-protocol.md) | Zed Agent Communication Protocol (ACP) server | planned | high |
 | [0017](0017-fastcache-prefix-hashing-and-affinity-routing.md) | FastCache prefix hashing and affinity routing | in-progress | high |
 | [0018](0018-mad-stack-operator-deck-and-settle-queue.md) | MAD stack operator deck and settle queue | planned | high |
