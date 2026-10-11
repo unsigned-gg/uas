@@ -79,7 +79,7 @@ Measured 2026-10-08:
 
 | Workflow | Jobs or role |
 |---|---|
-| `ci.yml` | `secrets`, `rust`, `cargo-deny`, `hygiene`, `moon-affected`, `ebpf-live` |
+| `ci.yml` | `secrets`, `rust`, `cargo-deny`, `hygiene`, `moon-affected`, `ebpf-live`, `fork-gate` |
 | `_rust.yml` | Reusable. The `rust` job calls it. |
 | `template-check.yml` | `template-check`. `make new-repo` deletes this file. |
 | `codeql.yml` | Dormant. See below. |
