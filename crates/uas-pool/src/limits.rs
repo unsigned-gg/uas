@@ -137,13 +137,30 @@ pub fn resolve(
             });
         }
     }
-    let memory_high_bytes = memory.map(|(max, _)| {
-        cfg.memory_high_bytes
-            .unwrap_or_else(|| (u128::from(max) * 4 / 5) as u64)
+    let memory_high_bytes = memory.map(|(max, _)| match cfg.memory_high_bytes {
+        Some(high) if high > max => {
+            tracing::warn!(
+                memory_high_bytes = high,
+                memory_max_bytes = max,
+                "memory_high_bytes above memory.max; clamping high to max"
+            );
+            max
+        }
+        Some(high) => high,
+        None => (u128::from(max) * 4 / 5) as u64,
     });
     let pids_max = cfg.pids_max.unwrap_or_else(|| {
         env_u64(env, ENV_PIDS_MAX)
-            .and_then(|v| u32::try_from(v).ok())
+            .and_then(|v| {
+                u32::try_from(v)
+                    .map_err(|_| {
+                        tracing::warn!(
+                            variable = ENV_PIDS_MAX,
+                            "ignoring limit override above u32::MAX"
+                        );
+                    })
+                    .ok()
+            })
             .unwrap_or(DEFAULT_PIDS_MAX)
     });
     let min_free_bytes = cfg
@@ -292,6 +309,31 @@ mod tests {
         assert_eq!((r.pids_max, r.min_free_bytes), (8, 5));
         let r = resolve(&LimitOverrides::default(), Some(54 * G), 2, &no_env).unwrap();
         assert_eq!(r.min_free_bytes, 20 * G);
+    }
+
+    #[test]
+    fn limits_pids_env_above_u32_falls_back_to_default() {
+        let env = |k: &str| (k == ENV_PIDS_MAX).then(|| "4294967296".to_string());
+        let r = resolve(&LimitOverrides::default(), Some(54 * G), 2, &env).unwrap();
+        assert_eq!(r.pids_max, DEFAULT_PIDS_MAX);
+    }
+
+    #[test]
+    fn limits_config_high_above_max_is_clamped() {
+        let cfg = LimitOverrides {
+            memory_max_bytes: Some(4 * G),
+            memory_high_bytes: Some(8 * G),
+            ..Default::default()
+        };
+        let r = resolve(&cfg, Some(54 * G), 2, &no_env).unwrap();
+        assert_eq!(r.memory_high_bytes, Some(4 * G));
+        let cfg = LimitOverrides {
+            memory_max_bytes: Some(4 * G),
+            memory_high_bytes: Some(3 * G),
+            ..Default::default()
+        };
+        let r = resolve(&cfg, Some(54 * G), 2, &no_env).unwrap();
+        assert_eq!(r.memory_high_bytes, Some(3 * G));
     }
 
     #[test]

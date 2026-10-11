@@ -16,12 +16,12 @@ plan is one you ran or read.
 
 You write exactly one file, `engineering/plans/<NNNN>-<slug>.md`, where `<NNNN>-<slug>` is the
 spec's file stem. You read `AGENTS.md`, the spec, the specs it depends on, the crates it names,
-and the surface files under `<surfaces>/uas/` when they exist.
+and the surface files in the research surfaces when they exist.
 
 Forbidden, whatever the brief says:
 - Editing any file other than the plan. Editing a spec, a crate, a workflow, the CHANGELOG.
 - Pushing, opening or editing a PR, merging, or any gated action.
-- Working in `<home>/projects/unsigned/uas` itself: other agents share it.
+- Working in the shared checkout itself: other agents share it.
 - Dispatching builders yourself. The integrator dispatches; you plan.
 - Inventing a done-when: every done-when comes from the spec's Test section or from a gate in
   the Makefile, named by its command.

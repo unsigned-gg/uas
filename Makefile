@@ -13,7 +13,7 @@ EBPF_TOOLCHAIN ?= nightly-2026-10-06
 SUDO ?= sudo
 
 .PHONY: help build fmt fmt-check clippy test doc-test deny check ci hygiene typos machete \
-	spec-check toolchain-check pin-check smoke audit sbom doc release-notes custody-check pgt-install new-repo template-check \
+	spec-check toolchain-check pin-check oss-check smoke audit sbom doc release-notes custody-check pgt-install new-repo template-check \
 	ebpf-build ebpf-test
 
 help: ## List targets
@@ -38,14 +38,22 @@ doc-test: ## Run doc tests
 	cargo test --doc --workspace --locked -j $(JOBS)
 
 deny: ## Check licences, advisories, bans and sources
-	cargo deny check
+	cargo deny --locked check
+	cargo deny --locked --manifest-path crates/uas-ebpf/ebpf/Cargo.toml check --config deny.toml licenses
 
 check: fmt-check clippy test doc-test deny ## Full gate: fmt, clippy, test, doc-test, deny
 
 ci: ## What the CI rust job runs
 	$(MAKE) NEXTEST_PROFILE=ci fmt-check clippy test doc-test
 
-hygiene: typos machete spec-check toolchain-check pin-check ## Typos, unused deps, specs, toolchain, pins
+hygiene: typos machete spec-check toolchain-check pin-check oss-check ## Typos, unused deps, specs, toolchain, pins, tree hygiene
+
+# Spec 0048 REQ-0048-08, pattern leg (the vendor-directory leg arrives with plan P11).
+# Each alternative is written so that this text does not match its own pattern.
+OSS_PATTERN := \.ts\.net|/(home|Users)/[a-z]+/|/roo(t)/|~/(projects|\.agents|\.claude|vault|\.local|\.config|keys)|<surfaces>(s)
+
+oss-check: ## No tailnet hostname or operator path in tracked files (spec 0048 D7)
+	@if git grep -n -E -e '$(OSS_PATTERN)'; then echo "oss-check: tracked files above hold a hostname or operator path" >&2; exit 1; fi
 
 typos: ## Spell check
 	typos

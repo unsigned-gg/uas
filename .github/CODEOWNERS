@@ -1,6 +1,6 @@
 # the CTO (@pgray) is CTO and a co-source of architecture canon for this repo, with
 # the operator (@todie). His approval satisfies any engineering gate here when he chooses
-# to exercise it (ruling 2026-10-06; <home>/.agents/sops/second-operator-allen-hackley.md section 12).
+# to exercise it (ruling 2026-10-06; the estate SOP `second-operator-allen-hackley` section 12).
 # the Director of Engineering (@LordVoid) is Director of Engineering. He holds an overriding veto on identity
 # services (ruling 2026-10-06; same SOP, section 3e).
 # Both are recorded here as comments, not in the patterns below, so GitHub does not auto-request
