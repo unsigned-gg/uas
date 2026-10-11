@@ -36,9 +36,9 @@ A crate depends only on crates in lower layers. Add a Cargo dependency only when
 3. **Evidence tiers.** Label every claim `verified`, `reported`, `heuristic` or `asserted`. Only `verified` satisfies a gate. A `verified` claim names the command that proved it.
 4. **Branch model.** Work happens on feature branches cut from `development`. A PR into `development` merges on green CI. `main` is the release branch. Spec 0003 has the details.
 5. **Sign every commit.** Never skip signing.
-6. **Use Conventional Commits.** Do not put a ticket ID in the subject. Put `Part of CER-N` in the PR body.
+6. **Use Conventional Commits.** Do not put a ticket ID in the subject. Put `Part of CER-N` in the PR body. See specs/0053-changelog-and-commit-text-policy.md.
 7. **Merge with merge commits only.** Never squash. Enforced: squash and rebase merging are off on the GitHub repo (checked 2026-10-10).
-8. **Write the changelog.** Add one line under `## [Unreleased]` in `CHANGELOG.md` for each user-visible PR. Never edit a released section.
+8. **Write the changelog.** Add one line under `## [Unreleased]` in `CHANGELOG.md` for each user-visible PR. Never edit a released section. See specs/0053-changelog-and-commit-text-policy.md.
 9. **Merge the promotion PR on green.** The promotion PR carries `development` to `main`. A lane merges it when CI is green, with a merge commit pinned to the head SHA. Agents never approve it. Then check that `main` matches `development` and that the `release` run is green. Spec 0003 has the operator ruling.
 10. **Never push to `main`.** Enforced by the hook `guard-main-push.sh`.
 11. **No secrets in the repo.** Enforced: `make` and lefthook run gitleaks.
