@@ -92,6 +92,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Spec 0052 wave 5, second half (plan 0052 P8): spec 0052 records plan link resolution (R12) and the status-parity error (R13) as live in PR #188 with the checker's message texts, the measured 0 of 52 mismatches, the first-row rule, Test rows against the real checker (a planted broken plan link, a planted registry mismatch, a renamed Status header), and the ticked boxes for P6 and P7; the tree prints only the two length warnings.
+- Spec 0053 wave 4 (plan 0053 P8): `RELEASING.md` points at spec 0053 for the CHANGELOG rule instead of restating it, so the two cannot drift (REQ-0053-15).
+- Spec 0048 wave 5 (plan 0048 P16): the README states the pre-1.0 support position; `oss-check` fails naming any `vendor/` subdirectory without a LICENSE file and is now one script with a failure flag so no leg is skipped; spec 0004 names `unsigned-gg/soma` for the soma contracts.
+- Spec 0052 wave 4 (plan 0052 P6): the 44 legacy-layout requirement bullets across 18 specs that drew a keyword warning now open with their EARS keyword (The, When, If) with the quantifiers folded into the generic singular, and the one ambiguous modal at spec 0014 reads definitely; each spec carries a dated Notes line; `cargo xtask spec-check` prints only the two length warnings and, until PR #184 lands, spec 0052's own two.
 - Spec 0052 wave 3, second half (plan 0052 P5): spec 0052 records the legacy-layout EARS checks as live warnings (PR #182) with the measured counts (46 keyword warnings across 19 specs, one modal at spec 0014; the earlier "about 290" corrected), the house-form rule in R09, Test rows for the legacy path against the real checker, and the ticked boxes for P1 to P4; its own two flagged bullets are reworded.
 - Spec 0051 wave 2 (plan 0051 P6): spec 0003 points at spec 0051 for the commit-subject regex and its protection table carries the fork-gate row (no, until plan 0048 P13); spec 0005's job list gains fork-gate; spec 0051 D8 and REQ-15 record the ruled head-SHA binding and the concurrency Test row uses a fixed-string match.
 - Spec 0050 wave 2 (plan 0050 P4): spec statuses follow their landed work in all three copies: 0042 and 0043 complete (their Test blocks run green here, live cgroup and network rows skipped), 0040, 0041 and 0048 in-progress; the landed packages in plans 0040 to 0043 and 0048 carry DONE suffixes and the stale BLOCKED text on 0042 P8 and 0043 P1 and P2 is gone.
@@ -121,6 +124,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Deprecated
 - Spec 0049 wave 1 (plan 0049 P1): the `uas wave` subcommands, `uas harness run --show-cpm`, `--wave` and `--max-concurrency`, the two `SagaFlowCoordinator` methods and the two `HarnessReport` fields are deprecated in favour of saga (spec 0049); `--help` and a single stderr line say so (the `--max-concurrency` notice fires only for a value other than its default of 3), and behaviour is unchanged until the removal PR after saga's parity step.
+
+### Removed
+- Spec 0048 wave 5 (plan 0048 P11): the vendored `vendor/cortex`, `vendor/saga` and `vendor/soma` contracts (55 files) are gone; `crates/uas-engine/build.rs` reads `.contracts/` from `make fetch-contracts` (the pinned fetch) and a missing contract fails the `cortex-grpc` build with `run cargo xtask fetch-contracts`; `vendor/leanspec` stays with its LICENSE. No CI job builds `cortex-grpc` today and the runners hold no credential for the private contract repos, so a CI fetch is deferred until one does.
 
 ### Fixed
 - Spec 0051 wave 2 (plan 0051 P4): the lefthook commit hook fails closed when the gitleaks binary is missing, printing the install hint, instead of skipping the secret scan with a notice; AGENTS.md says lefthook runs gitleaks.

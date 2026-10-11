@@ -91,8 +91,8 @@ Facts, 2026-10-10. Source facts from `unsigned-gg/blackwall@3d98dc1` are `report
 - **Ubiquitous:** The `WaveExecutor` shall dispatch each step by its role (table).
 - **Ubiquitous:** The executor shall run `blackwall`, `git`, `gh` and `claude` as subprocesses
   with fixed argv. It shall not link their crates.
-- **Ubiquitous:** No `uas` code shall read PR checks or run `gh pr merge` (D15).
-- **Ubiquitous:** Every step shall emit one `WorkflowEvent::WaveStep` (D5).
+- **Ubiquitous:** The `uas` code shall not read PR checks or run `gh pr merge` (D15).
+- **Ubiquitous:** The step shall emit one `WorkflowEvent::WaveStep` (D5).
 - **Ubiquitous:** The executor shall hold one host lock around each call that can build:
   reconcile, a critic run and a Probe (D8).
 - **Ubiquitous:** The executor shall send the critic prompt on stdin (F7).
@@ -298,4 +298,4 @@ UAS_WAVE_LIVE=1 UAS_WAVE_REPO=$L UAS_WAVE_PLAN=$L/.saga/plans/uas-wave-smoke.tom
 - Out of scope: the `?` at `wave.rs:421` and `compensator.rs:339` in `crates/uas-engine/src` [verified at b149d73] stops compensation at the first `Err`, against spec 0009 (F19). Ticket CER-2783 is the fix package, not P9a.
 - Open with the saga lane: a command-only step kind (D2 cost), the `verify_cmd`
   cwd, and when 35ee74a ships. Saga bounds no `verify_cmd` (F22), so D15 puts `timeout` in the argv. Open with the blackwall owners: overlapping
-  `start` runs on one store, a full-hash or JSON `start` output, and a merge-gate that merges with `--merge --match-head-commit <head>` and reads an empty check list as pending (F23, D15).
+  `start` runs on one store, a full-hash or JSON `start` output, and a merge-gate that merges with `--merge --match-head-commit <head>` and reads an empty check list as pending (F23, D15). EARS openers amended 2026-10-11 (spec 0052 P6).
