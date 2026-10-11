@@ -5,7 +5,8 @@ name = "uas-ebpf-ebpf"
 version = "0.1.0"
 edition = "2021"
 publish = false
-license = "MIT OR Apache-2.0"
+license = "GPL-2.0-only OR MIT"
+authors = ["unsigned.gg"]
 
 [dependencies]
 aya-ebpf = "0.2.1"
