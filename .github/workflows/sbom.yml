@@ -17,9 +17,18 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: taiki-e/install-action@f7e5d7c961414b23f5b25b2da9294395d08513ad # v2.87.26
-        with:
-          tool: cargo-cyclonedx
+      # Pinned by version and sha256 (spec 0004, CI tools; plan 0045 finding 2).
+      - name: Install cargo-cyclonedx (pinned)
+        env:
+          CYCLONEDX_VERSION: 0.5.9
+          CYCLONEDX_SHA256: fb8dbee9f182173e062a64a387b21a0badc6fab8b2abf9294973f012972bf6d8
+        run: |
+          set -euo pipefail
+          name=cargo-cyclonedx-x86_64-unknown-linux-gnu
+          curl -sSfL --retry 3 "https://github.com/CycloneDX/cyclonedx-rust-cargo/releases/download/cargo-cyclonedx-${CYCLONEDX_VERSION}/$name.tar.xz" -o "$RUNNER_TEMP/$name.tar.xz"
+          echo "${CYCLONEDX_SHA256}  $RUNNER_TEMP/$name.tar.xz" | sha256sum -c -
+          tar -xJf "$RUNNER_TEMP/$name.tar.xz" -C "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/$name" >> "$GITHUB_PATH"
       - name: make sbom
         run: |
           set -euo pipefail
