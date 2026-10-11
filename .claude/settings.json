@@ -21,7 +21,7 @@
             "type": "command",
             "command": "${CLAUDE_PROJECT_DIR}/.claude/hooks/guard-main-push.sh",
             "timeout": 5,
-            "description": "Deny direct push to main/master (override: # allow-direct-push)"
+            "description": "Deny direct push to main, master or development (override: # allow-direct-push)"
           },
           {
             "type": "command",
