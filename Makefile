@@ -14,7 +14,7 @@ SUDO ?= sudo
 
 .PHONY: help build fmt fmt-check clippy test doc-test deny check ci hygiene typos machete \
 	spec-check toolchain-check pin-check oss-check spdx-check hook-test smoke audit sbom doc release-notes custody-check pgt-install new-repo template-check \
-	ebpf-build ebpf-test
+	ebpf-build ebpf-test fetch-contracts
 
 help: ## List targets
 	awk 'BEGIN { FS = ":.*## " } /^[a-zA-Z0-9_-]+:.*## / { printf "  %-16s %s\n", $$1, $$2 }' $(MAKEFILE_LIST)
@@ -55,12 +55,22 @@ hook-test: ## Run the Claude Code hook tests
 	done
 	@for t in .claude/hooks/tests/test-*.sh; do echo "hook-test: $$t"; bash "$$t" || exit 1; done
 
-# Spec 0048 REQ-0048-08, pattern leg (the vendor-directory leg arrives with plan P11).
+# Spec 0048 REQ-0048-08: the pattern leg, then the leg that bars the three removed vendor directories (plan P11).
+# The vendor LICENSE leg is spec 0048 D16 (plan P16).
 # Each alternative is written so that this text does not match its own pattern.
 OSS_PATTERN := \.ts\.net|/(home|Users)/[a-z]+/|/roo(t)/|~/(projects|\.agents|\.claude|vault|\.local|\.config|keys)|/tmp/research-surface(s)
 
-oss-check: ## No tailnet hostname or operator path in tracked files (spec 0048 D7)
-	@if git grep -n -E -e '$(OSS_PATTERN)'; then echo "oss-check: tracked files above hold a hostname or operator path" >&2; exit 1; fi
+oss-check: ## No tailnet hostname or operator path, no removed vendor directory, a LICENSE in each vendor directory (spec 0048)
+	@bad=0
+	if git grep -n -E -e '$(OSS_PATTERN)'; then echo "oss-check: tracked files above hold a hostname or operator path" >&2; bad=1; fi
+	for d in vendor/cortex vendor/soma vendor/saga; do if [ -e "$$d" ]; then echo "oss-check: $$d must not exist; contracts live in .contracts/ (make fetch-contracts)" >&2; bad=1; fi; done
+	for d in vendor/*/; do d=$${d%/}; [ -d "$$d" ] || continue; if [ ! -f "$$d/LICENSE" ]; then echo "oss-check: $$d has no LICENSE file" >&2; bad=1; fi; done
+	exit $$bad
+
+# Spec 0048 D9, REQ-0048-11. Not a prerequisite of check: the default build reads no contract. Run it before
+# 'cargo build -p uas-engine --features cortex-grpc'. It needs SSH read access to the private upstream repositories.
+fetch-contracts: ## Fetch the pinned estate contracts into .contracts/ (contracts.lock)
+	cargo xtask fetch-contracts
 
 # Spec 0048 REQ-0048-04, D2, D10. Code: SPDX line in the first two lines with the right expression.
 # Markdown under docs, specs and engineering: CC-BY-4.0 tag in the first ten lines.
