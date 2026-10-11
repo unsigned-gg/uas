@@ -150,8 +150,7 @@ jobs:
         run: |
           set -euo pipefail
           printf '%s' "$PR_BODY" > "$RUNNER_TEMP/pr-body.md"
-          export HEAD_REF
-          make text-check BASE="origin/$BASE_REF" PR_BODY_FILE="$RUNNER_TEMP/pr-body.md"
+          BASE="origin/$BASE_REF" PR_BODY_FILE="$RUNNER_TEMP/pr-body.md" make text-check
 
   ebpf-live:
     name: ebpf-live

@@ -12,6 +12,22 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
+/// Variables a hook or the host can set that would redirect or reconfigure git. The tests clear
+/// them so they depend on nothing from the host.
+const HOST_GIT_VARS: &[&str] = &[
+    "GIT_DIR",
+    "GIT_WORK_TREE",
+    "GIT_INDEX_FILE",
+    "GIT_PREFIX",
+    "GIT_COMMON_DIR",
+    "GIT_OBJECT_DIRECTORY",
+    "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+    "GIT_CONFIG",
+    "GIT_CONFIG_COUNT",
+    "GIT_CONFIG_PARAMETERS",
+    "GIT_TEMPLATE_DIR",
+];
+
 static NEXT: AtomicUsize = AtomicUsize::new(0);
 
 /// The real repository root (the parent of `xtask/`).
@@ -89,7 +105,7 @@ impl Fixture {
     /// variable a hook could leave behind.
     fn git_cmd(&self, args: &[&str]) -> Command {
         let mut c = Command::new("git");
-        for var in ["GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_PREFIX"] {
+        for var in HOST_GIT_VARS {
             c.env_remove(var);
         }
         c.env("GIT_CONFIG_GLOBAL", self.top.join("empty.gitconfig"))
@@ -98,6 +114,18 @@ impl Fixture {
             .env("GIT_AUTHOR_EMAIL", "fixture@example.invalid")
             .env("GIT_COMMITTER_NAME", "Fixture")
             .env("GIT_COMMITTER_EMAIL", "fixture@example.invalid")
+            .args([
+                "-c",
+                "commit.gpgsign=false",
+                "-c",
+                "tag.gpgsign=false",
+                "-c",
+                "user.name=test",
+                "-c",
+                "user.email=test@example.invalid",
+                "-c",
+                "core.hooksPath=/dev/null",
+            ])
             .arg("-C")
             .arg(&self.repo)
             .args(args);
@@ -179,10 +207,11 @@ impl Fixture {
     }
 
     fn check_base(&self, base: &str, extra: &[&str]) -> Run {
-        let out = Command::new(env!("CARGO_BIN_EXE_xtask"))
-            .env_remove("GIT_DIR")
-            .env_remove("GIT_WORK_TREE")
-            .env_remove("GIT_INDEX_FILE")
+        let mut cmd = Command::new(env!("CARGO_BIN_EXE_xtask"));
+        for var in HOST_GIT_VARS {
+            cmd.env_remove(var);
+        }
+        let out = cmd
             .env("GIT_CONFIG_GLOBAL", self.top.join("empty.gitconfig"))
             .env("GIT_CONFIG_NOSYSTEM", "1")
             .args(["text-check", "--base", base, "--repo"])
