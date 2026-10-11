@@ -905,6 +905,87 @@ mod tests {
     }
 
     #[test]
+    fn keyword_warning_on_non_ears_bullet() {
+        let t = Tmp::new();
+        let bad = modern_spec("0001-kw").replace(
+            "* **Ubiquitous:** The system shall operate continuously.",
+            "- Systems shall run.",
+        );
+        t.write("specs/0001-kw.md", &bad);
+        t.write("specs/README.md", &readme(&["0001-kw.md"]));
+        let r = check(&t.0);
+        assert!(r.errors.is_empty(), "{:?}", r.errors);
+        assert_eq!(
+            r.warnings,
+            vec![
+                "specs/0001-kw.md:13: requirement clause does not begin with a standard EARS pattern keyword (The, When, While, If, Where)"
+                    .to_string()
+            ]
+        );
+    }
+
+    #[test]
+    fn duplicate_key_fails() {
+        let t = good();
+        t.write(
+            "specs/0001-first.md",
+            &spec("0001-first").replace("status: planned\n", "status: planned\nstatus: planned\n"),
+        );
+        assert_eq!(
+            t.errors(),
+            vec!["specs/0001-first.md:3: duplicate key `status`".to_string()]
+        );
+    }
+
+    #[test]
+    fn unclosed_frontmatter_fails() {
+        let t = good();
+        t.write(
+            "specs/0001-first.md",
+            &spec("0001-first").replace("priority: high\n---\n", "priority: high\n"),
+        );
+        assert_eq!(
+            t.errors(),
+            vec!["specs/0001-first.md:1: frontmatter is not closed by a --- line".to_string()]
+        );
+    }
+
+    #[test]
+    fn list_and_scalar_type_errors() {
+        let t = good();
+        let base = spec("0001-first");
+        t.write(
+            "specs/0001-first.md",
+            &base.replace("tags: [a, b]", "tags: a"),
+        );
+        assert_eq!(
+            t.errors(),
+            vec!["specs/0001-first.md:4: `tags` must be a list".to_string()]
+        );
+        t.write(
+            "specs/0001-first.md",
+            &base.replace("priority: high", "priority: [high]"),
+        );
+        assert_eq!(
+            t.errors(),
+            vec!["specs/0001-first.md:5: `priority` must be a single value".to_string()]
+        );
+    }
+
+    #[test]
+    fn missing_h1_fails() {
+        let t = good();
+        t.write(
+            "specs/0001-first.md",
+            &spec("0001-first").replace("# 0001-first\n\n", ""),
+        );
+        assert_eq!(
+            t.errors(),
+            vec!["specs/0001-first.md:7: missing H1 `# 0001-first`".to_string()]
+        );
+    }
+
+    #[test]
     fn sections_required_and_ordered() {
         let t = good();
         t.write(

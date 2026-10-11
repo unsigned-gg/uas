@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 //! Worker enrolment and limit-event classification (spec 0041 REQ-02, REQ-05 to REQ-08).
 //!
 //! The cgroup tree is a temp directory of plain files, so the tests run on any host.
