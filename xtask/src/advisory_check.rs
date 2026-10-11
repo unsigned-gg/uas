@@ -119,14 +119,15 @@ fn entry_problem(entry: &toml::Table, today: Date) -> Option<String> {
 }
 
 /// Problems with the ignore entries in `text`, one `<id>: <problem>` string each.
-pub fn check(text: &str, today: Date) -> Vec<String> {
+pub fn check(text: &str, today: Date, config: &Path) -> Vec<String> {
+    let name = config.display();
     let table = match parse_table(text) {
         Ok(t) => t,
-        Err(e) => return vec![format!("deny.toml: {e}")],
+        Err(e) => return vec![format!("{name}: {e}")],
     };
     let list = match entries(&table) {
         Ok(l) => l,
-        Err(e) => return vec![format!("deny.toml: {e}")],
+        Err(e) => return vec![format!("{name}: {e}")],
     };
     let mut out = Vec::new();
     for e in list {
@@ -135,7 +136,10 @@ pub fn check(text: &str, today: Date) -> Vec<String> {
                 out.push(format!("{id}: bare id; use {{ id, reason }} with a reason"))
             }
             toml::Value::Table(t) => match t.get("id").and_then(toml::Value::as_str) {
-                None => out.push("?: entry has no string id".to_string()),
+                None => out.push(format!(
+                    "entry has no string id: {}",
+                    toml::Value::Table(t.clone())
+                )),
                 Some(id) => out.extend(entry_problem(t, today).map(|p| format!("{id}: {p}"))),
             },
             _ => out.push("?: entry is neither a string nor a table".to_string()),
@@ -202,7 +206,7 @@ pub fn run(root: &Path, args: &[String]) -> ExitCode {
             }
         };
     }
-    let problems = check(&text, today.unwrap_or_else(utc_today));
+    let problems = check(&text, today.unwrap_or_else(utc_today), &config);
     if problems.is_empty() {
         let n = ids(&text).map_or(0, |v| v.len());
         println!("advisory-check: ok ({n} ignore entries)");
@@ -226,7 +230,11 @@ mod tests {
         let path = Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("tests/fixtures/advisory")
             .join(fixture);
-        check(&std::fs::read_to_string(path).expect("fixture"), today())
+        check(
+            &std::fs::read_to_string(path).expect("fixture"),
+            today(),
+            Path::new("deny.toml"),
+        )
     }
 
     #[test]
@@ -274,18 +282,30 @@ mod tests {
     #[test]
     fn advisory_missing_ignore_key_is_zero_entries() {
         assert_eq!(
-            check("[advisories]\nyanked = \"deny\"\n", today()),
+            check(
+                "[advisories]\nyanked = \"deny\"\n",
+                today(),
+                Path::new("deny.toml")
+            ),
             Vec::<String>::new()
         );
-        assert_eq!(check("", today()), Vec::<String>::new());
+        assert_eq!(
+            check("", today(), Path::new("deny.toml")),
+            Vec::<String>::new()
+        );
     }
 
     #[test]
     fn advisory_expiry_equal_to_today_passes_and_bad_calendar_date_fails() {
         let on = "[advisories]\nignore = [{ id = \"X\", reason = \"expires 2026-10-10; CER-1; why\" }]\n";
-        assert_eq!(check(on, today()), Vec::<String>::new());
-        let bad = on.replace("2026-10-10", "2026-02-30");
-        assert_eq!(check(&bad, today()).len(), 1);
+        assert_eq!(
+            check(on, today(), Path::new("deny.toml")),
+            Vec::<String>::new()
+        );
+        let bad = on.replace("2026-10-10", "2027-02-29");
+        let p = check(&bad, today(), Path::new("deny.toml"));
+        assert_eq!(p.len(), 1, "{p:?}");
+        assert!(p[0].contains("real date"), "{p:?}");
     }
 
     #[test]
