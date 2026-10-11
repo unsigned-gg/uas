@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 //! Critical Path Method (CPM) scheduler for Saga workflows.
 //!
 //! Computes earliest/latest start and finish times, calculates total float

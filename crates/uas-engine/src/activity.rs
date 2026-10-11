@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 //! Workflow activity definitions, kinds, and execution outcomes.
 
 use serde::{Deserialize, Serialize};

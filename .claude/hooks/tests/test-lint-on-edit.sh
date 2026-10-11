@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: Apache-2.0 OR MIT
 # Tests for lint-on-edit.sh. A stub `rustfmt` records its arguments.
 # Run: bash .claude/hooks/tests/test-lint-on-edit.sh
 set -uo pipefail

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 //! Host probe: can the kernel program load and attach here? (spec 0014, facts block)
 //!
 //! Tests use it to probe and skip. The daemon uses it to fail with a clear

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 //! The Cortex settle source. It parses the body of `GET /v1/settle/pending`
 //! (spec 0018 A1, D9, D10). The fetch sits behind `PendingFetch`, so tests read
 //! fixture files and open no socket to Cortex.

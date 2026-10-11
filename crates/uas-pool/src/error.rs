@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 //! Error types for the worker slot pool and cgroup freezer.
 
 use std::path::PathBuf;

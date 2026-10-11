@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 //! Pure limits core: the ruled memory, pids and disk defaults and their override order.
 //!
 //! Spec 0041 D1, D2, D5, D7. Nothing here writes a cgroup file; the freezer

@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 //! Worker slot pool management and lifecycle controller.
 //!
 //! CER-2723: Enforces host concurrency ceilings (`max_slots = 2`), coordinates
@@ -608,7 +609,7 @@ impl SlotPool {
         cmd: std::process::Command,
         cfg: &crate::launch::LaunchConfig,
     ) -> Result<crate::launch::Worker, PoolError> {
-        let cpu_cap = {
+        let (cpu_cap, cgroup) = {
             let guard = self.slots.lock().unwrap_or_else(|p| p.into_inner());
             let managed = guard
                 .get(id)
@@ -620,9 +621,14 @@ impl SlotPool {
                     "spawn",
                 ));
             }
-            managed.cpu_cap().to_string()
+            let cgroup = managed
+                .freezer
+                .as_ref()
+                .and_then(|f| Some((f.cgroup_path()?, f.limit_events()?)))
+                .map(|(path, baseline)| crate::launch::SlotCgroup { path, baseline });
+            (managed.cpu_cap().to_string(), cgroup)
         };
-        crate::launch::spawn_worker(cmd, cfg, cpu_cap)
+        crate::launch::spawn_worker(cmd, cfg, cpu_cap, cgroup)
     }
 
     /// Returns the CPU cap status recorded for a slot.

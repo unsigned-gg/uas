@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 //! The Cortex pool-member adapter (spec 0026), behind the feature `cortex-grpc`.
 
 mod adapter;

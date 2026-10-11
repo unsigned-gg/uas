@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 //! Domain model for the Unsigned Agent Substrate.
 //!
 //! This crate is the bottom layer. Every other `uas-*` crate may depend on it.
