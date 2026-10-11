@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 //! How a worker ended, and the cgroup limit counters behind it.
 
 use serde::{Deserialize, Serialize};

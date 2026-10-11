@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 //! Compiles the vendored Cortex pool protos for the feature `cortex-grpc` (spec 0026 P1). With
 //! the feature off it does nothing, so a default build needs neither `protox` nor `tonic`.
 

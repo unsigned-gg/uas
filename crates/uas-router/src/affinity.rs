@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 //! Rendezvous (Highest Random Weight) replica choice (spec 0017 D3).
 //!
 //! For a prefix hash and a replica id, the weight is the first 8 bytes, big-endian, of

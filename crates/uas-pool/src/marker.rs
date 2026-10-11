@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 //! The locked slot marker (spec 0040 D1, REQ-0040-01, REQ-0040-12).
 //!
 //! `provision` writes `uas-pool.json.tmp` with `O_CREAT | O_EXCL | O_CLOEXEC`,

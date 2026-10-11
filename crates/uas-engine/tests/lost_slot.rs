@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 //! A replayed activity whose lease the pool forgot compensates and readmits
 //! (spec 0040 D5, REQ-0040-10).
 

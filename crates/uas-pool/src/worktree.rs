@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 //! In-process Gitoxide (`gix`) warm worktree provisioning and teardown.
 //!
 //! CER-2724: Provisions ephemeral worktrees directly via the `gix` repository API,

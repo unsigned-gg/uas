@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: Apache-2.0 OR MIT
 //! Spec 0010 launcher gate: `cargo test -p uas-sandbox -j 2 --test launcher`.
 //!
 //! The cases need a kernel with Landlock. Without one they print `skipped`
