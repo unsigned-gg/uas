@@ -64,6 +64,8 @@ Measured 2026-10-11 on ceres at development `340475b`.
 - **F19 [verified]:** Measured at `7d97fa2`. `git grep -n -E 'the operator M\. Todie / cerebral\.work|All rights reserved' -- ':!specs' ':!vendor' ':!engineering' ':!CHANGELOG.md'` prints `LICENSE` line 1 and `docs/IP_NOTICE.md` lines 5 and 7. `docs/IP_NOTICE.md` (31 lines, added in `3a2e2d0` on 2026-10-08) calls the repository "proprietary and confidential". `Cargo.toml` line 13 sets `authors = ["the operator <chris@todie.io>"]`, and the 11 root packages inherit it with `authors.workspace = true`; the BPF package sets no `authors` (`git grep -n -E '^(authors|license)' -- '*Cargo.toml'`).
 - **F20 [verified]:** Measured at `7d97fa2`. `git ls-files 'docs/*.md' 'specs/*.md' 'engineering/*.md'` lists 65 files (9, 48 and 8), and none carries `SPDX-License-Identifier: CC-BY-4.0` in its first ten lines. spec-check finds the H1 anywhere in the body (`xtask/src/spec_check.rs` lines 320 to 340). On a `git archive` copy with `<!-- SPDX-License-Identifier: CC-BY-4.0 -->` on the line after each spec's frontmatter, `cargo xtask spec-check` passes; spec 0025 then reaches 301 lines and warns.
 - **F21 [verified]:** `b220833` merges PR #119 (`docs/spec-0038-worker-slot-limits`) into `main` at 2026-10-10T23:30:10Z (`gh pr view 119 --json baseRefName,mergedAt`). It is an ancestor of `origin/main` and not of `origin/development` (`git merge-base --is-ancestor`); `git rev-list --count origin/development..origin/main` prints 8.
+- **F22 [verified]:** Measured 2026-10-11 at the head of this branch. `CODE_OF_CONDUCT.md` exists (Contributor Covenant 2.1, enforcement contact `chris@todie.io`, lines 62-63 and 117-119) and `.github/CODEOWNERS` exists (`* @todie`; other humans named in comments). `MAINTAINERS.md`, `RELEASING.md` and a README support disclaimer do not exist, and no workflow runs `cargo-semver-checks`. `release-plz.toml` sets `publish = false` and `semver_check = false`. Commands: `ls CODE_OF_CONDUCT.md MAINTAINERS.md RELEASING.md .github/CODEOWNERS`; `grep -rn semver .github/workflows release-plz.toml`; `grep -n -i -E 'stability|support' README.md` prints nothing.
+- **F23 [reported: oss-roadmaps digest 2026-10-11]:** Practice at other projects. Meta ships `CODE_OF_CONDUCT.md` and a `MAINTAINERS` file at the repo root; Cloudflare ships a code of conduct and `CODEOWNERS`, and quiche's `RELEASING.md` has `cargo-semver-checks` decide the bump of pre-1.0 crates; Google requires the text "This is not an officially supported Google product", a `LICENSE` in every vendored directory, and a tracked approval before launch; Cloudflare's launch was a blog post; PyTorch and React moved to a foundation years after launch. Digest sections 1 to 4 and 6.
 
 ## Design
 
@@ -86,12 +88,18 @@ and stays private; the vendored contracts decide its public form.
 | D8 | The licence gate checks this workspace's own licence. `deny.toml` sets `[licenses.private] ignore = false` and drops the "proprietary and unpublished" comment. The allow list does not change, so GPL stays out (F10). `make deny` also runs `cargo deny --manifest-path crates/uas-ebpf/ebpf/Cargo.toml check --config deny.toml licenses`. | Today a GPL workspace crate passes unseen, and the BPF workspace is never read (F10). F3 is a wrong field that passed. A list of only Apache-2.0, MIT and BSD-3-Clause fails on today's dependencies (F17); narrowing the list is a separate licence decision. | lane-decided: uas-engineer, 2026-10-11 (F10, F17) |
 | D9 | Vendored contracts: option (a). `vendor/cortex/`, `vendor/soma/` and `vendor/saga/` leave the tree now (F12). `cargo xtask fetch-contracts` fetches them into the ignored `.contracts/`, each file pinned by upstream commit and sha256 in a tracked `contracts.lock`, starting from the README pins (F12). The `cortex-grpc` gRPC code is regenerated at build time from the fetched protos: `uas-engine`'s `build.rs` reads `.contracts/cortex/proto` and, when it is absent, fails with the fetch command in its message. The default build needs no fetch (F12). `vendor/leanspec/` (MIT) stays. History and the pull-request refs still hold the old files (F12, F14), so publication is a fresh clean-tree repository later, not a flip. | A tree that builds a feature only from private tracked files is not built to open-source standard (D4). No option clears history, and spec 0037 D5 bars a rewrite. | ruled: the operator, lane w25:p1, 2026-10-11 (option (a) and the fresh repository). Lane-decided: the fetch command, the lock file and the `build.rs` path, uas-engineer, 2026-10-11 |
 | D10 | Docs licence. Every `*.md` file under `docs/`, `specs/` and `engineering/` is `CC-BY-4.0`, with the legal text in a root `LICENSE-DOCS`. Each carries `<!-- SPDX-License-Identifier: CC-BY-4.0 -->` on line 1; a spec carries it on the line after its frontmatter, because spec-check requires `---` on line 1 (F20). Code stays `Apache-2.0 OR MIT`. Other non-code files outside `vendor/` take `Apache-2.0 OR MIT` through `NOTICE`. | CC-BY-4.0 is written for prose; Apache-2.0 and MIT for code. The placement keeps spec-check green (F20). | ruled: the licence and the three directories, the operator, lane w25:p1, 2026-10-11. Lane-decided: the tag placement and the default for other files, uas-engineer, 2026-10-11 |
+| D11 | `CODE_OF_CONDUCT.md` is the Contributor Covenant 2.1, and its enforcement contact is the address in spec 0045 D3. It joins the REQ-0048-03 file list. The file exists and already holds both (F22). | A public project needs a stated conduct rule and a contact; Meta and Cloudflare ship one (F23). | ruled: the operator, lane w25:p1, 2026-10-11 about 02:35Z (AskUserQuestion), "Contributor Covenant 2.1" |
+| D12 | `.github/CODEOWNERS` routes review. A new `MAINTAINERS.md` names humans and their areas, with the BPF program and the sandbox called out, and names no team, bot or alias. | The DCO check (D5) needs someone who can waive it; Meta keeps a `MAINTAINERS` file and Cloudflare a `CODEOWNERS` (F23). | ruled: the operator, lane w25:p1, 2026-10-11 about 02:35Z, "CODEOWNERS plus MAINTAINERS.md" |
+| D13 | `RELEASING.md` states pre-1.0 semver (a breaking change bumps the minor), the CHANGELOG one-line-per-PR rule, and that release-plz tags as today. CI runs `cargo-semver-checks` on each published crate and fails a breaking change without the minor bump. No crate publishes today (F2, F22), so the job has nothing to compare until the first publish. The tool is a CI download and takes a row in spec 0004's CI tools table (version and sha256). | quiche's model (F23). A semver gate catches an accidental break before a user does. | ruled: the operator, lane w25:p1, 2026-10-11 about 02:35Z, "RELEASING.md, pre-1.0 semver, cargo-semver-checks gate" |
+| D14 | Launch is a checklist, then a soft launch. Plan 0048 holds one go/no-go checklist: `make hygiene` and `oss-check` green, a secret scan of the whole tree, licence files and SPDX complete, the docs build green, the operator's explicit sign-off on the operator names of D7 at the cut, and then the operator's go. The repository turns public with no announcement until docs and CI are green there. The announcement text is a parked decision. | Google gates launch on an approval step; a quiet flip leaves time to fix what a first reader finds (F23). | ruled: the operator, lane w25:p1, 2026-10-11 about 02:35Z, "Checklist then soft launch"; the D7 sign-off item lane-decided, integrating lane w25:p1, 2026-10-11 |
+| D15 | The README states that the project is pre-1.0 and makes no stability or support promise, and that example code is not for production. | Google requires such a statement; Cloudflare's quiche and pingora state one (F23). | lane-decided: integrating lane w25:p1, 2026-10-11 |
+| D16 | `oss-check` also fails when a directory under `vendor/` has no `LICENSE` file. After D9 only `vendor/leanspec/` remains, and it has one (F12). | Google's rule for vendored code (F23). Low cost. | lane-decided: integrating lane w25:p1, 2026-10-11 |
 
 ### Requirements (EARS)
 
 - **[REQ-0048-01]** (Ubiquitous): The root `Cargo.toml` shall set `license = "Apache-2.0 OR MIT"` in `[workspace.package]`, and every root-workspace package shall inherit it with `license.workspace = true`.
 - **[REQ-0048-02]** (Ubiquitous): The package `crates/uas-ebpf/ebpf` shall set `license = "GPL-2.0-only OR MIT"`, and its object shall hold `Dual MIT/GPL` in its `license` section.
-- **[REQ-0048-03]** (Ubiquitous): The repository root shall hold `LICENSE-APACHE`, `LICENSE-MIT`, `LICENSE-DOCS`, `NOTICE` and a `CONTRIBUTING.md` that states the DCO sign-off rule, and no `LICENSE` or `docs/IP_NOTICE.md`; `crates/uas-ebpf/ebpf/LICENSE` shall hold the GPL-2.0 and MIT texts; `NOTICE` shall name `unsigned.gg` as the copyright holder and map each licence to its files.
+- **[REQ-0048-03]** (Ubiquitous): The repository root shall hold `LICENSE-APACHE`, `LICENSE-MIT`, `LICENSE-DOCS`, `NOTICE`, `CODE_OF_CONDUCT.md` and a `CONTRIBUTING.md` that states the DCO sign-off rule, and no `LICENSE` or `docs/IP_NOTICE.md`; `crates/uas-ebpf/ebpf/LICENSE` shall hold the GPL-2.0 and MIT texts; `NOTICE` shall name `unsigned.gg` as the copyright holder and map each licence to its files.
 - **[REQ-0048-04]** (Ubiquitous): Every tracked `.rs` and `.sh` file outside `vendor/` shall carry an `SPDX-License-Identifier` line in its first two lines, `GPL-2.0-only OR MIT` under `crates/uas-ebpf/ebpf/` and `Apache-2.0 OR MIT` elsewhere, and every tracked `*.md` file under `docs/`, `specs/` and `engineering/` shall carry `SPDX-License-Identifier: CC-BY-4.0` in its first ten lines.
 - **[REQ-0048-05]** (Unwanted): IF a root-workspace package or the BPF package declares a licence expression with no arm in the `deny.toml` allow list, THEN `make deny` shall exit non-zero and name the package.
 - **[REQ-0048-06]** (Ubiquitous): No userspace crate shall link libbpf or a GPL-licensed library; userspace shall reach the BPF program only as object bytes loaded through the `bpf` system call.
@@ -101,6 +109,13 @@ and stays private; the vendored contracts decide its public form.
 - **[REQ-0048-10]** (Event-driven): WHEN the fresh public repository is created, its history shall start with one commit holding the tree of `main`, `make check` shall pass on that commit, and a required check shall fail any pull request that holds a commit with no `Signed-off-by:` trailer matching its author.
 - **[REQ-0048-11]** (Unwanted): IF a file fetched by `cargo xtask fetch-contracts` does not match the commit and sha256 recorded in `contracts.lock`, THEN the fetch shall exit non-zero, name the file, and leave it out of `.contracts/`.
 - **[REQ-0048-12]** (Event-driven): WHEN the crates.io `uas` crate is next published after the public form exists, its licence shall have the arms `Apache-2.0` and `MIT` only, and its `repository` shall name a URL an anonymous reader can open.
+- **[REQ-0048-13]** (Ubiquitous): `CODE_OF_CONDUCT.md` shall be the Contributor Covenant 2.1, and its enforcement contact shall be the reporting address of spec 0045 D3.
+- **[REQ-0048-14]** (Ubiquitous): The repository shall hold `.github/CODEOWNERS` and a `MAINTAINERS.md` that names humans and areas, calls out the BPF program and the sandbox, and names no team or bot.
+- **[REQ-0048-15]** (Ubiquitous): `RELEASING.md` shall state pre-1.0 semver with a minor bump for a breaking change, the one-line-per-PR CHANGELOG rule, and that release-plz tags.
+- **[REQ-0048-16]** (Event-driven): WHEN a pull request is opened against `development` or `main`, CI shall run `cargo-semver-checks` on each published crate and shall fail the job on a breaking change that lacks the minor bump of REQ-0048-15.
+- **[REQ-0048-17]** (State-driven): WHILE `engineering/plans/0048-launch-checklist.md` holds an unticked item or no go from the operator, the repository shall stay private; WHILE docs or required CI are red on the public repository, no announcement shall be made.
+- **[REQ-0048-18]** (Ubiquitous): `README.md` shall state that the project is pre-1.0, makes no stability or support promise, and that example code is not for production.
+- **[REQ-0048-19]** (Event-driven): WHEN `make oss-check` runs, it shall exit non-zero and name any directory under `vendor/` that has no `LICENSE` file.
 
 ## Plan
 
@@ -135,10 +150,18 @@ command passes:
 - [ ] Remove `vendor/cortex/`, `vendor/soma/` and `vendor/saga/`; `oss-check` fails if any returns (REQ-0048-08).
 - [ ] A CI job that builds `cortex-grpc` needs read access to `cerebral-work/cortex`. That credential is an operator-gated secret; until it exists, CI builds default features only, as today.
 
+Package 4, day-one files, now, one PR into `development` (D11 to D13, D15, D16). Done when the
+day-one leg of the Test command passes:
+
+- [ ] `MAINTAINERS.md` (D12); `.github/CODEOWNERS` keeps its routes; `CODE_OF_CONDUCT.md` is checked against REQ-0048-13.
+- [ ] `RELEASING.md` (D13); a `cargo-semver-checks` CI job and its spec 0004 CI tools row; the README disclaimer (D15).
+- [ ] `oss-check` fails on a `vendor/` directory with no `LICENSE` (D16).
+- [ ] Write `engineering/plans/0048-launch-checklist.md` (D14); its go item is the operator's.
+
 The public form, the operator's acts:
 
 - [ ] Create the fresh public repository from the tree of `main` in one commit (REQ-0048-10); make the DCO check required (D5); enable private vulnerability reporting (spec 0045 D3).
-- [ ] Publish `uas` per D6.
+- [ ] Publish `uas` per D6. Announce only after the checklist of D14 and green docs and CI on the public repository; the text is a parked decision.
 
 ## Test
 
@@ -146,7 +169,7 @@ The public form, the operator's acts:
 |---|---|
 | REQ-0048-01, 05 | On a `git archive` copy with `ignore = false`: today's tree exits 4 with 11 rejections; the D1 licence exits 0; one crate at `GPL-2.0-only` exits 4 (F10). The rejection names the package: `uas-domain v0.1.0` and its `crates/uas-domain/Cargo.toml` line 8 (measured at `07d0b52`). Goes red if `ignore = true` returns: the GPL crate then passes (F10). The manifest leg below exits 1 today, 0 on a copy with the D1 licences, and 1 when one root crate sets its own licence (measured at `07d0b52`). |
 | REQ-0048-02, 05 | `cargo deny --manifest-path crates/uas-ebpf/ebpf/Cargo.toml check --config deny.toml licenses` exits 0 at `GPL-2.0-only OR MIT` and 4 at `GPL-2.0-only`, naming `uas-ebpf-ebpf v0.1.0` (F10; measured again at `07d0b52`). `strings crates/uas-ebpf/ebpf/uas-ebpf.o \| grep -cx 'Dual MIT/GPL'` prints 1. A changed `LICENSE` static, rebuilt and committed, makes it print 0; left unbuilt, it fails the `ebpf-live` drift step. Red today: the manifest says `MIT OR Apache-2.0` (F3). |
-| REQ-0048-03 | `test -f` on the five licence files and `test ! -e LICENSE -a ! -e docs/IP_NOTICE.md` exit 0; `grep -c unsigned.gg NOTICE` prints at least 1; the F19 holder grep prints nothing; `grep -c 'Signed-off-by' CONTRIBUTING.md` prints at least 1. Red today: no licence file exists (F11), the holder grep prints 3 lines (F19), and the DCO grep prints 0 (F18). |
+| REQ-0048-03 | `test -f` on the five licence files, `CODE_OF_CONDUCT.md` and `test ! -e LICENSE -a ! -e docs/IP_NOTICE.md` exit 0; `grep -c unsigned.gg NOTICE` prints at least 1; the F19 holder grep prints nothing; `grep -c 'Signed-off-by' CONTRIBUTING.md` prints at least 1. Red today: no licence file exists (F11), the holder grep prints 3 lines (F19), and the DCO grep prints 0 (F18). |
 | REQ-0048-04 | The code and Markdown SPDX legs of the command below print nothing. Red today: 127 code files at `07d0b52` (F11) and 65 Markdown files at `7d97fa2` (F20). Guard: remove the tag from one file and it is listed; put `Apache-2.0 OR MIT` in `ebpf/src/main.rs` and `spdx-check` fails. |
 | REQ-0048-06 | `grep -rn libbpf Cargo.lock crates/uas-ebpf/ebpf/Cargo.lock` prints nothing; control: `grep -c '^name = "aya"' Cargo.lock` prints 1 (F9). |
 | REQ-0048-07 | Not exercisable: no LSM, struct_ops or kfunc program exists (F6). The kernel is the control: `bpf_lsm.c` rejects a non-GPL LSM program at load. |
@@ -155,6 +178,13 @@ The public form, the operator's acts:
 | REQ-0048-10 | On the fresh repository: `git rev-list --count` on its first push prints 1, `make check JOBS=2` exits 0 there, and a pull request with one commit lacking the trailer fails the DCO check. Not exercisable until it exists. |
 | REQ-0048-11 | With one sha256 in a scratch `contracts.lock` changed by one character, `cargo xtask fetch-contracts` exits non-zero and names the file; with the true value it exits 0. Goes red if the hash compare is removed. |
 | REQ-0048-12 | `curl -s -o /dev/null -w '%{http_code}'` on the crate's `repository` URL prints 200. Red today: 404 (F13); control: the containerd URL prints 200. |
+| REQ-0048-13 | `grep -c 'version 2.1' CODE_OF_CONDUCT.md` prints at least 1 and the address of `SECURITY.md` appears in the file. Holds today (F22). Goes red if the contact line is deleted. |
+| REQ-0048-14 | `test -f MAINTAINERS.md -a -f .github/CODEOWNERS` and `grep -c -i -E 'ebpf|sandbox' MAINTAINERS.md` prints at least 2. Red today: no `MAINTAINERS.md` (F22). |
+| REQ-0048-15 | `test -f RELEASING.md` and `grep -c -i -E 'pre-1.0|minor|release-plz' RELEASING.md` prints at least 3. Red today (F22). |
+| REQ-0048-16 | On a scratch copy of a crate with a pristine copy as `--baseline-root`: unchanged, `cargo semver-checks` exits 0; with one `pub fn` removed it exits non-zero and names the lint. Goes red if the CI job is removed: `grep -rn semver-checks .github/workflows` prints nothing. |
+| REQ-0048-17 | `test -f engineering/plans/0048-launch-checklist.md` and `grep -c '^- \[' ` on it prints at least 6, the last item being the operator's go. Red today: no file. The visibility leg is REQ-0048-09. |
+| REQ-0048-18 | `grep -c -i -E 'pre-1.0|no stability|not for production' README.md` prints at least 3. Red today (F22). |
+| REQ-0048-19 | In a scratch copy, `mkdir vendor/x` with a file but no `LICENSE`: `make oss-check` exits non-zero and names `vendor/x`; with `vendor/leanspec` alone it exits 0 (positive control). Goes red if the leg is removed. |
 
 ```bash
 make deny hygiene JOBS=2 && \
@@ -168,11 +198,12 @@ make deny hygiene JOBS=2 && \
   test -z "$(git ls-files -z -- '*.rs' '*.sh' ':!vendor' | xargs -0 grep -L 'SPDX-License-Identifier')" && \
   test -z "$(git ls-files 'docs/*.md' 'specs/*.md' 'engineering/*.md' | while read -r f; do head -n 10 "$f" | grep -q 'SPDX-License-Identifier: CC-BY-4.0' || echo "$f"; done)" && \
   test ! -e vendor/cortex -a ! -e vendor/soma -a ! -e vendor/saga && \
+  test -f CODE_OF_CONDUCT.md -a -f MAINTAINERS.md -a -f RELEASING.md -a -f .github/CODEOWNERS && \
   ! git grep -n -E '\.ts\.net|/(home|Users)/[a-z]+/|/roo(t)/|~/(projects|\.agents|\.claude|vault|\.local|\.config|keys)|<surfaces>(s)' && \
   strings crates/uas-ebpf/ebpf/uas-ebpf.o | grep -qx 'Dual MIT/GPL'
 ```
 
-Passing means exit 0 after packages 1 to 3. The chain stops at its first red leg. Measured at
+Passing means exit 0 after packages 1 to 4. The chain stops at its first red leg. Measured at
 `7d97fa2`: `make deny hygiene` and the `strings` leg pass; the manifest, licence-file, holder, DCO,
 both SPDX, vendor and hostname/path legs are red. Package 1 turns the first six green, package 3
 the vendor leg, package 2 the hostname/path leg.
@@ -201,5 +232,9 @@ the vendor leg, package 2 the hostname/path leg.
   139 to 142, not 125 (F14); no allow-list change is needed, and the narrower example list fails
   (F10, F17); the BPF package declares `MIT OR Apache-2.0` (F3); `vendor/leanspec` is MIT and
   stays; replacing the vendored contracts does not clear them from history (D9).
+- Parked: a foundation or neutral home. PyTorch and React moved years after launch and kept
+  licence and contributor rules (F23). Not decided here.
+- Parked: the announcement text and timing (D14). the operator's call after the checklist.
+- Open: the docs build command of the D14 checklist is not named by any spec; P17 names it.
 - Out of scope: trademark use of the name `uas`, an SBOM licence field (spec 0045 D4), and
   relicensing the vendored contracts.
