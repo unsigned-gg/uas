@@ -3,7 +3,7 @@ status: complete
 created: 2026-10-09
 tags: [sandbox, security, test, phase-2]
 priority: high
-depends_on: [0010-landlock-ruleset-and-abi-probe, 0011-network-namespace-isolation]
+depends_on: [0010-landlock-ruleset-and-abi-probe, 0011-network-namespace-isolation, 0043-seccomp-syscall-filter-for-slot-workers]
 ---
 
 # 0012-sandbox-escape-suite
@@ -42,7 +42,9 @@ execute on `target/` and read on `/proc`. The matrix runs twice: once with
 Landlock and the launcher alone, and once with the network namespace added
 when the host can create one (`netns::isolate` on `/bin/true` succeeds).
 Without a namespace the network rows are reported as `skipped`, as spec
-0011 rules. Every attack prints `check=<name> result=<value>`; the parent
+0011 rules. Where `/proc/sys/kernel/seccomp/actions_avail` lacks `errno`, the
+eleven seccomp rows are reported as `skipped` and the skip is printed
+(REQ-0043-08). Every attack prints `check=<name> result=<value>`; the parent
 asserts the matrix.
 
 ### Matrix
@@ -71,6 +73,17 @@ asserts the matrix.
 | `ping_raw` | `ping -c1 -W1 1.1.1.1` | `raw-socket-denied` (stderr `socktype: SOCK_RAW`) or `no-route` | `no_new_privs` ignores file capabilities, so the raw socket cannot open; with no route it would fail anyway |
 | `interfaces` | `/proc/net/dev` | `lo` | namespace |
 | `uds_connect_out` | connect to a pathname Unix socket under `$HOME` | `ok` (measurement) | not mediated below Landlock ABI v6 |
+| `ptrace_self` | `ptrace(PTRACE_TRACEME)` | `EPERM` | seccomp (spec 0043) |
+| `keyctl_session` | `keyctl(KEYCTL_GET_KEYRING_ID)` for the session keyring | `EPERM` | seccomp (spec 0043) |
+| `bpf_syscall` | `bpf(BPF_MAP_CREATE)` | `EPERM` | seccomp (spec 0043), also capability; cannot tell the mechanisms apart |
+| `perf_open` | `perf_event_open` on the worker itself | `EPERM` | seccomp (spec 0043) |
+| `mount_tmpfs` | `mount` a tmpfs on a workspace directory | `EPERM` | seccomp (spec 0043), also capability; cannot tell the mechanisms apart |
+| `unshare_user` | `unshare(CLONE_NEWUSER)` | `EPERM` | seccomp (spec 0043) |
+| `clone_newuser` | `clone` with `CLONE_NEWUSER` | `EPERM` | seccomp (spec 0043) |
+| `raw_socket` | `socket(AF_INET, SOCK_RAW, IPPROTO_ICMP)` | `EPERM` | seccomp (spec 0043), also capability; cannot tell the mechanisms apart |
+| `io_uring` | `io_uring_setup` | `EPERM` | seccomp (spec 0043) |
+| `open_by_handle` | `open_by_handle_at` on a workspace handle | `EPERM` | seccomp (spec 0043), also capability; cannot tell the mechanisms apart |
+| `clone3_enosys` | `clone3` with a zeroed argument struct | `ENOSYS` | seccomp (spec 0043); glibc falls back to `clone` |
 
 A host without `sudo`, `ping` or `$HOME/.ssh` reports `absent` for that
 row and the parent accepts it. The parent also checks that no file appeared
@@ -122,6 +135,9 @@ The PR body says which host ran it and which rows were skipped. Also run
 The suite deliberately runs every attack in one worker. A per-attack worker
 would be cleaner to read but would take seconds per row and hide
 interactions between rows, such as the staged `/tmp` binary.
+
+Spec 0043 also lists this spec in its `depends_on`; the dependence is
+mutual and `make spec-check` has no cycle test.
 
 References:
 

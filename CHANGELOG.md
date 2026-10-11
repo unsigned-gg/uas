@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Spec 0043 wave 1 (plan 0043 P1, P5): spec 0004 pins `seccompiler` 0.5.0 for uas-sandbox and moves `libc` to a direct uas-sandbox pin at 0.2.190 (ruling 2026-10-11); spec 0012's escape matrix gains the eleven seccomp rows of spec 0043 D6, the `actions_avail` skip rule and the mutual-dependence note.
 - Specs 0044 to 0047, with 45 EARS requirements, from the second gap intake with the research lane and the plan author, drafted by four engineer agents: the host-side reverie client's behaviour when the daemon is down (fail-open reads, a write-behind outbox, a live or degraded mark on every receipt); the security disclosure and advisory policy (cargo-deny on every PR as the gate, the weekly cargo-audit as the detector, ignore entries with an expiry, the SBOM attached to releases); the saga team and topology files (a `make team-check` pre-flight stricter than saga's own loader); and slot build-cache retention (a per-slot cache root outside the worktree with a quota, so a reclaimed slot stays warm). All four are status planned; the rulings each one needs are marked proposed.
 ||||||| 7b984d0
 ||||||| 5f36d86
