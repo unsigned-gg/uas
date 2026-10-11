@@ -70,10 +70,10 @@ to read another process, and leaves every other call untouched.
 ## Plan
 
 - [x] Spec 0004: add the `seccompiler` 0.5.0 row to both tables and move the `libc` row to 0.2.190 for `uas-sandbox` (D7). Run `make pin-check`. Landed in PR #136.
-- [ ] `uas-sandbox`: `seccomp.rs` with the D2 program, `install()` for `pre_exec`, and the `JailRefused` mapping (D4).
-- [ ] `uas-sandbox`: wire `install()` into `launcher::launch` after `restrict_child` (D1).
-- [ ] Escape suite: the twelve D6 rows and the D8 timing print.
-- [ ] Spec 0012: add the rows to its matrix and this spec to its `depends_on`.
+- [x] `uas-sandbox`: `seccomp.rs` with the D2 program, `install()` for `pre_exec`, and the `JailRefused` mapping (D4). Landed in PR #139.
+- [x] `uas-sandbox`: wire `install()` into `launcher::launch` after `restrict_child` (D1). Landed in PR #141.
+- [x] Escape suite: the twelve D6 rows and the D8 timing print. Landed in PR #142.
+- [x] Spec 0012: add the rows to its matrix and this spec to its `depends_on`. Eleven rows landed in PR #136; the `x32_syscall` row lands with branch `docs/spec-amendments-2026-10-11`, not yet on `development`.
 
 ## Test
 
@@ -98,3 +98,4 @@ Passing means exit 0 with every seccomp row at the result D6 names for it, or `s
 - Out of scope: an allow-list mode, syscall argument inspection beyond D2, and logging of denials. Spec 0014's eBPF audit probes are the place for a denial counter if one is wanted.
 - The research lane proposed two further sandbox items, a zero-copy memfd IPC and an L7 prompt firewall. Both are design drafts with no code and no consumer; they are parked, not specified.
 - Status in-progress, ruled: integrating lane w25:p1, 2026-10-11. Landed on `development`: PR #136 (wave 1: the `seccompiler` and `libc` pins, the spec 0012 rows), PR #139 (wave 2: `seccomp.rs` with `build` and `install`) and PR #141 (wave 3: `launch` installs the filter last in `pre_exec`). PR #142 (wave 4) then added the D6 rows, `x32_syscall` among them, and the D8 timing print to `crates/uas-sandbox/tests/escapes.rs` [reported: `uas@20832e5`, its subject and the file's line 9].
+- Amended 2026-10-11 (source: `git log origin/development` for `crates/uas-sandbox/src/seccomp.rs` and `tests/escapes.rs`, merges of PRs #136, #139, #141, #142): the Plan boxes are ticked for what those PRs delivered. D2 already records the two programs (`EPERM` list, `ENOSYS` for `clone3`) and the x32 kill; spec 0012 now carries the `x32_syscall` row.
