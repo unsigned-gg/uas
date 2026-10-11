@@ -1,0 +1,32 @@
+# Canned answers of the fake `blackwall` for the wave smoke parity run (spec 0049 REQ-05).
+# Ordered [[rule]] tables: `pat` is a shell `case` glob over the joined argv, the first match
+# wins, `out` goes to stdout, `err` to stderr, `code` is the exit status.
+[[rule]]
+pat = "start --task wave-smoke-build *"
+out = ""
+err = "✓ run sonnet (ok): hash bwrun0000001 (new)\n✓ changeset: chg000000001 (1 entries)\n"
+code = 0
+
+[[rule]]
+pat = "settle *"
+out = ""
+err = ""
+code = 0
+
+[[rule]]
+pat = "reconcile *"
+out = ""
+err = ""
+code = 0
+
+[[rule]]
+pat = "pr *"
+out = "opened https://github.com/unsigned-gg/uas/pull/57\n"
+err = ""
+code = 0
+
+[[rule]]
+pat = "*"
+out = ""
+err = ""
+code = 0
