@@ -191,7 +191,7 @@ P7 and P8 start from a `development` that already holds P4 (the Markdown set shr
 - **Done-when:** `grep -c -i -E 'pre-1.0|no stability|not for production' README.md && make oss-check JOBS=2` exits 0.
 - **Red-first:** `mkdir vendor/x && touch vendor/x/f` and watch `oss-check` fail naming `vendor/x`; with `vendor/leanspec` alone it passes (the control). Remove the scratch directory.
 
-### P17: the launch checklist (BLOCKED on P13)
+### P17: the launch checklist (drafted; execution blocked on P13)
 - **Persona:** `uas-engineer`.
 - **BLOCKED:** needs the cut date and the repository name (P13). The file can be drafted before, but the go item is the operator's and the docs build command is not named by any spec; the builder names it and says it is `asserted`.
 - **Files:** `engineering/plans/0048-launch-checklist.md` (new). Items, each a `- [ ]` line with its command: `make hygiene` and `make oss-check` green; a secret scan of the whole tree (the scanner and its command named in the file); licence files and SPDX complete (the fenced spec command exits 0); the docs build green; the operator's explicit sign-off on the operator names (spec D7, Notes); then the operator's go. Announcement is out of the file: a parked decision (spec D14).
