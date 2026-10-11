@@ -1,5 +1,5 @@
 ---
-status: planned
+status: in-progress
 created: 2026-10-10
 tags: [saga, cpm, wave, migration, custody]
 priority: high
@@ -9,7 +9,7 @@ depends_on: [0008-soma-cortex-saga-reverie-integration, 0022-custody-landing, 00
 
 # 0049-cpm-migration-to-saga
 
-> **Status**: planned, **Priority**: high, **Created**: 2026-10-10
+> **Status**: in-progress, **Priority**: high, **Created**: 2026-10-10
 
 ## Overview
 
