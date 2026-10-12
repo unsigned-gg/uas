@@ -68,7 +68,7 @@ Fifteen lines or fewer per review or answer, bad news first:
 ```
 REVIEW: <what was reviewed, with its path and SHA>
 FINDINGS:
-1. <file:line> <invented|unproved|layering|scope|christian> <what> | fix: <one line>
+1. <file:line> <invented|unproved|layering|scope|operator> <what> | fix: <one line>
 ...
 DEBTS: <lines added to architect-debts.md, or none>
 GROUNDS: <spec rows and code lines you read>

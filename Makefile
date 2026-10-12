@@ -60,10 +60,19 @@ hook-test: ## Run the Claude Code hook tests
 # The vendor LICENSE leg is spec 0048 D16 (plan P16).
 # Each alternative is written so that this text does not match its own pattern.
 OSS_PATTERN := \.ts\.net|/(home|Users)/[a-z]+/|/roo(t)/|~/(projects|\.agents|\.claude|vault|\.local|\.config|keys)|/tmp/research-surface(s)
+# Spec 0048 D20, REQ-0048-21: operator names become roles. The four kept files name a maintainer
+# and a contact on purpose. The names are spelt so that this line and scripts/public-history.sh do
+# not match themselves and survive the public rewrite. The CTO's surname is also a colour word
+# (spec 0018 D5) and is not in the pattern; the first name is.
+NAMES_PATTERN := [Cc]hris[t]ian|Tod[i]e|Al[l]en|Hack[l]ey|Patr[i]ck
+NAMES_KEEP := ':!MAINTAINERS.md' ':!.github/CODEOWNERS' ':!SECURITY.md' ':!CODE_OF_CONDUCT.md'
 
 oss-check: ## No tailnet hostname or operator path, no removed vendor directory, a LICENSE in each vendor directory (spec 0048)
 	@bad=0
 	if git grep -n -E -e '$(OSS_PATTERN)'; then echo "oss-check: tracked files above hold a hostname or operator path" >&2; bad=1; fi
+	if git grep -n -E -e '$(NAMES_PATTERN)' -- $(NAMES_KEEP); then echo "oss-check: tracked files above name an operator; write the role (spec 0048 D20)" >&2; bad=1; fi
+	if ! grep -q -F "oss_pattern='$(OSS_PATTERN)'" scripts/public-history.sh; then echo "oss-check: scripts/public-history.sh oss_pattern differs from OSS_PATTERN" >&2; bad=1; fi
+	if ! grep -q -F "names_pattern='$(NAMES_PATTERN)'" scripts/public-history.sh; then echo "oss-check: scripts/public-history.sh names_pattern differs from NAMES_PATTERN" >&2; bad=1; fi
 	for d in vendor/cortex vendor/soma vendor/saga; do if [ -e "$$d" ]; then echo "oss-check: $$d must not exist; contracts live in .contracts/ (make fetch-contracts)" >&2; bad=1; fi; done
 	for d in vendor/*/; do d=$${d%/}; [ -d "$$d" ] || continue; if [ ! -f "$$d/LICENSE" ]; then echo "oss-check: $$d has no LICENSE file" >&2; bad=1; fi; done
 	exit $$bad

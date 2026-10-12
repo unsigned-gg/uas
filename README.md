@@ -4,12 +4,29 @@ UAS is the Unsigned Agent Substrate. It is a Rust-native, pooled runtime for age
 harnesses. The design calls for durable workflows, kernel confinement, prefix-aware
 model routing and an operator dashboard.
 
-**Status:** scaffold and domain; no runtime yet. Version 0.1.0. Private. Licensed
+**Status:** scaffold and domain; no runtime yet. Version 0.1.0. Private until the spec 0048
+cut; the public form is `unsigned-gg/od`. Licensed
 `Apache-2.0 OR MIT` (see `LICENSE-APACHE`, `LICENSE-MIT` and `NOTICE`). The design is a draft from `cerebral-work/research@4068134`.
 
 **Support:** This project is pre-1.0.
 It makes no stability or support promise, and any interface may change without notice.
 Example code is not for production.
+
+## Purpose
+
+This repository is an instrument as much as a product. It is designed to generate a
+trace corpus of agents implementing complicated Rust, and to experiment with agentic
+swarm orchestration in the software development lifecycle. Agent swarms write the specs,
+plans, code, tests and reviews here under the rules in [AGENTS.md](AGENTS.md). The corpus is
+what they leave in the tree: specs with tiered facts, plans with waves and done-when
+commands, critic findings, and the commit history. Session transcripts are not in the tree.
+
+The public repository `unsigned-gg/od` ("od", for "TTY overdrive") will carry this tree with its
+full history once the spec 0048 cut is made. That history is a reconstruction: each commit is attributed to a bot persona
+by its role (integrator, engineer, builder, ebpf-builder), hostnames, paths and personal
+names are replaced, and the imported commits are unsigned. Commits after the cut are
+signed. The rewrite is `scripts/public-history.sh`; its rules are in
+[specs/0048](specs/0048-licence-and-publication.md).
 
 ## Crates
 

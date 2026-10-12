@@ -1,7 +1,7 @@
 # Pane topologies for uas, read by bifrost::yggdrasil from .saga/ when saga runs here.
 # Overlay on saga's built-in catalog (cockpit-grid and the others stay available).
 #
-# estate-cockpit (Christian, 2026-10-10, in session, lane w25:p1 interview): nine panes in three
+# estate-cockpit (the operator, 2026-10-10, in session, lane w25:p1 interview): nine panes in three
 # columns. Left: lead, spec designer, architect. Middle: three builders. Right: engineer, critic,
 # prober. Slot roles are the Norse catalog; the team file sets harness, effort and persona.
 # Apply: cd <repo> && saga yggdrasil topology apply estate-cockpit (splits panes, starts no agent).

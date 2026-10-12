@@ -1,7 +1,7 @@
 # Agent teams for uas, read by bifrost::yggdrasil when saga runs from this repo.
 # Overlay on saga's built-in catalog; the estate-cockpit topology is in .saga/topologies.toml.
 #
-# uas-estate is the pane gang for multi-package waves (Christian, 2026-10-10, in session, lane
+# uas-estate is the pane gang for multi-package waves (the operator, 2026-10-10, in session, lane
 # w25:p1 interview): architect on fable (mimir, this lane's persona), agy as spec designer
 # (mimir on the agy harness), engineer on opus (sindri, effort high), foreman on sonnet
 # (brokkr, effort medium), three builders on sonnet (sindri, effort medium; the 2026-10-10

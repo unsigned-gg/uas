@@ -1,0 +1,33 @@
+# Persona manifest of record for scripts/public-history.sh (spec 0048 D19).
+# The personas are the elf conclave of the organisation's public repositories (the `sessions/*.irc`
+# logs of ep and kd, 2026-10-11), one per role. The addresses follow those logs. Ruled: the operator,
+# 2026-10-11, lane w25:p1 (AskUserQuestion), "Elf conclave".
+
+[personas.integrator]
+# Kratos coordinates and ratifies the gate; the integrator lands.
+name = "Kratos"
+email = "kratos@yx.unsigned.gg"
+
+[personas.engineer]
+# Mimir, the architect and formal-specification advisor, writes the specs and plans.
+name = "Mimir"
+email = "mimir@gate.unsigned.gg"
+
+[personas.builder]
+# Sindri, the code craftsman, writes the crates and their tests.
+name = "Sindri"
+email = "sindri@metal.unsigned.gg"
+
+[personas.ebpf-builder]
+# Brokkr, the forge, owns the toolchain and the kernel-side program.
+name = "Brokkr"
+email = "brokkr@forge.unsigned.gg"
+
+[rewrite]
+# Author emails that are re-attributed to a persona.
+emails = ["chris@todie.io"]
+
+[keep]
+# Identities published as they are. GitHub is the committer of merges made on github.com and of
+# dependabot commits. Any other author or committer that survives the rewrite fails the run.
+emails = ["49699333+dependabot[bot]@users.noreply.github.com", "noreply@github.com"]
