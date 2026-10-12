@@ -252,16 +252,23 @@ the vendor leg, package 2 the hostname/path leg.
   the operator, lane w25:p1, 2026-10-11].
 - Superseded by D20 (2026-10-11): operator names in decision attributions were kept under D7;
   they now become roles across the tree.
-- Measured 2026-10-11, lane w25:p1, on the package 5 branch at `c57d26b` (a ref that holds
-  `scripts/public-history.sh`), with `engineering/plans/0048-personas.toml` [verified]:
-  the script exits 0 and prints `ok`; 1061 commits (1061 on the ref, one emptied commit pruned,
-  one restore commit added); authors integrator 488, engineer 335, builder 230, ebpf-builder 7,
-  dependabot 1; no tag in the output (the ref has one); `make oss-check` exits 0 inside the
-  output; the output's `Makefile` and script are byte-identical to the ref's; `MAINTAINERS.md`
-  at the output head names the maintainer; no blob or message in any revision starts a sentence
-  with a lowercase role. Red controls: a manifest whose `[rewrite]` omits the operator address
-  exits 1 naming `chris@todie.io`; the unrewritten ref, scanned with the same blob and message
-  patterns, has 54245 matching blobs and 65 matching message lines.
+- Measured 2026-10-11, lane w25:p1, on the package 5 branch at `d2933f2` (a ref that holds
+  `scripts/public-history.sh`; 1061 commits; no tag reachable), with the manifest of record
+  `engineering/plans/0048-personas.toml` [verified]: the script exits 0 and prints `ok`; 1061
+  commits (one emptied commit pruned, one restore commit added); authors Kratos 488, Mimir 335,
+  Sindri 230, Brokkr 7, dependabot 1; no tag in the output; the output's `Makefile` and script are
+  byte-identical to the ref's; `MAINTAINERS.md` at the output head names the maintainer; no blob or
+  message in any revision has a lowercase role after a full stop, and the literal `\1The` appears
+  only in the script's own rule text. The unix identifiers survive: `ctodie` matches 3820 blob
+  versions in 9 paths of the rewritten history, among them the retired `crates/cas-*` paths
+  (`git -C <dir> grep -l -E ctodie $(git -C <dir> rev-list --all)`).
+- Controls, same day and ref [verified]: a manifest whose `[rewrite]` omits the operator address
+  exits 1 naming `chris@todie.io`; a `git` shim that refuses `rev-list --all` inside the
+  verification exits 1 with "git rev-list failed" and "no revision to scan"; a clone of `main`
+  holds 1 tag (`v0.1.0`) without `--no-tags` and 0 with it. The unrewritten ref, scanned as the
+  legs scan (`git grep -l -E <pattern> $(git rev-list <ref>)`, the names leg with the four kept
+  files excluded), has 9869 path-leg blob versions, 50035 names-leg blob versions (54851 in their
+  union) and 65 matching message lines.
 - Open: whether the imported public history is re-signed with a persona key before the push.
   D19 publishes it unsigned; re-signing about 1,060 commits is a separate act and a ruling.
 - No counsel has reviewed D3. It rests on the kernel's own document and the object's MIT arm
