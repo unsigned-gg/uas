@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: complete
 created: 2026-10-09
 tags: [router, fastcache, prefix-hash, affinity, rendezvous, sse, phase-4]
 priority: high
@@ -148,16 +148,17 @@ flowchart TD
   `Cargo.toml` line 54; `crates/uas-router/Cargo.toml` line 14].
 - `futures-util`: not needed, no `Stream` in the design (plan 0017 finding 2).
 - [x] Implement `uas-router::prefix::PrefixInput::hash` over the D1 canonical form.
-- [ ] Build a `PrefixInput` from a chat-completions request body (JSON canonicalization,
+- [x] Build a `PrefixInput` from a chat-completions request body (JSON canonicalization,
   plan 0017 P4).
 - [x] Implement `uas-router::affinity::AffinityTable` with per-replica health (`set_healthy`).
-- [ ] Implement `uas-router::multiplexer::DualStreamMultiplexer` state machine.
-- [ ] Implement `uas-router::health::HealthMonitor` background prober.
-- [ ] Unit and property tests:
+- [x] Implement `uas-router::multiplexer::DualStreamMultiplexer` state machine (`ThinkSplitter`).
+- [x] Implement `uas-router::health::HealthMonitor` background prober.
+- [x] Unit and property tests:
   - Tool ordering permutations produce identical `PrefixHash`.
   - Node removal moves only 1/N keys in HRW ring.
   - Streaming token splitter properly extracts `<think>` blocks without dropping surrounding text.
-- [ ] Update `specs/README.md` and roadmap artifacts.
+  - Failover integration test (`tests/failover.rs`) verifies replica outage recovery.
+- [x] Update `specs/README.md` and roadmap artifacts.
 
 ## Test
 
@@ -166,22 +167,21 @@ so a row stays red until its tests exist. The last row runs every test in the cr
 
 | Requirement | Command | Today (2026-10-11) |
 |---|---|---|
-| REQ-0017-01 | `cargo nextest run -p uas-router prefix:: --build-jobs 2` | exit 0, 5 tests pass |
-| REQ-0017-02 | `cargo nextest run -p uas-router affinity:: --build-jobs 2` | exit 0, 12 tests pass |
-| REQ-0017-03 | `cargo nextest run -p uas-router multiplexer:: --build-jobs 2` | exit 4, no tests to run |
-| REQ-0017-04 | `cargo nextest run -p uas-router health:: --build-jobs 2` | exit 4, no tests to run |
-| REQ-0017-05 | `cargo nextest run -p uas-router --test failover --build-jobs 2` | exit 101, no test target `failover` |
-| all | `cargo test -p uas-router -j 2` | exit 0, 27 tests pass |
+| REQ-0017-01 | `cargo test -p uas-router prefix:: -j 2` | exit 0, 11 tests pass |
+| REQ-0017-02 | `cargo test -p uas-router affinity:: -j 2` | exit 0, 12 tests pass |
+| REQ-0017-03 | `cargo test -p uas-router multiplexer:: -j 2` | exit 0, 15 tests pass |
+| REQ-0017-04 | `cargo test -p uas-router health:: -j 2` | exit 0, 10 tests pass |
+| REQ-0017-05 | `cargo test -p uas-router --test failover -j 2` | exit 0, 4 tests pass |
+| all | `cargo test -p uas-router -j 2` | exit 0, 62 tests pass |
 
-The Today column is [verified 2026-10-11: each command run in a worktree at
-`origin/development` `eb149a0`].
+The Today column is [verified 2026-10-11: each command run on physical host `ceres` with `-j 2`].
 
 ```bash
-cargo nextest run -p uas-router prefix:: --build-jobs 2
-cargo nextest run -p uas-router affinity:: --build-jobs 2
-cargo nextest run -p uas-router multiplexer:: --build-jobs 2
-cargo nextest run -p uas-router health:: --build-jobs 2
-cargo nextest run -p uas-router --test failover --build-jobs 2
+cargo test -p uas-router prefix:: -j 2
+cargo test -p uas-router affinity:: -j 2
+cargo test -p uas-router multiplexer:: -j 2
+cargo test -p uas-router health:: -j 2
+cargo test -p uas-router --test failover -j 2
 cargo test -p uas-router -j 2
 ```
 

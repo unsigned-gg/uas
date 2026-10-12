@@ -22,7 +22,7 @@ Methodology: LeanSpec. The reference copy is in `../vendor/leanspec/`.
 | [0014](0014-ebpf-priority-clamping-and-audit-probes.md) | eBPF priority clamping and audit probes | in-progress | high |
 | [0015](0015-slot-pool-cgroup-freezer-and-gitoxide.md) | Slot pool, cgroup freezer, and gitoxide worktrees | in-progress | high |
 | [0016](0016-zed-agent-communication-protocol.md) | Zed Agent Communication Protocol (ACP) server | complete | high |
-| [0017](0017-fastcache-prefix-hashing-and-affinity-routing.md) | FastCache prefix hashing and affinity routing | in-progress | high |
+| [0017](0017-fastcache-prefix-hashing-and-affinity-routing.md) | FastCache prefix hashing and affinity routing | complete | high |
 | [0018](0018-mad-stack-operator-deck-and-settle-queue.md) | MAD stack operator deck and settle queue | in-progress | high |
 | [0019](0019-pool-runtime-decision.md) | Pool runtime decision | complete | high |
 | [0020](0020-build-job-cap.md) | Build job cap | complete | high |
