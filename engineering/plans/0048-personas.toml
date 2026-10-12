@@ -1,27 +1,29 @@
 # Persona manifest of record for scripts/public-history.sh (spec 0048 D19).
 # The personas are the elf conclave of the organisation's public repositories (the `sessions/*.irc`
-# logs of ep and kd, 2026-10-11), one per role. The addresses follow those logs. Ruled: the operator,
-# 2026-10-11, lane w25:p1 (AskUserQuestion), "Elf conclave".
+# logs of ep and kd, 2026-10-11), one per role. Ruled: the operator, 2026-10-11, lane w25:p1
+# (AskUserQuestion), "Elf conclave". The addresses are the git principals of the organisation's
+# signing registry, `.harness/allowed_signers` in kl, kd and gs (read 2026-10-11), so a later
+# re-signing can verify; the IRC logs' `name@host.unsigned.gg` forms are chat hostmasks.
 
 [personas.integrator]
 # Kratos coordinates and ratifies the gate; the integrator lands.
 name = "Kratos"
-email = "kratos@yx.unsigned.gg"
+email = "kratos@unsigned.gg"
 
 [personas.engineer]
 # Mimir, the architect and formal-specification advisor, writes the specs and plans.
 name = "Mimir"
-email = "mimir@gate.unsigned.gg"
+email = "mimir@unsigned.gg"
 
 [personas.builder]
 # Sindri, the code craftsman, writes the crates and their tests.
 name = "Sindri"
-email = "sindri@metal.unsigned.gg"
+email = "sindri@unsigned.gg"
 
 [personas.ebpf-builder]
 # Brokkr, the forge, owns the toolchain and the kernel-side program.
 name = "Brokkr"
-email = "brokkr@forge.unsigned.gg"
+email = "brokkr@unsigned.gg"
 
 [rewrite]
 # Author emails that are re-attributed to a persona.
