@@ -1,5 +1,5 @@
 ---
-status: planned
+status: in-progress
 created: 2026-10-11
 tags: [providers, streaming, adapter, events, jsonrpc, acp, engine, harnesses]
 priority: high
@@ -9,7 +9,7 @@ depends_on: [0001-cas-architecture-and-crate-layout, 0006-cas-engine-and-harness
 
 # 0061-agent-harness-adapter-streaming-and-event-translation
 
-> **Status**: planned · **Priority**: high · **Created**: 2026-10-11
+> **Status**: in-progress · **Priority**: high · **Created**: 2026-10-11
 
 ## Overview
 
@@ -56,12 +56,12 @@ The `uas-engine` crate implements a streaming adapter pipeline:
 
 ## Plan
 
-- [ ] Define `HarnessEvent` and `TokenMetrics` types in `uas-engine`.
-- [ ] Implement `StreamTranslator` with newline delimiter parsing and 1 MiB frame limit protection.
+- [x] Define `HarnessEvent` and `TokenMetrics` types in `uas-engine`.
+- [x] Implement `StreamTranslator` with newline delimiter parsing and 1 MiB frame limit protection.
 - [ ] Implement `ClaudeStreamParser`, `AgyStreamParser`, and `OmpStreamParser` modules.
-- [ ] Implement `MockStreamGenerator` for deterministic localhost test replay.
+- [x] Implement `MockStreamGenerator` for deterministic localhost test replay.
 - [ ] Wire stream events into `WorkflowSession::handle_event` and event store persistence.
-- [ ] Add unit and integration tests covering normal streams, malformed line recovery, and mock replay.
+- [x] Add unit and integration tests covering normal streams, malformed line recovery, and mock replay.
 
 ## Test
 

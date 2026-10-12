@@ -63,6 +63,7 @@ pub mod cortex_pool;
 mod cpm;
 mod error;
 mod event;
+mod harness;
 mod landing;
 mod reverie;
 mod saga;
@@ -81,6 +82,10 @@ pub use cortex::{CortexMeshEvent, MeshIntent, SettleCard, SettleQueue, SettleSta
 pub use cpm::{CpmSchedule, CpmStepSchedule};
 pub use error::EngineError;
 pub use event::{EventStore, InMemoryEventStore, WaveOutcome, WorkflowEvent};
+pub use harness::{
+    HarnessEvent, MockStreamGenerator, StreamTranslator, TokenMetrics,
+    MAX_FRAME_BYTES as MAX_HARNESS_FRAME_BYTES,
+};
 pub use landing::{
     LandingActivity, LandingConfig, LandingError, LandingInput, LandingOutcome, ReconcileOutcome,
 };
