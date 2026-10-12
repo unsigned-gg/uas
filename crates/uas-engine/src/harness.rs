@@ -4,9 +4,14 @@
 //! Translates process output from agent harnesses into typed substrate events,
 //! aggregates token usage metrics, and enforces frame size safety boundaries.
 
+use std::collections::BTreeMap;
 use std::io::{BufRead, Read};
+use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
+use uas_domain::{LeaseId, Provider, SlotId};
+
+use crate::{EngineError, SessionId};
 
 /// Maximum frame size in bytes (1 MiB).
 ///
@@ -546,6 +551,317 @@ impl HarnessStreamParser for OmpStreamParser {
     }
 }
 
+/// An assembled harness process invocation (spec 0062).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct HarnessInvocation {
+    /// Target executable path or binary name.
+    pub program: PathBuf,
+    /// Ordered command-line arguments.
+    pub args: Vec<String>,
+    /// Sanitized environment variables.
+    pub env: BTreeMap<String, String>,
+    /// Working directory for the process.
+    pub current_dir: PathBuf,
+}
+
+/// Allowed ambient environment variable keys that are safe to inherit (spec 0062).
+pub const ALLOWED_AMBIENT_ENV: &[&str] = &[
+    "PATH", "USER", "LOGNAME", "LANG", "LC_ALL", "LC_CTYPE", "TERM", "TZ", "SHELL",
+];
+
+/// Substrings that immediately disqualify an environment variable as a secret (spec 0062).
+pub const SECRET_ENV_PATTERNS: &[&str] = &[
+    "KEY",
+    "TOKEN",
+    "SECRET",
+    "PASSWORD",
+    "PASSWD",
+    "CRED",
+    "AUTH",
+    "BEARER",
+    "SIGNATURE",
+];
+
+/// Checks if an environment variable key matches a secret pattern.
+#[must_use]
+pub fn is_secret_env_key(key: &str) -> bool {
+    let upper = key.to_ascii_uppercase();
+    SECRET_ENV_PATTERNS.iter().any(|pat| upper.contains(pat))
+}
+
+/// Sanitized environment builder for agent harness processes (spec 0062).
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct HarnessEnv {
+    vars: BTreeMap<String, String>,
+}
+
+impl HarnessEnv {
+    /// Creates an empty sanitized environment.
+    #[must_use]
+    pub fn new() -> Self {
+        Self {
+            vars: BTreeMap::new(),
+        }
+    }
+
+    /// Inherits safe ambient variables from the host environment, scrubbing secrets.
+    pub fn inherit_safe_ambient(&mut self) -> &mut Self {
+        for (k, v) in std::env::vars() {
+            if ALLOWED_AMBIENT_ENV.contains(&k.as_str()) && !is_secret_env_key(&k) {
+                self.vars.insert(k, v);
+            }
+        }
+        self
+    }
+
+    /// Sets an explicit environment variable, refusing known secret patterns.
+    pub fn set(
+        &mut self,
+        key: impl Into<String>,
+        val: impl Into<String>,
+    ) -> Result<&mut Self, EngineError> {
+        let k = key.into();
+        let v = val.into();
+        if is_secret_env_key(&k) {
+            return Err(EngineError::PolicyViolation(format!(
+                "attempted to inject secret variable {k} into sanitized harness environment"
+            )));
+        }
+        self.vars.insert(k, v);
+        Ok(self)
+    }
+
+    /// Injects slot identity metadata into the environment.
+    pub fn inject_slot_identity(
+        &mut self,
+        slot_id: &SlotId,
+        lease_id: &LeaseId,
+        session_id: &SessionId,
+        provider: Provider,
+        model: &str,
+    ) -> &mut Self {
+        self.vars
+            .insert("UAS_SLOT_ID".into(), slot_id.as_str().into());
+        self.vars
+            .insert("UAS_LEASE_ID".into(), lease_id.as_str().into());
+        self.vars
+            .insert("UAS_SESSION_ID".into(), session_id.as_str().into());
+        self.vars
+            .insert("UAS_PROVIDER".into(), provider.as_str().into());
+        self.vars.insert("UAS_MODEL".into(), model.into());
+        self
+    }
+
+    /// Injects proxy settings pointing to the local proxy endpoint.
+    pub fn inject_proxy(&mut self, proxy_url: &str) -> &mut Self {
+        self.vars.insert("HTTP_PROXY".into(), proxy_url.into());
+        self.vars.insert("HTTPS_PROXY".into(), proxy_url.into());
+        self.vars.insert("ALL_PROXY".into(), proxy_url.into());
+        self.vars.insert("http_proxy".into(), proxy_url.into());
+        self.vars.insert("https_proxy".into(), proxy_url.into());
+        self.vars.insert("all_proxy".into(), proxy_url.into());
+        self
+    }
+
+    /// Isolates config directories to the slot scratch and configuration path.
+    pub fn isolate_config_dirs(&mut self, slot_path: &Path) -> &mut Self {
+        let config_dir = slot_path.join(".config");
+        self.vars
+            .insert("HOME".into(), slot_path.to_string_lossy().into());
+        self.vars.insert(
+            "XDG_CONFIG_HOME".into(),
+            config_dir.to_string_lossy().into(),
+        );
+        self.vars.insert(
+            "CLAUDE_CONFIG_DIR".into(),
+            config_dir.join("claude").to_string_lossy().into(),
+        );
+        self.vars.insert(
+            "AGY_CONFIG_DIR".into(),
+            config_dir.join("agy").to_string_lossy().into(),
+        );
+        self
+    }
+
+    /// Returns the compiled environment map.
+    #[must_use]
+    pub fn into_map(self) -> BTreeMap<String, String> {
+        self.vars
+    }
+
+    /// Returns a reference to the environment map.
+    #[must_use]
+    pub fn as_map(&self) -> &BTreeMap<String, String> {
+        &self.vars
+    }
+}
+
+/// Builder for constructing provider-specific CLI invocations (spec 0062).
+#[derive(Debug, Clone)]
+pub struct HarnessCommandBuilder {
+    provider: Provider,
+    slot_path: PathBuf,
+    model: Option<String>,
+    proxy_url: Option<String>,
+    slot_id: Option<SlotId>,
+    lease_id: Option<LeaseId>,
+    session_id: Option<SessionId>,
+    extra_env: BTreeMap<String, String>,
+}
+
+impl HarnessCommandBuilder {
+    /// Creates a new builder for the designated provider and slot directory.
+    pub fn new(provider: Provider, slot_path: impl Into<PathBuf>) -> Self {
+        Self {
+            provider,
+            slot_path: slot_path.into(),
+            model: None,
+            proxy_url: None,
+            slot_id: None,
+            lease_id: None,
+            session_id: None,
+            extra_env: BTreeMap::new(),
+        }
+    }
+
+    /// Sets the model override.
+    pub fn with_model(&mut self, model: impl Into<String>) -> &mut Self {
+        self.model = Some(model.into());
+        self
+    }
+
+    /// Sets the socket proxy endpoint.
+    pub fn with_proxy(&mut self, proxy_url: impl Into<String>) -> &mut Self {
+        self.proxy_url = Some(proxy_url.into());
+        self
+    }
+
+    /// Sets the slot identity parameters.
+    pub fn with_slot_identity(
+        &mut self,
+        slot_id: SlotId,
+        lease_id: LeaseId,
+        session_id: SessionId,
+    ) -> &mut Self {
+        self.slot_id = Some(slot_id);
+        self.lease_id = Some(lease_id);
+        self.session_id = Some(session_id);
+        self
+    }
+
+    /// Adds an extra safe environment variable.
+    pub fn with_env(
+        &mut self,
+        key: impl Into<String>,
+        val: impl Into<String>,
+    ) -> Result<&mut Self, EngineError> {
+        let k = key.into();
+        let v = val.into();
+        if is_secret_env_key(&k) {
+            return Err(EngineError::PolicyViolation(format!(
+                "prohibited secret variable {k} in extra_env"
+            )));
+        }
+        self.extra_env.insert(k, v);
+        Ok(self)
+    }
+
+    /// Validates the prompt and builds the complete execution invocation.
+    pub fn build(&self, prompt: &str) -> Result<HarnessInvocation, EngineError> {
+        if prompt.trim().is_empty() {
+            return Err(EngineError::InvalidCommandInput {
+                reason: "task prompt must not be empty or whitespace".into(),
+            });
+        }
+        if prompt.contains('\0') {
+            return Err(EngineError::InvalidCommandInput {
+                reason: "task prompt contains forbidden null byte".into(),
+            });
+        }
+
+        let model = self
+            .model
+            .as_deref()
+            .unwrap_or_else(|| self.provider.default_model());
+
+        let mut env = HarnessEnv::new();
+        env.inherit_safe_ambient();
+        env.isolate_config_dirs(&self.slot_path);
+
+        if let (Some(slot_id), Some(lease_id), Some(session_id)) =
+            (&self.slot_id, &self.lease_id, &self.session_id)
+        {
+            env.inject_slot_identity(slot_id, lease_id, session_id, self.provider, model);
+        }
+
+        if let Some(proxy) = &self.proxy_url {
+            env.inject_proxy(proxy);
+        }
+
+        for (k, v) in &self.extra_env {
+            env.set(k.clone(), v.clone())?;
+        }
+
+        let (program, args) = match self.provider {
+            Provider::Claude => (
+                PathBuf::from("claude"),
+                vec![
+                    "--print".into(),
+                    "--output-format".into(),
+                    "json".into(),
+                    "-p".into(),
+                    prompt.into(),
+                    "--dangerously-skip-permissions".into(),
+                ],
+            ),
+            Provider::Agy => (
+                PathBuf::from("agy"),
+                vec![
+                    "run".into(),
+                    "--stream".into(),
+                    "--format".into(),
+                    "jsonl".into(),
+                    "--prompt".into(),
+                    prompt.into(),
+                ],
+            ),
+            Provider::Omp => (
+                PathBuf::from("omp"),
+                vec![
+                    "exec".into(),
+                    "--json".into(),
+                    "--prompt".into(),
+                    prompt.into(),
+                ],
+            ),
+            Provider::Codex => (
+                PathBuf::from("codex"),
+                vec!["exec".into(), "--json".into(), prompt.into()],
+            ),
+            Provider::Gateway => (
+                PathBuf::from("uas-gateway-client"),
+                vec![
+                    "--model".into(),
+                    model.into(),
+                    "--prompt".into(),
+                    prompt.into(),
+                ],
+            ),
+            Provider::Mock => (
+                PathBuf::from("mock-harness"),
+                vec!["--task".into(), prompt.into()],
+            ),
+        };
+
+        Ok(HarnessInvocation {
+            program,
+            args,
+            env: env.into_map(),
+            current_dir: self.slot_path.clone(),
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
 
@@ -765,5 +1081,107 @@ mod tests {
 
         let replayed = WorkflowSession::replay_from_events(session_id, session.events()).unwrap();
         assert_eq!(replayed.events().len(), 2);
+    }
+
+    #[test]
+    fn harness_command_builder_constructs_canonical_argv() {
+        let slot_dir = PathBuf::from("/tmp/uas-slot-test");
+        let builder = HarnessCommandBuilder::new(Provider::Claude, &slot_dir);
+        let inv = builder.build("run tests").unwrap();
+        assert_eq!(inv.program, PathBuf::from("claude"));
+        assert_eq!(
+            inv.args,
+            vec![
+                "--print",
+                "--output-format",
+                "json",
+                "-p",
+                "run tests",
+                "--dangerously-skip-permissions"
+            ]
+        );
+        assert_eq!(inv.current_dir, slot_dir);
+
+        let agy_builder = HarnessCommandBuilder::new(Provider::Agy, &slot_dir);
+        let agy_inv = agy_builder.build("fix bugs").unwrap();
+        assert_eq!(agy_inv.program, PathBuf::from("agy"));
+        assert_eq!(
+            agy_inv.args,
+            vec!["run", "--stream", "--format", "jsonl", "--prompt", "fix bugs"]
+        );
+
+        let omp_builder = HarnessCommandBuilder::new(Provider::Omp, &slot_dir);
+        let omp_inv = omp_builder.build("refactor module").unwrap();
+        assert_eq!(omp_inv.program, PathBuf::from("omp"));
+        assert_eq!(
+            omp_inv.args,
+            vec!["exec", "--json", "--prompt", "refactor module"]
+        );
+
+        let mock_builder = HarnessCommandBuilder::new(Provider::Mock, &slot_dir);
+        let mock_inv = mock_builder.build("mock task").unwrap();
+        assert_eq!(mock_inv.program, PathBuf::from("mock-harness"));
+        assert_eq!(mock_inv.args, vec!["--task", "mock task"]);
+    }
+
+    #[test]
+    fn harness_command_builder_validates_prompt() {
+        let slot_dir = PathBuf::from("/tmp/uas-slot-test");
+        let builder = HarnessCommandBuilder::new(Provider::Mock, &slot_dir);
+
+        let empty_res = builder.build("   ");
+        assert!(matches!(
+            empty_res,
+            Err(EngineError::InvalidCommandInput { .. })
+        ));
+
+        let null_res = builder.build("invalid\0prompt");
+        assert!(matches!(
+            null_res,
+            Err(EngineError::InvalidCommandInput { .. })
+        ));
+    }
+
+    #[test]
+    fn harness_env_scrubs_secret_patterns() {
+        assert!(is_secret_env_key("GITHUB_TOKEN"));
+        assert!(is_secret_env_key("AWS_SECRET_ACCESS_KEY"));
+        assert!(is_secret_env_key("DB_PASSWORD"));
+        assert!(is_secret_env_key("API_CREDENTIALS"));
+        assert!(!is_secret_env_key("PATH"));
+        assert!(!is_secret_env_key("USER"));
+        assert!(!is_secret_env_key("LANG"));
+
+        let mut env = HarnessEnv::new();
+        let res = env.set("SUPER_SECRET_TOKEN", "12345");
+        assert!(matches!(res, Err(EngineError::PolicyViolation(_))));
+    }
+
+    #[test]
+    fn harness_env_injects_metadata_and_isolates_paths() {
+        let slot_dir = PathBuf::from("/tmp/slots/slot-10");
+        let mut env = HarnessEnv::new();
+        env.isolate_config_dirs(&slot_dir);
+        env.inject_slot_identity(
+            &SlotId::new("slot-10").unwrap(),
+            &LeaseId::new("lease-42").unwrap(),
+            &SessionId::new("sess-99").unwrap(),
+            Provider::Claude,
+            "sonnet",
+        );
+        env.inject_proxy("http://127.0.0.1:8080");
+
+        let map = env.into_map();
+        assert_eq!(map.get("HOME").unwrap(), "/tmp/slots/slot-10");
+        assert_eq!(
+            map.get("XDG_CONFIG_HOME").unwrap(),
+            "/tmp/slots/slot-10/.config"
+        );
+        assert_eq!(map.get("UAS_SLOT_ID").unwrap(), "slot-10");
+        assert_eq!(map.get("UAS_LEASE_ID").unwrap(), "lease-42");
+        assert_eq!(map.get("UAS_SESSION_ID").unwrap(), "sess-99");
+        assert_eq!(map.get("UAS_PROVIDER").unwrap(), "claude");
+        assert_eq!(map.get("UAS_MODEL").unwrap(), "sonnet");
+        assert_eq!(map.get("HTTP_PROXY").unwrap(), "http://127.0.0.1:8080");
     }
 }

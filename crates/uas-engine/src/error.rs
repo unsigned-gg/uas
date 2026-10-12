@@ -72,4 +72,11 @@ pub enum EngineError {
         /// Detail why the flow definition is invalid.
         reason: String,
     },
+
+    /// Invalid command or prompt input.
+    #[error("invalid command input: {reason}")]
+    InvalidCommandInput {
+        /// Detail why the command input is invalid.
+        reason: String,
+    },
 }

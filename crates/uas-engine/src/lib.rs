@@ -88,8 +88,10 @@ pub use cpm::{CpmSchedule, CpmStepSchedule};
 pub use error::EngineError;
 pub use event::{EventStore, InMemoryEventStore, WaveOutcome, WorkflowEvent};
 pub use harness::{
-    AgyStreamParser, ClaudeStreamParser, HarnessEvent, HarnessStreamParser, MockStreamGenerator,
-    OmpStreamParser, StreamTranslator, TokenMetrics, MAX_FRAME_BYTES as MAX_HARNESS_FRAME_BYTES,
+    is_secret_env_key, AgyStreamParser, ClaudeStreamParser, HarnessCommandBuilder, HarnessEnv,
+    HarnessEvent, HarnessInvocation, HarnessStreamParser, MockStreamGenerator, OmpStreamParser,
+    StreamTranslator, TokenMetrics, ALLOWED_AMBIENT_ENV,
+    MAX_FRAME_BYTES as MAX_HARNESS_FRAME_BYTES, SECRET_ENV_PATTERNS,
 };
 pub use landing::{
     LandingActivity, LandingConfig, LandingError, LandingInput, LandingOutcome, ReconcileOutcome,
