@@ -200,7 +200,7 @@ metadata, read 2026-10-09.
 | `gix` | 0.88.0 | MIT OR Apache-2.0 | uas-pool | 3 | default-features off, minimal features; MSRV 1.88; fallback 0.87.1 |
 | `agent-client-protocol` | 2.2.0 | Apache-2.0 | uas-acp | 3 | MSRV 1.88; 3.x is under 14 days old. In use since spec 0016 (2026-10-10); transitive pull in D1 |
 | `tokio` | 1.53.1 | MIT | uas-router, uas-deck, uas-storage; uas-engine behind feature `cortex-grpc` (spec 0026; UAS lane amendment, Christian corrects it in place) | 4, 5, 6 | default-features off; `rt-multi-thread`, `macros`, `net`, `time`, `sync`. The uas-pool runtime stays open (spec 0001 gap 1). In use since spec 0013 (2026-10-09) in uas-router, plus `io-util` (a feature of the same crate, needed by `AsyncReadExt` and `AsyncWriteExt`; UAS lane amendment, Christian corrects it in place) |
-| `sha2` | 0.11.0 | MIT OR Apache-2.0 | uas-ebpf, uas-router, xtask | 2, 4 | none |
+| `sha2` | 0.11.0 | MIT OR Apache-2.0 | uas-ebpf, uas-pool, uas-router, xtask | 2, 4 | none |
 | `reqwest` | 0.13.5 | MIT OR Apache-2.0 | uas-router, uas-deck | 4, 5 | default-features off; `rustls` (aws-lc-rs provider, needs cmake), `http2`, `json`, `stream` |
 | `futures-util` | 0.3.34 | MIT OR Apache-2.0 | uas-deck | 5 | `uas-router` dropped 2026-10-11: spec 0017 says the crate is not needed there (plan 0017 finding 2) |
 | `axum` | 0.8.9 | MIT | uas-deck | 5 | default features off, `http1` and `tokio` (P4, 2026-10-10); `ws` waits for D2 |

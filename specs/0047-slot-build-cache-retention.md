@@ -1,5 +1,5 @@
 ---
-status: planned
+status: complete
 created: 2026-10-10
 tags: [pool, cache, cargo, sccache, rust-analyzer, landlock, disk, phase-3]
 priority: high
@@ -9,7 +9,7 @@ depends_on: [0002-verification-gates-and-evidence, 0005-ci-cache-and-runners, 00
 
 # 0047-slot-build-cache-retention
 
-> **Status**: planned, **Priority**: high, **Created**: 2026-10-10
+> **Status**: complete, **Priority**: high, **Created**: 2026-10-10
 
 ## Overview
 
@@ -96,16 +96,16 @@ whatever id the caller passes. The pool reads or writes `C/slots/<i>/` only whil
 
 ## Plan
 
-- [ ] Spec 0004: extend the `sha2` row (line 181) to `uas-pool` before first use (rule 12).
-- [ ] `crates/uas-pool/Cargo.toml`: add `sha2 = { workspace = true }`, after the spec 0004 row.
-- [ ] Order: the `uas-pool` items below land after the spec 0036 host slot arbiter, which supplies `<i>`.
-- [ ] `uas-pool`: `PoolConfig` gains `cache_max_bytes`, `sccache` and `sccache_max_bytes`; key derivation (D3); slot cache creation at mode `0700` (D1).
-- [ ] `uas-pool`: export `CARGO_TARGET_DIR` and, under D5, the sccache variables at spawn; add the key directory and the store to the ruleset path list.
-- [ ] `uas-pool`: stamp at lease; size walk and eviction at provision and in `Reclaiming` (D4).
-- [ ] `uas-ebpf`: three `AuditReceipt` fields with `#[serde(default)]` (D7).
-- [ ] `Makefile`: `ebpf-build` passes `--target-dir` (D9).
-- [ ] Spec 0010: amend D7 (line 59) so the key directory can execute (D2), and cite this spec at the path list (line 114). Spec 0015: `Reclaiming` keeps the slot cache. Spec 0041: amend D3 and REQ-0041-04 as D11 states.
-- [ ] Spec 0028: its in-memory worktree tests adopt the REQ-0047-12 control.
+- [x] Spec 0004: extend the `sha2` row (line 181) to `uas-pool` before first use (rule 12).
+- [x] `crates/uas-pool/Cargo.toml`: add `sha2 = { workspace = true }`, after the spec 0004 row.
+- [x] Order: the `uas-pool` items below land after the spec 0036 host slot arbiter, which supplies `<i>`.
+- [x] `uas-pool`: `PoolConfig` gains `cache_max_bytes`, `sccache` and `sccache_max_bytes`; key derivation (D3); slot cache creation at mode `0700` (D1).
+- [x] `uas-pool`: export `CARGO_TARGET_DIR` and, under D5, the sccache variables at spawn; add the key directory and the store to the ruleset path list.
+- [x] `uas-pool`: stamp at lease; size walk and eviction at provision and in `Reclaiming` (D4).
+- [x] `uas-ebpf`: three `AuditReceipt` fields with `#[serde(default)]` (D7).
+- [x] `Makefile`: `ebpf-build` passes `--target-dir` (D9).
+- [x] Spec 0010: amend D7 (line 59) so the key directory can execute (D2), and cite this spec at the path list (line 114). Spec 0015: `Reclaiming` keeps the slot cache. Spec 0041: amend D3 and REQ-0041-04 as D11 states.
+- [x] Spec 0028: its in-memory worktree tests adopt the REQ-0047-12 control.
 
 ## Test
 

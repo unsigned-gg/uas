@@ -11,8 +11,8 @@ use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
 use uas_domain::{
-    DomainError, HostCapacity, Lease, LeaseToken, ReconcileReport, Slot, SlotAcquirePolicy, SlotId,
-    SlotState, WorktreeRef,
+    DomainError, HostCapacity, HostSlotIndex, Lease, LeaseToken, ReconcileReport, Slot,
+    SlotAcquirePolicy, SlotId, SlotState, WorktreeRef,
 };
 
 use crate::arbitration::{HostSlotArbiter, HostSlotLease, UAS_SLOT_DIR_ENV};
@@ -48,6 +48,12 @@ pub struct PoolConfig {
     /// Worktree root whose filesystem must keep `min_free_bytes` free (spec 0041 D3).
     /// `None` uses `reconcile.worktree_root` when set, else the current directory.
     pub disk_root: Option<PathBuf>,
+    /// Maximum cache directory size per slot in bytes (spec 0047, default 20 GiB).
+    pub cache_max_bytes: u64,
+    /// Whether sccache compilation wrapper is enabled (spec 0047, default false).
+    pub sccache: bool,
+    /// Maximum cache size for sccache store in bytes (spec 0047, default 10 GiB).
+    pub sccache_max_bytes: u64,
 }
 
 impl PoolConfig {
@@ -72,6 +78,9 @@ impl Default for PoolConfig {
             reconcile: None,
             limits: LimitOverrides::default(),
             disk_root: None,
+            cache_max_bytes: crate::cache::DEFAULT_CACHE_MAX_BYTES,
+            sccache: false,
+            sccache_max_bytes: crate::cache::DEFAULT_SCCACHE_MAX_BYTES,
         }
     }
 }
@@ -107,6 +116,7 @@ pub struct ManagedSlot {
     host_lease: Option<HostSlotLease>,
     last_activity: Instant,
     freezer: Option<Box<dyn Freezer>>,
+    last_eviction: Option<crate::cache::EvictionReport>,
 }
 
 impl ManagedSlot {
@@ -118,6 +128,7 @@ impl ManagedSlot {
             host_lease: None,
             last_activity: Instant::now(),
             freezer,
+            last_eviction: None,
         }
     }
 
@@ -129,6 +140,16 @@ impl ManagedSlot {
     /// Sets or clears the host slot lease (spec 0036).
     pub fn set_host_lease(&mut self, lease: Option<HostSlotLease>) {
         self.host_lease = lease;
+    }
+
+    /// Last cache eviction report for this slot (spec 0047).
+    pub fn last_eviction(&self) -> Option<crate::cache::EvictionReport> {
+        self.last_eviction
+    }
+
+    /// Sets the last cache eviction report (spec 0047).
+    pub fn set_last_eviction(&mut self, report: Option<crate::cache::EvictionReport>) {
+        self.last_eviction = report;
     }
 
     /// The slot id.
@@ -343,6 +364,20 @@ impl SlotPool {
             None
         };
 
+        // Spec 0047 D1, D4, D11: Initialize slot cache and evict down to cache_max_bytes
+        let host_idx = host_lease
+            .as_ref()
+            .map(|l| l.index())
+            .unwrap_or(HostSlotIndex(0));
+        let slot_cache = crate::cache::SlotBuildCache::new(host_idx, None);
+        let _ = slot_cache.init();
+        let eviction_report = slot_cache.evict(self.config.cache_max_bytes).ok();
+
+        // Check slot cache filesystem free space after eviction (REQ-0047-07)
+        let cache_root = crate::cache::base_cache_dir();
+        let cache_free = (self.free_bytes)(&cache_root).map_err(PoolError::DiskProbe)?;
+        limits::check_free(cache_free, self.min_free_bytes)?;
+
         let freezer: Option<Box<dyn Freezer>> = if let Some(ref base) = self.config.cgroup_base {
             let resource_limits = match &self.resolved {
                 Ok(r) => ResourceLimits::from(r),
@@ -358,6 +393,7 @@ impl SlotPool {
         };
 
         let mut managed = ManagedSlot::new(id.clone(), freezer);
+        managed.set_last_eviction(eviction_report);
         managed.set_host_lease(host_lease);
         guard.insert(id, managed);
         Ok(())
@@ -644,6 +680,16 @@ impl SlotPool {
             wt.reset_clean()?;
         }
 
+        // Spec 0047 D4, D7: Evict slot cache down to cache_max_bytes and record report
+        let host_idx = managed
+            .host_lease()
+            .map(|l| l.index())
+            .unwrap_or(HostSlotIndex(0));
+        let slot_cache = crate::cache::SlotBuildCache::new(host_idx, None);
+        if let Ok(eviction) = slot_cache.evict(self.config.cache_max_bytes) {
+            managed.set_last_eviction(Some(eviction));
+        }
+
         // Transition from Leased to Warm if leased
         if managed.slot.state() == SlotState::Leased {
             let current = managed.slot.clone();
@@ -653,6 +699,49 @@ impl SlotPool {
         managed.lease = None;
         managed.last_activity = Instant::now();
         Ok(())
+    }
+
+    /// Returns the last eviction report recorded for a slot (spec 0047).
+    pub fn slot_last_eviction(
+        &self,
+        id: &SlotId,
+    ) -> Result<Option<crate::cache::EvictionReport>, PoolError> {
+        let guard = self.slots.lock().unwrap_or_else(|p| p.into_inner());
+        let managed = guard
+            .get(id)
+            .ok_or_else(|| PoolError::SlotNotFound(id.clone()))?;
+        Ok(managed.last_eviction())
+    }
+
+    /// Returns the slot build cache manager for a slot (spec 0047).
+    pub fn slot_build_cache(&self, id: &SlotId) -> Result<crate::cache::SlotBuildCache, PoolError> {
+        let guard = self.slots.lock().unwrap_or_else(|p| p.into_inner());
+        let managed = guard
+            .get(id)
+            .ok_or_else(|| PoolError::SlotNotFound(id.clone()))?;
+        let host_idx = managed
+            .host_lease()
+            .map(|l| l.index())
+            .unwrap_or(HostSlotIndex(0));
+        Ok(crate::cache::SlotBuildCache::new(host_idx, None))
+    }
+
+    /// Attaches the slot's cache metrics to an audit receipt before sealing (spec 0047 D7, REQ-0047-11).
+    pub fn seal_audit_receipt(
+        &self,
+        id: &SlotId,
+        mut receipt: uas_ebpf::audit::AuditReceipt,
+    ) -> Result<uas_ebpf::audit::AuditReceipt, PoolError> {
+        let guard = self.slots.lock().unwrap_or_else(|p| p.into_inner());
+        let managed = guard
+            .get(id)
+            .ok_or_else(|| PoolError::SlotNotFound(id.clone()))?;
+        if let Some(eviction) = managed.last_eviction() {
+            receipt.cache_bytes_before = eviction.bytes_before;
+            receipt.cache_bytes_after = eviction.bytes_after;
+            receipt.cache_evicted = eviction.evicted_count;
+        }
+        Ok(receipt)
     }
 
     /// Reaps any reparented child processes that have exited without blocking (Spec 0060 D5).

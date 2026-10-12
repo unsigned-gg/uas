@@ -9,6 +9,7 @@
 #![deny(unsafe_code)]
 
 pub mod arbitration;
+pub mod cache;
 pub mod error;
 pub mod freezer;
 pub mod launch;
@@ -20,6 +21,10 @@ pub mod worktree;
 
 pub use arbitration::{
     HostSlotArbiter, HostSlotLease, HostSlotMetadata, DEFAULT_SLOT_DIR, UAS_SLOT_DIR_ENV,
+};
+pub use cache::{
+    base_cache_dir, calculate_dir_size, derive_key, derive_key_with_channel, EvictionReport,
+    SlotBuildCache, DEFAULT_CACHE_MAX_BYTES, DEFAULT_SCCACHE_MAX_BYTES,
 };
 pub use error::{FreezerError, PoolError};
 pub use freezer::{
