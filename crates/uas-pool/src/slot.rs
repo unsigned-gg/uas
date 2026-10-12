@@ -537,6 +537,49 @@ impl SlotPool {
         Ok(())
     }
 
+    /// Reclaims an active or suspended slot, reaping child processes and returning it to `Warm`.
+    ///
+    /// If a worktree is provided, its working directory is reset to clean HEAD state (spec 0015 D2, REQ-0015-06).
+    pub fn reclaim_slot(
+        &self,
+        id: &SlotId,
+        worktree: Option<&crate::worktree::WarmWorktree>,
+    ) -> Result<(), PoolError> {
+        let mut guard = self.slots.lock().unwrap_or_else(|p| p.into_inner());
+        let managed = guard
+            .get_mut(id)
+            .ok_or_else(|| PoolError::SlotNotFound(id.clone()))?;
+
+        // If suspended, thaw first
+        if managed.slot.state() == SlotState::Suspended {
+            if let Some(freezer) = &managed.freezer {
+                let _ = freezer.unfreeze();
+            }
+            let current = managed.slot.clone();
+            managed.slot = current.resume()?;
+        }
+
+        // Reap worker processes in the freezer
+        if let Some(freezer) = &managed.freezer {
+            freezer.reap(Duration::from_millis(500))?;
+        }
+
+        // If a worktree is provided, reset it back to clean HEAD
+        if let Some(wt) = worktree {
+            wt.reset_clean()?;
+        }
+
+        // Transition from Leased to Warm if leased
+        if managed.slot.state() == SlotState::Leased {
+            let current = managed.slot.clone();
+            managed.slot = current.release()?;
+        }
+
+        managed.lease = None;
+        managed.last_activity = Instant::now();
+        Ok(())
+    }
+
     /// Returns the current state of a slot.
     pub fn slot_state(&self, id: &SlotId) -> Result<SlotState, PoolError> {
         let guard = self.slots.lock().unwrap_or_else(|p| p.into_inner());

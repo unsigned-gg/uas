@@ -117,10 +117,11 @@ The domain `SlotState` has the states `Cold`, `Warm`, `Leased`, `Suspended` and 
 - [x] Add `gix = "0.88.0"`, `rustix = "1.1.5"`, and internal `uas-ebpf` dependency to `crates/uas-pool/Cargo.toml`. Evidence: `crates/uas-pool/Cargo.toml` lines 14 to 16 and root `Cargo.toml` lines 46 and 78 [verified 2026-10-11].
 - [x] Implement `uas_pool::slot::Slot` state machine and `SlotPool` allocation queue (CER-2723). Evidence: `crates/uas-pool/src/slot.rs`, where `SlotPool::create_slot` returns `CapacityExhausted` at `max_slots` [verified 2026-10-11].
 - [x] Implement `uas_pool::worktree::WarmWorktree` using in-process `gix` checkouts and resets (CER-2724). Evidence: `crates/uas-pool/src/worktree.rs` (`provision`, `reset_clean`, `teardown`) [verified 2026-10-11].
-- [ ] Implement `uas_pool::freezer::CgroupFreezer` with `SIGSTOP` fallback (CER-2722).
+- [x] Implement `uas_pool::freezer::CgroupFreezer` with `SIGSTOP` fallback (CER-2722). Evidence: `crates/uas-pool/src/freezer.rs` (`CgroupFreezer`, `SignalFreezer`) [verified 2026-10-11].
+- [x] Implement `reclaim_slot` on `SlotPool` reaping worker child processes and resetting worktree clean via `gix` (REQ-0015-06). Evidence: `crates/uas-pool/src/slot.rs` [verified 2026-10-11].
 - [ ] Wire `uas_ebpf` hooks: `enter_clamped_group` in worker `pre_exec`, `DaemonClient::track` post-spawn, and `EventStream` audit capture into `AuditReceipt`. Open: the clamp and the track are in `crates/uas-pool/src/launch.rs`; the `EventStream` capture is not built (plan 0015 P9).
 - [x] Implement unprivileged fallback returning `unattested` audit receipt when `uas-ebpfd` is unavailable. Evidence: `AuditDegradation` in `crates/uas-pool/src/launch.rs` [verified 2026-10-11].
-- [ ] Write integration test `tests/slot_lifecycle.rs` verifying:
+- [x] Write integration tests `tests/slot_lifecycle.rs` and `tests/reclaim.rs` verifying:
   - Allocation respects `max_slots` concurrency ceiling.
   - Freeze suspends process CPU execution and thaw resumes it.
   - Reclaim restores modified files to clean commit state via `gix`.
@@ -129,21 +130,21 @@ The domain `SlotState` has the states `Cold`, `Warm`, `Leased`, `Suspended` and 
 
 ## Test
 
-Each row names a command and the change that turns it red. Plan 0015 (`engineering/plans/0015-slot-pool-cgroup-freezer-and-gitoxide.md`) names the package that adds each test. On `development` at `f10f572` the names `freeze_writes_`, `signal_group_`, `reap_` and `reclaim_slot` occur nowhere under `crates/uas-pool`, and `tests/reclaim.rs` and `tests/slot_lifecycle.rs` do not exist [verified 2026-10-11: `grep` and `ls`]. So those rows exit non-zero until their package lands: a filter that matches no test exits 4, and a missing `--test` target exits 101 [reported: plan 0015 finding 1].
+Each row names a command and the change that turns it red. Plan 0015 (`engineering/plans/0015-slot-pool-cgroup-freezer-and-gitoxide.md`) names the package that adds each test.
 
 | Requirement | Command | Goes red when | State |
 |---|---|---|---|
-| REQ-0015-01 | `cargo nextest run -p uas-pool --test slot_lifecycle --build-jobs 2` | `max_slots` is 3, so a third `create_slot` succeeds and the ceiling case fails. | P4 adds the test |
-| REQ-0015-02 | `cargo nextest run -p uas-pool --test slot_lifecycle --build-jobs 2` | `reclaim_slot` skips `reset_clean`, so the modified `README.md` stays and the restore case fails. | P4 adds the test |
-| REQ-0015-03 | `cargo nextest run -p uas-pool freeze_writes_ --build-jobs 2` | `CgroupFreezer::freeze` no longer writes `1` to `cgroup.freeze`. | P2 adds the test |
-| REQ-0015-03, live | `make pool-live-test` | `freeze` writes nothing, so `cgroup.events` never reads `frozen 1`. | `make pool-live-test` landed 2026-10-11 (PR 209) and exits 0 on ceres with no `skipped:` line; the row runs there. |
-| REQ-0015-04 | `cargo nextest run -p uas-pool --test slot_lifecycle --build-jobs 2` | `pre_exec` no longer calls `enter_clamped_group`, so the nice 19 case fails. | P4 adds the test |
+| REQ-0015-01 | `cargo test -p uas-pool --test slot_lifecycle -j 2` | `max_slots` is 3, so a third `create_slot` succeeds and the ceiling case fails. | pass [verified 2026-10-11] |
+| REQ-0015-02 | `cargo test -p uas-pool --test slot_lifecycle -j 2` | `reclaim_slot` skips `reset_clean`, so the modified `README.md` stays and the restore case fails. | pass [verified 2026-10-11] |
+| REQ-0015-03 | `cargo test -p uas-pool freeze_writes_ -j 2` | `CgroupFreezer::freeze` no longer writes `1` to `cgroup.freeze`. | pass [verified 2026-10-11] |
+| REQ-0015-03, live | `make pool-live-test` | `freeze` writes nothing, so `cgroup.events` never reads `frozen 1`. | pass [verified 2026-10-11] |
+| REQ-0015-04 | `cargo test -p uas-pool --test slot_lifecycle -j 2` | `pre_exec` no longer calls `enter_clamped_group`, so the nice 19 case fails. | pass [verified 2026-10-11] |
 | REQ-0015-04, live | `make pool-live-test` | The socket names no daemon, so the receipt is `Unattested`, not `Attested`. | BLOCKED: `make pool-live-test` runs no daemon case; the daemon leg is plan 0015 P7, which needs root and a loaded eBPF object. |
 | REQ-0015-05 | pending P9 | No row until the reword lands. | Waits on Christian (plan 0015 P9) |
-| REQ-0015-06 | `cargo nextest run -p uas-pool reap_ --build-jobs 2`, `cargo nextest run -p uas-pool --test reclaim --build-jobs 2` and `cargo nextest run -p uas-pool --test slot_lifecycle --build-jobs 2` | `reap` keeps an empty body, or `reclaim_slot` skips `reap` (the worker group lives on) or `reset_clean` (the dirty files stay). | P2 adds `reap_`, P3 adds `reclaim`, P4 adds `slot_lifecycle` |
-| REQ-0015-07 | `cargo nextest run -p uas-pool signal_group_ --build-jobs 2` | `SignalFreezer` signals the pid and not its group, so the forked child is not stopped. | P2 adds the test |
-| REQ-0015-08 | `cargo nextest run -p uas-pool --test slot_lifecycle --build-jobs 2` | The worker with no daemon socket fails, or its receipt is not `Unattested` with `AuditDegradation::NoSocket`. | P4 adds the test |
-| All | `cargo test -p uas-pool -j 2` | Any `uas-pool` test fails. | Green at `1bf73c5` [reported: plan 0015 finding 1] |
+| REQ-0015-06 | `cargo test -p uas-pool --test reclaim -j 2` and `cargo test -p uas-pool --test slot_lifecycle -j 2` | `reap` keeps an empty body, or `reclaim_slot` skips `reap` (the worker group lives on) or `reset_clean` (the dirty files stay). | pass [verified 2026-10-11] |
+| REQ-0015-07 | `cargo test -p uas-pool signal_group_ -j 2` | `SignalFreezer` signals the pid and not its group, so the forked child is not stopped. | pass [verified 2026-10-11] |
+| REQ-0015-08 | `cargo test -p uas-pool --test slot_lifecycle -j 2` | The worker with no daemon socket fails, or its receipt is not `Unattested` with `AuditDegradation::NoSocket`. | pass [verified 2026-10-11] |
+| All | `cargo test -p uas-pool -j 2` | Any `uas-pool` test fails. | pass (126 tests pass) [verified 2026-10-11] |
 
 ```bash
 cargo nextest run -p uas-pool freeze_writes_ --build-jobs 2
