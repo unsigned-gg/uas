@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
-- Spec 0063: author LeanSpec 0063 defining agent harness MCP configuration bridge, isolated slot scratch synthesis, repository config masking, and role-based capability filtering.
+- Spec 0063: implement agent harness MCP configuration bridge in `uas-engine` with isolated slot scratch synthesis, repository `.mcp.json` masking, Reverie UDS stdio bridging, fail-closed tool command allowlisting, secret scrubbing, and role-based capability filtering (`Builder` vs `Critic`).
 - Spec 0036: implement host-wide slot arbitration in `uas-pool` and `uas-domain` with advisory file locking, bounded wait backoff, sequential slot indexing, directory security verification, and multi-process capacity enforcement.
 - Spec 0062: implement agent harness CLI invocation builder and environment sanitization in `uas-engine` with allowlisted system variables, secret scrubbing, slot metadata injection, and isolated configuration roots.
 - Spec 0032: implement Reverie memory proxy in `uas-router` and `uas-sandbox` with Unix socket isolation, route prefix matching, project scoping checks, and 502/504 error synthesis.

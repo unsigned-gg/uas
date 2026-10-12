@@ -79,4 +79,15 @@ pub enum EngineError {
         /// Detail why the command input is invalid.
         reason: String,
     },
+
+    /// Unauthorized or unapproved MCP server command (spec 0063).
+    #[error(
+        "unauthorized MCP server '{server}': command '{command}' is not in approved tool allowlist"
+    )]
+    McpServerUnauthorized {
+        /// Name of the unauthorized MCP server.
+        server: String,
+        /// Command that was rejected.
+        command: String,
+    },
 }

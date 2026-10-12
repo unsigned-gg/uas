@@ -13,6 +13,12 @@ use uas_domain::{LeaseId, Provider, SlotId};
 
 use crate::{EngineError, SessionId};
 
+pub mod mcp;
+pub use mcp::{
+    McpConfigBuilder, McpRootConfig, McpServerConfig, McpServerJson, McpTransport,
+    DEFAULT_APPROVED_MCP_COMMANDS,
+};
+
 /// Maximum frame size in bytes (1 MiB).
 ///
 /// Matches the ACP server frame size limit in spec 0016.
@@ -706,6 +712,7 @@ pub struct HarnessCommandBuilder {
     slot_id: Option<SlotId>,
     lease_id: Option<LeaseId>,
     session_id: Option<SessionId>,
+    mcp_config_path: Option<PathBuf>,
     extra_env: BTreeMap<String, String>,
 }
 
@@ -720,8 +727,15 @@ impl HarnessCommandBuilder {
             slot_id: None,
             lease_id: None,
             session_id: None,
+            mcp_config_path: None,
             extra_env: BTreeMap::new(),
         }
+    }
+
+    /// Sets the MCP configuration file path (spec 0063).
+    pub fn with_mcp_config(&mut self, path: impl Into<PathBuf>) -> &mut Self {
+        self.mcp_config_path = Some(path.into());
+        self
     }
 
     /// Sets the model override.
@@ -803,17 +817,35 @@ impl HarnessCommandBuilder {
         }
 
         let (program, args) = match self.provider {
-            Provider::Claude => (
-                PathBuf::from("claude"),
-                vec![
+            Provider::Claude => {
+                let mut args = vec![
                     "--print".into(),
                     "--output-format".into(),
                     "json".into(),
                     "-p".into(),
                     prompt.into(),
                     "--dangerously-skip-permissions".into(),
-                ],
-            ),
+                ];
+                let mcp_path = self.mcp_config_path.clone().or_else(|| {
+                    let scratch = self.slot_path.join("scratch").join("mcp-config.json");
+                    if scratch.exists() {
+                        Some(scratch)
+                    } else {
+                        let direct = self.slot_path.join("mcp-config.json");
+                        if direct.exists() {
+                            Some(direct)
+                        } else {
+                            None
+                        }
+                    }
+                });
+                if let Some(mcp) = mcp_path {
+                    args.push("--strict-mcp-config".into());
+                    args.push("--mcp-config".into());
+                    args.push(mcp.to_string_lossy().to_string());
+                }
+                (PathBuf::from("claude"), args)
+            }
             Provider::Agy => (
                 PathBuf::from("agy"),
                 vec![

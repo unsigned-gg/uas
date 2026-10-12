@@ -1,5 +1,5 @@
 ---
-status: planned
+status: complete
 created: 2026-10-11
 tags: [engine, harness, mcp, security, isolation, phase-3]
 priority: high
@@ -9,7 +9,7 @@ depends_on: [0001-cas-architecture-and-crate-layout, 0010-landlock-ruleset-and-a
 
 # 0063-agent-harness-mcp-configuration-bridge
 
-> **Status**: planned, **Priority**: high, **Created**: 2026-10-11
+> **Status**: complete, **Priority**: high, **Created**: 2026-10-11
 
 ## Overview
 
@@ -53,11 +53,11 @@ The MCP configuration bridge is owned by `uas-engine::harness::mcp`. It takes ag
 
 ## Plan
 
-- [ ] Define `McpConfigBuilder`, `McpServerConfig`, and `McpTransport` in `uas-engine::harness::mcp`.
-- [ ] Add `EngineError::McpServerUnauthorized` to `uas-engine::error`.
-- [ ] Implement role-based server filtering (`Builder` vs `Critic`).
-- [ ] Implement socket bridge command serialization for Reverie UDS endpoints (Spec 0032).
-- [ ] Write integration test verifying synthesized JSON structure, role isolation, and secret scrubbing.
+- [x] Define `McpConfigBuilder`, `McpServerConfig`, and `McpTransport` in `uas-engine::harness::mcp`.
+- [x] Add `EngineError::McpServerUnauthorized` to `uas-engine::error`.
+- [x] Implement role-based server filtering (`Builder` vs `Critic`).
+- [x] Implement socket bridge command serialization for Reverie UDS endpoints (Spec 0032).
+- [x] Write integration test verifying synthesized JSON structure, role isolation, and secret scrubbing.
 
 ## Test
 
