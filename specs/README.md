@@ -64,6 +64,7 @@ Methodology: LeanSpec. The reference copy is in `../vendor/leanspec/`.
 | [0057](0057-work-items-and-approval-routes.md) | Work items and approval routes | planned | medium |
 | [0058](0058-agent-harness-providers-and-mock-runtime.md) | Agent harness providers and mock runtime | complete | high |
 | [0059](0059-ceres-localhost-repeatable-substrate-testing.md) | Ceres localhost repeatable substrate testing | complete | high |
+| [0060](0060-agent-harness-process-supervision-and-signals-coordination.md) | Agent harness process supervision and signals coordination | planned | high |
 
 
 ## How to add a spec
