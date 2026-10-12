@@ -155,6 +155,7 @@ ceres-test: ## Run repeatable substrate tests on ceres localhost (spec 0058)
 ebpf-build: ## Build the kernel eBPF artifact into crates/uas-ebpf/ebpf/uas-ebpf.o
 	PATH="$$HOME/.local/share/mise/shims:$$PATH" cargo +$(EBPF_TOOLCHAIN) build \
 		--manifest-path crates/uas-ebpf/ebpf/Cargo.toml \
+		--target-dir crates/uas-ebpf/ebpf/target \
 		--target bpfel-unknown-none -Z build-std=core --release --locked -j $(JOBS)
 	cp crates/uas-ebpf/ebpf/target/bpfel-unknown-none/release/uas-ebpf-ebpf crates/uas-ebpf/ebpf/uas-ebpf.o
 	sha256sum crates/uas-ebpf/ebpf/uas-ebpf.o | cut -d' ' -f1 > crates/uas-ebpf/ebpf/uas-ebpf.o.sha256

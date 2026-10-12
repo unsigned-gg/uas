@@ -69,6 +69,9 @@ impl RunHash {
             dropped_events: self.dropped_events,
             attested: self.dropped_events == 0,
             cpu_cap: cpu_cap.into(),
+            cache_bytes_before: 0,
+            cache_bytes_after: 0,
+            cache_evicted: 0,
         }
     }
 
@@ -97,6 +100,15 @@ pub struct AuditReceipt {
     /// CPU cap enforced during the run ("200000 100000", "max", or "uncapped") (spec 0020).
     #[serde(default = "default_cpu_cap")]
     pub cpu_cap: String,
+    /// Slot cache size in bytes before eviction (spec 0047).
+    #[serde(default)]
+    pub cache_bytes_before: u64,
+    /// Slot cache size in bytes after eviction (spec 0047).
+    #[serde(default)]
+    pub cache_bytes_after: u64,
+    /// Number of cache key directories evicted during reclaim (spec 0047).
+    #[serde(default)]
+    pub cache_evicted: u32,
 }
 
 /// Lower-case hex of `bytes`.
@@ -207,6 +219,16 @@ mod tests {
         let receipt = RunHash::new().finish_with_cap("200000 100000");
         assert_eq!(receipt.cpu_cap, "200000 100000");
         assert!(receipt.attested);
+    }
+
+    #[test]
+    fn receipt_without_cache_fields_deserializes_with_defaults() {
+        let json = r#"{"run_hash":"abc123","events":10,"dropped_events":0,"attested":true}"#;
+        let receipt: AuditReceipt = serde_json::from_str(json).expect("deserialize old format");
+        assert_eq!(receipt.cpu_cap, "uncapped");
+        assert_eq!(receipt.cache_bytes_before, 0);
+        assert_eq!(receipt.cache_bytes_after, 0);
+        assert_eq!(receipt.cache_evicted, 0);
     }
 
     #[test]

@@ -67,6 +67,7 @@ Methodology: LeanSpec. The reference copy is in `../vendor/leanspec/`.
 | [0060](0060-agent-harness-process-supervision-and-signals-coordination.md) | Agent harness process supervision and signals coordination | complete | high |
 | [0061](0061-agent-harness-adapter-streaming-and-event-translation.md) | Agent harness adapter streaming and event translation | complete | high |
 | [0062](0062-agent-harness-cli-invocation-and-environment-sanitization.md) | Agent harness CLI invocation and environment sanitization | complete | high |
+| [0063](0063-agent-harness-mcp-configuration-bridge.md) | Agent harness MCP configuration bridge | planned | high |
 
 
 ## How to add a spec
