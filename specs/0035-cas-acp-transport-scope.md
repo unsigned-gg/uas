@@ -1,5 +1,5 @@
 ---
-status: planned
+status: complete
 created: 2026-10-10
 tags: [acp, transport, zed]
 priority: high
@@ -9,7 +9,7 @@ depends_on: [0011-network-namespace-isolation, 0013-llm-gateway-socket-proxy, 00
 
 # 0035-cas-acp-transport-scope
 
-> **Status**: planned, **Priority**: high, **Created**: 2026-10-10
+> **Status**: complete, **Priority**: high, **Created**: 2026-10-10
 
 ## Overview
 
@@ -38,8 +38,8 @@ Reasoning: Spec 0016 D2 pins ACP 2.2.0 with no custom framing. TCP without custo
 
 ## Plan
 
-- [ ] (Conditional on D1 confirmation) Remove TCP claims from `crates/uas-acp/README.md`.
-- [ ] (Conditional on D1 confirmation) Remove TCP claims from `crates/uas-acp/Cargo.toml`.
+- [x] (Conditional on D1 confirmation) Remove TCP claims from `crates/uas-acp/README.md`.
+- [x] (Conditional on D1 confirmation) Remove TCP claims from `crates/uas-acp/Cargo.toml`.
 
 ## Test
 

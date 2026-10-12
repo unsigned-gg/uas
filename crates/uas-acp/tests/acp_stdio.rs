@@ -613,3 +613,35 @@ fn handle_frame_rejects_an_oversize_line_before_parsing() {
     let frames = frames_of(&mut server, &line);
     assert_eq!(ids_and_codes(&frames), vec![(Value::Null, -32600)]);
 }
+
+#[test]
+fn acp_transport_scope_is_strictly_stdio_no_tcp() {
+    // Spec 0035 REQ-0035-02: uas-acp source contains no TCP networking primitives
+    let src_dir = std::path::Path::new("src");
+    let crate_src = if src_dir.exists() {
+        src_dir.to_path_buf()
+    } else {
+        std::path::Path::new("crates/uas-acp/src").to_path_buf()
+    };
+    for entry in std::fs::read_dir(crate_src).unwrap() {
+        let entry = entry.unwrap();
+        if entry.path().extension().is_some_and(|ext| ext == "rs") {
+            let content = std::fs::read_to_string(entry.path()).unwrap();
+            assert!(
+                !content.contains("TcpListener"),
+                "found TcpListener in {:?}",
+                entry.path()
+            );
+            assert!(
+                !content.contains("tokio::net"),
+                "found tokio::net in {:?}",
+                entry.path()
+            );
+            assert!(
+                !content.contains("std::net"),
+                "found std::net in {:?}",
+                entry.path()
+            );
+        }
+    }
+}

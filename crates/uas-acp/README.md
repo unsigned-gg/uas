@@ -1,6 +1,6 @@
 # uas-acp
 
-Agent Communication Protocol server (JSON-RPC 2.0 over stdio and TCP) for Zed and IDE integration.
+Agent Communication Protocol server (JSON-RPC 2.0 over stdio) for Zed and IDE integration.
 
 | | |
 |---|---|

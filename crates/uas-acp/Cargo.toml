@@ -1,6 +1,6 @@
 [package]
 name = "uas-acp"
-description = "Agent Communication Protocol server (JSON-RPC 2.0 over stdio and TCP) for Zed and IDE integration."
+description = "Agent Communication Protocol server (JSON-RPC 2.0 over stdio) for Zed and IDE integration."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
