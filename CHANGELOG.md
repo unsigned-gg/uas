@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
+- Spec 0059: author LeanSpec 0059 defining the ceres localhost repeatable substrate testing protocol, live cgroup v2 subtree delegation, unprivileged test execution, and zero-I/O validation.
 - Spec 0058: add agent harness `Provider` enum to `uas-domain` (`claude`, `agy`, `omp`, `codex`, `gateway`, `mock`), implement dynamic provider task admission and hermetic mock execution in `uas-engine::wave_exec`, wire repeatable `make ceres-test` substrate suite for host ceres, and advance specs 0016, 0026 and 0058 in the registry.
 - Contributor Persona Gang: add the 16 Clockwork Elves of the Machine Conclave to `.claude/agents/ROSTER.md` (Sindri through Syn), establishing systems philosophy, literary foundations, and hardware sympathy.
 - Spec 0017 wave 2 (plan 0017 P4 to P6): `PrefixInput::from_request` parses a chat-completions body (system and developer messages, string or text-part content, tools serialised with keys sorted at every depth) into the prefix hash; `ThinkSplitter` splits `<think>` blocks across chunk boundaries with a fixed 7-byte window and no allocation, dropping a stray closing tag; `HealthCounter` (2 failures down, 3 successes up), a TCP `probe` of `/healthz` with one `/health` retry, and `HealthMonitor` that flips the affinity table.
