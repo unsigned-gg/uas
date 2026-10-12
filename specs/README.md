@@ -21,7 +21,7 @@ Methodology: LeanSpec. The reference copy is in `../vendor/leanspec/`.
 | [0013](0013-llm-gateway-socket-proxy.md) | LLM gateway socket proxy | complete | high |
 | [0014](0014-ebpf-priority-clamping-and-audit-probes.md) | eBPF priority clamping and audit probes | in-progress | high |
 | [0015](0015-slot-pool-cgroup-freezer-and-gitoxide.md) | Slot pool, cgroup freezer, and gitoxide worktrees | in-progress | high |
-| [0016](0016-zed-agent-communication-protocol.md) | Zed Agent Communication Protocol (ACP) server | planned | high |
+| [0016](0016-zed-agent-communication-protocol.md) | Zed Agent Communication Protocol (ACP) server | complete | high |
 | [0017](0017-fastcache-prefix-hashing-and-affinity-routing.md) | FastCache prefix hashing and affinity routing | in-progress | high |
 | [0018](0018-mad-stack-operator-deck-and-settle-queue.md) | MAD stack operator deck and settle queue | planned | high |
 | [0019](0019-pool-runtime-decision.md) | Pool runtime decision | complete | high |
@@ -31,7 +31,7 @@ Methodology: LeanSpec. The reference copy is in `../vendor/leanspec/`.
 | [0023](0023-test-time-compute-and-verifiable-reward.md) | Test-time compute and verifiable reward | planned | medium |
 | [0024](0024-estate-saga-cpm-and-agent-sprint-wave-strategy.md) | Estate saga CPM and agent sprint wave strategy | complete | high |
 | [0025](0025-wave-execution-on-the-custody-chain.md) | Wave execution on the custody chain | planned | high |
-| [0026](0026-cortex-pool-member-adapter.md) | Cortex pool-member adapter | planned | high |
+| [0026](0026-cortex-pool-member-adapter.md) | Cortex pool-member adapter | complete | high |
 | [0028](0028-branchless-crdt-worktrees.md) | Branchless CRDT worktrees | planned | high |
 | [0029](0029-agent-identity-and-on-behalf-of-delegation.md) | Agent identity and on-behalf-of delegation | planned | high |
 | [0030](0030-a2a-multi-agent-interop.md) | A2A multi-agent interop | planned | high |
@@ -62,7 +62,7 @@ Methodology: LeanSpec. The reference copy is in `../vendor/leanspec/`.
 | [0055](0055-supply-chain-automation.md) | Supply-chain automation | planned | medium |
 | [0056](0056-agent-roster-and-tooling.md) | Agent roster and tooling surface | planned | medium |
 | [0057](0057-work-items-and-approval-routes.md) | Work items and approval routes | planned | medium |
-| [0058](0058-agent-harness-providers-and-mock-runtime.md) | Agent harness providers and mock runtime | in-progress | high |
+| [0058](0058-agent-harness-providers-and-mock-runtime.md) | Agent harness providers and mock runtime | complete | high |
 
 
 ## How to add a spec

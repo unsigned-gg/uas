@@ -131,6 +131,24 @@ impl Env {
         fs::write(dir.join("task.toml"), toml).unwrap();
     }
 
+    /// Write `tasks/<id>/prompt.md` and a `task.toml` with explicit `provider` and `model`.
+    fn task_full(&self, id: &str, provider: Option<&str>, model: Option<&str>) {
+        let dir = self.repo.join("tasks").join(id);
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(dir.join("prompt.md"), format!("Build {id}.\n")).unwrap();
+        let mut toml = String::new();
+        if let Some(p) = provider {
+            toml.push_str(&format!("provider = \"{p}\"\n"));
+        }
+        if let Some(m) = model {
+            toml.push_str(&format!("model = \"{m}\"\n"));
+        }
+        if toml.is_empty() {
+            toml = "budget = 1\n".to_owned();
+        }
+        fs::write(dir.join("task.toml"), toml).unwrap();
+    }
+
     fn remove(&self, rel: &str) {
         let path = self.repo.join(rel);
         let _ = fs::remove_file(path);
@@ -346,6 +364,55 @@ fn wave_admit_refuses_task_model_mismatch() {
             found: "haiku".into()
         })
     );
+}
+
+#[test]
+fn wave_admit_refuses_unknown_provider() {
+    let env = Env::new("wave_admit_refuses_unknown_provider");
+    env.task_full("build-a", Some("nonexistent-llm"), Some("sonnet"));
+    let steps = [builder("build-a"), critic("review-a", "build-a")];
+    assert_eq!(
+        executor(&env, &steps).admit(),
+        Err(AdmitError::UnknownProvider {
+            step: "build-a".into(),
+            found: "nonexistent-llm".into(),
+        })
+    );
+}
+
+#[test]
+fn wave_admit_accepts_known_providers() {
+    let env = Env::new("wave_admit_accepts_known_providers");
+    for prov in ["mock", "agy", "omp", "codex", "gateway", "claude"] {
+        let step_id = format!("build-{prov}");
+        let model = if prov == "claude" {
+            Some("sonnet")
+        } else {
+            None
+        };
+        env.task_full(&step_id, Some(prov), model);
+        let critic_id = format!("review-{prov}");
+        let steps = [builder(&step_id), critic(&critic_id, &step_id)];
+        assert!(
+            executor(&env, &steps).admit().is_ok(),
+            "provider {prov} should admit"
+        );
+    }
+}
+
+#[test]
+fn wave_builder_mock_provider_runs_hermetically() {
+    let env = Env::new("wave_builder_mock_provider_runs_hermetically");
+    env.task_full("build-a", Some("mock"), None);
+    let steps = [builder("build-a"), critic("review-a", "build-a")];
+    let ex = executor(&env, &steps);
+    let res = ex.run_step("build-a", 1000).unwrap();
+    assert_eq!(res.outcome, StepOutcome::Passed);
+    assert!(res.receipt.is_some());
+    // Proves that blackwall start was never executed (mock provider runs hermetically)
+    let argv = env.argv();
+    assert!(!argv.iter().any(|l| l.starts_with("blackwall start")));
+    assert!(!argv.iter().any(|l| l.starts_with("blackwall settle")));
 }
 
 #[test]

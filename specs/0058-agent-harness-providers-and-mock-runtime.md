@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: complete
 created: 2026-10-11
 tags: [providers, harnesses, claude, agy, omp, codex, mock, engine, domain]
 priority: high
@@ -9,7 +9,7 @@ depends_on: [0001-cas-architecture-and-crate-layout, 0006-cas-engine-and-harness
 
 # 0058-agent-harness-providers-and-mock-runtime
 
-> **Status**: in-progress · **Priority**: high · **Created**: 2026-10-11
+> **Status**: complete · **Priority**: high · **Created**: 2026-10-11
 
 ## Overview
 
@@ -49,19 +49,23 @@ Supported providers:
 
 - [x] Define `Provider` enum in `uas-domain::provider` with serialization and parsing.
 - [x] Wire `Provider` into `uas-domain::lib` exports.
-- [ ] Extend `uas-engine::wave_exec` to read `provider` from `task.toml`.
-- [ ] Add `mock` provider execution branch in `uas-engine` for hermetic testing.
-- [ ] Add `make ceres-test` target in `Makefile`.
+- [x] Extend `uas-engine::wave_exec` to read `provider` from `task.toml`.
+- [x] Add `mock` provider execution branch in `uas-engine` for hermetic testing.
+- [x] Add `make ceres-test` target in `Makefile`.
 
 ## Test
 
 ```bash
-cargo test -p uas-domain --test lib provider::tests -- --nocapture
+cargo test -p uas-domain --test lib provider::tests -- -j 2
+cargo test -p uas-engine --test wave_exec provider -j 2
+make ceres-test
 ```
 
 - [x] Provider parsing and string round-trips pass.
 - [x] Unrecognized provider names return `ParseProviderError`.
 - [x] Zero-I/O verified by `make smoke`.
+- [x] Provider task admission and mock execution tested in `uas-engine`.
+- [x] Ceres repeatable test suite verifies substrate without network or credentials.
 
 ## Notes
 

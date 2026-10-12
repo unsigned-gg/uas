@@ -1,5 +1,5 @@
 ---
-status: planned
+status: complete
 created: 2026-10-10
 tags: [cortex, pool, adapter, grpc, uas-engine, lease]
 priority: high

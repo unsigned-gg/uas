@@ -1,5 +1,5 @@
 ---
-status: planned
+status: complete
 created: 2026-10-09
 tags: [acp, jsonrpc, zed, ide, phase-3]
 priority: high

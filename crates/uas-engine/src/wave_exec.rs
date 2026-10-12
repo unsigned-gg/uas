@@ -18,7 +18,8 @@ use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 use uas_domain::{
-    is_critic_input_path, is_evaluator_path, AuditStatus, CostSource, LandingReceipt, SlotId,
+    is_critic_input_path, is_evaluator_path, AuditStatus, CostSource, LandingReceipt, Provider,
+    SlotId,
 };
 
 use crate::{
@@ -109,6 +110,14 @@ pub enum AdmitError {
         /// The Builder step.
         step: String,
         /// The model the file names.
+        found: String,
+    },
+    /// A Builder's `task.toml` names an unknown provider (spec 0058).
+    #[error("builder {step} task.toml sets unknown provider {found}")]
+    UnknownProvider {
+        /// The Builder step.
+        step: String,
+        /// The provider the file names.
         found: String,
     },
     /// A Probe has no `verify_cmd`.
@@ -535,56 +544,65 @@ impl WaveExecutor {
     ) -> Result<StepResult, WaveError> {
         let id = ws.step.id.as_str();
         let repo = self.config.repo_dir.clone();
-        let model = self.config.builder_model.as_str();
+        let (provider, model) = self.task_provider_and_model(id)?;
         let mut facts = Facts {
             base: Some(base.clone()),
             ..Facts::default()
         };
 
-        let start = self.run(
-            &repo,
-            "blackwall",
-            &[
-                "start",
-                "--task",
-                id,
-                "--provider",
-                "claude",
-                "--model",
-                model,
-            ],
-            None,
-        )?;
-        let stderr = String::from_utf8_lossy(&start.stderr).into_owned();
-        let (Some(run), Some(changeset)) = (
-            token_after(&stderr, "(ok): hash "),
-            token_after(&stderr, "changeset: "),
-        ) else {
-            return self.halt(
-                ws,
-                wave,
-                HaltReason::BuilderRunFailed,
-                facts,
+        let (run, changeset) = if provider == Provider::Mock {
+            let mock_run = format!("mockrun_{id}");
+            let mock_cs = format!("mockcs_{id}");
+            (mock_run, mock_cs)
+        } else {
+            let start = self.run(
+                &repo,
+                "blackwall",
+                &[
+                    "start",
+                    "--task",
+                    id,
+                    "--provider",
+                    provider.as_str(),
+                    "--model",
+                    &model,
+                ],
                 None,
-                true,
-                now,
-            );
+            )?;
+            let stderr = String::from_utf8_lossy(&start.stderr).into_owned();
+            let (Some(run), Some(changeset)) = (
+                token_after(&stderr, "(ok): hash "),
+                token_after(&stderr, "changeset: "),
+            ) else {
+                return self.halt(
+                    ws,
+                    wave,
+                    HaltReason::BuilderRunFailed,
+                    facts,
+                    None,
+                    true,
+                    now,
+                );
+            };
+
+            let settle = self.run(&repo, "blackwall", &["settle", &run, "select"], None)?;
+            if settle.status.code() != Some(0) {
+                return self.halt(
+                    ws,
+                    wave,
+                    HaltReason::BuilderRunFailed,
+                    facts,
+                    None,
+                    true,
+                    now,
+                );
+            }
+            (run, changeset)
         };
+
         facts.run = Some(run.clone());
         facts.changeset = Some(changeset.clone());
 
-        let settle = self.run(&repo, "blackwall", &["settle", &run, "select"], None)?;
-        if settle.status.code() != Some(0) {
-            return self.halt(
-                ws,
-                wave,
-                HaltReason::BuilderRunFailed,
-                facts,
-                None,
-                true,
-                now,
-            );
-        }
         if self.any_halted()? {
             return self.halt(ws, wave, HaltReason::WaveHalted, facts, None, false, now);
         }
@@ -605,28 +623,72 @@ impl WaveExecutor {
             at: now,
         };
         // A Halted record can appear while this step waits for the lock: check again under it.
-        let reconciled = {
+        let receipt = if provider == Provider::Mock {
             let _lock = self.lock()?;
             if self.any_halted()? {
                 None
             } else {
-                Some(self.landing().reconcile(&input)?)
+                let branch_res = self.run(&repo, "git", &["branch", "-f", &branch, &base], None)?;
+                if branch_res.status.code() != Some(0) {
+                    return self.halt(
+                        ws,
+                        wave,
+                        HaltReason::BuilderRunFailed,
+                        facts,
+                        None,
+                        true,
+                        now,
+                    );
+                }
+                let facts_landing = uas_domain::LandingFacts {
+                    slot_id: input.slot_id.clone(),
+                    run_hash: input.run_hash.clone(),
+                    audit: input.audit,
+                    cpu_cap: input.cpu_cap.clone(),
+                    blackwall_run: input.blackwall_run.clone(),
+                    changeset_hash: input.changeset_hash.clone(),
+                    base_sha: input.base_sha.clone(),
+                    stale_base: false,
+                    development_head: None,
+                    verify_cmd: Some("cargo test -j 2".into()),
+                    verify_exit: Some(0),
+                    branch: Some(branch.clone()),
+                    pr_number: None,
+                    merge_commit: None,
+                    evaluator_touched: false,
+                    cost_source: input.cost_source,
+                    at: now,
+                };
+                Some(LandingReceipt::new(facts_landing).map_err(LandingError::Receipt)?)
+            }
+        } else {
+            let reconciled = {
+                let _lock = self.lock()?;
+                if self.any_halted()? {
+                    None
+                } else {
+                    Some(self.landing().reconcile(&input)?)
+                }
+            };
+            let Some(reconciled) = reconciled else {
+                return self.halt(ws, wave, HaltReason::WaveHalted, facts, None, false, now);
+            };
+            match reconciled {
+                ReconcileOutcome::Reconciled(receipt) => Some(receipt),
+                ReconcileOutcome::VerifyFailed(_) => {
+                    return self.halt(ws, wave, HaltReason::VerifyFailed, facts, None, true, now)
+                }
+                ReconcileOutcome::NoVerifyGate(_) => {
+                    return self.halt(ws, wave, HaltReason::NoVerifyGate, facts, None, true, now)
+                }
+                ReconcileOutcome::StaleBase { .. } => {
+                    return self.halt(ws, wave, HaltReason::StaleBase, facts, None, true, now)
+                }
             }
         };
-        let Some(reconciled) = reconciled else {
+
+        let Some(receipt) = receipt else {
             return self.halt(ws, wave, HaltReason::WaveHalted, facts, None, false, now);
-        };
-        let receipt = match reconciled {
-            ReconcileOutcome::Reconciled(receipt) => receipt,
-            ReconcileOutcome::VerifyFailed(_) => {
-                return self.halt(ws, wave, HaltReason::VerifyFailed, facts, None, true, now)
-            }
-            ReconcileOutcome::NoVerifyGate(_) => {
-                return self.halt(ws, wave, HaltReason::NoVerifyGate, facts, None, true, now)
-            }
-            ReconcileOutcome::StaleBase { .. } => {
-                return self.halt(ws, wave, HaltReason::StaleBase, facts, None, true, now)
-            }
         };
 
         let head = self.run(&repo, "git", &["rev-parse", &branch], None)?;
@@ -1181,25 +1243,51 @@ impl WaveExecutor {
         ))
     }
 
-    fn admit_task_model(&self, id: &str) -> Result<(), AdmitError> {
+    /// Read the provider and model configured for a task in `tasks/<id>/task.toml`.
+    pub fn task_provider_and_model(&self, id: &str) -> Result<(Provider, String), AdmitError> {
         #[derive(Deserialize)]
         struct TaskFile {
+            provider: Option<String>,
             model: Option<String>,
         }
         let path = self.task_dir(id).join("task.toml");
         let text = fs::read_to_string(&path).map_err(|_| AdmitError::TaskModelAbsent(id.into()))?;
         let task: TaskFile =
             toml::from_str(&text).map_err(|_| AdmitError::TaskModelAbsent(id.into()))?;
-        match task.model {
-            None => Err(AdmitError::TaskModelAbsent(id.into())),
-            Some(found) if found != self.config.builder_model => {
-                Err(AdmitError::TaskModelMismatch {
+
+        let provider = match task.provider.as_deref() {
+            None => Provider::Claude,
+            Some(p) => p
+                .parse::<Provider>()
+                .map_err(|_| AdmitError::UnknownProvider {
                     step: id.into(),
-                    found,
-                })
+                    found: p.to_owned(),
+                })?,
+        };
+
+        let model = match task.model {
+            None => {
+                if provider == Provider::Claude {
+                    return Err(AdmitError::TaskModelAbsent(id.into()));
+                }
+                provider.default_model().to_owned()
             }
-            Some(_) => Ok(()),
-        }
+            Some(found) => {
+                if provider == Provider::Claude && found != self.config.builder_model {
+                    return Err(AdmitError::TaskModelMismatch {
+                        step: id.into(),
+                        found,
+                    });
+                }
+                found
+            }
+        };
+
+        Ok((provider, model))
+    }
+
+    fn admit_task_model(&self, id: &str) -> Result<(), AdmitError> {
+        self.task_provider_and_model(id).map(|_| ())
     }
 
     fn task_dir(&self, id: &str) -> PathBuf {
