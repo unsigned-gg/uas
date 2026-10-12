@@ -8,10 +8,15 @@
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
 
+pub mod a2a;
 pub mod error;
 pub mod pool_port;
 pub mod server;
 
+pub use a2a::{
+    A2aEnvelope, A2aError, A2aGateway, A2aHandshakeRequest, A2aHandshakeResponse, A2aPeerAddress,
+    A2aVersion,
+};
 pub use error::AcpError;
 pub use pool_port::PoolPort;
 pub use server::{AcpConfig, AcpServer};

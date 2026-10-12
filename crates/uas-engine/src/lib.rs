@@ -55,6 +55,7 @@
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
 
+mod a2a;
 mod activity;
 mod compensator;
 mod cortex;
@@ -73,6 +74,10 @@ mod wave;
 mod wave_exec;
 mod workflow;
 
+pub use a2a::{
+    handle_peer_disconnect, A2aMessageEnvelope, ArtifactRef, MessagePayload,
+    MAX_INLINE_PAYLOAD_BYTES,
+};
 pub use activity::{Activity, ActivityDisposition, ActivityKind, ActivityResult};
 pub use compensator::{
     BranchPruneCompensator, CompensationReceipt, Compensator, CompositeCompensator,

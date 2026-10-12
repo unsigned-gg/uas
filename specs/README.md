@@ -34,7 +34,7 @@ Methodology: LeanSpec. The reference copy is in `../vendor/leanspec/`.
 | [0026](0026-cortex-pool-member-adapter.md) | Cortex pool-member adapter | complete | high |
 | [0028](0028-branchless-crdt-worktrees.md) | Branchless CRDT worktrees | planned | high |
 | [0029](0029-agent-identity-and-on-behalf-of-delegation.md) | Agent identity and on-behalf-of delegation | planned | high |
-| [0030](0030-a2a-multi-agent-interop.md) | A2A multi-agent interop | in-progress | high |
+| [0030](0030-a2a-multi-agent-interop.md) | A2A multi-agent interop | complete | high |
 | [0031](0031-mcp-security-baseline.md) | MCP security baseline | planned | high |
 | [0032](0032-reverie-access-from-a-jailed-slot.md) | Reverie access from a jailed slot | planned | high |
 | [0033](0033-cargo-feature-policy-and-ci-matrix.md) | Cargo feature policy and CI matrix | in-progress | high |

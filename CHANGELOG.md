@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
+- Spec 0030: implement A2A protocol gateway, version negotiation, and Cortex Mesh addressing in `uas-acp`, and out-of-band artifact storage references and peer loss compensation in `uas-engine`.
 - Spec 0061: implement agent harness stream translator, token metrics aggregation, and mock stream generator in `uas-engine` with 1 MiB frame limit and error recovery.
 - Spec 0030: define pure orchestrator AST node types (`LlmAgent`, `Sequential`, `Parallel`, `Loop`) and `AgentTool` in `uas-domain` with a maximum delegation depth limit of 5, zero I/O, and serde support.
 - Spec 0060: implement `SubreaperGuard` and non-blocking zombie reaping in `uas-pool`, add `pidfd_send_signal` path to `SignalFreezer`, wire process group teardown into `reclaim_slot`, and add child process tree verification tests.

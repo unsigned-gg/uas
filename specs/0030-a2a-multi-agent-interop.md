@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: complete
 created: 2026-10-10
 tags: [architecture, agents, interoperability]
 priority: high
@@ -9,7 +9,7 @@ depends_on: [0001-cas-architecture-and-crate-layout, 0008-soma-cortex-saga-rever
 
 # 0030-a2a-multi-agent-interop
 
-> **Status**: in-progress - **Priority**: high - **Created**: 2026-10-10
+> **Status**: complete - **Priority**: high - **Created**: 2026-10-10
 
 ## Overview
 
@@ -42,8 +42,8 @@ The architecture defines orchestrator nodes to compose hybrid agents, separating
 
 - [x] Define declarative agent composition types and depth limits in `uas-domain` with zero I/O dependency.
 - [x] Implement the `AgentTool` capability delegation struct in `uas-domain`.
-- [ ] Implement the A2A mutual cryptographic authentication gateway, peer addressing, and version negotiation in `uas-acp`.
-- [ ] Integrate out-of-band artifact storage references in `uas-engine` message envelopes.
+- [x] Implement the A2A mutual cryptographic authentication gateway, peer addressing, and version negotiation in `uas-acp`.
+- [x] Integrate out-of-band artifact storage references in `uas-engine` message envelopes.
 
 ## Test
 
