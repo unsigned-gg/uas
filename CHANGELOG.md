@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
+- Spec 0062: implement agent harness CLI invocation builder and environment sanitization in `uas-engine` with allowlisted system variables, secret scrubbing, slot metadata injection, and isolated configuration roots.
 - Spec 0032: implement Reverie memory proxy in `uas-router` and `uas-sandbox` with Unix socket isolation, route prefix matching, project scoping checks, and 502/504 error synthesis.
 - Spec 0030: implement A2A protocol gateway, version negotiation, and Cortex Mesh addressing in `uas-acp`, and out-of-band artifact storage references and peer loss compensation in `uas-engine`.
 - Spec 0061: implement agent harness stream translator, token metrics aggregation, and mock stream generator in `uas-engine` with 1 MiB frame limit and error recovery.
