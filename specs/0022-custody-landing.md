@@ -1,5 +1,5 @@
 ---
-status: planned
+status: complete
 created: 2026-10-10
 tags: [custody, blackwall, saga, orlog, receipt, landing, phase-9]
 priority: high
@@ -235,13 +235,13 @@ landing activity's principal.
   and the D10 `try_from` rule. Red first: a raise above the computed tier with
   no `human_raise` is rejected; a raise to `verified` with `verify_exit` 1 is
   rejected even with `human_raise` (PR #61).
-- [ ] P5c, `uas-engine::landing`: the D7 exit mapping and the D11 PR body. Red
+- [x] P5c, `uas-engine::landing`: the D7 exit mapping and the D11 PR body. Red
   first: reconcile exit 1 and exit 2 each return a `LandingError`; the `pr`
   argv ends in `--body -`; the fake `blackwall` gets the receipt JSON on stdin,
   `pr_number` null, and an unattested run shows its dropped count there.
-- [ ] Wire the activity into `SagaFlowCoordinator` after settle; compensation on
+- [x] Wire the activity into `SagaFlowCoordinator` / `WaveExecution` after settle; compensation on
   failure removes the temporary branch if `blackwall pr` did not push.
-- [ ] Live gate on ceres: `blackwall doctor` green in the main checkout (F16),
+- [x] Live gate on ceres: `blackwall doctor` green in the main checkout (F16),
   one real run through `estate-custody-rollout.toml`; the PR body shows the
   receipt JSON (D11).
 - [x] Spec 0008: cite this receipt as the `Attestation.receipt` for landings.
