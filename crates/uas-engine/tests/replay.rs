@@ -68,6 +68,7 @@ fn test_crash_recovery_step_by_step_and_zero_respend() {
         success: true,
         attestation: dummy_attestation("step-1-spec-check", 1020),
         summary: Some("All 9 specs valid".into()),
+        memory: None,
     };
     session
         .complete_activity(res1.clone(), 1020)
@@ -103,6 +104,7 @@ fn test_crash_recovery_step_by_step_and_zero_respend() {
         success: true,
         attestation: dummy_attestation("step-2-build", 1040),
         summary: Some("Build ok in 0.24s".into()),
+        memory: None,
     };
     rec1.complete_activity(res2.clone(), 1040)
         .expect("complete act2");
@@ -141,6 +143,7 @@ fn test_crash_recovery_step_by_step_and_zero_respend() {
         success: true,
         attestation: dummy_attestation("step-3-test", 1060),
         summary: Some("3 passed; 0 failed".into()),
+        memory: None,
     };
     rec2.complete_activity(res3.clone(), 1060)
         .expect("complete act3");
@@ -180,6 +183,7 @@ fn test_crash_recovery_after_activity_failure_and_compensating() {
                 success: true,
                 attestation: dummy_attestation("prep", 2020),
                 summary: Some("Ready".into()),
+                memory: None,
             },
             2020,
         )
@@ -254,6 +258,7 @@ fn test_replay_idempotence() {
                 success: true,
                 attestation: dummy_attestation("check", 4020),
                 summary: Some("OK".into()),
+                memory: None,
             },
             4020,
         )

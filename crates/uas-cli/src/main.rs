@@ -69,6 +69,25 @@ fn open_prs_value(raw: &str) -> Result<bool, String> {
     Ok(raw == "1")
 }
 
+/// Resolve write-behind outbox directory path from override, XDG_STATE_HOME, or HOME (spec 0044 D10).
+#[must_use]
+pub fn resolve_outbox_dir(override_dir: Option<std::path::PathBuf>) -> std::path::PathBuf {
+    if let Some(dir) = override_dir {
+        return dir;
+    }
+    if let Ok(state_home) = std::env::var("XDG_STATE_HOME") {
+        if !state_home.is_empty() {
+            return std::path::PathBuf::from(state_home).join("uas/reverie-outbox");
+        }
+    }
+    if let Ok(home) = std::env::var("HOME") {
+        if !home.is_empty() {
+            return std::path::PathBuf::from(home).join(".local/state/uas/reverie-outbox");
+        }
+    }
+    std::path::PathBuf::from("/tmp/uas-reverie-outbox")
+}
+
 #[derive(Debug, Subcommand)]
 enum WaveCommand {
     /// Write one saga flow per wave from a plan.
@@ -138,6 +157,7 @@ enum WaveCommand {
 }
 
 #[derive(Debug, Subcommand)]
+#[allow(clippy::large_enum_variant)]
 enum HarnessCommand {
     /// Run an activity within a leased slot and emit an attestation receipt.
     Run {
@@ -189,6 +209,14 @@ enum HarnessCommand {
         /// Deprecated: moves to saga (spec 0049).
         #[arg(long, default_value_t = DEFAULT_MAX_WAVE_CONCURRENCY)]
         max_concurrency: usize,
+
+        /// Reverie memory daemon base URL (spec 0044 D10).
+        #[arg(long, env = "UAS_REVERIE_URL", default_value = "http://127.0.0.1:7437")]
+        reverie_url: String,
+
+        /// Path to reverie write-behind outbox directory.
+        #[arg(long)]
+        reverie_outbox_dir: Option<std::path::PathBuf>,
     },
 
     /// Verify a receipt file by replaying events and checking evidence tiers.
@@ -450,6 +478,7 @@ fn harness_run(
             success: true,
             attestation: attestation.clone(),
             summary: Some("simulated dry-run execution".into()),
+            memory: None,
         };
         workflow.complete_activity(result, now)?;
         workflow.finish_success(now)?;
@@ -494,6 +523,7 @@ fn harness_run(
                 success: true,
                 attestation: attestation.clone(),
                 summary: Some(String::from_utf8_lossy(&output.stdout).trim().into()),
+                memory: None,
             };
             workflow.complete_activity(result, now)?;
             workflow.finish_success(now)?;
@@ -719,6 +749,7 @@ fn harness_run_flow(
                         success: true,
                         attestation: attestation.clone(),
                         summary: Some(format!("simulated dry-run: {}", step.title)),
+                        memory: None,
                     };
                     workflow.complete_activity(result, step_now)?;
                     wave_coordinator.mark_step_completed(
@@ -755,6 +786,7 @@ fn harness_run_flow(
                             success: true,
                             attestation: attestation.clone(),
                             summary: Some(summary_raw.clone()),
+                            memory: None,
                         };
                         workflow.complete_activity(result, step_now)?;
                         let verdict = if summary_raw.is_empty() {
@@ -810,6 +842,7 @@ fn harness_run_flow(
                         success: true,
                         attestation: attestation.clone(),
                         summary: Some(format!("gate approved: {}", step.id)),
+                        memory: None,
                     };
                     workflow.complete_activity(result, step_now)?;
                     wave_coordinator.mark_step_completed(
@@ -830,6 +863,7 @@ fn harness_run_flow(
                         success: true,
                         attestation: attestation.clone(),
                         summary: Some(format!("step completed: {}", step.title)),
+                        memory: None,
                     };
                     workflow.complete_activity(result, step_now)?;
                     wave_coordinator.mark_step_completed(
@@ -928,6 +962,7 @@ fn harness_run_flow(
                 success: true,
                 attestation: attestation.clone(),
                 summary: Some(format!("simulated dry-run: {}", step.title)),
+                memory: None,
             };
             workflow.complete_activity(result, step_now)?;
             coordinator.mark_completed(&step.id);
@@ -957,6 +992,7 @@ fn harness_run_flow(
                     success: true,
                     attestation: attestation.clone(),
                     summary: Some(String::from_utf8_lossy(&output.stdout).trim().into()),
+                    memory: None,
                 };
                 workflow.complete_activity(result, step_now)?;
                 coordinator.mark_completed(&step.id);
@@ -1006,6 +1042,7 @@ fn harness_run_flow(
                 success: true,
                 attestation: attestation.clone(),
                 summary: Some(format!("gate approved: {}", step.id)),
+                memory: None,
             };
             workflow.complete_activity(result, step_now)?;
             coordinator.mark_completed(&step.id);
@@ -1023,6 +1060,7 @@ fn harness_run_flow(
                 success: true,
                 attestation: attestation.clone(),
                 summary: Some(format!("step completed: {}", step.title)),
+                memory: None,
             };
             workflow.complete_activity(result, step_now)?;
             coordinator.mark_completed(&step.id);
@@ -1201,6 +1239,8 @@ fn main() -> Result<()> {
                 show_cpm,
                 wave,
                 max_concurrency,
+                reverie_url: _reverie_url,
+                reverie_outbox_dir: _reverie_outbox_dir,
             } => {
                 let report = match (flow, task) {
                     (Some(flow_path), _) => {
@@ -1562,5 +1602,59 @@ verify_cmd = ["echo", "critic pass"]
             Err(EngineError::StoreError(msg)) => assert_eq!(msg, "boom"),
             other => panic!("expected StoreError pass-through, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn test_reverie_url_resolution_order() {
+        use clap::Parser;
+        static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+        let _guard = ENV_LOCK.lock().unwrap();
+
+        // 1. Default when neither flag nor env var is provided
+        std::env::remove_var("UAS_REVERIE_URL");
+        let cli = Cli::try_parse_from(["uas", "harness", "run", "--flow", "f.toml"]).unwrap();
+        match cli.command {
+            Command::Harness {
+                command: HarnessCommand::Run { reverie_url, .. },
+            } => {
+                assert_eq!(reverie_url, "http://127.0.0.1:7437");
+            }
+            _ => panic!("expected HarnessCommand::Run"),
+        }
+
+        // 2. UAS_REVERIE_URL environment variable alone
+        std::env::set_var("UAS_REVERIE_URL", "http://127.0.0.1:9999");
+        let cli = Cli::try_parse_from(["uas", "harness", "run", "--flow", "f.toml"]).unwrap();
+        match cli.command {
+            Command::Harness {
+                command: HarnessCommand::Run { reverie_url, .. },
+            } => {
+                assert_eq!(reverie_url, "http://127.0.0.1:9999");
+            }
+            _ => panic!("expected HarnessCommand::Run"),
+        }
+
+        // 3. Flag wins over UAS_REVERIE_URL environment variable
+        let cli = Cli::try_parse_from([
+            "uas",
+            "harness",
+            "run",
+            "--flow",
+            "f.toml",
+            "--reverie-url",
+            "http://127.0.0.1:8888",
+        ])
+        .unwrap();
+        match cli.command {
+            Command::Harness {
+                command: HarnessCommand::Run { reverie_url, .. },
+            } => {
+                assert_eq!(reverie_url, "http://127.0.0.1:8888");
+            }
+            _ => panic!("expected HarnessCommand::Run"),
+        }
+
+        // Cleanup
+        std::env::remove_var("UAS_REVERIE_URL");
     }
 }

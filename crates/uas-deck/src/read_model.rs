@@ -123,6 +123,7 @@ mod tests {
                     at: timestamp,
                 },
                 summary: None,
+                memory: None,
             },
             timestamp,
         }

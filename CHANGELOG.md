@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
+- Spec 0044: implement Reverie degradation client in `uas-engine` and `uas-cli`. Add bounded HTTP/1.0 transport, write-behind disk outbox, fail-open search, and memory status precedence.
 - Spec 0047: implement slot build cache retention and quota eviction in `uas-pool` with deterministic SHA-256 key derivation, per-slot `0700` cache isolation, stamp mtime-ordered eviction, and `AuditReceipt` cache telemetry.
 - Spec 0063: implement agent harness MCP configuration bridge in `uas-engine` with isolated slot scratch synthesis, repository `.mcp.json` masking, Reverie UDS stdio bridging, fail-closed tool command allowlisting, secret scrubbing, and role-based capability filtering (`Builder` vs `Critic`).
 - Spec 0036: implement host-wide slot arbitration in `uas-pool` and `uas-domain` with advisory file locking, bounded wait backoff, sequential slot indexing, directory security verification, and multi-process capacity enforcement.

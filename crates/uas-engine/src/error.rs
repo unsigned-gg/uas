@@ -90,4 +90,12 @@ pub enum EngineError {
         /// Command that was rejected.
         command: String,
     },
+
+    /// Underlying I/O error.
+    #[error("i/o error: {0}")]
+    Io(#[from] std::io::Error),
+
+    /// Reverie memory client error (spec 0044).
+    #[error("reverie error: {0}")]
+    Reverie(String),
 }

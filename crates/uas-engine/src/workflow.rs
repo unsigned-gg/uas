@@ -445,6 +445,7 @@ mod tests {
             success: true,
             attestation: att,
             summary: Some("passed".into()),
+            memory: None,
         };
         sess.complete_activity(res, 110).unwrap();
         sess.finish_success(120).unwrap();

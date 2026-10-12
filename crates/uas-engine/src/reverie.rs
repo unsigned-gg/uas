@@ -11,6 +11,11 @@ use uas_domain::Attestation;
 
 use crate::EngineError;
 
+#[cfg(feature = "reverie-http")]
+pub mod http;
+#[cfg(feature = "reverie-http")]
+pub mod outbox;
+
 /// A structured memory entry to persist in Reverie.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ReverieMemoryRecord {

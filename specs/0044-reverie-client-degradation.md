@@ -1,5 +1,5 @@
 ---
-status: planned
+status: complete
 created: 2026-10-10
 tags: [engine, reverie, memory, degradation, outbox, http]
 priority: high
@@ -9,7 +9,7 @@ depends_on: [0004-dependency-and-licence-policy, 0006-cas-engine-and-harness-dog
 
 # 0044-reverie-client-degradation
 
-> **Status**: planned, **Priority**: high, **Created**: 2026-10-10
+> **Status**: complete, **Priority**: high, **Created**: 2026-10-10
 
 ## Overview
 
@@ -88,13 +88,13 @@ choice for Christian.
 
 ## Plan
 
-- [ ] Christian rules D2. Under A, amend the spec 0004 `reqwest` row (add `uas-engine`, behind `reverie-http`, `blocking`, `json`) and run `make pin-check`. Under B, no row changes.
-- [ ] `uas-engine`: declare `reverie-http` (D1); add `MemoryStatus` and `ActivityResult.memory` with `#[serde(default)]` (D5). Check that the spec 0009 replay tests still read old events.
-- [ ] `uas-engine`: `reverie::outbox` with the offset sidecar, cap, compaction, locks and mode checks (D6, D7, D8).
-- [ ] `uas-engine`: `reverie::http::HttpReverieClient` with `ReverieDeadlines` (D3), probe and fail-open (D4), replay and backoff (D6), `event_id` (D9).
-- [ ] Wire the client into the activity path that `uas harness run` drives: probe and search before an activity, record after it, memory status on the result. This closes the F2 gap left by spec 0008.
-- [ ] `uas-cli`: forward `reverie-http`; add `--reverie-url` with `env = "UAS_REVERIE_URL"` (needs the clap `env` feature, spec 0042 Plan); pass the outbox directory (D10).
-- [ ] Makefile and CI: a `reverie-http` leg in the spec 0033 feature matrix, when that matrix lands.
+- [x] Christian rules D2. Transport B selected: raw HTTP/1.0 over TcpStream, no new dependencies.
+- [x] `uas-engine`: declare `reverie-http` (D1); add `MemoryStatus` and `ActivityResult.memory` with `#[serde(default)]` (D5). Check that the spec 0009 replay tests still read old events.
+- [x] `uas-engine`: `reverie::outbox` with the offset sidecar, cap, compaction, locks and mode checks (D6, D7, D8).
+- [x] `uas-engine`: `reverie::http::HttpReverieClient` with `ReverieDeadlines` (D3), probe and fail-open (D4), replay and backoff (D6), `event_id` (D9).
+- [x] Wire the client into the activity path that `uas harness run` drives: probe and search before an activity, record after it, memory status on the result. This closes the F2 gap left by spec 0008.
+- [x] `uas-cli`: forward `reverie-http`; add `--reverie-url` with `env = "UAS_REVERIE_URL"` (needs the clap `env` feature, spec 0042 Plan); pass the outbox directory (D10).
+- [x] Makefile and CI: a `reverie-http` leg in the spec 0033 feature matrix, when that matrix lands.
 
 ## Test
 

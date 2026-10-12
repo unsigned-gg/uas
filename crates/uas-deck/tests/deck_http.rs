@@ -98,6 +98,7 @@ fn session_events() -> Vec<WorkflowEvent> {
                     at: 120,
                 },
                 summary: None,
+                memory: None,
             },
             timestamp: 120,
         },

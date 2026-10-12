@@ -45,6 +45,7 @@
 //!     success: true,
 //!     attestation,
 //!     summary: Some("passed".into()),
+//!     memory: None,
 //! };
 //! session.complete_activity(result, 1010).unwrap();
 //! session.finish_success(1020).unwrap();
@@ -78,7 +79,7 @@ pub use a2a::{
     handle_peer_disconnect, A2aMessageEnvelope, ArtifactRef, MessagePayload,
     MAX_INLINE_PAYLOAD_BYTES,
 };
-pub use activity::{Activity, ActivityDisposition, ActivityKind, ActivityResult};
+pub use activity::{Activity, ActivityDisposition, ActivityKind, ActivityResult, MemoryStatus};
 pub use compensator::{
     BranchPruneCompensator, CompensationReceipt, Compensator, CompositeCompensator,
     LeaseReturnCompensator, NoopCompensator, RecordingCompensator, WorktreeCleanupCompensator,
@@ -96,6 +97,11 @@ pub use harness::{
 };
 pub use landing::{
     LandingActivity, LandingConfig, LandingError, LandingInput, LandingOutcome, ReconcileOutcome,
+};
+#[cfg(feature = "reverie-http")]
+pub use reverie::{
+    http::{HttpReverieClient, ReverieDeadlines},
+    outbox::ReverieOutbox,
 };
 pub use reverie::{InMemoryReverieClient, ReverieClient, ReverieContextQuery, ReverieMemoryRecord};
 pub use saga::{FlowMetadata, SagaFlowCoordinator, SagaFlowDef, SagaStep};

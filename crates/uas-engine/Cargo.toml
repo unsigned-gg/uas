@@ -43,6 +43,8 @@ cortex-grpc = [
     "dep:tonic-prost-build",
     "dep:protox",
 ]
+# Reverie client degradation (spec 0044). Off by default.
+reverie-http = []
 
 # The generated gRPC code (build.rs, feature cortex-grpc) names these two crates; no source file
 # does, so machete cannot see the use.
