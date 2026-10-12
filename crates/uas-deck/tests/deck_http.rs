@@ -323,3 +323,47 @@ async fn bind_taken_port_is_server_bind_failed() {
         other => panic!("expected ServerBindFailed, got {:?}", other.map(|_| ())),
     }
 }
+
+#[tokio::test]
+async fn get_settle_renders_live_snapshot_from_poller() {
+    let fixture = include_str!("fixtures/settle-pending.json");
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+
+    let fixture_str = fixture.to_string();
+    tokio::spawn(async move {
+        let (mut stream, _) = listener.accept().await.unwrap();
+        let mut buf = [0u8; 1024];
+        let _ = stream.read(&mut buf).await.unwrap();
+        let resp = format!(
+            "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+            fixture_str.len(),
+            fixture_str
+        );
+        stream.write_all(resp.as_bytes()).await.unwrap();
+    });
+
+    let config = uas_deck::CortexPollerConfig {
+        addr,
+        path: "/v1/settle/pending".to_string(),
+        bearer_token: None,
+        interval: std::time::Duration::from_millis(50),
+        timeout: std::time::Duration::from_millis(500),
+    };
+
+    let snapshot = uas_deck::SnapshotFetch::new();
+    let poller = uas_deck::CortexPoller::new(config, snapshot.clone());
+    poller.poll_once().await.expect("poll once succeeds");
+
+    let source = CortexSettleSource::new(snapshot);
+    let state = DeckState::new(sessions(), Arc::new(source));
+
+    let response = get(state, "/settle").await;
+    assert_eq!(response.status, 200);
+    assert!(
+        response.body.contains("Reply to the vendor invoice"),
+        "{}",
+        response.body
+    );
+    assert!(!response.body.contains("disconnected"), "{}", response.body);
+}

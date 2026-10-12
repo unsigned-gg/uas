@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
-//! Operator dashboard for the Unsigned Agent Substrate (spec 0018, slices 1 and 2).
+//! Operator dashboard for the Unsigned Agent Substrate (spec 0018, slices 1, 2, and 3).
 //!
 //! `uas-deck` serves a read-only page: the session table and the settle queue.
 //! Routes use Axum and the HTML uses Maud. Settle cards come from the in-process
-//! queue or from a Cortex body that a `PendingFetch` supplies. This slice has no
-//! actions, no event stream and no HTTP fetch yet.
+//! queue or from a Cortex body that a `PendingFetch` supplies. A background `CortexPoller`
+//! updates a memory `SnapshotFetch` (spec 0018 D9).
 
 #![forbid(unsafe_code)]
 
@@ -17,7 +17,10 @@ mod source;
 mod views;
 
 pub use card::{DeckCard, Guard, PendingCards, PlanStep};
-pub use cortex::{parse_pending, CortexSettleSource, PendingFetch};
+pub use cortex::{
+    fetch_pending_http, parse_pending, CortexPoller, CortexPollerConfig, CortexSettleSource,
+    PendingFetch, SnapshotFetch,
+};
 pub use error::DeckError;
 pub use read_model::SessionRow;
 pub use server::{bind, router, serve};
