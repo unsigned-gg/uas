@@ -27,14 +27,14 @@ This spec defines the delegated identity a run carries, how the effective
 permission is computed from the human and the agent policy, and what the audit
 record holds. It states intent. It picks no crate and no provider.
 
-Why now: Christian ruled this spec wave in session on 2026-10-10 [reported: his
+Why now: the operator ruled this spec wave in session on 2026-10-10 [reported: his
 own session, this lane, interview answer "All four gaps"]. A ruling is not
 command-provable, so it carries the reported tier.
 
 No spec owns delegated identity, which is narrower than saying identity is
 absent: spec 0004 lines 190 to 192 already pin `ed25519-dalek`, `jsonschema` and
 `governor` with the purpose "identity" at phase 7, each marked as waiting for
-Allen [verified: read `specs/0004-dependency-and-licence-policy.md` lines 190 to
+the Director of Engineering [verified: read `specs/0004-dependency-and-licence-policy.md` lines 190 to
 192]. What is missing is the delegation rule, not the crate list. The absence
 claim carries its own control: `git grep -ilE 'keycloak|spire|oidc|svid'
 6794d9b -- specs/` exits 1 with no match, while the same pattern matches this
@@ -49,7 +49,7 @@ In scope: the identity types in `uas-domain`, the delegation bridge in
 a cargo feature, off by default.
 
 Out of scope: deploying or configuring an identity provider, minting anything,
-and the mesh join token flow, which is cortex spec 0005 and sits in Allen's
+and the mesh join token flow, which is cortex spec 0005 and sits in the Director of Engineering's
 identity veto area (spec 0026 D7). REQ-0029-16 and REQ-0029-17 say what the
 engine does with whichever provider is reachable; they do not select one, and
 the grant and crate choices stay deferred to D8.
@@ -72,7 +72,7 @@ sources and commits to neither.
 | D4a | The proxy lives in `uas-router` (spec 0013 D1), below the engine. The engine therefore cannot be called by it. `uas-domain` defines an audit sink trait and a credential source trait; `uas-router` depends only on those, and `uas-engine` implements them. No lower layer calls a higher one. | spec 0001 layering; spec 0013 D1 |
 | D5 | `uas-domain` holds the assertion type, the subject type and the intersection rule as pure functions. Fetching, exchanging and verifying a token is adapter work in `uas-engine`, and the egress rule is `uas-sandbox`. The domain keeps zero I/O. | spec 0001 layering |
 | D6 | The audit record is append-only and names **both** principals. A record that names one is a defect, not a degraded mode. | estate synthesis 4.12 point 4 [reported] |
-| D7 | Ratification needs Allen Hackley. Identity services are his overriding veto, and Christian alone cannot override it: that takes Christian and Patrick together. Christian ruled on 2026-10-10 that the spec may land at `status: planned` and that Allen reviews afterwards [reported: his own session, this lane]. Landing a `planned` spec exercises no override, because it commits no code and decides no provider. | second-operator SOP section 3e; executive-override section 5 |
+| D7 | Ratification needs the Director of Engineering. Identity services are his overriding veto, and the operator alone cannot override it: that takes the operator and the CTO together. The operator ruled on 2026-10-10 that the spec may land at `status: planned` and that the Director of Engineering reviews afterwards [reported: his own session, this lane]. Landing a `planned` spec exercises no override, because it commits no code and decides no provider. | second-operator SOP section 3e; executive-override section 5 |
 | D8 | The provider choice, the token-exchange grant and any new crate are deferred to an implementation spec, which must pin its dependencies in spec 0004 before first use. | AGENTS.md rule 12 |
 
 ### Requirements (EARS)
@@ -157,8 +157,8 @@ removed proves nothing.
   gives `verified` as "a command ran and the output proves the claim", so an
   operator ruling is `reported`, however direct it was. The synthesis points are
   `reported` as another lane's write-up.
-- This spec is `planned` and commits no code. Ratification is Allen's, under his
-  identity veto. Christian set the timing of any ask to him.
+- This spec is `planned` and commits no code. Ratification is the Director of Engineering's, under his
+  identity veto. The operator set the timing of any ask to him.
 - The proxy already strips what a worker sends and injects its own header
   (spec 0013 D5). REQ-0029-12 adds a check before that injection; it does not
   move the credential closer to the worker.

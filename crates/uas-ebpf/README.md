@@ -29,7 +29,7 @@ depends only on crates in lower layers.
 | `src/bin/uas-ebpfd.rs` | The daemon binary. |
 | `uas-ebpfd.service` | The systemd unit (root, `CAP_BPF CAP_PERFMON CAP_SYS_NICE`, socket `/run/uas/ebpf.sock`). |
 
-## Decisions (Christian, 2026-10-09)
+## Decisions (the operator, 2026-10-09)
 
 - **Clean-room Aya implementation:** `aya` 0.14.0 and `aya-ebpf` 0.2.1 (MIT OR Apache-2.0).
   Zero code copied from `neutral-engineering/autonice` (GPL-2.0).

@@ -19,7 +19,7 @@ the gateway key itself (CER-2718, parent CER-2681).
 
 The first draft came from the agy lane (`session-agy-ceres-estate-w25-p3`)
 on 2026-10-09; its facts and filter rules are kept. Its runtime decision is
-replaced by Christian's ruling below.
+replaced by the operator's ruling below.
 
 Facts, measured 2026-10-09 on ceres (kernel `6.6.87.2-microsoft-standard-WSL2`,
 Landlock ABI 3, unprivileged):
@@ -53,8 +53,8 @@ Landlock ABI 3, unprivileged):
 
 | # | Decision | Who, when |
 |---|---|---|
-| D1 | The proxy lives in `uas-router`, on `tokio`. `uas-sandbox` keeps only the socket mount: the `.ipc` directory and the path convention. Layering holds: sandbox sits above router. | Christian, 2026-10-09, by interview in the UAS lane |
-| D2 | Upstream is plain HTTP to the tailnet or in-cluster gateway. No `reqwest`, no TLS stack now. | Christian, 2026-10-09, by interview in the UAS lane |
+| D1 | The proxy lives in `uas-router`, on `tokio`. `uas-sandbox` keeps only the socket mount: the `.ipc` directory and the path convention. Layering holds: sandbox sits above router. | The operator, 2026-10-09, by interview in the UAS lane |
+| D2 | Upstream is plain HTTP to the tailnet or in-cluster gateway. No `reqwest`, no TLS stack now. | The operator, 2026-10-09, by interview in the UAS lane |
 | D3 | The socket is `<workspace>/.ipc/llm.sock`: a path inside the workspace, not a bind mount. `uas_sandbox::ipc::ensure_ipc_dir` creates `.ipc` with mode `0700` and refuses a symlink in its place. The proxy binds and cleans up only when `.ipc` is a real directory and the path holds nothing or a socket, so a worker cannot redirect the host's `remove_file`. | agy lane draft, kept; UAS lane, 2026-10-09, after a critic pass |
 | D4 | Allowlist: `POST` to exactly `/v1/chat/completions` or `/v1/embeddings`; `GET` to `/v1/models` or `/v1/models/<one segment>`. The ticket's telemetry egress has no receiver yet (no gateway path for it is known; not measured), so it is not on the default list; the pool adds a path when one exists. A query string is allowed. Everything else is `403`: other methods, other paths, `..` segments, `//`, percent-encoded `.`, `/` or `\`, malformed percent-encoding, characters outside the URI set, and non-origin-form targets (so `CONNECT` and absolute URLs). | agy lane draft, narrowed after a critic pass; UAS lane, 2026-10-09 |
 | D5 | The worker never holds the key. The proxy takes it from a file outside the workspace at start (`with_key_file`), or from the caller that already holds it (`with_bearer_token`). It drops any `Authorization` and every `x-litellm-*` header the worker sent, and adds its own `Authorization`. `Debug` on the config redacts it. | agy lane draft, kept; UAS lane, 2026-10-09 |
@@ -62,7 +62,7 @@ Landlock ABI 3, unprivileged):
 | D7 | `tokio` enters the workspace with the approved features plus `io-util`, a feature of the same crate that `AsyncReadExt` and `AsyncWriteExt` need. Recorded in spec 0004 as a lane amendment. | UAS lane, 2026-10-09 |
 | D8 | Limits, all configurable: 64 live connections (`503` beyond), 16 MiB declared body (`413` beyond), 10 s to send the head (`408`), 5 s to connect upstream (`502`), 120 s for the whole exchange (both sides closed). A transient accept error backs off 50 ms and never ends the listener. A short body gets `400` and the upstream connection is closed. | UAS lane, 2026-10-09, after a critic pass |
 
-Christian corrects any of these in place.
+The operator corrects any of these in place.
 
 ### Shape
 
@@ -120,7 +120,7 @@ run `make check`, `make hygiene` and `make smoke`.
 ## Notes
 
 Alternative for D1, from the agy draft: `std::thread` and blocking I/O in
-`uas-sandbox`. Rejected by Christian's ruling; the proxy is model-call
+`uas-sandbox`. Rejected by the operator's ruling; the proxy is model-call
 egress, which is the router's job.
 
 Alternative for D6: chunked request bodies. Not needed by the OpenAI-style

@@ -17,7 +17,7 @@ Work enters this repo through four surfaces: an issue template, a PR template, a
 blackwall, and a CODEOWNERS file. Who may merge or stop a change is written in five bullets of
 `AGENTS.md` and in specs 0003 and 0050. No spec owns the whole contract, and no check reads any of
 it. This spec names each surface, fixes the route of each class of action, and adds one check,
-`work-check`. Christian ruled on 2026-10-11 about 05:50Z (AskUserQuestion, lane w25:p1, label
+`work-check`. The operator ruled on 2026-10-11 about 05:50Z (AskUserQuestion, lane w25:p1, label
 "Work items and approval routes") that this spec is drafted [reported: lane brief]. Content decisions
 are the integrating lane's unless marked proposed.
 
@@ -114,13 +114,13 @@ lane never waits on it. `MAINTAINERS.md` names the humans and areas; the two fil
 | `engineering/plans` | One build plan per spec; owned by 0050 and its README | Stays; a landed plan stays as the record (plans README) |
 | `engineering/suggestions.md` | Numbered suggestions with evidence | Stays until the launch checklist; deleted if still empty then (D11) |
 | `engineering/roadmap-improvements.md` | Roadmap items, proposed until the owner accepts | Stays; each item moves to a spec or a ticket when accepted |
-| `engineering/cluster-survey-atlas.md` | Where each signal lives on the estate | Christian to rule (D12) |
-| `engineering/session-notes` | Intended for session notes; holds `.gitkeep` only | Christian to rule (D12) |
+| `engineering/cluster-survey-atlas.md` | Where each signal lives on the estate | The operator to rule (D12) |
+| `engineering/session-notes` | Intended for session notes; holds `.gitkeep` only | The operator to rule (D12) |
 
 ### Decisions
 
-Classes: `ruled` (Christian decided it), `lane-decided` (the integrating lane decided it on 2026-10-11
-and Christian may override), `proposed: Christian` (a decision only Christian can take).
+Classes: `ruled` (the operator decided it), `lane-decided` (the integrating lane decided it on 2026-10-11
+and the operator may override), `proposed: the operator` (a decision only the operator can take).
 
 | ID | Decision | Rationale | Source |
 |---|---|---|---|
@@ -129,13 +129,13 @@ and Christian may override), `proposed: Christian` (a decision only Christian ca
 | D3 | `work-check` reads the repo, not Linear and not a live PR. The PR body check stays in `text-check` (0053 D9). | One check per input; 0053 owns the body. | lane-decided: uas-engineer, 2026-10-11 |
 | D4 | The allowed `task.toml` keys are the five of the Design section. `read_paths`, `write_paths`, `[providers]` and `[cicatrix]` fail `work-check`. | F5: blackwall drops unknown keys and ignores the path keys, so only this repo can catch a typo or a false sense of confinement. | lane-decided: uas-engineer, 2026-10-11 |
 | D5 | `conventional_subject` is optional in the file and required for a task whose run opens a PR by hand. A wave step task takes its title from the executor (Notes, open). | `blackwall pr` refuses a missing subject (F5 source, `pr.rs` BadSubject); `wave-smoke-build` has none (F4). | lane-decided: uas-engineer, 2026-10-11 |
-| D6 | Routes 1 and 2 stay class 200 with land-on-green as the standing green light. The lane reports each merge and does not ask first. | AGENTS.md rule 9; 0003 promotion ruling; estate land-on-green. | ruled: Christian, 2026-10-06 and 2026-10-08, cited by 0003 |
-| D7 | A lane changes branch protection only on Christian's per-item go. Without one it prepares the API call and stops. | Spec 0003 and plan 0051 P7 (PR #194) already reserve it; Christian gave the go for `fork-gate` on 2026-10-11 about 05:25Z. | ruled: Christian, spec 0003, and his per-item go in lane w25:p1, 2026-10-11 about 05:25Z |
+| D6 | Routes 1 and 2 stay class 200 with land-on-green as the standing green light. The lane reports each merge and does not ask first. | AGENTS.md rule 9; 0003 promotion ruling; estate land-on-green. | ruled: the operator, 2026-10-06 and 2026-10-08, cited by 0003 |
+| D7 | A lane changes branch protection only on the operator's per-item go. Without one it prepares the API call and stops. | Spec 0003 and plan 0051 P7 (PR #194) already reserve it; the operator gave the go for `fork-gate` on 2026-10-11 about 05:25Z. | ruled: the operator, spec 0003, and his per-item go in lane w25:p1, 2026-10-11 about 05:25Z |
 | D8 | Route 6: a lane edits only files in its brief. A change in another lane's repo is a request sent to that lane. | Estate land-on-green: "another lane's repo or service" is not moved without the operator. | lane-decided: integrating lane, 2026-10-11 |
-| D9 | CODEOWNERS pattern lines name only people listed in `MAINTAINERS.md`. A co-approver goes in a comment, and into a pattern only after that person asks and picks the paths. | The estate attention rule: no agent spends a co-approver's attention by auto-request; the timing is Christian's. | lane-decided: integrating lane, 2026-10-11, from CODEOWNERS lines 1 to 7 |
+| D9 | CODEOWNERS pattern lines name only people listed in `MAINTAINERS.md`. A co-approver goes in a comment, and into a pattern only after that person asks and picks the paths. | The estate attention rule: no agent spends a co-approver's attention by auto-request; the timing is the operator's. | lane-decided: integrating lane, 2026-10-11, from CODEOWNERS lines 1 to 7 |
 | D10 | `require_code_owner_reviews` stays false while approvals stay 0 (0003). Turning it on is route 3. | A required code-owner review with one owner blocks every PR by that owner. | lane-decided: uas-engineer, 2026-10-11 |
-| D11 | `suggestions.md` stays until the launch checklist (0048) is ticked. It is deleted then if it has no entry. | Empty since 3a2e2d0, no inbound link (F8). A file with no content costs a reader. | proposed: Christian |
-| D12 | `cluster-survey-atlas.md` and `session-notes/` are removed, unless Christian keeps them. Default until ruled: both stay. | Both are stubs with no link or reader (F8); the repo runs no service (atlas, 2026-10-08). | proposed: Christian |
+| D11 | `suggestions.md` stays until the launch checklist (0048) is ticked. It is deleted then if it has no entry. | Empty since 3a2e2d0, no inbound link (F8). A file with no content costs a reader. | proposed: the operator |
+| D12 | `cluster-survey-atlas.md` and `session-notes/` are removed, unless the operator keeps them. Default until ruled: both stay. | Both are stubs with no link or reader (F8); the repo runs no service (atlas, 2026-10-08). | proposed: the operator |
 
 ### Requirements (EARS)
 
@@ -162,7 +162,7 @@ Order: P1 is the check. P2 and P3 are pointers and cleanup. This commit touches 
 
 - [ ] P1, `xtask/src/work_check.rs`, the `work-check` arm in `main.rs`, `make work-check`, and a non-required CI job: REQ-01, 02, 05, 06, 09, 10, 15. Red first: Test rows 1, 3, 4, 5, 6, 7, 8.
 - [ ] P2, pointers: `AGENTS.md` approval routes link here (REQ-14), `CONTRIBUTING.md` links the work-item table, and the PR template `Part of` line gains "or `Part of spec NNNN`". `text-check` gets the numeric and spec-exists test (REQ-03, 04; Test row 2).
-- [ ] P3, cleanup after Christian rules D11 and D12: delete or keep, in one `docs` PR.
+- [ ] P3, cleanup after the operator rules D11 and D12: delete or keep, in one `docs` PR.
 - [ ] P4, read back route 3 once: `gh api repos/unsigned-gg/uas/branches/development/protection` prints approvals 0 and the required checks (F7). 0003's table still says `fork-gate` is not required (Notes, open).
 
 ## Test
@@ -222,7 +222,7 @@ leg; the body check proper is `text-check` (0053). The tree table lists `enginee
 
 ## Notes
 
-- Ruling that this spec is drafted: Christian, lane w25:p1, 2026-10-11 about 05:50Z, AskUserQuestion,
+- Ruling that this spec is drafted: the operator, lane w25:p1, 2026-10-11 about 05:50Z, AskUserQuestion,
   label "Work items and approval routes" [reported: lane brief].
 - Sibling specs: 0050 owns plans and D9 (the five checks that gate a wave PR); 0053 owns the
   `Part of` pattern and the body check; 0048 D12 and REQ-0048-14 own the existence of CODEOWNERS and

@@ -27,7 +27,7 @@ not write the changelog.
 ## Publication
 
 The crates.io `uas` crate is the publication vehicle (spec 0048 D6). Publishing is
-Christian's act. Every crate sets `publish = false` until then.
+the operator's act. Every crate sets `publish = false` until then.
 
 ## Semver gate
 
@@ -40,4 +40,4 @@ required check until a crate publishes. The tool version and sha256 are pinned i
 ## Go or no-go
 
 Before the repository turns public, the launch checklist of spec 0048 D14 holds, in
-`engineering/plans/0048-launch-checklist.md`. The last item is Christian's go.
+`engineering/plans/0048-launch-checklist.md`. The last item is the operator's go.

@@ -15,7 +15,7 @@ Replace the paragraph:
 "Proposed, not adopted: a DeltaDB virtual-worktree integration with Saga,
 Blackwall and Soma
 (`cerebral-work/research@ddf42c8:agentic-systems/designs/deltadb-virtual-worktree-integration.md`,
-draft, no approver). This spec does not adopt it. Christian ruled on 2026-10-08
+draft, no approver). This spec does not adopt it. The operator ruled on 2026-10-08
 to record it here only. The cortex lane sent six review findings to the
 proposing lane (w1R:p1) the same day. One finding blocks: the design commits
 directly to main."

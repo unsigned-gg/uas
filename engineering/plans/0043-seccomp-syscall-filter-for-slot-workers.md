@@ -23,7 +23,7 @@ Tiers: `verified` = I ran or read it at the path named; `reported` = the spec sa
 ## Rulings and approvals (all given: R1 and R2 by the integrating lane on 2026-10-11, recorded in spec 0004 and spec 0043 D7)
 
 - **R1 (libc):** may `uas-sandbox` declare `libc` directly (dependency, plus dev-dependency for the P4 syscall probes), moving the spec 0004 row from 0.2.169 to the locked 0.2.190 and from "NOT in the workspace" to "uas-sandbox"? Recommended yes: `rustix` has no syscall numbers (finding 3), `seccompiler` already brings `libc` into `Cargo.lock`, and 0.2.190 is what the lockfile holds. 0.2.190 was published 2026-10-02 [verified: crates.io API], after the 2026-09-25 cutoff the epic table states, so the ruling also waives that cutoff for this row.
-- **R2 (seccompiler approval):** D7 says "the row awaits the spec 0004 approval step". Spec 0004 line 11 says no crate enters a manifest until its row is approved. P1 writes the row as `approved <date> (Christian)` only if the integrator supplies the date and name; otherwise P1 writes it as "proposed, NOT approved" and P2 stays blocked.
+- **R2 (seccompiler approval):** D7 says "the row awaits the spec 0004 approval step". Spec 0004 line 11 says no crate enters a manifest until its row is approved. P1 writes the row as `approved <date> (the operator)` only if the integrator supplies the date and name; otherwise P1 writes it as "proposed, NOT approved" and P2 stays blocked.
 
 ## Requirement coverage
 

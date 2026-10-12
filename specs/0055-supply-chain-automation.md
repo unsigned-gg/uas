@@ -21,7 +21,7 @@ file (F7). The two gitleaks scanners share a config and a version only by habit 
 This spec owns the contract for all three. It cites and does not restate spec 0004 (pin tables
 and `pin-check`, D3), spec 0034 (tool pins), spec 0045 (SBOM format and release attachment, D4),
 spec 0051 (fail-closed hook, D7) and spec 0053 (Dependabot is exempt from the CHANGELOG line,
-D6). Christian ruled on 2026-10-11 about 05:50Z that this spec is drafted [reported:
+D6). The operator ruled on 2026-10-11 about 05:50Z that this spec is drafted [reported:
 AskUserQuestion in lane w25:p1, label "Supply-chain automation"]. Content decisions are the
 integrating lane's unless marked proposed.
 
@@ -55,7 +55,7 @@ re-read at merge commit 65467c9 (origin/development merged in). The counts below
   `protox` "0.10.0 not taken (0026 D3)". Line 200 says `agent-client-protocol` "3.x is under 14
   days old" and the manifest keeps `"2.2.0"` (spec 0016). Line 201 pins `tokio` 1.53.1 and
   `Cargo.toml` line 44 says `=1.53.1`. Line 198 records that #122's `toml` bump was ratified
-  after the merge (Christian, 2026-10-11, "Ratify 1.1.8"). No `toml` row existed at the merge,
+  after the merge (the operator, 2026-10-11, "Ratify 1.1.8"). No `toml` row existed at the merge,
   0856f37 (`git show 0856f37:specs/0004-dependency-and-licence-policy.md | grep -c '^| .toml. |'`
   prints 0). `pin-check` compares a row with the lock as strings. Until build plan P2 it skipped
   the `toml` row, whose version carries build metadata (F13).
@@ -107,9 +107,9 @@ re-read at merge commit 65467c9 (origin/development merged in). The counts below
 
 ### Decisions
 
-Classes: `ruled` (Christian decided it), `lane-decided` (the integrating lane decided it on
-2026-10-11; Christian may override), `proposed` (this spec proposes it; the integrating lane or
-Christian rules).
+Classes: `ruled` (the operator decided it), `lane-decided` (the integrating lane decided it on
+2026-10-11; the operator may override), `proposed` (this spec proposes it; the integrating lane or
+the operator rules).
 
 | # | Decision | Why | Class |
 |---|---|---|---|
@@ -270,7 +270,7 @@ P1 and P2 replace the shell and become their unit tests.
 
 ## Notes
 
-- The ruling that this spec is drafted: Christian, lane w25:p1, 2026-10-11 about 05:50Z, by
+- The ruling that this spec is drafted: the operator, lane w25:p1, 2026-10-11 about 05:50Z, by
   AskUserQuestion, label "Supply-chain automation" [reported: lane brief].
 - Overlap kept out: spec 0045 owns the SBOM format and release attachment and the advisory
   gate. Spec 0051 owns the fail-closed hook (D7). Spec 0034 owns the tool pin tables. Spec 0053

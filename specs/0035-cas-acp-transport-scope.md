@@ -26,9 +26,9 @@ Addresses the contradiction between `crates/uas-acp/README.md` (which claims TCP
 
 | ID | Decision | Source |
 |---|---|---|
-| D1 | `uas-acp` does not get a TCP transport; it remains strictly stdio over JSON-RPC 2.0. | proposed: lane w10:pN, 2026-10-10; awaits integrating lane or Christian |
+| D1 | `uas-acp` does not get a TCP transport; it remains strictly stdio over JSON-RPC 2.0. | proposed: lane w10:pN, 2026-10-10; awaits integrating lane or the operator |
 
-Reasoning: Spec 0016 D2 pins ACP 2.2.0 with no custom framing. TCP without custom framing (like TLS-PSK or token headers) provides no authentication mechanism, exposing the JSON-RPC interface. Stdio is sufficient for the Zed integration path. This removes an advertised capability, so it awaits integrating lane or Christian's confirmation before the README and manifest change.
+Reasoning: Spec 0016 D2 pins ACP 2.2.0 with no custom framing. TCP without custom framing (like TLS-PSK or token headers) provides no authentication mechanism, exposing the JSON-RPC interface. Stdio is sufficient for the Zed integration path. This removes an advertised capability, so it awaits integrating lane or the operator's confirmation before the README and manifest change.
 
 ### Requirements (EARS)
 

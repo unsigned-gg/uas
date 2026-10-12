@@ -4,8 +4,8 @@ Repo-specific Claude Code subagents. They load at session start from this direct
 `/agents` to pick up a new file). The global set in the user-level `agents/` directory under `.claude` stays available: use
 `surface-builder`, `prober`, `ci-watcher`, `verifier`, `prompt-linter` and `linear-filer` as they
 are. The global `builder` and `pr-reviewer` assume `origin/main`; here `uas-builder` and
-`uas-critic` replace them. Models follow Christian's rule of 2026-10-10: engineer and critic on
-opus, foreman on sonnet, builders on sonnet (Christian, 2026-10-10, estate-wide; the haiku rule of the same day is superseded), prober on haiku, every model a Claude 5.x.
+`uas-critic` replace them. Models follow the operator's rule of 2026-10-10: engineer and critic on
+opus, foreman on sonnet, builders on sonnet (the operator, 2026-10-10, estate-wide; the haiku rule of the same day is superseded), prober on haiku, every model a Claude 5.x.
 
 | Agent | Model | Writes | Runs when |
 |---|---|---|---|
@@ -42,7 +42,7 @@ The procedure of record is spec 0050 (`specs/0050-build-handoff-pipeline.md`). I
    done-when, a red-first control, a persona and a wave (at most three builders, disjoint files).
 2. The lane resolves anything BLOCKED and dispatches one wave through the Agent tool, each builder
    in its own worktree cut from fresh `origin/development`. The lane runs at most five agents at
-   once, counting builders, critics and probers (Christian, 2026-10-10).
+   once, counting builders, critics and probers (the operator, 2026-10-10).
 3. A builder commits signed, never pushes, never edits `CHANGELOG.md`, and returns the verdict
    block: 15 lines or fewer, bad news first, a tier on each claim.
 4. The lane merges the builder branches into one wave branch with merge commits, adds the wave's

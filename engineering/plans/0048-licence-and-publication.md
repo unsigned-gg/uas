@@ -15,7 +15,7 @@ Tiers: `verified` = I ran or read it at the path named; `reported` = the spec sa
 6. **`oss-check` must be added in two steps [verified by reading REQ-0048-08 and the tree]:** the spec's `oss-check` also fails when `vendor/cortex`, `vendor/soma` or `vendor/saga` exists. Adding that leg in P2 makes `make hygiene` red until P11. So P2 adds the pattern leg only; P11 adds the directory leg in the same commit that removes the directories.
 7. **`typos` will read the licence texts [asserted]:** `_typos.toml` excludes only `vendor/` and `Cargo.lock`. Verbatim Apache, GPL and CC-BY texts may trip `make typos` (part of `make hygiene`). P4 adds `LICENSE-*` and `NOTICE` to `extend-exclude` if, and only if, the run shows a hit.
 8. **Stale "proprietary" text outside the spec's Plan [verified]:** `README.md` lines 7 and 8 ("Proprietary licence (see `LICENSE`)") and `crates/uas-ebpf/README.md` line 37 ("The userspace crate stays proprietary"). Removing `LICENSE` leaves the first as a dead link. P4 fixes both; they close no REQ and are not Plan items (OPEN for the integrator to confirm).
-9. **`publish = false` stays [verified: `Cargo.toml` line 11; spec D6 and Notes]:** no decision flips a `publish` flag. Publishing is Christian's act, `uas-ebpf` cannot publish as packaged (F7) and which crates publish is spec 0039's subject. No package touches `publish`.
+9. **`publish = false` stays [verified: `Cargo.toml` line 11; spec D6 and Notes]:** no decision flips a `publish` flag. Publishing is the operator's act, `uas-ebpf` cannot publish as packaged (F7) and which crates publish is spec 0039's subject. No package touches `publish`.
 10. **`SECURITY.md` has no 0048 package [verified: `SECURITY.md` still says "no fixed response time"; spec 0045 owns the text]:** the spec 0048 Plan lists it as a pointer. Before the feature PR opens the integrator runs `grep -c 'business days' SECURITY.md`; 0 means the spec 0045 plan has not landed and `SECURITY.md` stays as it is. No REQ-0048 needs it.
 11. **In-flight work will turn red on landing [asserted]:** `hygiene` is a required check. After P2 a new tracked path or hostname fails it; after P9 a new `.rs`, `.sh`, spec, plan or doc without its tag fails it. Open spec and plan PRs from other lanes must rebase and add the tag. Recommended, not a Plan item: add the CC-BY tag line to `.agents/skills/spec-driven-dev/spec-template.md` so new specs start tagged (OPEN).
 12. **The fetch tool needs no new pin [verified]:** `sha2` 0.11.0 is a workspace dependency (`Cargo.toml` line 54) and a spec 0004 row (line 188, "used by uas-ebpf, uas-router"). `xtask` uses `anyhow` only today. P10 adds `sha2 = { workspace = true }` to `xtask`; P1 amends the row's "used by" cell first. The lock file is a plain line format parsed by hand, so no `toml` or `serde` enters `xtask`. Git is called through `std::process::Command` (`.cargo/config.toml` already sets `git-fetch-with-cli`).
@@ -27,7 +27,7 @@ Tiers: `verified` = I ran or read it at the path named; `reported` = the spec sa
 | Spec Plan item | Package |
 |---|---|
 | Pkg 1, spec 0004: line 55 requirement, 2026-10-09 position (lines 158 to 163), `aya-ebpf` row (line 180), lines 15 to 18 | P1 |
-| Pkg 1, spec 0045 D8 points at 0048 D6, "only once Christian confirms D6" | P12 (done 2026-10-11) |
+| Pkg 1, spec 0045 D8 points at 0048 D6, "only once the operator confirms D6" | P12 (done 2026-10-11) |
 | Pkg 1, `LICENSE-APACHE`, `LICENSE-MIT`, `NOTICE`, remove `LICENSE` and `docs/IP_NOTICE.md` | P4 |
 | Pkg 1, `LICENSE-DOCS` | P6 |
 | Pkg 1, `crates/uas-ebpf/ebpf/LICENSE` | P5 |
@@ -47,7 +47,7 @@ Tiers: `verified` = I ran or read it at the path named; `reported` = the spec sa
 | Pkg 3, `fetch-contracts`, `contracts.lock`, `.contracts/` in `.gitignore`, `build.rs` | P10 |
 | Pkg 3, remove the three vendor directories, `oss-check` guards them | P11 |
 | Pkg 3, CI job for `cortex-grpc` | none (operator-gated credential; CI stays on default features) |
-| Public form: fresh repository, DCO required check, private reporting, publish `uas` | none (Christian's acts; REQ-0048-10 and 12) |
+| Public form: fresh repository, DCO required check, private reporting, publish `uas` | none (the operator's acts; REQ-0048-10 and 12) |
 
 ## Requirement coverage
 
@@ -70,7 +70,7 @@ Tiers: `verified` = I ran or read it at the path named; `reported` = the spec sa
 | REQ-0048-18, 19 | P16 |
 | REQ-0048-17 | P17 (BLOCKED on P13) |
 
-14 of 19 requirements are closed by an unblocked package (01 to 06, 08, 11, 13 to 16, 18, 19). REQ-0048-17 has P17, blocked on P13. 09 holds by a command, 07 is not exercisable, 10 and 12 wait on Christian.
+14 of 19 requirements are closed by an unblocked package (01 to 06, 08, 11, 13 to 16, 18, 19). REQ-0048-17 has P17, blocked on P13. 09 holds by a command, 07 is not exercisable, 10 and 12 wait on the operator.
 
 ## Waves and the spec's command
 
@@ -121,7 +121,7 @@ P7 and P8 start from a `development` that already holds P4 (the Markdown set shr
 - **Persona:** `uas-builder`.
 - **Files:** `LICENSE-APACHE` (new, about 200 lines), `LICENSE-MIT` (new), `NOTICE` (new); `LICENSE` (exists, 16 lines, delete); `docs/IP_NOTICE.md` (exists, 31 lines, delete); `CONTRIBUTING.md` (exists, 45 lines); `README.md` (lines 7 and 8); `crates/uas-ebpf/README.md` (line 37); `_typos.toml` (only if finding 7 shows a hit).
 - **Change:** `LICENSE-APACHE` is the Apache-2.0 text verbatim. `LICENSE-MIT` is the MIT text with `Copyright (c) 2026 unsigned.gg`. `NOTICE` names `unsigned.gg` as the copyright holder and maps each licence to its files: code and non-code files outside `vendor/` to `Apache-2.0 OR MIT` (`LICENSE-APACHE`, `LICENSE-MIT`); `crates/uas-ebpf/ebpf/` to `GPL-2.0-only OR MIT` (`crates/uas-ebpf/ebpf/LICENSE`); `*.md` under `docs/`, `specs/` and `engineering/` to `CC-BY-4.0` (`LICENSE-DOCS`); `vendor/` to its own READMEs (D2, F12). `CONTRIBUTING.md` gains a "Developer Certificate of Origin" section: the DCO 1.1 text, the rule that every commit carries a `Signed-off-by:` trailer matching its author, `git commit -s`, no CLA, and that commits stay GPG-signed (D5). The README sentences name the new licences and point at `LICENSE-APACHE`, `LICENSE-MIT` and `NOTICE`.
-- **Done-when:** `test -f LICENSE-APACHE -a -f LICENSE-MIT -a -f NOTICE && test ! -e LICENSE -a ! -e docs/IP_NOTICE.md && grep -q unsigned.gg NOTICE && ! git grep -q -E 'Christian M\. Todie / cerebral\.work|All rights reserved' -- ':!specs' ':!vendor' ':!engineering' ':!CHANGELOG.md' && grep -q 'Signed-off-by' CONTRIBUTING.md && make typos` exits 0. These are the REQ-0048-03 legs of the spec's command; they are red today (F11, F18, F19).
+- **Done-when:** `test -f LICENSE-APACHE -a -f LICENSE-MIT -a -f NOTICE && test ! -e LICENSE -a ! -e docs/IP_NOTICE.md && grep -q unsigned.gg NOTICE && ! git grep -q -E 'Christ[i]an M\. T[o]die / cerebral\.work|All rights reserved' -- ':!specs' ':!vendor' ':!engineering' ':!CHANGELOG.md' && grep -q 'Signed-off-by' CONTRIBUTING.md && make typos` exits 0. These are the REQ-0048-03 legs of the spec's command; they are red today (F11, F18, F19).
 - **Red-first:** run the command first and watch it fail at `test -f`. After green, restore `LICENSE` and watch the removal leg fail; delete the DCO section and watch the `Signed-off-by` grep fail (the spec's control: `grep -c -i commit CONTRIBUTING.md` printing 2 shows the file is readable). Licence text sources: SPDX `license-list-data`; save to a file, record URL and `sha256sum`, and compare the Apache and MIT bodies with a registry crate's copy ignoring the copyright line.
 
 ### P5: the BPF program package (wave 2, needs P1) (DONE 2026-10-11, #153)
@@ -168,12 +168,12 @@ P7 and P8 start from a `development` that already holds P4 (the Markdown set shr
 
 ### P12: spec 0045 D8 points at 0048 D6 (DONE 2026-10-11)
 - **Persona:** `uas-engineer`.
-- **DONE 2026-10-11:** Christian confirmed D6 ("Confirm, the crate is the vehicle", lane w25:p1, AskUserQuestion); spec 0045 D8 now points at it. Was blocked because spec 0048 line 84 (D6) was `proposed, Christian to rule`, and the Plan says "Only once Christian confirms D6, spec 0045 D8 points at it". Spec 0045 line 58 (D8) is also his row. Unblocks when Christian rules D6. Files then: `specs/0045-security-disclosure-and-advisory-policy.md` only. Done-when: `grep -q 'spec 0048' specs/0045-security-disclosure-and-advisory-policy.md && make spec-check` exits 0 (`asserted`).
+- **DONE 2026-10-11:** The operator confirmed D6 ("Confirm, the crate is the vehicle", lane w25:p1, AskUserQuestion); spec 0045 D8 now points at it. Was blocked because spec 0048 line 84 (D6) was `proposed, the operator to rule`, and the Plan says "Only once the operator confirms D6, spec 0045 D8 points at it". Spec 0045 line 58 (D8) is also his row. Unblocks when the operator rules D6. Files then: `specs/0045-security-disclosure-and-advisory-policy.md` only. Done-when: `grep -q 'spec 0048' specs/0045-security-disclosure-and-advisory-policy.md && make spec-check` exits 0 (`asserted`).
 
 ### P14: conduct, owners and maintainers (wave 6) (DONE 2026-10-11, #159)
 - **Persona:** `uas-builder`.
 - **Files:** `MAINTAINERS.md` (new); `.github/CODEOWNERS` and `CODE_OF_CONDUCT.md` (exist; edit only if a check below fails). Both existing files predate this plan (spec F22).
-- **Change:** `MAINTAINERS.md` lists humans and areas only (Christian: all areas; the BPF program under `crates/uas-ebpf/ebpf/` and the sandbox `crates/uas-sandbox/` called out as their own lines; other named humans only as `.github/CODEOWNERS` comments already record them). No team, bot or alias. Carry the SPDX tag of REQ-0048-04. The CoC must name the spec 0045 D3 address; it does today.
+- **Change:** `MAINTAINERS.md` lists humans and areas only (the operator: all areas; the BPF program under `crates/uas-ebpf/ebpf/` and the sandbox `crates/uas-sandbox/` called out as their own lines; other named humans only as `.github/CODEOWNERS` comments already record them). No team, bot or alias. Carry the SPDX tag of REQ-0048-04. The CoC must name the spec 0045 D3 address; it does today.
 - **Done-when:** `test -f MAINTAINERS.md -a -f .github/CODEOWNERS && grep -c -i -E 'ebpf|sandbox' MAINTAINERS.md && grep -c 'version 2.1' CODE_OF_CONDUCT.md && grep -q "$(grep -o -E '[a-z.]+@[a-z.]+' SECURITY.md | head -1)" CODE_OF_CONDUCT.md && make hygiene JOBS=2` exits 0 (`asserted`: the spec Test rows REQ-0048-13 and 14 are the source).
 - **Red-first:** run the first `test -f` before writing the file and watch it exit 1; delete the contact line of the CoC in a scratch copy and watch the grep fail.
 
@@ -193,13 +193,13 @@ P7 and P8 start from a `development` that already holds P4 (the Markdown set shr
 
 ### P17: the launch checklist (drafted; execution blocked on P13) (DONE 2026-10-11, #190)
 - **Persona:** `uas-engineer`.
-- **BLOCKED:** needs the cut date and the repository name (P13). The file can be drafted before, but the go item is Christian's and the docs build command is not named by any spec; the builder names it and says it is `asserted`.
-- **Files:** `engineering/plans/0048-launch-checklist.md` (new). Items, each a `- [ ]` line with its command: `make hygiene` and `make oss-check` green; a secret scan of the whole tree (the scanner and its command named in the file); licence files and SPDX complete (the fenced spec command exits 0); the docs build green; Christian's explicit sign-off on the operator names (spec D7, Notes); then Christian's go. Announcement is out of the file: a parked decision (spec D14).
-- **Done-when:** `test -f engineering/plans/0048-launch-checklist.md && test "$(grep -c '^- \[' engineering/plans/0048-launch-checklist.md)" -ge 6` exits 0. The last item is Christian's.
+- **BLOCKED:** needs the cut date and the repository name (P13). The file can be drafted before, but the go item is the operator's and the docs build command is not named by any spec; the builder names it and says it is `asserted`.
+- **Files:** `engineering/plans/0048-launch-checklist.md` (new). Items, each a `- [ ]` line with its command: `make hygiene` and `make oss-check` green; a secret scan of the whole tree (the scanner and its command named in the file); licence files and SPDX complete (the fenced spec command exits 0); the docs build green; the operator's explicit sign-off on the operator names (spec D7, Notes); then the operator's go. Announcement is out of the file: a parked decision (spec D14).
+- **Done-when:** `test -f engineering/plans/0048-launch-checklist.md && test "$(grep -c '^- \[' engineering/plans/0048-launch-checklist.md)" -ge 6` exits 0. The last item is the operator's.
 - **Red-first:** the `test -f` exits 1 before the file exists; delete one item in a scratch copy and the count leg fails.
 
-### P13: the public form (BLOCKED, Christian's acts)
-- **BLOCKED:** the cut date and the public repository name are not ruled (spec Notes, "Rulings needed"); creating the repository is Christian's act (spec 0037 D1). Whether `uas-operator` (spec 0038) publishes separately is not ruled. Covers REQ-0048-10 (one commit holding the tree of `main`, `make check` green there, a required DCO check) and REQ-0048-12 (the crates.io `uas` crate's `repository` URL returns 200; today 404). Also the CI credential for `cortex-grpc`, an operator-gated secret. No builder acts on any of it. Until then `gh api repos/unsigned-gg/uas --jq .private` must print `true` (REQ-0048-09).
+### P13: the public form (BLOCKED, the operator's acts)
+- **BLOCKED:** the cut date and the public repository name are not ruled (spec Notes, "Rulings needed"); creating the repository is the operator's act (spec 0037 D1). Whether `uas-operator` (spec 0038) publishes separately is not ruled. Covers REQ-0048-10 (one commit holding the tree of `main`, `make check` green there, a required DCO check) and REQ-0048-12 (the crates.io `uas` crate's `repository` URL returns 200; today 404). Also the CI credential for `cortex-grpc`, an operator-gated secret. No builder acts on any of it. Until then `gh api repos/unsigned-gg/uas --jq .private` must print `true` (REQ-0048-09).
 
 ## Open
 

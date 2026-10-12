@@ -17,7 +17,7 @@ Three surfaces steer every lane in this repo and none has an owner: the persona 
 `.claude/agents/`, the skills under `.agents/skills/`, and the Makefile. Spec 0050 owns the
 procedure that uses the personas. Spec 0002 names five Make targets. Spec 0052 owns the
 `spec-check` rules. This spec owns the rest: the roster, the lint gate for persona files, the skill
-roster, and the Make surface with one owning spec per target. Christian ruled on 2026-10-11 about
+roster, and the Make surface with one owning spec per target. The operator ruled on 2026-10-11 about
 05:50Z that this spec is drafted (AskUserQuestion, lane w25:p1, label "Agent roster and tooling
 surface") [reported: integrating lane brief]. Content decisions are the integrating lane's unless
 marked `proposed`.
@@ -129,7 +129,7 @@ decide the target, so this spec owns it (F7 lists no other owner).
 |---|---|---|---|
 | D1 | This spec owns the roster, the persona lint gate, the skill roster and the Make-target index. Spec 0050 keeps the procedure, 0052 the `spec-check` rules, 0002 the gate table. This spec cites and does not restate them. | Three surfaces had no owner (Overview). | lane-decided: uas-engineer, 2026-10-11 |
 | D2 | Personas fall in two classes: handoff roles that spec 0050 cites, and pane-gang roles that `.saga/teams.toml` names. A persona may be both. Foreman, architect and prober are gang-only; planner and k8s-builder are handoff-only. | The README table mixes them in one list (F3). | lane-decided: uas-engineer, 2026-10-11 |
-| D3 | The estate agent-file rules E1 to E7 are the persona contract. Models stay as the README records them under Christian's 2026-10-10 ruling; this spec records the values and decides none. | Duplicated model decisions drift. | lane-decided: uas-engineer, 2026-10-11 |
+| D3 | The estate agent-file rules E1 to E7 are the persona contract. Models stay as the README records them under the operator's 2026-10-10 ruling; this spec records the values and decides none. | Duplicated model decisions drift. | lane-decided: uas-engineer, 2026-10-11 |
 | D4 | The lint gate has two layers. `make tooling-check` runs E1 to E6 deterministically. `prompt-linter` runs E7 and stays on request: a model reads it, so CI cannot. A PR that changes `.claude/agents/` carries the linter's TOTALS line in its body. | F4: no gate exists. The linter has no shell and cannot run in CI. | lane-decided: uas-engineer, 2026-10-11 |
 | D5 | `tooling-check` joins the `hygiene` members. | `hygiene` is a required check; the change makes a persona defect block a merge. | lane-decided: integrating lane w25:p1, 2026-10-11 |
 | D6 | `tooling-check` is a shell recipe of about 40 lines, in the style of `hook-test`, not an `xtask`. It has no banned-string list (F5). If paas publishes one, it becomes a variable of the recipe. | No Rust is needed for awk and grep checks; F6 of the linter has no source here. | lane-decided: uas-engineer, 2026-10-11 |

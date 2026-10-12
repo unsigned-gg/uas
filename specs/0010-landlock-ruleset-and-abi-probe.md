@@ -32,7 +32,7 @@ Facts, measured 2026-10-09 on ceres:
 - The `landlock` crate 0.4.7 (MIT OR Apache-2.0, MSRV 1.71) knows ABI v1 to
   v9. It has no public ABI probe: `LandlockStatus::current()` is private and
   the status is returned only by `restrict_self()`.
-- Christian approved the spec 0004 epic dependency list on 2026-10-09 by
+- The operator approved the spec 0004 epic dependency list on 2026-10-09 by
   interview in the UAS lane. `landlock` 0.4.7 is the first row to enter a
   `Cargo.toml`.
 - The CI runner kernel is not measured. The probe test prints what it finds.
@@ -60,7 +60,7 @@ Facts, measured 2026-10-09 on ceres:
 | D7 | Scratch and device paths get write without execute. Only the workspace and the system paths may execute. | UAS lane, 2026-10-09, after a critic pass |
 | D8 | The child enters the jail in `pre_exec`, between fork and exec. The parent never restricts itself. A refused jail is reported as `ENOTRECOVERABLE`, because std forwards only a raw errno from `pre_exec`. | UAS lane, 2026-10-09 |
 
-Christian corrects any of these in place.
+The operator corrects any of these in place.
 
 ### Probe
 

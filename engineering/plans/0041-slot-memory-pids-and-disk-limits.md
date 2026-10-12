@@ -121,7 +121,7 @@ The critical path is P1, P3, P5, P6, P7. P5 and P6 both touch `slot.rs` but in d
 
 ### P8: run the live cases from a make target (DONE 2026-10-11, #209)
 - **Ruled 2026-10-11 (integrator, option one):** `make pool-live-test`, no `SUDO`, `ci.yml` untouched; the freezer and `limits_live` cases ran 17 of 17 and 3 of 3 on ceres with 0 skipped.
-- **Blocked on:** a ruling (finding 12), the same one as plan 0040 P8. The spec says the live cases run under `make ebpf-test`; that recipe runs one `uas-ebpf` binary and CI rejects any `skipped:` line and any result but `9 passed`. Options for the integrator: one new target (for example `pool-live-test`, same shape as `ebpf-test`) shared with plan 0040, plus a fix to the spec 0041 Test paragraph; or extend the `ebpf-live` job, which edits spec 0005 and `ci.yml` and is Christian's gate. A CI pod has uid 0 and may create `/sys/fs/cgroup/uas` itself [asserted, not probed].
+- **Blocked on:** a ruling (finding 12), the same one as plan 0040 P8. The spec says the live cases run under `make ebpf-test`; that recipe runs one `uas-ebpf` binary and CI rejects any `skipped:` line and any result but `9 passed`. Options for the integrator: one new target (for example `pool-live-test`, same shape as `ebpf-test`) shared with plan 0040, plus a fix to the spec 0041 Test paragraph; or extend the `ebpf-live` job, which edits spec 0005 and `ci.yml` and is the operator's gate. A CI pod has uid 0 and may create `/sys/fs/cgroup/uas` itself [asserted, not probed].
 - **Persona once ruled:** `uas-builder`. File: `Makefile`; `.github/workflows/ci.yml` only if the ruling says so.
 
 ### P9: `WorkerSlot` `spec.limits` pass-through (BLOCKED)

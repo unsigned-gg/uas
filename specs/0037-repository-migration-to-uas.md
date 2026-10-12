@@ -20,9 +20,9 @@ the plan, copied at `kube-rs-plan.md` in the research surfaces from the
 author pane w1X:p22's brain file, metadata updated 2026-10-10T20:36Z; its
 approval provenance is unverified, see Notes]. This spec says what the move
 changes inside the repository, in what order, what must be carried across by
-hand, what breaks for lanes working here, and which steps are Christian's acts.
+hand, what breaks for lanes working here, and which steps are the operator's acts.
 
-Why now: Christian ruled an estate-wide hold on development work for the
+Why now: the operator ruled an estate-wide hold on development work for the
 migrations plan at 21:08Z and, asked directly, ruled at about 21:15Z that the
 migration itself is to be specified under the hold's exemption [reported: his own
 session, lane w25:p1, 2026-10-10]. A planned spec lands nothing.
@@ -54,15 +54,15 @@ Facts, measured 2026-10-10 on `origin/development` at `ab8112a`:
   `unsigned-gg/cas-substrate` exists, and `cerebral-work/cas-substrate` is still
   present and private. Commands: `gh api repos/unsigned-gg/uas` and
   `gh api repos/unsigned-gg/cas-substrate`, both HTTP 404;
-  `gh api repos/cerebral-work/cas-substrate`, `private=true`. Christian said in
+  `gh api repos/cerebral-work/cas-substrate`, `private=true`. The operator said in
   session at about 21:35Z "we're now an unsigned-gg repo" [reported]; the API
   did not show a transfer one minute later. At about 22:45Z, asked again with
   the same probe result, he directed this lane to perform the transfer (D1, amended).
 - **F6 [verified]:** The crates.io name `uas` was published at version 0.1.0 on
   2026-10-10T20:46Z as "Unsigned Agent Substrate (UAS) core primitives", owned by
-  the user `todie`. Command: `curl https://crates.io/api/v1/crates/uas` and
+  the user the operator. Command: `curl https://crates.io/api/v1/crates/uas` and
   `.../uas/owners`. Spec 0004 records `publish = false` for estate crates; this
-  placeholder is outside that rule and is Christian's own act.
+  placeholder is outside that rule and is the operator's own act.
 - **F7 [verified]:** CI runs on self-hosted runners addressed by the runner
   group `ent-default` (spec 0005). Whether that group belongs to the
   `cerebral-work` organisation or to an enterprise could not be read: both
@@ -82,19 +82,19 @@ Facts, measured 2026-10-10 on `origin/development` at `ab8112a`:
 
 | | Decision | Source |
 |---|---|---|
-| D1 | The transfer of the repository to `unsigned-gg`, the rename to `uas`, and any change of visibility from private to public are **Christian's acts**. Amended 2026-10-10 about 22:45Z: Christian, in lane w25:p1, directed the lane to perform the transfer and the rename itself and to dispatch workers for the rename; the lane performs those two steps on that instruction and records the API call it made. Visibility and crates.io publication stay his own acts. Every estate SOP already lists org transfers and visibility changes as operator-gated; his instruction is the gate's sign-off. | revenant-bridge-authority SOP, the floor; CAS lane w25:p1, 2026-10-10; Christian's instruction in lane w25:p1, 2026-10-10 about 22:45Z |
-| D2 | The move is one cutover, not a drift. Before it: the hold stands, every lane commits and parks (F8), and the preparation PRs of this spec land on `development`. Then Christian transfers and renames. Then one post-cutover PR fixes what only the new name can fix. Development resumes only when he lifts the hold. **Proposed, not ruled:** where this cutover sits relative to the `soma` to `vespertin` move is undecided and is Christian's call [reported: research lane w1X:p22, 2026-10-10 about 21:5xZ, "not decided yet"]. | CAS lane w25:p1, 2026-10-10 |
+| D1 | The transfer of the repository to `unsigned-gg`, the rename to `uas`, and any change of visibility from private to public are **the operator's acts**. Amended 2026-10-10 about 22:45Z: the operator, in lane w25:p1, directed the lane to perform the transfer and the rename itself and to dispatch workers for the rename; the lane performs those two steps on that instruction and records the API call it made. Visibility and crates.io publication stay his own acts. Every estate SOP already lists org transfers and visibility changes as operator-gated; his instruction is the gate's sign-off. | revenant-bridge-authority SOP, the floor; CAS lane w25:p1, 2026-10-10; the operator's instruction in lane w25:p1, 2026-10-10 about 22:45Z |
+| D2 | The move is one cutover, not a drift. Before it: the hold stands, every lane commits and parks (F8), and the preparation PRs of this spec land on `development`. Then the operator transfers and renames. Then one post-cutover PR fixes what only the new name can fix. Development resumes only when he lifts the hold. **Proposed, not ruled:** where this cutover sits relative to the `soma` to `vespertin` move is undecided and is the operator's call [reported: research lane w1X:p22, 2026-10-10 about 21:5xZ, "not decided yet"]. | CAS lane w25:p1, 2026-10-10 |
 | D3 | The crate prefix changes from `cas-` to `uas-` and the binary from `cas` to `uas`, in the same cutover, by `make new-repo NAME=uas ORG=unsigned-gg`. That target must first be fixed to rename every `cas-*` crate directory (F2, CER-2813), and `make template-check` must pass on `development` before the cutover is attempted. A rename tool that is proven broken is not used on the real repository. | spec 0001; CER-2813; CAS lane w25:p1, 2026-10-10 |
 | D4 | Spec numbers, spec file names and their `REQ-NNNN-NN` ids do not change. A spec's prose that says `cas-pool` becomes `uas-pool` in the post-cutover PR; a requirement id is a stable reference and stays. The registry keeps its order. | CAS lane w25:p1, 2026-10-10 |
 | D5 | History is preserved. The transfer keeps every commit, tag and PR number. No history rewrite, no re-initialisation. | AGENTS.md rule 10 and the NEVER floor; CAS lane w25:p1, 2026-10-10 |
 | D6 | Settings are carried by export and re-apply, not by memory: branch protection on `development` and `main`, the merge-commit-only setting, delete-branch-on-merge, CODEOWNERS, the 14 labels, and the Actions configuration. Each is exported to a file before the cutover and compared after. | F3; CAS lane w25:p1, 2026-10-10 |
-| D7 | The organisation secrets behind sccache (F4) and the runner group `ent-default` (F7) are the two things most likely to break CI on the other side. Both are resolved before the cutover, by Christian or Allen, who hold organisation admin: either `unsigned-gg` gains equivalent organisation secrets and runner access, or CI is rewritten to need neither. A red CI after the transfer is a stop, not something to work around. | spec 0005; second-operator SOP section 3; CAS lane w25:p1, 2026-10-10 |
+| D7 | The organisation secrets behind sccache (F4) and the runner group `ent-default` (F7) are the two things most likely to break CI on the other side. Both are resolved before the cutover, by the operator or the Director of Engineering, who hold organisation admin: either `unsigned-gg` gains equivalent organisation secrets and runner access, or CI is rewritten to need neither. A red CI after the transfer is a stop, not something to work around. | spec 0005; second-operator SOP section 3; CAS lane w25:p1, 2026-10-10 |
 | D8 | `release-plz` continues to tag from the renamed CLI package as `v{{ version }}`, and the version does not reset. The first release after the cutover is a minor bump whose changelog names the rename. | F9; spec 0003; CAS lane w25:p1, 2026-10-10 |
-| D9 | Linear stays as it is. The 52 `CER-` references in specs remain valid identifiers; the Linear project is renamed if Christian wants, which is his act. | F9; CAS lane w25:p1, 2026-10-10 |
+| D9 | Linear stays as it is. The 52 `CER-` references in specs remain valid identifiers; the Linear project is renamed if the operator wants, which is his act. | F9; CAS lane w25:p1, 2026-10-10 |
 | D10 | Other lanes' checkouts (F8) are not touched by this lane. After the transfer, GitHub redirects the old remote, so an existing checkout keeps working until its owner updates `origin`. The cutover notice tells each owner to run `git remote set-url origin` and to move the directory under their `unsigned/` projects directory when they choose. | post-merge-branch-hygiene SOP, concurrency; CAS lane w25:p1, 2026-10-10 |
 | D11 | The estate brief, the agentic context package, memory files and the `.saga` team files name this repo. Those outside this repository are not this spec's to edit; the cutover notice lists them for their owners. Those inside, `.saga/teams.toml` and `.saga/topologies.toml`, are part of the post-cutover PR. | CAS lane w25:p1, 2026-10-10 |
-| D12 | Facts F1 to F9 are the **transfer impact list** for `uas` that the implementation plan's step 7 waits on, and they are published as `docs/migration/uas-impact-list.md` in the preparation phase, so the `vespertin` lane and Christian read one file rather than this spec [reported: research lane w1X:p22 confirmed the list is "exactly what is needed", 2026-10-10 about 21:5xZ]. | CAS lane w25:p1, 2026-10-10 |
-| D13 | **Publication.** Christian ruled, in his own session in lane w25:p1 at about 21:38Z on 2026-10-10, that the `uas` crate on crates.io, which he published and owns (F6), is the vehicle for publishing substrate work. This amends, for this repository only, spec 0004's standing `publish = false` for estate crates. crates.io has no namespaces: `uas` is one crate name, and any `uas-*` sub-crate is a separate name that is unreserved until published, with a 24-hour lock after any deletion (as `vesperan` and `zerodays` showed today). Which crates publish, under which names, and who presses publish, are spec 0039's to record; publishing itself stays Christian's act. | Christian, 2026-10-10 about 21:38Z, in session [reported: this lane heard it] |
+| D12 | Facts F1 to F9 are the **transfer impact list** for `uas` that the implementation plan's step 7 waits on, and they are published as `docs/migration/uas-impact-list.md` in the preparation phase, so the `vespertin` lane and the operator read one file rather than this spec [reported: research lane w1X:p22 confirmed the list is "exactly what is needed", 2026-10-10 about 21:5xZ]. | CAS lane w25:p1, 2026-10-10 |
+| D13 | **Publication.** The operator ruled, in his own session in lane w25:p1 at about 21:38Z on 2026-10-10, that the `uas` crate on crates.io, which he published and owns (F6), is the vehicle for publishing substrate work. This amends, for this repository only, spec 0004's standing `publish = false` for estate crates. crates.io has no namespaces: `uas` is one crate name, and any `uas-*` sub-crate is a separate name that is unreserved until published, with a 24-hour lock after any deletion (as `vesperan` and `zerodays` showed today). Which crates publish, under which names, and who presses publish, are spec 0039's to record; publishing itself stays the operator's act. | The operator, 2026-10-10 about 21:38Z, in session [reported: this lane heard it] |
 
 ### Requirements (EARS)
 
@@ -109,7 +109,7 @@ Facts, measured 2026-10-10 on `origin/development` at `ab8112a`:
 - **[REQ-0037-09]** (Unwanted): IF `make template-check` fails on `development`, THEN the cutover shall not begin.
 - **[REQ-0037-10]** (Unwanted): IF CI is red on the first push after the transfer, THEN the lane shall stop and report, and shall not merge around it.
 - **[REQ-0037-11]** (Unwanted): IF a post-cutover setting differs from its exported file, THEN the difference shall be reported before any further pull request merges.
-- **[REQ-0037-12]** (Unwanted): IF any step would change the repository's visibility, publish to crates.io, or rewrite history, THEN a lane shall stop and leave that step to Christian; the transfer and rename run only on his recorded instruction (D1, amended).
+- **[REQ-0037-12]** (Unwanted): IF any step would change the repository's visibility, publish to crates.io, or rewrite history, THEN a lane shall stop and leave that step to the operator; the transfer and rename run only on his recorded instruction (D1, amended).
 - **[REQ-0037-13]** (Optional): WHERE GitHub's redirect from the old repository name is in place, a lane's existing checkout shall keep working until its owner updates the remote, and no lane shall update another lane's checkout.
 
 ## Plan
@@ -118,12 +118,12 @@ Preparation, on `development`, before the transfer:
 
 - [ ] Fix `make new-repo` to rename every `cas-*` crate directory, and make `make template-check` pass on `development` (CER-2813). Red first: the current failure is the control.
 - [ ] Export the settings of REQ-0037-03 to `docs/migration/settings-before.*`, names only for anything secret-adjacent.
-- [ ] Publish F1 to F9 as `docs/migration/uas-impact-list.md`, the step-7 input for the `vespertin` lane and Christian (D12).
+- [ ] Publish F1 to F9 as `docs/migration/uas-impact-list.md`, the step-7 input for the `vespertin` lane and the operator (D12).
 - [ ] Rewrite `.github/workflows/_rust.yml` so the sccache step degrades to a warning when its secrets are absent, so a missing organisation secret does not fail the build on the other side.
 - [ ] Add a `docs/migration/cutover.md` runbook from this spec: the order, the owner of each step, the rollback.
-- [ ] Open a Linear ticket under CER for the cutover with Christian as owner of D1 steps and the two D7 items.
+- [ ] Open a Linear ticket under CER for the cutover with the operator as owner of D1 steps and the two D7 items.
 
-Cutover, by Christian:
+Cutover, by the operator:
 
 - [ ] Resolve D7: organisation secrets and runner access on `unsigned-gg`, or CI that needs neither.
 - [ ] Transfer `cerebral-work/cas-substrate` to `unsigned-gg` and rename it `uas`.
@@ -137,7 +137,7 @@ Post-cutover, one pull request:
 - [ ] Verify `.saga/teams.toml`, `.saga/topologies.toml`, `README.md` and `AGENTS.md` after `new-repo`, which rewrites them; fix by hand only what it missed.
 - [ ] Compare live settings against `docs/migration/settings-before.*` and record the result.
 - [ ] Send the cutover notice to every lane with a checkout (F8): the new remote, and that updating it is theirs to do.
-- [ ] Christian lifts the hold.
+- [ ] the operator lifts the hold.
 
 ## Test
 
@@ -163,7 +163,7 @@ Until it does, the cutover does not begin (REQ-0037-09).
 ## Notes
 
 - **The plan's approval, as reported.** Asked who approved it, the author pane
-  w1X:p22 answered at about 21:3xZ that Christian approved the artifact himself,
+  w1X:p22 answered at about 21:3xZ that the operator approved the artifact himself,
   through the agy artifact approval in that pane, at about 21:12Z, and that the
   file is an uncommitted artifact in that pane's brain directory [reported:
   mesh reply from session-agy-ceres-estate-w1x-p22]. An artifact approval in his
@@ -180,14 +180,14 @@ Until it does, the cutover does not begin (REQ-0037-09).
   finalizing physical Git migrations". It does not place the `uas` transfer in
   that order, and its two open questions, where `cerebral-k8s-api` lives and the
   `vespertin` operator's new path, are open. Seven questions went to the research
-  lane at about 21:4xZ on Christian's instruction, including where `uas` sits in
+  lane at about 21:4xZ on the operator's instruction, including where `uas` sits in
   that order and whether F1 to F9 of this spec are the "transfer impact list"
   step 7 wants. Until answered, D2's single cutover is this lane's proposal, and
   REQ-0037-08 holds the cutover anyway.
 - **What this spec does not decide.** The `uas-operator` and its CRDs are spec
   0038. The k8s dependency set, its pins and the `k3d` CI job are spec 0039. The
   `soma` move to `cerebral-work` and the `unsigned-k8s-*` crates are other
-  repositories' specs. Public visibility is Christian's decision, recorded here
+  repositories' specs. Public visibility is the operator's decision, recorded here
   as a step, not presumed.
 - **Why `new-repo` and not a hand rename.** The target already exists, it is the
   repository's own rename tool, and it is proven broken by a test the repository

@@ -19,10 +19,10 @@ drift (D2). History is preserved (D5).
 
 | Step | Owner |
 |---|---|
-| D7: organisation secrets and runner access on `unsigned-gg`, or CI that needs neither | Christian or Allen; the `self-hosted` scale set is already visible to `unsigned-gg` (impact list F7) |
+| D7: organisation secrets and runner access on `unsigned-gg`, or CI that needs neither | The operator or the Director of Engineering; the `self-hosted` scale set is already visible to `unsigned-gg` (impact list F7) |
 | Transfer `cerebral-work/cas-substrate` to `unsigned-gg` and rename it `uas` | lane w25:p1, on the ruling below |
-| Decide visibility | Christian |
-| Decide the order relative to the `vespertin` move | Christian |
+| Decide visibility | The operator |
+| Decide the order relative to the `vespertin` move | The operator |
 
 ## 3. Post-cutover, one pull request
 
@@ -33,11 +33,11 @@ drift (D2). History is preserved (D5).
 | Verify `.saga/teams.toml`, `.saga/topologies.toml`, `README.md`, `AGENTS.md` after `new-repo` | lane w25:p1 |
 | Compare live settings against `docs/migration/settings-before.*`, record the result | lane w25:p1 |
 | Cutover notice to every lane with a checkout (F8): new remote, theirs to update | lane w25:p1 |
-| Lift the hold | Christian |
+| Lift the hold | The operator |
 
 ## 4. Ruling 2026-10-10 about 22:45Z
 
-Christian, in lane w25:p1, directed the lane to perform the transfer and rename itself and
+The operator, in lane w25:p1, directed the lane to perform the transfer and rename itself and
 to dispatch workers for the rename. This supersedes D1's "no lane performs them" for the
 transfer and rename only. Visibility and crates.io publication stay his acts. History is
 not rewritten (D5).

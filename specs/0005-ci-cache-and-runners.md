@@ -42,7 +42,7 @@ Measured 2026-10-08:
     profile, which refuses `CLONE_NEWUSER`; the node itself has user namespaces
     (`CONFIG_USER_NS=y`, `user.max_user_namespaces` 15000) [reported, paas lane
     probe on cygnus-principes-4, 2026-10-10, mesh 906c9a88]. Lifting it is the
-    held OPS-1660 seccomp half, Christian's gate.
+    held OPS-1660 seccomp half, the operator's gate.
   - Per-run toolchain cost, from the step start times: 22 s in run 38027192645
     and 19 s in run 38028859773 (install-action under 1 s, pinned nightly 8 to
     11 s, drift rebuild 10 to 11 s). Run 38027008230 stopped at the `zstd`
@@ -120,12 +120,12 @@ holds the protection table.
 
 `codeql.yml` runs only when the repo variable `CODE_SCANNING` equals `true`.
 Without it, the workflow does nothing. Code Security is a paid feature on
-private repos. Enabling it is a paid decision for the operator, Christian.
+private repos. Enabling it is a paid decision for the operator.
 Nobody turns it on without his go.
 
 ### Release flow
 
-Refined from decision 8, Christian, interviews 2026-10-08.
+Refined from decision 8, the operator, interviews 2026-10-08.
 
 1. A person opens a normal PR to `development`. The PR runs
    `make release-notes VERSION=x.y.z`. It sets the workspace version, runs
@@ -148,8 +148,8 @@ Refined from decision 8, Christian, interviews 2026-10-08.
 
 ### Decisions
 
-- **D1 (lane w25:p1, 2026-10-10):** The `ebpf-live` job runs on the `ci-kernel` lane. It installs the pinned nightly into a job-local `RUSTUP_HOME`. It rebuilds `uas-ebpf.o` and fails on any difference from the committed object. Christian can override.
-- **D2 (lane w25:p1, 2026-10-10):** `ebpf-live` is not a required check until one green run on `development`. Then the integrator adds it to the protection and to the spec 0003 table. Christian can override.
+- **D1 (lane w25:p1, 2026-10-10):** The `ebpf-live` job runs on the `ci-kernel` lane. It installs the pinned nightly into a job-local `RUSTUP_HOME`. It rebuilds `uas-ebpf.o` and fails on any difference from the committed object. The operator can override.
+- **D2 (lane w25:p1, 2026-10-10):** `ebpf-live` is not a required check until one green run on `development`. Then the integrator adds it to the protection and to the spec 0003 table. The operator can override.
 
 ## Plan
 

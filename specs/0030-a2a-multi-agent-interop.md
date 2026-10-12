@@ -17,7 +17,7 @@ Multi-agent workflows combine autonomous reasoning loops with deterministic cont
 
 ## Design
 
-The architecture defines orchestrator nodes to compose hybrid agents, separating I/O-free state transitions in `uas-domain` from networking components in the `uas-acp` Zed Agent Communication Protocol server and `uas-engine`. The A2A protocol gateway establishes cross-framework connectivity. Note: The identity and auth parts of this spec sit in Allen Hackley's identity veto area.
+The architecture defines orchestrator nodes to compose hybrid agents, separating I/O-free state transitions in `uas-domain` from networking components in the `uas-acp` Zed Agent Communication Protocol server and `uas-engine`. The A2A protocol gateway establishes cross-framework connectivity. Note: The identity and auth parts of this spec sit in the Director of Engineering's identity veto area.
 
 ### Decisions
 

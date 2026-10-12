@@ -47,11 +47,11 @@ Facts, measured and recorded 2026-10-09:
 
 | # | Decision | Who, when |
 |---|---|---|
-| D1 | Canonical prefix serialization: Sort tool schemas alphabetically by name, then by json bytes. Normalize system instructions to deterministic UTF-8 bytes before hashing. Every field is length-prefixed with its byte length in decimal: `SYS:<len>:<part>,...\|TOOLS:<len>:<name><len>:<json>,...`. Length prefixes stop a separator inside a part from imitating another separator. | UAS lane, 2026-10-09. Amended 2026-10-10, lane w25:p1, Christian may override (the unescaped `\|`-joined form collided). |
+| D1 | Canonical prefix serialization: Sort tool schemas alphabetically by name, then by json bytes. Normalize system instructions to deterministic UTF-8 bytes before hashing. Every field is length-prefixed with its byte length in decimal: `SYS:<len>:<part>,...\|TOOLS:<len>:<name><len>:<json>,...`. Length prefixes stop a separator inside a part from imitating another separator. | UAS lane, 2026-10-09. Amended 2026-10-10, lane w25:p1, the operator may override (the unescaped `\|`-joined form collided). |
 | D2 | SHA-256 prefix hash: Hash the invariant prefix with `sha2` 0.11.0. Use the first 16 bytes as the affinity routing key. | UAS lane, 2026-10-09 |
 | D3 | Rendezvous routing: Use Highest Random Weight (HRW) rendezvous hashing across active replica nodes. Achieve deterministic sticky routing without centralized state. | UAS lane, 2026-10-09 |
-| D4 | Dual-stream token multiplexer: Intercept streaming SSE chunks. Parse and strip `<think>` blocks. Route thought traces to telemetry and clean completions to client. A `</think>` tag with no open `<think>` block is dropped. The text around it stays on the clean stream. | UAS lane, 2026-10-09. Stray closing tag rule: UAS lane, 2026-10-11, Christian may override. |
-| D5 | Active health probe: Probe replica `/healthz` or `/health` every 5 seconds. Probe path: `GET /healthz`; a `404` answer is retried once on `/health` in the same probe. Mark replica unavailable after 2 consecutive failures. Restore: 3 consecutive successes mark an unavailable replica available again. Fail over in-flight requests. Fallback: when every replica is unhealthy, `choose` picks over all registered replicas in ascending id order at index `u64::from_be_bytes(prefix_hash[0..8]) % n` and returns `ReplicaChoice::Fallback`, so callers can log it. An empty table is `NoHealthyReplicas`. | UAS lane, 2026-10-09. Fallback added 2026-10-10, lane w25:p1, Christian may override. Probe path and restore rule: UAS lane, 2026-10-11, Christian may override. |
+| D4 | Dual-stream token multiplexer: Intercept streaming SSE chunks. Parse and strip `<think>` blocks. Route thought traces to telemetry and clean completions to client. A `</think>` tag with no open `<think>` block is dropped. The text around it stays on the clean stream. | UAS lane, 2026-10-09. Stray closing tag rule: UAS lane, 2026-10-11, the operator may override. |
+| D5 | Active health probe: Probe replica `/healthz` or `/health` every 5 seconds. Probe path: `GET /healthz`; a `404` answer is retried once on `/health` in the same probe. Mark replica unavailable after 2 consecutive failures. Restore: 3 consecutive successes mark an unavailable replica available again. Fail over in-flight requests. Fallback: when every replica is unhealthy, `choose` picks over all registered replicas in ascending id order at index `u64::from_be_bytes(prefix_hash[0..8]) % n` and returns `ReplicaChoice::Fallback`, so callers can log it. An empty table is `NoHealthyReplicas`. | UAS lane, 2026-10-09. Fallback added 2026-10-10, lane w25:p1, the operator may override. Probe path and restore rule: UAS lane, 2026-10-11, the operator may override. |
 | D6 | Zero-allocation buffer: Use circular byte window for streaming token parsing. Detect boundary tags without heap allocations. | UAS lane, 2026-10-09 |
 
 ### Architecture and Flow
@@ -97,7 +97,7 @@ flowchart TD
 - Parses incoming JSON request payloads for `/v1/chat/completions`.
 - Extracts the system parts: each `messages[]` entry whose `role` is `system` or
   `developer`, in request order. Its `content` is a string or an array of
-  `{"type":"text","text":...}` parts. UAS lane, 2026-10-11, Christian may override.
+  `{"type":"text","text":...}` parts. UAS lane, 2026-10-11, the operator may override.
 - Extracts `tools` definitions. A tool's name is `tools[].function.name`. Sorts tools
   by that name, then by json bytes.
 - Serializes the canonical UTF-8 form of D1, every field length-prefixed with its

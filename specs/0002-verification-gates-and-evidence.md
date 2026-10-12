@@ -59,7 +59,7 @@ for each claim. A grep that finds nothing is not proof of absence.
 
 ### The `-j` rule
 
-Operator decision, Christian, 2026-10-08.
+Operator decision, the operator, 2026-10-08.
 
 - Makefile sets `JOBS ?= 2`. Every cargo build, test and clippy call passes
   `-j $(JOBS)`.

@@ -49,11 +49,11 @@ repository's `deny.toml` copied in:
   `vespertin` operator and were not checked against this repository before F1
   to F5 [research lane w1X:p22, mesh reply 2026-10-10 about 21:5xZ].
 - **F7 [reported]:** The crates.io names `uas`, `cerebral-work` and
-  `cerebral-k8s` are held by `todie`. `vesperan` and `zerodays` hit the 24-hour
+  `cerebral-k8s` are held by the operator. `vesperan` and `zerodays` hit the 24-hour
   lock after a deletion and are due for republish at about 20:56Z on 2026-10-11
   [research lane w1X:p22, same reply]. `uas` 0.1.0 is also verified in spec 0037
   F6. `unsigned-k8s-core` and `unsigned-k8s-api` are held by nobody.
-- **F8 [reported]:** Christian ruled in his own session at about 21:38Z on
+- **F8 [reported]:** The operator ruled in his own session at about 21:38Z on
   2026-10-10 that the `uas` crate is the vehicle for publishing substrate work
   [this lane, w25:p1, heard it; spec 0037 D13 records it].
 
@@ -71,7 +71,7 @@ repository's `deny.toml` copied in:
 | D5 | The `k8s-e2e` job runs on the existing self-hosted runner group `ent-default` with the `ci-rust` image, which gains `k3d` and `kubectl`. No GitHub-hosted runner: spec 0005 has none, and one would change cost, secrets reach and the self-hosted assumption. Spec 0037 F7 notes the group's organisation could not be read, so the job may be re-homed after the transfer. | spec 0005; integrating lane w25:p1, 2026-10-10 |
 | D6 | Every Kubernetes-facing piece sits behind the cargo feature `k8s`, declared per spec 0033 in each crate that owns gated code, off by default. | spec 0033; integrating lane w25:p1, 2026-10-10 |
 | D7 | `k3d` and `kubectl` are pinned as tools beyond cargo under spec 0034, in spec 0004's CI tools table. | spec 0034; integrating lane w25:p1, 2026-10-10 |
-| D8 | **Publishing.** The `uas` crate is the publication vehicle for substrate work (F8). crates.io has no namespaces: `uas` is one name, and every `uas-*` sub-crate is a separate name, unreserved until published. Which workspace crates publish and under which names is decided when the first publish is prepared, in a spec that amends 0004's `publish = false`. Publishing, and reserving any further name, is Christian's act; no lane presses publish. | F7, F8; spec 0037 D13; integrating lane w25:p1, 2026-10-10 |
+| D8 | **Publishing.** The `uas` crate is the publication vehicle for substrate work (F8). crates.io has no namespaces: `uas` is one name, and every `uas-*` sub-crate is a separate name, unreserved until published. Which workspace crates publish and under which names is decided when the first publish is prepared, in a spec that amends 0004's `publish = false`. Publishing, and reserving any further name, is the operator's act; no lane presses publish. | F7, F8; spec 0037 D13; integrating lane w25:p1, 2026-10-10 |
 
 ### Requirements (EARS)
 
@@ -85,7 +85,7 @@ repository's `deny.toml` copied in:
 - **[REQ-0039-07]** (Ubiquitous): The `k3d` and `kubectl` tools shall be pinned in spec 0004's CI tools table per spec 0034 before the `ci-rust` image gains them.
 - **[REQ-0039-08]** (Unwanted): IF `make pin-check` finds a Kubernetes crate in a manifest that spec 0004 does not record, THEN it shall fail and name the crate.
 - **[REQ-0039-09]** (Unwanted): IF a release of `kube` raises its MSRV above the workspace `rust-version`, THEN the bump shall wait for a spec 0004 decision on the floor.
-- **[REQ-0039-10]** (Unwanted): IF a lane's change would publish any crate or reserve any crates.io name, THEN the lane shall stop and leave that act to Christian.
+- **[REQ-0039-10]** (Unwanted): IF a lane's change would publish any crate or reserve any crates.io name, THEN the lane shall stop and leave that act to the operator.
 - **[REQ-0039-11]** (Optional): WHERE a `k8s-openapi` release offers `v1_37`, the feature shall move to it and spec 0004 shall record the bump.
 
 ## Plan

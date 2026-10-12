@@ -46,8 +46,8 @@ in strict reverse order of completed steps:
 - `WorktreeCleanupCompensator`: Cleans up temporary working directories and virtual worktree state.
 - `BranchPruneCompensator`: Prunes unmerged transient git branches.
 - `LeaseReturnCompensator`: Revokes or returns active slot leases to the ledger.
-- `CompositeCompensator`: Aggregates multiple compensators and executes them sequentially. It runs every child in add order, never returns Err, and records a child Err as a receipt with `success: false`. A rollback returns Err only when at least one receipt has `success: false`, and that Err carries every receipt (lane decision w25:p1, 2026-10-10, CER-2783; Christian may override).
-- `WorkflowSession::fail_activity` keeps every receipt, ends the log with `SessionFinished` (`Failed`), and returns `CompensationIncomplete` only when the compensator itself returned Err (lane decision w25:p1, 2026-10-10, CER-2785; Christian may override). Replay restores `Failed` but not the receipts, which are not in the event log.
+- `CompositeCompensator`: Aggregates multiple compensators and executes them sequentially. It runs every child in add order, never returns Err, and records a child Err as a receipt with `success: false`. A rollback returns Err only when at least one receipt has `success: false`, and that Err carries every receipt (lane decision w25:p1, 2026-10-10, CER-2783; the operator may override).
+- `WorkflowSession::fail_activity` keeps every receipt, ends the log with `SessionFinished` (`Failed`), and returns `CompensationIncomplete` only when the compensator itself returned Err (lane decision w25:p1, 2026-10-10, CER-2785; the operator may override). Replay restores `Failed` but not the receipts, which are not in the event log.
 
 Each executed compensator yields a `CompensationReceipt`:
 

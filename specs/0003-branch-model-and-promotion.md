@@ -63,7 +63,7 @@ Both branches carry the same classic protection.
 | Required check `cargo-deny` | yes | yes |
 | Required check `hygiene` | yes | yes |
 | Required check `ebpf-live` | yes (2026-10-10, after development run 38028975897; spec 0005 D2) | no, until the next promotion |
-| Required check `fork-gate` | yes (2026-10-11, Christian, "Add fork-gate to the required checks now", lane w25:p1 about 05:25Z; plan 0051 P7; six required checks) | no, until plan 0048 P13 |
+| Required check `fork-gate` | yes (2026-10-11, the operator, "Add fork-gate to the required checks now", lane w25:p1 about 05:25Z; plan 0051 P7; six required checks) | no, until plan 0048 P13 |
 
 The template repo itself also requires `template-check` on both branches. A
 repo made from the template does not, because `make new-repo` deletes that
@@ -78,7 +78,7 @@ reports as `rust / cargo`. Spec 0005 lists the jobs.
 
 A promotion PR merges `development` into `main`.
 
-- Land-on-green covers the promotion PR. Operator ruling: Christian Todie
+- Land-on-green covers the promotion PR. Operator ruling: the operator
   chose "Land-on-green covers it" in an interview in the UAS lane on
   2026-10-08. It replaces the earlier decision of the same day that only he
   merges it.

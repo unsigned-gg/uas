@@ -95,7 +95,7 @@ All builders here are `uas-engineer` or `uas-builder`; none is `uas-ebpf-builder
      done-when, a red-first control, a persona and a wave (at most three builders, disjoint files).
   2. The lane resolves anything BLOCKED and dispatches one wave through the Agent tool, each builder
      in its own worktree cut from fresh `origin/development`. The lane runs at most five agents at
-     once, counting builders, critics and probers (Christian, 2026-10-10).
+     once, counting builders, critics and probers (the operator, 2026-10-10).
   3. A builder commits signed, never pushes, never edits `CHANGELOG.md`, and returns the verdict
      block: 15 lines or fewer, bad news first, a tier on each claim.
   4. The lane merges the builder branches into one wave branch with merge commits, adds the wave's

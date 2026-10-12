@@ -13,7 +13,7 @@ depends_on: [0008-soma-cortex-saga-reverie-integration, 0022-custody-landing, 00
 
 ## Overview
 
-Christian ruled on 2026-10-10 to "migrate all CPM and team-checking from uas to saga" (Notes).
+The operator ruled on 2026-10-10 to "migrate all CPM and team-checking from uas to saga" (Notes).
 Spec 0046 took the team-checking half; saga spec 0039 now implements it (F13). This spec takes
 the CPM half. The critical-path and wave planning of spec 0024 and the wave execution of spec
 0025 move to saga. uas keeps what a slot runtime needs: slot leases and the custody landing
@@ -121,22 +121,22 @@ checkout's worktree is on `feat/yggdrasil-skald-trace` (ef0919e).
 
 ### Decisions
 
-Each row has one class. `ruled`: a ruling by Christian decides it (Notes). `lane-decided`: the
-integrating lane w25:p1 decided it on 2026-10-11, and Christian may override. `proposed: for the
+Each row has one class. `ruled`: a ruling by the operator decides it (Notes). `lane-decided`: the
+integrating lane w25:p1 decided it on 2026-10-11, and the operator may override. `proposed: for the
 saga lane`: it needs that lane's agreement. `accepted`: the saga lane adopted it in a merged saga
 spec. A decision ID always names its spec: `0049 D8` is this spec's, `0022 D8` is spec 0022's,
 `saga 0040 D7` is saga spec 0040's (not uas spec 0040). A bare F-number is a fact of this spec.
 
 | ID | Decision | Rationale | Source |
 |---|---|---|---|
-| D1 | CPM (spec 0024), wave planning and wave execution (spec 0025) move from uas to saga, with the reading of `.saga/plans/` and the merge step. | The ruling. The 0025 HELD banner (line 10) puts wave execution in saga. | Christian, lane w25:p1, 2026-10-10 about 23:55Z, and the 0025 HELD banner; `ruled` |
+| D1 | CPM (spec 0024), wave planning and wave execution (spec 0025) move from uas to saga, with the reading of `.saga/plans/` and the merge step. | The ruling. The 0025 HELD banner (line 10) puts wave execution in saga. | The operator, lane w25:p1, 2026-10-10 about 23:55Z, and the 0025 HELD banner; `ruled` |
 | D2 | The removal set (below) leaves uas in one PR, after saga passes the parity set (0049 D5). Until then it carries the 0049 D10 line and takes fixes only. | One cut keeps one working path at every commit. A new feature in the window is work saga must port (F3). | w25:p1 brief; `lane-decided: integrating lane w25:p1, 2026-10-11` |
 | D3 | Saga builds the spec 0025 wave executor natively, as saga spec 0040 (F16). It differs from this spec's proposal in four places. Not-ready is a `ready_cmd` that exits 1, not a check command that exits 2 (saga 0040 D7: `make` exits 2 on a failed recipe). The lock is saga's own `${XDG_STATE_HOME:-$HOME/.local/state}/saga/build.lock`; `SAGA_BUILD_LOCK` overrides it and is set to the F9 path while uas runs waves (saga 0040 D8). Halt-all is opt-in per plan, `on_halt = "halt-all"`; the default is `cancel-dependents` (saga 0040 D9). The uas-only halt path moves into the uas plan's `halt_paths` (saga 0040 D14). | Saga had none of it (F10, F11). | `accepted: saga spec 0040 (PR 133, 51e4df8), 2026-10-11` |
 | D4 | `.saga/plans/uas-wave-smoke.toml`, `tasks/wave-smoke-build/`, the parity golden under `.saga/parity/` and the three hand-written flows stay in uas as data saga reads. The removal PR deletes the generated `uas-cpm-wave-w*.toml`. `engineering/plans/` and the `uas-planner` persona stay uas documents. | A generated flow calls `uas wave step` (F7); no flow may call a removed command. | w25:p1 brief, amended for F7; `lane-decided: integrating lane w25:p1, 2026-10-11` |
 | D5 | The parity set gates the removal: the spec 0025 admission, not-ready and halt rows; the `tests/cpm_wave.rs` cases; the smoke plan's wave split (F7); and the smoke Builder receipt. The uas tests (F6) are the reference; saga ports them (0049 D3). | No fixture files exist (F6). Row tables port, as saga 0039 ported the spec 0046 rows. | w25:p1 brief; `lane-decided: integrating lane w25:p1, 2026-10-11` |
-| D6 | Spec 0024 is status `complete` and keeps it; it gains a banner that points here and marks its CPM and wave rules superseded. Spec 0025 keeps its HELD banner (line 10); a second banner is added below it, points here and at saga spec 0040, which restates its admission, not-ready, halt and compensation rows, and marks each moved rule superseded. Spec 0022 D12 is amended for 0049 D8, and spec 0022's amendment log records the 0049 D7 and 0049 D8 rulings. | One subject has one live spec. The HELD banner records Christian's words, so it stays. | w25:p1 brief; `lane-decided: integrating lane w25:p1, 2026-10-11` |
-| D7 | The landing edge is a subprocess. Saga runs `blackwall reconcile` itself, and the 0022 D11 JSON is the only contract. Saga takes no Cargo dependency on uas, and uas adds no landing subcommand. | uas is private (F15), spec 0008 sets service edges, and 0022 D1 (line 212) sets a subprocess boundary. | `ruled: Christian, 2026-10-11, lane w25:p1 (AskUserQuestion)`: "Subprocess, receipt JSON only" |
-| D8 | `LandingActivity::open_pr` and `land` leave uas with the removal set. Saga opens every PR with `blackwall pr <run> --base development --body -`, fed the 0022 D11 JSON. `reconcile` stays in uas. | No uas code opens a PR. 0022 D12 (line 223) has `open_pr` write the 0022 D11 body, so 0022 D12 is amended (0049 D6). | `ruled: Christian, 2026-10-11, lane w25:p1 (AskUserQuestion)`: "Yes, remove them" |
+| D6 | Spec 0024 is status `complete` and keeps it; it gains a banner that points here and marks its CPM and wave rules superseded. Spec 0025 keeps its HELD banner (line 10); a second banner is added below it, points here and at saga spec 0040, which restates its admission, not-ready, halt and compensation rows, and marks each moved rule superseded. Spec 0022 D12 is amended for 0049 D8, and spec 0022's amendment log records the 0049 D7 and 0049 D8 rulings. | One subject has one live spec. The HELD banner records the operator's words, so it stays. | w25:p1 brief; `lane-decided: integrating lane w25:p1, 2026-10-11` |
+| D7 | The landing edge is a subprocess. Saga runs `blackwall reconcile` itself, and the 0022 D11 JSON is the only contract. Saga takes no Cargo dependency on uas, and uas adds no landing subcommand. | uas is private (F15), spec 0008 sets service edges, and 0022 D1 (line 212) sets a subprocess boundary. | `ruled: the operator, 2026-10-11, lane w25:p1 (AskUserQuestion)`: "Subprocess, receipt JSON only" |
+| D8 | `LandingActivity::open_pr` and `land` leave uas with the removal set. Saga opens every PR with `blackwall pr <run> --base development --body -`, fed the 0022 D11 JSON. `reconcile` stays in uas. | No uas code opens a PR. 0022 D12 (line 223) has `open_pr` write the 0022 D11 body, so 0022 D12 is amended (0049 D6). | `ruled: the operator, 2026-10-11, lane w25:p1 (AskUserQuestion)`: "Yes, remove them" |
 | D9 | uas keeps slot leases, the slot runtime, `LandingActivity::reconcile` and `LandingReceipt`. The receipt keeps the 0022 D11 field set with `merge_commit` and `NotAudited`; saga becomes the only writer of `merge_commit`. `EVALUATOR_PATHS` and `CRITIC_INPUT_PATHS` stay in `uas-domain` (spec 0023) as the 0025 D17 halt set; saga applies those lists as written, not by linking uas (0049 D7, saga 0040 D14). | The receipt is the contract. Spec 0023 owns the path lists. | w25:p1 brief; `lane-decided: integrating lane w25:p1, 2026-10-11` |
 | D10 | The deprecation line is `deprecated: moves to saga (spec 0049); fixes only`. | A saga run keeps a step's stderr in its receipt, so the log shows it. | `lane-decided: integrating lane w25:p1, 2026-10-11` |
 
@@ -206,7 +206,7 @@ every saga ask over the mesh; this lane sends nothing.
       first: Test rows 1 and 2.
 - [ ] Send the saga lane 0049 D3, 0049 D5 and the F12 corrections to spec 0025. Saga spec 0039
       already names its review against `dagr/src/stats.rs` (F13).
-- [x] Christian ruled 0049 D7 and 0049 D8 on 2026-10-11 in lane w25:p1 (AskUserQuestion).
+- [x] the operator ruled 0049 D7 and 0049 D8 on 2026-10-11 in lane w25:p1 (AskUserQuestion).
 - [x] Saga spec 0040 merged, the saga half (PR 133, 51e4df8, 2026-10-11; F16).
 - [ ] Saga build, saga 0040 Plan steps 1 to 6: REQ-0049-07 to 11.
 - [ ] Parity deliverables, one uas PR before saga 0040 Plan step 7 (saga 0040 D16). All paths
@@ -267,14 +267,14 @@ wave-only file (F3). P1 is a `chore` and the removal a `refactor!`, so neither c
 
 ## Notes
 
-- The ruling (Christian, lane w25:p1, 2026-10-10 about 23:55Z, verbatim): "migrate all CPM and
+- The ruling (the operator, lane w25:p1, 2026-10-10 about 23:55Z, verbatim): "migrate all CPM and
   team-checking from uas to saga". [reported: w25:p1 brief, 2026-10-10]
-- The rulings on 0049 D7 and 0049 D8 (Christian, lane w25:p1, 2026-10-11 about 01:40Z, by
+- The rulings on 0049 D7 and 0049 D8 (the operator, lane w25:p1, 2026-10-11 about 01:40Z, by
   AskUserQuestion, option labels verbatim): "Subprocess, receipt JSON only" and "Yes, remove
   them". [reported: w25:p1 relay, 2026-10-11]
 - The saga lane's reply: saga spec 0040 (F16), announced in mesh df02b4db, 2026-10-11 about
   02:00Z [reported].
-- Difference: saga 0040 Notes (lines 223 to 225) call 0025 D9 (`NotAudited`) still Christian's to
+- Difference: saga 0040 Notes (lines 223 to 225) call 0025 D9 (`NotAudited`) still the operator's to
   rule. Spec 0025 D9 (line 234) records it as ruled; spec 0022 D12 (line 223) still says pending.
 - Caveat: F10 to F12 are from saga 2f9b23a, F16 from 51e4df8. The binary's commit is asserted (F14).
 - Caveat for the window: a uas merge step needs `SAGA_VERIFY_TIMEOUT_SECS` of at least 960, or

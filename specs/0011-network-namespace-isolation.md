@@ -58,7 +58,7 @@ Facts, measured 2026-10-09:
 | D5 | Default deny comes from the namespace itself: no interface but `lo`, no route. No packet filter is installed. | UAS lane, 2026-10-09 |
 | D6 | `rustix` enters the workspace with `default-features = false` and `std`, `thread`, `process`, `fs`. The approved row allows `mount` too; it is not enabled until a crate needs it. | UAS lane, 2026-10-09 |
 
-Christian corrects any of these in place.
+The operator corrects any of these in place.
 
 ### Child sequence
 
@@ -115,7 +115,7 @@ from the worker's stdout. The jailed worker must see only `lo` in
 `/proc/net/dev`; the unjailed control must see another interface. The
 jailed case first probes the host with `netns::isolate` alone. A host that
 cannot create a namespace prints `skipped` plus its diagnostics and the
-case passes; the PR body then says which host ran it. Decision, Christian,
+case passes; the PR body then says which host ran it. Decision, the operator,
 2026-10-09, by interview in the UAS lane: probe and skip, and file a ticket
 for the `ci-rust` runner so CI proves the namespace later. Add
 `-- --nocapture` to see the probe lines. Also run `make check`,

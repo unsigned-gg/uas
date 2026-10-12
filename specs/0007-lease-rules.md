@@ -19,7 +19,7 @@ decided. A code review of the landed crates found them on 2026-10-08:
 - A renewal by zero seconds returned success and changed nothing.
 - No test or document said whether a draining slot keeps its worktree.
 
-Christian ruled on all four by interview in the UAS lane on 2026-10-08. He
+The operator ruled on all four by interview in the UAS lane on 2026-10-08. He
 chose the recommended option each time. This spec records the rules. The code
 that enforces them lands in the same PR.
 
@@ -86,7 +86,7 @@ The only caller of `renew` and `issue` on 2026-10-08 is `uas demo` in
 ### Not covered
 
 - Public fields on `Lease`, `Budget` and `Envelope` still let a struct literal
-  skip validation. Christian ruled on 2026-10-08 to keep them public while
+  skip validation. The operator ruled on 2026-10-08 to keep them public while
   `uas-engine` is under construction. Revisit with spec 0006.
 - Who may issue a lease. That is the capacity gate in swarm-control
   (spec 0001, integration edges), not the ledger.

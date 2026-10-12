@@ -17,7 +17,7 @@ Every build lane in this repo runs one procedure: a planner turns a landed spec 
 builders build the packages in their own worktrees, a critic reads the merged wave, and the
 integrating lane lands it on green. The procedure is written in two short places only,
 `.claude/agents/README.md` ("Build handoff", lines 36 to 58) and `engineering/plans/README.md`.
-Christian ruled on 2026-10-11 about 03:10Z (AskUserQuestion, label "Build-handoff pipeline")
+The operator ruled on 2026-10-11 about 03:10Z (AskUserQuestion, label "Build-handoff pipeline")
 that this spec is drafted. The content decisions are the integrating lane's unless marked
 `proposed`.
 
@@ -61,7 +61,7 @@ Measured 2026-10-11 at `origin/development` e0e903f. Tiers: `verified` names the
 - **F7 [verified]:** of the last 25 non-merge commits that touch `CHANGELOG.md`, all 25 have the
   subject `docs(changelog): ...`; 24 change `CHANGELOG.md` alone and 1 also changes plan and spec
   0048. Command: `git log --no-merges --format='%h %s' -25 origin/development -- CHANGELOG.md`
-  plus `git show --format= --name-only <sha>` per commit. All 25 are authored by Christian M. Todie.
+  plus `git show --format= --name-only <sha>` per commit. All 25 are authored by the operator.
   [reported] The lane commits as the operator's identity, so authorship does not separate
   integrator from builder; plan 0048 ("The integrator owns the single `CHANGELOG.md` line") and
   the builder briefs are the source. `uas-builder.md` line 17, `uas-ebpf-builder.md` line 17 and
@@ -96,20 +96,20 @@ Measured 2026-10-11 at `origin/development` e0e903f. Tiers: `verified` names the
 
 ### Decisions
 
-Classes: `ruled` (Christian ruled it), `lane-decided` (the integrating lane, 2026-10-11;
-Christian may override), `proposed: <for whom>`.
+Classes: `ruled` (the operator ruled it), `lane-decided` (the integrating lane, 2026-10-11;
+the operator may override), `proposed: <for whom>`.
 
 | ID | Decision | Rationale | Class and source |
 |---|---|---|---|
 | D1 | This spec is the procedure of record. The README "Build handoff" section and `engineering/plans/README.md` shrink to a pointer to it, keeping the persona table. | One statement cannot drift from itself (F1, F2, F9). | `lane-decided` |
 | D2 | The plan file carries the F3 sections: header with base sha and tiers, findings, plan item to package map, requirement coverage, Waves table with a "disjoint because" column, packages, open list. | The shape the five plans share; builders run from it without the spec (F3). | `lane-decided` |
 | D3 | A package is one builder, one worktree, one crate or file group. Target under 400 changed lines; a package that exceeds 800 is split. Each package has Persona, Files (existing or `new`), Change, Done-when and Red-first. Done-when is a command with an exit code from the spec Test section or a Makefile gate. A package with no runnable Done-when is BLOCKED and names the spec line. | The planner cuts packages, so its 400 governs; the engineer's 800 is the ceiling for a brief (F9). | `lane-decided` |
-| D4 | At most five agents run at once per lane, counting builders, critics and probers. A wave holds at most three builders, with disjoint files. The next wave is cut from the new `origin/development` after the wave PR lands. During a development hold, planning runs and dispatch waits (README lines 57, 58). | Five: Christian, 2026-10-10. Three per wave leaves room for a critic and a prober inside the cap (F9). | cap `ruled`; wave size `lane-decided` |
+| D4 | At most five agents run at once per lane, counting builders, critics and probers. A wave holds at most three builders, with disjoint files. The next wave is cut from the new `origin/development` after the wave PR lands. During a development hold, planning runs and dispatch waits (README lines 57, 58). | Five: the operator, 2026-10-10. Three per wave leaves room for a critic and a prober inside the cap (F9). | cap `ruled`; wave size `lane-decided` |
 | D5 | Builders commit signed and never push. The integrating lane merges builder branches into one wave branch with merge commits, pushes with `git -C`, and opens the PR as a draft. | Push hooks judge the shared checkout (README line 66); the draft starts CI while the critic reads (F5, F6). | `lane-decided` |
 | D6 | The integrating lane owns the CHANGELOG line: one `docs(changelog)` commit per wave PR, under `## [Unreleased]`. A builder writes none. The three builder personas drop their CHANGELOG clause. | One writer cannot conflict with itself; 25 of 25 recent changelog commits are `docs(changelog)` commits, and plan 0048 gives the line to the integrator (F7, reported). | `lane-decided` |
 | D7 | The in-house `uas-critic` re-reads the merged wave branch once the draft PR is open and before it is marked ready, and never before the draft exists. It returns numbered defects with file and line, or no defects plus what it checked. The lane applies each item (a defect in a builder file goes back to that builder) and records the pass in the PR body. | F6: #154 and #157 show a critic pass recorded between draft and ready; #156 shows a draft and a later pass promised. | `lane-decided` |
 | D8 | A per-SHA critic pass on a builder branch is optional. It is required for a package that touches `unsafe`, the sandbox, the pool's kernel calls or `crates/uas-ebpf`. | README step 3 and line 15 ask for it on every SHA; the trail shows a wave-level pass only (F6). | `lane-decided: integrating lane w25:p1, 2026-10-11` |
-| D9 | The lane marks the PR ready and lands it when all six required checks read SUCCESS on the head: `secrets`, `rust / cargo`, `cargo-deny`, `hygiene`, `ebpf-live`, `fork-gate` (amended 2026-10-11, Christian, lane w25:p1 about 05:25Z). The merge is a merge commit pinned to the head sha. `moon-affected` is advisory. Red stops the wave. | AGENTS.md rules 7 and 9, approval routes; spec 0003 table; F8. | `ruled` by spec 0003 and the lane approval route |
+| D9 | The lane marks the PR ready and lands it when all six required checks read SUCCESS on the head: `secrets`, `rust / cargo`, `cargo-deny`, `hygiene`, `ebpf-live`, `fork-gate` (amended 2026-10-11, the operator, lane w25:p1 about 05:25Z). The merge is a merge commit pinned to the head sha. `moon-affected` is advisory. Red stops the wave. | AGENTS.md rules 7 and 9, approval routes; spec 0003 table; F8. | `ruled` by spec 0003 and the lane approval route |
 | D10 | After the PR state reads MERGED, the lane removes the wave's worktrees, prunes, and deletes the local builder and wave branches. It reads the state from `gh pr view <n> --json state`, never from the merge button. A branch whose PR is open or closed unmerged stays. | F12: nothing in the repo says it, and a worktree removed before MERGED loses unlanded work. | `lane-decided` |
 | D11 | Conflicts resolve with merge commits only. Merging `origin/development` into the wave branch is routine. In `CHANGELOG.md` keep every line from both sides; in `specs/README.md` keep one row per spec in number order. A scripted resolution drops the whole `|||||||` base section. No conflict or diff3 marker reaches a pushed commit. | F11. | `lane-decided` |
 | D12 | A verdict block is 15 lines or fewer, bad news first, with a tier on each claim. A builder returns STATUS, SHA, FILES, CHECKS, TESTS, SCOPE, OPEN. A critic returns VERDICT, numbered DEFECTS, CHECKED, UNCHECKED. A planner returns PLAN, SPEC, BLOCKED, PINS, FIRST, OPEN. An engineer returns STATUS, SHA, SPEC, DECIDES, PINS, BRIEFS, OPEN. | The persona Output sections already say so; D12 makes them the contract. | `lane-decided` |
@@ -198,7 +198,7 @@ Run from the repo root of a clone with `gh` signed in. Read the lines, not the e
 | 1 | Plans with a package that has no done-when and no BLOCKED | `0`; the stripped control prints the packages it catches, more than 0 | `0` while the control stays above 0 | REQ-0050-01 |
 | 2 | `docs(changelog)` commits in the wave branch | `1` here (the integrator's line); control a9d2d1c prints `1` | `1` on a wave branch; `0` or `2` is red | REQ-0050-07 |
 | 3 | Frontmatter status against the registry row | two lines: 0040 and 0043 (F10) | no line | REQ-0050-12 |
-| 4 | The six required checks, names and API order (amended 2026-10-11: `fork-gate` added, Christian, lane w25:p1 about 05:25Z) | `4 required checks ok` | still ok; a seventh, a missing name or a changed order prints `4 RED` | REQ-0050-08, 09 |
+| 4 | The six required checks, names and API order (amended 2026-10-11: `fork-gate` added, the operator, lane w25:p1 about 05:25Z) | `4 required checks ok` | still ok; a seventh, a missing name or a changed order prints `4 RED` | REQ-0050-08, 09 |
 | 5 | Conflict markers in `CHANGELOG.md` and `specs/` | `0`; control prints `2` | `0` | REQ-0050-11 |
 | 6 | A worktree whose PR reads MERGED | control prints `MERGED`; no `RED` line | no `RED` line. Control run once by hand: a worktree on a branch named `build/spec-0041-wave5` printed `6 RED` | REQ-0050-10 |
 | 7 | A verdict block over 15 lines | planted 16 lines prints `RED` | `ok` on the real block | REQ-0050-02 |
@@ -216,9 +216,9 @@ manual control).
 
 ## Notes
 
-- The ruling that this spec is drafted: Christian, lane w25:p1, 2026-10-11 about 03:10Z, by
+- The ruling that this spec is drafted: the operator, lane w25:p1, 2026-10-11 about 03:10Z, by
   AskUserQuestion, label "Build-handoff pipeline" [reported: w25:p1 brief].
-- The cap of five: Christian, 2026-10-10 [reported: `.claude/agents/README.md` lines 47, 48].
+- The cap of five: the operator, 2026-10-10 [reported: `.claude/agents/README.md` lines 47, 48].
 - Difference, README against practice, decided here: critic per SHA (D8, D7); CHANGELOG written
   by a builder (D6); a cap of three at README line 24 (D4); a status move with no timing (D14).
 - Difference, persona against persona: package size 400 against 800 (D3).

@@ -16,7 +16,7 @@ depends_on: [0001-cas-architecture-and-crate-layout, 0002-verification-gates-and
 `make spec-check` gates every spec pull request (AGENTS.md rule 1). The rules it enforces live
 only in the comment block and the code of `xtask/src/spec_check.rs`. Specs 0001 and 0002 name the
 checker but state no rule. This spec owns the rule set: what each rule checks, whether it warns
-or fails, the line caps, and how a rule changes. Christian ruled on 2026-10-11 about 03:10Z that
+or fails, the line caps, and how a rule changes. The operator ruled on 2026-10-11 about 03:10Z that
 this spec is drafted (AskUserQuestion, lane w25:p1, label "Spec-check rule set") [reported:
 integrating lane brief]. Content decisions are the integrating lane's.
 
@@ -136,7 +136,7 @@ stderr, then `spec-check: ok (N warning(s))` or `spec-check: N error(s)`.
 | D9 | The modal list stays the four words above. Adding a word follows D10. | Only `shall` lines are scanned; a longer list raises false positives on prose such as "may be empty". | lane-decided: uas-engineer, 2026-10-11 |
 | D10 | A rule change ships in one PR with three parts: an amendment of the table above, a unit test in `xtask/src/spec_check.rs` that goes red without the change, and a CHANGELOG line. | Today a rule can change with no spec and no test (F1, F9). | lane-decided: integrating lane brief, 2026-10-11 |
 | D11 | The code comment block stops carrying a numbered list. It points at this spec and keeps one line per rule name. That is a code change, left to a builder (Plan). | Two numbering schemes already disagree (F1). | lane-decided: uas-engineer, 2026-10-11 |
-| D12 | Two more rules (spec 0050 Plan P4, proposed there for Christian, taken by the integrating lane here; spec 0050's P4 box is amended by plan 0050 to point at this spec). R13: the frontmatter `status` of each spec shall equal the Status column of its `specs/README.md` row; a mismatch is an error. R14: each package in `engineering/plans/*.md` shall hold a Persona, Files, Done-when and Red-first, or the word BLOCKED with the spec line that blocks it (spec 0050 REQ-0050-01); a missing part is a warning first, an error on a date the lane sets after one clean week. A package whose heading holds DONE is exempt, because its fields are history (plan 0052 finding 4; built in PR #192, 2026-10-11). The check looks for the word BLOCKED, not for a spec line [asserted: plan 0052 P9]. | The registry status and the frontmatter drift apart today (the checker reads only the README links, R11). A plan without a done-when cannot be dispatched. | lane-decided: integrating lane w25:p1, 2026-10-11 (0050 P4) |
+| D12 | Two more rules (spec 0050 Plan P4, proposed there for the operator, taken by the integrating lane here; spec 0050's P4 box is amended by plan 0050 to point at this spec). R13: the frontmatter `status` of each spec shall equal the Status column of its `specs/README.md` row; a mismatch is an error. R14: each package in `engineering/plans/*.md` shall hold a Persona, Files, Done-when and Red-first, or the word BLOCKED with the spec line that blocks it (spec 0050 REQ-0050-01); a missing part is a warning first, an error on a date the lane sets after one clean week. A package whose heading holds DONE is exempt, because its fields are history (plan 0052 finding 4; built in PR #192, 2026-10-11). The check looks for the word BLOCKED, not for a spec line [asserted: plan 0052 P9]. | The registry status and the frontmatter drift apart today (the checker reads only the README links, R11). A plan without a done-when cannot be dispatched. | lane-decided: integrating lane w25:p1, 2026-10-11 (0050 P4) |
 
 ### Requirements (EARS)
 
@@ -234,7 +234,7 @@ red with the exact H1 message; the scratch copy lives outside the repository.
 - Spec 0048 REQ-0048-04 checks the SPDX line by shell, not by the checker (F7). Moving it into the
   checker is a rule change under D10 and has no ruling.
 - Spec 0050 is on `development` (8d80119). Its REQ-0050-01 names Persona, Files, Done-when and
-  Red-first, with no separate Change field. Spec 0050 lines 164 to 166 still say "Christian rules whether it is built" until plan 0050 amends them (Plan, package 4).
+  Red-first, with no separate Change field. Spec 0050 lines 164 to 166 still say "the operator rules whether it is built" until plan 0050 amends them (Plan, package 4).
 - F6's 2026-10-11 count comes from the checker itself. The earlier figure came from a throwaway script and was wrong.
 - Amendment log, 2026-10-11 (P5 count fix): last line of `cargo xtask spec-check` after this edit: `spec-check: ok (47 warning(s))`.
 - Amendment log, 2026-10-11 (P8, plan 0052): R12 over plans and R13 are built (PR #188); F3, F7, F11, the R12 and R13 rows, the Plan boxes for P6 (#185) and P7 (#188) and the Test rows 15 and 17 are amended. Left open on purpose: D5 step 3 (promote R07 after one clean week) and the D12 BLOCKED clause with its date for R14 as an error. Last line of `cargo xtask spec-check` on the scratch merge: `spec-check: ok (2 warning(s))`.

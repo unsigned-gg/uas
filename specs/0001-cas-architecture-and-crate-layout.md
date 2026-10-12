@@ -155,16 +155,16 @@ vendors their contract files and never their service code:
 
 | Decision | Who | When |
 |---|---|---|
-| Repo is `unsigned-gg/uas`. Private. Proprietary licence. | Christian | 2026-10-08 |
-| First landing is the scaffold plus `uas-domain`. The other eight research crates start as placeholders. | Christian | 2026-10-08 |
-| `uas-cli` stays beside the nine research crates. The smoke gate and the release tag use it. | Christian | 2026-10-08 |
-| Crate prefix is `uas`. | Christian | 2026-10-08 |
-| GPL dependencies are denied by `deny.toml`. | Christian | 2026-10-08 |
-| UAS vendors estate contract files, never service code ("contracts yes, code no"). | Christian | 2026-10-09 |
-| Phase 8 (DeltaDB) enters the epic saga run. Recorded as adoption into the plan, see Notes. | Christian | 2026-10-09 |
-| `unsafe` stays forbidden in the workspace. `uas-sandbox`, `uas-pool` and `uas-ebpf` deny it instead, with a per-block allow and a SAFETY comment (AGENTS.md rule 14). | Christian | 2026-10-09 |
-| The kernel-side BPF program object declares `Dual MIT/GPL`. The loader and every other crate stay proprietary. | Christian | 2026-10-09 |
-| eBPF tests on ceres run through a sudo `make ebpf-test` target. The sysctl `kernel.unprivileged_bpf_disabled` is not changed. | Christian | 2026-10-09 |
+| Repo is `unsigned-gg/uas`. Private. Proprietary licence. | The operator | 2026-10-08 |
+| First landing is the scaffold plus `uas-domain`. The other eight research crates start as placeholders. | The operator | 2026-10-08 |
+| `uas-cli` stays beside the nine research crates. The smoke gate and the release tag use it. | The operator | 2026-10-08 |
+| Crate prefix is `uas`. | The operator | 2026-10-08 |
+| GPL dependencies are denied by `deny.toml`. | The operator | 2026-10-08 |
+| UAS vendors estate contract files, never service code ("contracts yes, code no"). | The operator | 2026-10-09 |
+| Phase 8 (DeltaDB) enters the epic saga run. Recorded as adoption into the plan, see Notes. | The operator | 2026-10-09 |
+| `unsafe` stays forbidden in the workspace. `uas-sandbox`, `uas-pool` and `uas-ebpf` deny it instead, with a per-block allow and a SAFETY comment (AGENTS.md rule 14). | The operator | 2026-10-09 |
+| The kernel-side BPF program object declares `Dual MIT/GPL`. The loader and every other crate stay proprietary. | The operator | 2026-10-09 |
+| eBPF tests on ceres run through a sudo `make ebpf-test` target. The sysctl `kernel.unprivileged_bpf_disabled` is not changed. | The operator | 2026-10-09 |
 
 The research names nine crates. This repo has ten because of `uas-cli`.
 
@@ -172,7 +172,7 @@ The research names nine crates. This repo has ten because of `uas-cli`.
 
 These are not decided. Each needs a spec or an operator ruling before code.
 
-1. **Pool runtime.** Closed by spec 0019 D2 (2026-10-10): Christian ruled
+1. **Pool runtime.** Closed by spec 0019 D2 (2026-10-10): the operator ruled
    Option A, OS threads with `std::sync` as built, on the benchmark addendum
    numbers [reported, relayed by the integrator, mesh e42efbc2]. The heph design and the
    options are in spec 0019 and `cerebral-work/research@4068134:repos/heph.md`
@@ -180,7 +180,7 @@ These are not decided. Each needs a spec or an operator ruling before code.
 2. **Kernel `-j 2`.** Closed by spec 0020 (2026-10-10). The research claim that
    eBPF enforces two parallel jobs is dropped: `nice 19` is a priority, not a
    cap. The cap is the cgroup v2 CPU quota per slot (`cpu.max`, two CPUs by
-   Christian's ruling) that `uas-pool` writes, plus the `-j 2` convention.
+   the operator's ruling) that `uas-pool` writes, plus the `-j 2` convention.
 3. **`uas-storage` has no phase.** Resolved by spec 0021 (2026-10-10): `uas-storage`
    is assigned to Phase 6 (Distributed Storage & Operator Client) alongside
    the AIStore Kubernetes operator deployment.
@@ -249,12 +249,12 @@ DeltaDB virtual-worktree integration with Saga, Blackwall and Soma
 (`cerebral-work/research@ddf42c8:agentic-systems/designs/deltadb-virtual-worktree-integration.md`,
 draft, no approver):
 
-- 2026-10-08: Christian ruled to record it here only, as proposed, not adopted.
+- 2026-10-08: the operator ruled to record it here only, as proposed, not adopted.
 - 2026-10-08: the cortex lane sent six review findings to the proposing lane
   (w1R:p1). One finding blocks: the design commits directly to main.
-- 2026-10-09: Christian included Phase 8 (DeltaDB) in the epic saga run, by
+- 2026-10-09: the operator included Phase 8 (DeltaDB) in the epic saga run, by
   interview in the UAS lane. The UAS lane records this as adoption into the
-  plan. Christian corrects it here if that reading is wrong.
+  plan. The operator corrects it here if that reading is wrong.
 - The blocking finding still stands. No Phase 8 code runs until a revised
   design lands that never commits directly to main. Phase 8 runs last.
 - Estate-wide DeltaDB and Blackwall custody process adopted with PR-floor constraints

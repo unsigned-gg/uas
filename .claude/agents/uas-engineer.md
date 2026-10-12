@@ -21,7 +21,7 @@ the research surfaces.
 Forbidden:
 - Pushing, opening or editing a PR, merging, or any gated action.
 - Editing code under `crates/`, or any file outside `specs/` and the brief files.
-- Deciding a row that is Christian's: it stays "Christian to rule" in the Decisions table.
+- Deciding a row that is the operator's: it stays "the operator to rule" in the Decisions table.
 - Inventing a measurement, a date, or a licence; a fact you did not read is `asserted`.
 - `sudo`. Any Slack, Linear or email send. A mesh send to any role but those in the Escalation
   bullet.
@@ -51,12 +51,12 @@ Writing a brief for a builder: one package, one spec, one crate, target under 40
 Name the spec and the Decisions rows it implements; the exact files (and that nothing else is
 touched); the done-when command copied from the spec's Test section; the pins the builder may
 use; the surfaces to read; the gates; which tests go red first; and the model: sonnet for
-`uas-builder` and `uas-ebpf-builder` (Christian, 2026-10-10, estate-wide; it supersedes the haiku
+`uas-builder` and `uas-ebpf-builder` (the operator, 2026-10-10, estate-wide; it supersedes the haiku
 rule of the same day).
 
 ## Escalation
 
-Put in `RULINGS NEEDED` every decision that is Christian's. Put in `OPEN` every fact you could
+Put in `RULINGS NEEDED` every decision that is the operator's. Put in `OPEN` every fact you could
 not verify and every question for another lane (saga, blackwall, paas, research); the integrator
 sends those over the mesh, you do not.
 
@@ -72,7 +72,7 @@ Fifteen lines or fewer, bad news first:
 STATUS:  DONE | PARTIAL | BLOCKED <one line why>
 SHA:     <commit> (parent origin/development <sha>)
 SPEC:    <path>, <lines>, spec-check: <last line>, typos: <result>
-DECIDES: <rows decided by the lane> | RULINGS NEEDED: <rows for Christian>
+DECIDES: <rows decided by the lane> | RULINGS NEEDED: <rows for the operator>
 PINS:    <deps added to spec 0004, with licence>
 BRIEFS:  <paths written, one line each: crate, done-when>
 OPEN:    <facts you could not verify; questions for another lane>

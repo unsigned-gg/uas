@@ -16,7 +16,7 @@ design shows thread-per-core actors (heph). Spec 0015 D5 then picked standard OS
 threads for the pool, as a UAS lane decision, not an operator ruling. Spec 0001
 Plan item 3 still asks for the spec that chooses the pool runtime. This spec is
 that record. It lays out the three options with measured facts and leaves the
-ruling to Christian.
+ruling to the operator.
 
 Facts, measured 2026-10-10 on ceres unless stated:
 
@@ -51,7 +51,7 @@ Facts, measured 2026-10-10 on ceres unless stated:
   the fork is open, that no benchmark has measured `uas-pool`, and recommends
   keeping `uas-domain` runtime-neutral until criterion benchmarks measure the pool.
   Approval of the design itself follows the same benchmarks (research `AGENTS.md`,
-  Christian by deck merge).
+  the operator by deck merge).
 
 ## Design
 
@@ -81,8 +81,8 @@ Facts, measured 2026-10-10 on ceres unless stated:
 
 | # | Decision | Who, when |
 |---|---|---|
-| D1 | Recommendation of this spec: **Option A** for the pool's slot lifecycle and control loop, as spec 0015 D5 already states; **Option B** only where a crate serves a socket or HTTP endpoint (router, ebpfd, acp, deck). No heph. | UAS lane w25:p1, 2026-10-10, pending Christian |
-| D2 | The runtime for `uas-pool`: A, B or C. | Christian, interview in lane w25:p1, 2026-10-10: **benchmark first, then rule.** Spec 0015 D5 (Option A) stays the interim choice. The lane writes the criterion benchmark of the slot lifecycle (lease, launch, freeze, thaw, reclaim) under Option A; Christian rules D2 on its numbers. **Ruled: Option A**, OS threads as built, on the benchmark addendum numbers: Christian, in session, lane w25:p1 interview, 2026-10-10 [reported, relayed by the integrator, mesh e42efbc2]. |
+| D1 | Recommendation of this spec: **Option A** for the pool's slot lifecycle and control loop, as spec 0015 D5 already states; **Option B** only where a crate serves a socket or HTTP endpoint (router, ebpfd, acp, deck). No heph. | UAS lane w25:p1, 2026-10-10, pending the operator |
+| D2 | The runtime for `uas-pool`: A, B or C. | The operator, interview in lane w25:p1, 2026-10-10: **benchmark first, then rule.** Spec 0015 D5 (Option A) stays the interim choice. The lane writes the criterion benchmark of the slot lifecycle (lease, launch, freeze, thaw, reclaim) under Option A; the operator rules D2 on its numbers. **Ruled: Option A**, OS threads as built, on the benchmark addendum numbers: the operator, in session, lane w25:p1 interview, 2026-10-10 [reported, relayed by the integrator, mesh e42efbc2]. |
 | D3 | If D2 is A or B, spec 0001 gap 1 and Plan item 3 close, and 0015 D5 gains the citation "ruled in spec 0019". If D2 is C, spec 0004 gets the `heph` pin and licence row first, and a measurement plan precedes code. Applied 2026-10-10: D2 is A, so spec 0001 gap 1 and Plan item 3 close and 0015 D5 cites spec 0019. | Follows D2 |
 | D4 | Any later runtime change needs a measurement recorded in a new spec (the Unwanted-behavior requirement above). A criterion benchmark of the slot lifecycle (lease, launch, freeze, thaw, reclaim) under Option A is the first such measurement, and it is the evidence a move to C would need (F9). | UAS lane, 2026-10-10 |
 
@@ -96,9 +96,9 @@ Facts, measured 2026-10-10 on ceres unless stated:
 
 ## Plan
 
-- [x] Christian ruled on D2 (2026-10-10): benchmark first. Spec 0001 gap 1 stays open until the numbers are in.
+- [x] the operator ruled on D2 (2026-10-10): benchmark first. Spec 0001 gap 1 stays open until the numbers are in.
 - [x] Write the criterion benchmark of the slot lifecycle in `uas-pool` (`benches/`), Option A, `-j 2`, results dated in a new spec or an addendum here; a package for the uas-pool lane (agy, spec 0015).
-- [x] Christian ruled D2 on the benchmark numbers: Option A, 2026-10-10 [reported, relayed by the integrator, mesh e42efbc2].
+- [x] the operator ruled D2 on the benchmark numbers: Option A, 2026-10-10 [reported, relayed by the integrator, mesh e42efbc2].
 - [x] Record the ruling in spec 0001 (gap 1, Plan item 3) and spec 0015 D5.
 - [x] If C: pin `heph` and `heph-rt` in spec 0004 and write the measurement plan. Not needed: D2 is A.
 

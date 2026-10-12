@@ -17,7 +17,7 @@ Agentic systems executing tool calls against enterprise infrastructure demand st
 
 ## Design
 
-The `uas-acp` Zed Agent Communication Protocol server enforces digital signatures at the wire protocol layer for UAS-originated traffic. Tool executions are bound to short-lived tokens to eliminate ambient authority. The `uas-engine` defers to the ledger owned by Spec 0029, while `uas-ebpf` detects unauthorized local servers for `uas-sandbox` quarantine within registered worker trees. Note: The identity and auth parts of this spec sit in Allen Hackley's identity veto area.
+The `uas-acp` Zed Agent Communication Protocol server enforces digital signatures at the wire protocol layer for UAS-originated traffic. Tool executions are bound to short-lived tokens to eliminate ambient authority. The `uas-engine` defers to the ledger owned by Spec 0029, while `uas-ebpf` detects unauthorized local servers for `uas-sandbox` quarantine within registered worker trees. Note: The identity and auth parts of this spec sit in the Director of Engineering's identity veto area.
 
 ### Decisions
 
