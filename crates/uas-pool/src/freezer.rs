@@ -727,13 +727,77 @@ impl Freezer for CgroupFreezer {
     }
 }
 
+/// RAII guard that registers the current process as a Linux child subreaper (Spec 0060 D1).
+///
+/// Orphaned descendant processes (grandchildren) reparent to this process
+/// instead of PID 1 (init / systemd). When dropped, restores the previous
+/// subreaper configuration.
+#[derive(Debug)]
+pub struct SubreaperGuard {
+    prev_enabled: bool,
+}
+
+impl SubreaperGuard {
+    /// Enter child subreaper mode for the current process.
+    pub fn enter() -> Result<Self, FreezerError> {
+        let prev_enabled = rustix::process::child_subreaper()
+            .map(|opt| opt.is_some())
+            .unwrap_or(false);
+
+        if !prev_enabled {
+            rustix::process::set_child_subreaper(Some(rustix::process::getpid()))
+                .map_err(|e| FreezerError::Signal(format!("failed to set child subreaper: {e}")))?;
+        }
+
+        Ok(Self { prev_enabled })
+    }
+
+    /// Reaps any reparented child processes that have exited without blocking (Spec 0060 D5).
+    ///
+    /// Reaps zombie processes from the kernel process table. Returns the count of reaped processes.
+    pub fn reap_zombies() -> usize {
+        let mut count = 0;
+        while let Ok(Some((_pid, _status))) =
+            rustix::process::wait(rustix::process::WaitOptions::NOHANG)
+        {
+            count += 1;
+        }
+        count
+    }
+}
+
+impl Drop for SubreaperGuard {
+    fn drop(&mut self) {
+        if !self.prev_enabled {
+            let _ = rustix::process::set_child_subreaper(None);
+        }
+    }
+}
+
+/// Tests whether a process or any process in its process group is currently alive.
+pub fn is_process_or_group_alive(pid: rustix::process::Pid) -> bool {
+    use rustix::process::{getpgid, getpgrp, test_kill_process, test_kill_process_group};
+
+    if getpgid(Some(pid)).is_ok_and(|pgid| pgid == pid && pgid != getpgrp())
+        && test_kill_process_group(pid).is_ok()
+    {
+        return true;
+    }
+    test_kill_process(pid).is_ok()
+}
+
 /// Signals the process group led by `pid`, so a worker's children stop and resume with it.
+///
+/// Uses Linux `pidfd` handles when available to prevent PID recycling races (Spec 0060 D4).
 ///
 /// `kill_process_group` reaches only a process that leads its own group; on `ESRCH` the pid
 /// is signalled alone. The caller's own group is never signalled: when the pid's group is
 /// ours, only the pid is.
 fn signal_worker_group(pid: rustix::process::Pid, sig: rustix::process::Signal) {
-    use rustix::process::{getpgid, getpgrp, kill_process, kill_process_group};
+    use rustix::process::{
+        getpgid, getpgrp, kill_process, kill_process_group, pidfd_open, pidfd_send_signal,
+        PidfdFlags,
+    };
 
     if getpgid(Some(pid)).is_ok_and(|pgid| pgid == pid && pgid != getpgrp()) {
         match kill_process_group(pid, sig) {
@@ -742,6 +806,13 @@ fn signal_worker_group(pid: rustix::process::Pid, sig: rustix::process::Signal) 
             Err(_) => return,
         }
     }
+
+    if let Ok(pidfd) = pidfd_open(pid, PidfdFlags::empty()) {
+        if pidfd_send_signal(&pidfd, sig).is_ok() {
+            return;
+        }
+    }
+
     let _ = kill_process(pid, sig);
 }
 
@@ -945,5 +1016,13 @@ mod reclaim_tests {
         assert!(matches!(err, FreezerError::UnsafePath(_)));
         assert!(real.exists());
         fs::remove_dir_all(&base).unwrap();
+    }
+
+    #[test]
+    fn subreaper_guard_enables_and_restores() {
+        let guard = SubreaperGuard::enter().expect("enter subreaper");
+        let active = rustix::process::child_subreaper().expect("child_subreaper");
+        assert!(active.is_some());
+        drop(guard);
     }
 }

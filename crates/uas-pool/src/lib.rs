@@ -19,8 +19,8 @@ pub mod worktree;
 
 pub use error::{FreezerError, PoolError};
 pub use freezer::{
-    current_process_cgroup_path, CgroupFreezer, CpuCap, Freezer, FreezerState, ResourceLimits,
-    SignalFreezer,
+    current_process_cgroup_path, is_process_or_group_alive, CgroupFreezer, CpuCap, Freezer,
+    FreezerState, ResourceLimits, SignalFreezer, SubreaperGuard,
 };
 pub use launch::{
     spawn_worker, AuditDegradation, LaunchConfig, SlotCgroup, Worker, WorkerAudit,

@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
+- Spec 0060: implement `SubreaperGuard` and non-blocking zombie reaping in `uas-pool`, add `pidfd_send_signal` path to `SignalFreezer`, wire process group teardown into `reclaim_slot`, and add child process tree verification tests.
 - Spec 0060: author LeanSpec 0060 defining agent harness process supervision, subreaper registration, process group isolation, and escalating signal coordination.
 - Spec 0018: add in-process syntactic diff engine with `similar` 3.2.0, implement `GET /diff/{card_id}` modal endpoint in `uas-deck`, and render line-numbered Maud diff tables.
 - Spec 0059: author LeanSpec 0059 defining the ceres localhost repeatable substrate testing protocol, live cgroup v2 subtree delegation, unprivileged test execution, and zero-I/O validation.

@@ -121,3 +121,89 @@ fn reclaim_suspended_slot_thaws_and_returns_to_warm() {
         .expect("reclaim suspended slot");
     assert_eq!(pool.slot_state(&slot_id).unwrap(), SlotState::Warm);
 }
+
+#[test]
+fn reclaim_slot_kills_worker_process_group_and_reaps_zombies() {
+    use std::time::{Duration, Instant};
+
+    let slot_id = SlotId::new("slot-reclaim-subreaper").unwrap();
+    let config = PoolConfig {
+        max_slots: 2,
+        idle_suspend_duration: None,
+        cgroup_base: None,
+        reconcile: None,
+        ..PoolConfig::default()
+    };
+    let pool = SlotPool::new(config);
+
+    pool.create_slot(slot_id.clone()).expect("create slot");
+    let wt_ref = uas_domain::WorktreeRef::new("slots/slot-reclaim-subreaper").unwrap();
+    pool.warm_slot(&slot_id, wt_ref).expect("warm slot");
+
+    let lease = make_lease("lease-proc-01", slot_id.as_str());
+    pool.acquire_lease(lease).expect("acquire lease");
+    assert_eq!(pool.slot_state(&slot_id).unwrap(), SlotState::Leased);
+
+    let pid_file = std::env::temp_dir().join(format!("uas-test-child-{}.pid", std::process::id()));
+    let _ = fs::remove_file(&pid_file);
+
+    let mut cmd = std::process::Command::new("sh");
+    cmd.args([
+        "-c",
+        &format!("sleep 60 & echo $! > {} && wait", pid_file.display()),
+    ]);
+
+    let worker = pool
+        .spawn_worker(&slot_id, cmd, &uas_pool::LaunchConfig::default())
+        .expect("spawn worker");
+
+    // Wait for the grandchild pid to be written
+    let start = Instant::now();
+    let mut grandchild_raw = None;
+    while start.elapsed() < Duration::from_secs(3) {
+        if let Ok(content) = fs::read_to_string(&pid_file) {
+            let trimmed = content.trim();
+            if let Ok(p) = trimmed.parse::<i32>() {
+                if p > 1 {
+                    grandchild_raw = Some(p);
+                    break;
+                }
+            }
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    let _ = fs::remove_file(&pid_file);
+
+    let grandchild_pid = grandchild_raw.expect("grandchild pid written");
+    let grandchild = rustix::process::Pid::from_raw(grandchild_pid).expect("valid pid");
+
+    // Verify grandchild is initially running
+    assert!(
+        rustix::process::test_kill_process(grandchild).is_ok(),
+        "grandchild process should be alive before reclaim"
+    );
+
+    // Reclaim the slot: sends KILL to the group, resets state, and reaps zombies
+    pool.reclaim_slot(&slot_id, None).expect("reclaim slot");
+
+    // Worker finish to release child handle
+    let _ = worker.finish();
+
+    // Verify grandchild was terminated
+    let start = Instant::now();
+    let mut dead = false;
+    while start.elapsed() < Duration::from_secs(3) {
+        pool.reap_zombies();
+        if rustix::process::test_kill_process(grandchild).is_err() {
+            dead = true;
+            break;
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
+
+    assert!(
+        dead,
+        "grandchild process should have been terminated and reaped by reclaim_slot"
+    );
+    assert_eq!(pool.slot_state(&slot_id).unwrap(), SlotState::Warm);
+}

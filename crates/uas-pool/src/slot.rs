@@ -15,7 +15,9 @@ use uas_domain::{
 };
 
 use crate::error::PoolError;
-use crate::freezer::{CgroupFreezer, CpuCap, Freezer, ResourceLimits, SignalFreezer};
+use crate::freezer::{
+    CgroupFreezer, CpuCap, Freezer, ResourceLimits, SignalFreezer, SubreaperGuard,
+};
 use crate::limits::{self, LimitOverrides, LimitSource, ResolvedLimits};
 use crate::reconcile::{self, ReconcileRoots};
 
@@ -160,6 +162,7 @@ pub struct SlotPool {
     resolved: Result<ResolvedLimits, (u64, u64)>,
     min_free_bytes: u64,
     free_bytes: Box<dyn Fn(&Path) -> io::Result<u64> + Send + Sync>,
+    _subreaper: Option<SubreaperGuard>,
 }
 
 impl SlotPool {
@@ -221,6 +224,7 @@ impl SlotPool {
             .as_ref()
             .map(reconcile::reconcile)
             .unwrap_or_default();
+        let subreaper = SubreaperGuard::enter().ok();
         Self {
             config,
             slots: Mutex::new(BTreeMap::new()),
@@ -228,6 +232,7 @@ impl SlotPool {
             resolved,
             min_free_bytes,
             free_bytes: host.free_bytes,
+            _subreaper: subreaper,
         }
     }
 
@@ -564,6 +569,9 @@ impl SlotPool {
             freezer.reap(Duration::from_millis(500))?;
         }
 
+        // Drain any reparented child processes that have exited (Spec 0060 D5)
+        SubreaperGuard::reap_zombies();
+
         // If a worktree is provided, reset it back to clean HEAD
         if let Some(wt) = worktree {
             wt.reset_clean()?;
@@ -578,6 +586,11 @@ impl SlotPool {
         managed.lease = None;
         managed.last_activity = Instant::now();
         Ok(())
+    }
+
+    /// Reaps any reparented child processes that have exited without blocking (Spec 0060 D5).
+    pub fn reap_zombies(&self) -> usize {
+        SubreaperGuard::reap_zombies()
     }
 
     /// Returns the current state of a slot.
@@ -671,7 +684,16 @@ impl SlotPool {
                 .map(|(path, baseline)| crate::launch::SlotCgroup { path, baseline });
             (managed.cpu_cap().to_string(), cgroup)
         };
-        crate::launch::spawn_worker(cmd, cfg, cpu_cap, cgroup)
+        let worker = crate::launch::spawn_worker(cmd, cfg, cpu_cap, cgroup)?;
+        let mut guard = self.slots.lock().unwrap_or_else(|p| p.into_inner());
+        if let Some(managed) = guard.get_mut(id) {
+            if let Some(ref freezer) = managed.freezer {
+                if freezer.cgroup_path().is_none() {
+                    freezer.add_pid(worker.id())?;
+                }
+            }
+        }
+        Ok(worker)
     }
 
     /// Returns the CPU cap status recorded for a slot.

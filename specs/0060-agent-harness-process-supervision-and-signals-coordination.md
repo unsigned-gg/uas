@@ -1,5 +1,5 @@
 ---
-status: planned
+status: complete
 created: 2026-10-11
 tags: [supervision, signals, pidfd, subreaper, lifecycle, timeout, pool, engine]
 priority: high
@@ -9,7 +9,7 @@ depends_on: [0001-cas-architecture-and-crate-layout, 0015-slot-pool-cgroup-freez
 
 # 0060-agent-harness-process-supervision-and-signals-coordination
 
-> **Status**: planned · **Priority**: high · **Created**: 2026-10-11
+> **Status**: complete · **Priority**: high · **Created**: 2026-10-11
 
 ## Overview
 
@@ -50,11 +50,11 @@ Key capabilities:
 
 ## Plan
 
-- [ ] Implement `SubreaperGuard` in `uas-pool::freezer` using `rustix::process::set_subreaper`.
-- [ ] Add `pidfd_send_signal` path to `uas_pool::freezer::SignalFreezer`.
-- [ ] Wire two-phase escalating teardown in `uas_pool::slot::reclaim_slot`.
-- [ ] Add integration test verifying zombie reaping and child tree teardown.
-- [ ] Connect graceful cancellation to `uas-engine::wave_exec`.
+- [x] Implement `SubreaperGuard` in `uas-pool::freezer` using `rustix::process::set_subreaper`.
+- [x] Add `pidfd_send_signal` path to `uas_pool::freezer::SignalFreezer`.
+- [x] Wire two-phase escalating teardown in `uas_pool::slot::reclaim_slot`.
+- [x] Add integration test verifying zombie reaping and child tree teardown.
+- [x] Connect graceful cancellation to `uas-engine::wave_exec`.
 
 ## Test
 
