@@ -79,7 +79,7 @@ jobs:
 
       - uses: taiki-e/install-action@f7e5d7c961414b23f5b25b2da9294395d08513ad # v2.87.26
         with:
-          tool: cargo-nextest
+          tool: cargo-nextest@0.9.146
 
       - name: make ci
         run: make ci JOBS=${{ inputs.jobs }} NEXTEST_PROFILE=${{ inputs.nextest-profile }}
