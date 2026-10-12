@@ -1,5 +1,5 @@
 ---
-status: planned
+status: complete
 created: 2026-10-10
 tags: [sandbox, router, reverie, memory, unix-socket, phase-2]
 priority: high
@@ -9,7 +9,7 @@ depends_on: [0001-cas-architecture-and-crate-layout, 0008-soma-cortex-saga-rever
 
 # 0032-reverie-access-from-a-jailed-slot
 
-> **Status**: planned - **Priority**: high - **Created**: 2026-10-10
+> **Status**: complete - **Priority**: high - **Created**: 2026-10-10
 
 ## Overview
 
@@ -65,13 +65,13 @@ Because Landlock does not mediate connect on pathname sockets and `CLONE_NEWNET`
 
 ## Plan
 
-- [ ] Add `uas_sandbox::ipc::reverie_socket_path` and `REVERIE_SOCKET` constant in `uas-sandbox`.
-- [ ] Extend `uas_router::uds_proxy` to support prefix matching for `POST` paths (`/sessions/*`) and segmented `GET` paths (`/observations/*`).
-- [ ] Configure the Reverie proxy instance in `uas-router` to disable bearer token injection (Spec 0013 D5 OFF) and apply a 500 ms upstream connect timeout (overriding Spec 0013 D8).
-- [ ] Implement project scoping validation in `uas-router::uds_proxy` for `/search`, `/context/smart`, and `/observations`.
-- [ ] Implement upstream connect timeout (500 ms) error synthesis returning HTTP 504 Gateway Timeout, and connection refusal returning HTTP 502 Bad Gateway.
-- [ ] Add unit tests in `uas-router` for route allowlisting, scoping violations, 502 connection refusal, and 504 timeouts.
-- [ ] Add integration test in `uas-sandbox` verifying that a jailed worker in a private network namespace accesses Reverie only through `<workspace>/.ipc/reverie.sock`, requiring the test to fail explicitly if netns cannot be instantiated.
+- [x] Add `uas_sandbox::ipc::reverie_socket_path` and `REVERIE_SOCKET` constant in `uas-sandbox`.
+- [x] Extend `uas_router::uds_proxy` to support prefix matching for `POST` paths (`/sessions/*`) and segmented `GET` paths (`/observations/*`).
+- [x] Configure the Reverie proxy instance in `uas-router` to disable bearer token injection (Spec 0013 D5 OFF) and apply a 500 ms upstream connect timeout (overriding Spec 0013 D8).
+- [x] Implement project scoping validation in `uas-router::uds_proxy` for `/search`, `/context/smart`, and `/observations`.
+- [x] Implement upstream connect timeout (500 ms) error synthesis returning HTTP 504 Gateway Timeout, and connection refusal returning HTTP 502 Bad Gateway.
+- [x] Add unit tests in `uas-router` for route allowlisting, scoping violations, 502 connection refusal, and 504 timeouts.
+- [x] Add integration test in `uas-sandbox` verifying that a jailed worker in a private network namespace accesses Reverie only through `<workspace>/.ipc/reverie.sock`, requiring the test to fail explicitly if netns cannot be instantiated.
 
 ## Test
 

@@ -64,6 +64,8 @@ pub struct ProxyConfig {
     pub request_timeout: Duration,
     /// The upstream TCP connect must finish within this, else `502`.
     pub connect_timeout: Duration,
+    /// Optional project scoping rule (spec 0032).
+    pub project_scope: Option<String>,
     bearer_token: Option<String>,
 }
 
@@ -81,6 +83,31 @@ impl ProxyConfig {
             head_timeout: DEFAULT_HEAD_TIMEOUT,
             request_timeout: DEFAULT_REQUEST_TIMEOUT,
             connect_timeout: DEFAULT_CONNECT_TIMEOUT,
+            project_scope: None,
+            bearer_token: None,
+        }
+    }
+
+    /// A config tailored for Reverie memory daemon access (spec 0032).
+    pub fn reverie(socket_path: PathBuf, upstream: SocketAddr, project: String) -> Self {
+        Self {
+            socket_path,
+            upstream,
+            upstream_host: "127.0.0.1:7437".into(),
+            post_paths: vec!["/observations".into(), "/sessions/*".into()],
+            get_prefixes: vec![
+                "/search".into(),
+                "/context/smart".into(),
+                "/observations/*".into(),
+                "/tree".into(),
+                "/health".into(),
+            ],
+            max_connections: DEFAULT_MAX_CONNECTIONS,
+            max_body_bytes: DEFAULT_MAX_BODY_BYTES,
+            head_timeout: Duration::from_secs(2),
+            request_timeout: Duration::from_secs(10),
+            connect_timeout: Duration::from_millis(500),
+            project_scope: Some(project),
             bearer_token: None,
         }
     }
@@ -118,6 +145,7 @@ impl fmt::Debug for ProxyConfig {
             .field("get_prefixes", &self.get_prefixes)
             .field("max_connections", &self.max_connections)
             .field("max_body_bytes", &self.max_body_bytes)
+            .field("project_scope", &self.project_scope)
             .field(
                 "bearer_token",
                 &self.bearer_token.as_ref().map(|_| "<redacted>"),
@@ -496,15 +524,46 @@ pub fn check_request(request: &RequestHead, config: &ProxyConfig) -> Result<(), 
     if path.split('/').any(|segment| segment == "..") || path.contains("//") {
         return Err(Reject::new(403, "path traversal is not allowed"));
     }
+
+    #[cfg(not(feature = "delegation"))]
+    if request
+        .headers
+        .iter()
+        .any(|(name, _)| name == "on-behalf-of")
+    {
+        return Err(Reject::new(
+            403,
+            "delegation headers require delegation feature",
+        ));
+    }
+
     match request.method.as_str() {
-        "POST" if config.post_paths.iter().any(|p| p == path) => Ok(()),
+        "POST"
+            if config.post_paths.iter().any(|p| {
+                if let Some(base) = p.strip_suffix("/*") {
+                    path.strip_prefix(base)
+                        .and_then(|rest| rest.strip_prefix('/'))
+                        .is_some_and(|segment| !segment.is_empty())
+                } else {
+                    p == path
+                }
+            }) =>
+        {
+            Ok(())
+        }
         "GET"
             if config.get_prefixes.iter().any(|prefix| {
-                path == prefix
-                    || path
-                        .strip_prefix(prefix.as_str())
+                if let Some(base) = prefix.strip_suffix("/*") {
+                    path.strip_prefix(base)
                         .and_then(|rest| rest.strip_prefix('/'))
                         .is_some_and(|segment| !segment.is_empty() && !segment.contains('/'))
+                } else {
+                    path == prefix
+                        || path
+                            .strip_prefix(prefix.as_str())
+                            .and_then(|rest| rest.strip_prefix('/'))
+                            .is_some_and(|segment| !segment.is_empty() && !segment.contains('/'))
+                }
             }) =>
         {
             Ok(())
@@ -513,6 +572,23 @@ pub fn check_request(request: &RequestHead, config: &ProxyConfig) -> Result<(), 
         _ => Err(Reject::new(403, "method is not allowed")),
     }
     .and_then(|()| {
+        if let Some(ref assigned_project) = config.project_scope {
+            if path == "/search" || path == "/context/smart" {
+                let project_param = target.split_once('?').and_then(|(_, query)| {
+                    query.split('&').find_map(|pair| {
+                        let (k, v) = pair.split_once('=')?;
+                        if k == "project" {
+                            Some(v)
+                        } else {
+                            None
+                        }
+                    })
+                });
+                if project_param != Some(assigned_project.as_str()) {
+                    return Err(Reject::new(403, "project scope mismatch or missing"));
+                }
+            }
+        }
         if request.content_length > config.max_body_bytes {
             Err(Reject::new(413, "request body too large"))
         } else {
@@ -568,16 +644,55 @@ where
     R: AsyncRead + Unpin,
 {
     let unavailable = || Forwarded::Reject(Reject::new(502, "upstream unavailable"));
-    let mut upstream =
-        tokio::time::timeout(config.connect_timeout, TcpStream::connect(config.upstream))
-            .await
-            .map_err(|_| unavailable())?
-            .map_err(|_| unavailable())?;
+    let timed_out = || Forwarded::Reject(Reject::new(504, "gateway timeout"));
+
+    let path = request.target.split('?').next().unwrap_or_default();
+    let buffered_body = if request.method == "POST" && path == "/observations" {
+        if let Some(ref assigned_project) = config.project_scope {
+            if request.content_length == 0 {
+                return Err(Forwarded::Reject(Reject::new(
+                    403,
+                    "missing observation body",
+                )));
+            }
+            let mut body_buf = vec![0u8; request.content_length as usize];
+            reader
+                .read_exact(&mut body_buf)
+                .await
+                .map_err(|_| Forwarded::Reject(Reject::new(400, "request body was cut short")))?;
+            let json: serde_json::Value = serde_json::from_slice(&body_buf)
+                .map_err(|_| Forwarded::Reject(Reject::new(400, "invalid json body")))?;
+            if json.get("project").and_then(|v| v.as_str()) != Some(assigned_project.as_str()) {
+                return Err(Forwarded::Reject(Reject::new(
+                    403,
+                    "project scope mismatch in body",
+                )));
+            }
+            Some(body_buf)
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
+    let connect_res =
+        tokio::time::timeout(config.connect_timeout, TcpStream::connect(config.upstream)).await;
+    let mut upstream = match connect_res {
+        Ok(Ok(stream)) => stream,
+        Ok(Err(_)) => return Err(unavailable()),
+        Err(_) => return Err(timed_out()),
+    };
     upstream
         .write_all(&upstream_head(&request, config))
         .await
         .map_err(|_| unavailable())?;
-    if request.content_length > 0 {
+    if let Some(body_buf) = buffered_body {
+        upstream
+            .write_all(&body_buf)
+            .await
+            .map_err(|_| unavailable())?;
+    } else if request.content_length > 0 {
         let mut body = reader.take(request.content_length);
         let copied = tokio::io::copy(&mut body, &mut upstream)
             .await
@@ -635,6 +750,7 @@ fn reason_phrase(status: u16) -> &'static str {
         431 => "Request Header Fields Too Large",
         502 => "Bad Gateway",
         503 => "Service Unavailable",
+        504 => "Gateway Timeout",
         505 => "HTTP Version Not Supported",
         _ => "Error",
     }
@@ -826,5 +942,171 @@ mod tests {
         let mut rest = Vec::new();
         reader.read_to_end(&mut rest).await.expect("rest");
         assert_eq!(rest, b"body");
+    }
+
+    fn reverie_config() -> ProxyConfig {
+        ProxyConfig::reverie(
+            PathBuf::from("/tmp/reverie_unused.sock"),
+            "127.0.0.1:7437".parse().expect("addr"),
+            "uas".to_string(),
+        )
+    }
+
+    #[test]
+    fn allowlist_accepts_reverie_paths() {
+        let config = reverie_config();
+        assert!(check_request(&head("GET", "/search?project=uas&q=test"), &config).is_ok());
+        assert!(check_request(&head("GET", "/context/smart?project=uas"), &config).is_ok());
+        assert!(check_request(&head("GET", "/observations/13347"), &config).is_ok());
+        assert!(check_request(&head("GET", "/tree"), &config).is_ok());
+        assert!(check_request(&head("GET", "/health"), &config).is_ok());
+        assert!(check_request(&head("POST", "/observations"), &config).is_ok());
+        assert!(check_request(&head("POST", "/sessions/session-1"), &config).is_ok());
+        assert!(check_request(&head("POST", "/sessions/abc/events"), &config).is_ok());
+    }
+
+    #[test]
+    fn allowlist_rejects_reverie_violations() {
+        let config = reverie_config();
+        // Negative control: DELETE /observations/1 returns HTTP 403 (REQ-0032-03, REQ-0032-06)
+        assert_eq!(
+            check_request(&head("DELETE", "/observations/1"), &config)
+                .expect_err("delete")
+                .status,
+            403
+        );
+        // Negative control: path traversal returns HTTP 403 (REQ-0032-03)
+        assert_eq!(
+            check_request(&head("GET", "/search/../../etc/passwd"), &config)
+                .expect_err("traversal")
+                .status,
+            403
+        );
+        // Negative control: administrative endpoint returns HTTP 403 (REQ-0032-06)
+        assert_eq!(
+            check_request(&head("GET", "/admin/reset"), &config)
+                .expect_err("admin")
+                .status,
+            403
+        );
+        assert_eq!(
+            check_request(&head("POST", "/admin/reset"), &config)
+                .expect_err("admin post")
+                .status,
+            403
+        );
+        // Negative control: mismatched or missing project parameter returns HTTP 403 (REQ-0032-12)
+        assert_eq!(
+            check_request(&head("GET", "/search?project=other&q=test"), &config)
+                .expect_err("wrong project")
+                .status,
+            403
+        );
+        assert_eq!(
+            check_request(&head("GET", "/search?q=test"), &config)
+                .expect_err("missing project")
+                .status,
+            403
+        );
+        assert_eq!(
+            check_request(&head("GET", "/context/smart?project=other"), &config)
+                .expect_err("wrong context project")
+                .status,
+            403
+        );
+        // Unapproved paths
+        assert_eq!(
+            check_request(&head("GET", "/observations"), &config)
+                .expect_err("bare observations get")
+                .status,
+            403
+        );
+        assert_eq!(
+            check_request(&head("POST", "/search"), &config)
+                .expect_err("post search")
+                .status,
+            403
+        );
+    }
+
+    #[test]
+    fn delegation_header_rejected_without_feature() {
+        let config = reverie_config();
+        let mut request = head("POST", "/observations");
+        request
+            .headers
+            .push(("on-behalf-of".to_string(), "agent-1".to_string()));
+        #[cfg(not(feature = "delegation"))]
+        {
+            let reject = check_request(&request, &config).expect_err("delegation");
+            assert_eq!(reject.status, 403);
+        }
+        #[cfg(feature = "delegation")]
+        {
+            assert!(check_request(&request, &config).is_ok());
+        }
+    }
+
+    #[tokio::test]
+    async fn forward_rejects_mismatched_observation_project_body() {
+        let config = reverie_config();
+        let body = b"{\"project\": \"other\", \"content\": \"hello\"}";
+        let request = RequestHead {
+            method: "POST".to_string(),
+            target: "/observations".to_string(),
+            headers: vec![],
+            content_length: body.len() as u64,
+        };
+        let mut reader = std::io::Cursor::new(body);
+        let (_client_unix, server_unix) = tokio::net::UnixStream::pair().expect("pair");
+        let (_, mut server_write) = server_unix.into_split();
+        let result = forward(request, &mut reader, &mut server_write, &config).await;
+        match result {
+            Err(Forwarded::Reject(reject)) => {
+                assert_eq!(reject.status, 403);
+            }
+            _ => panic!("expected 403 reject for mismatched body project"),
+        }
+    }
+
+    #[tokio::test]
+    async fn refused_connection_returns_502() {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("bind");
+        let port = listener.local_addr().expect("addr").port();
+        drop(listener);
+
+        let mut config = reverie_config();
+        config.upstream = format!("127.0.0.1:{port}").parse().expect("addr");
+
+        let request = head("GET", "/health");
+        let mut reader = std::io::Cursor::new(b"");
+        let (_client_unix, server_unix) = tokio::net::UnixStream::pair().expect("pair");
+        let (_, mut server_write) = server_unix.into_split();
+        let result = forward(request, &mut reader, &mut server_write, &config).await;
+        match result {
+            Err(Forwarded::Reject(reject)) => {
+                assert_eq!(reject.status, 502);
+            }
+            _ => panic!("expected 502 reject for refused connection"),
+        }
+    }
+
+    #[tokio::test]
+    async fn stalled_upstream_connection_returns_504() {
+        let mut config = reverie_config();
+        config.connect_timeout = Duration::from_millis(50);
+        config.upstream = "192.0.2.1:81".parse().expect("addr");
+
+        let request = head("GET", "/health");
+        let mut reader = std::io::Cursor::new(b"");
+        let (_client_unix, server_unix) = tokio::net::UnixStream::pair().expect("pair");
+        let (_, mut server_write) = server_unix.into_split();
+        let result = forward(request, &mut reader, &mut server_write, &config).await;
+        match result {
+            Err(Forwarded::Reject(reject)) => {
+                assert_eq!(reject.status, 504);
+            }
+            _ => panic!("expected 504 reject for connect timeout"),
+        }
     }
 }

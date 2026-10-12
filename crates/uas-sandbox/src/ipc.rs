@@ -13,10 +13,17 @@ use crate::error::SandboxError;
 pub const IPC_DIR: &str = ".ipc";
 /// The gateway socket's file name inside [`IPC_DIR`].
 pub const LLM_SOCKET: &str = "llm.sock";
+/// The Reverie memory socket's file name inside [`IPC_DIR`] (spec 0032).
+pub const REVERIE_SOCKET: &str = "reverie.sock";
 
 /// `<workspace>/.ipc/llm.sock`. Pure path arithmetic; nothing is created.
 pub fn socket_path(workspace: &Path) -> PathBuf {
     workspace.join(IPC_DIR).join(LLM_SOCKET)
+}
+
+/// `<workspace>/.ipc/reverie.sock`. Pure path arithmetic; nothing is created (spec 0032).
+pub fn reverie_socket_path(workspace: &Path) -> PathBuf {
+    workspace.join(IPC_DIR).join(REVERIE_SOCKET)
 }
 
 /// Create `<workspace>/.ipc` with mode `0700` and return it. The worker preset
@@ -48,6 +55,14 @@ mod tests {
         assert_eq!(
             socket_path(Path::new("/workspace")),
             PathBuf::from("/workspace/.ipc/llm.sock")
+        );
+    }
+
+    #[test]
+    fn reverie_socket_path_is_under_ipc() {
+        assert_eq!(
+            reverie_socket_path(Path::new("/workspace")),
+            PathBuf::from("/workspace/.ipc/reverie.sock")
         );
     }
 
