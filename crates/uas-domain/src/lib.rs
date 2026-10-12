@@ -33,6 +33,7 @@ mod landing;
 mod lease;
 mod outcome;
 mod policy;
+mod provider;
 mod reconcile;
 mod slot;
 
@@ -46,5 +47,6 @@ pub use landing::{
 pub use lease::{check_slot_free, Budget, Lease, LeaseId, LeaseLedger, LeaseToken, PrincipalRef};
 pub use outcome::{KillReason, LimitEvents, WorkerOutcome};
 pub use policy::{PolicyTier, SomaClassification};
+pub use provider::{ParseProviderError, Provider};
 pub use reconcile::{LostSlot, ReconcileReport};
 pub use slot::{Slot, SlotId, SlotState, WorktreeRef};

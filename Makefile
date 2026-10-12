@@ -15,7 +15,7 @@ SBOM_DIR ?= sbom
 
 .PHONY: help build fmt fmt-check clippy test doc-test deny check ci hygiene typos machete \
 	spec-check toolchain-check pin-check text-check oss-check spdx-check hook-test smoke audit sbom sbom-check doc release-notes custody-check pgt-install new-repo template-check \
-	ebpf-build ebpf-test fetch-contracts pool-live-test features feature-leg
+	ebpf-build ebpf-test fetch-contracts pool-live-test features feature-leg ceres-test
 
 help: ## List targets
 	awk 'BEGIN { FS = ":.*## " } /^[a-zA-Z0-9_-]+:.*## / { printf "  %-16s %s\n", $$1, $$2 }' $(MAKEFILE_LIST)
@@ -148,6 +148,9 @@ smoke: ## Build the CLI, run it, check the domain crate has no I/O
 		exit 1
 	fi
 	echo "smoke: ok"
+
+ceres-test: ## Run repeatable substrate tests on ceres localhost (spec 0058)
+	scripts/ceres-test.sh
 
 ebpf-build: ## Build the kernel eBPF artifact into crates/uas-ebpf/ebpf/uas-ebpf.o
 	PATH="$$HOME/.local/share/mise/shims:$$PATH" cargo +$(EBPF_TOOLCHAIN) build \
