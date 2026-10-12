@@ -14,6 +14,7 @@ mod fetch_contracts;
 mod pin_check;
 mod spec_check;
 mod text_check;
+mod tool_pins;
 mod toolchain;
 
 use std::path::{Path, PathBuf};
@@ -32,7 +33,10 @@ fn main() -> ExitCode {
     match arg.as_deref() {
         Some("spec-check") => spec_check::run(&root),
         Some("toolchain-check") => toolchain::run(&root),
-        Some("pin-check") => pin_check::run(&root),
+        Some("pin-check") => {
+            let rest: Vec<String> = std::env::args().skip(2).collect();
+            pin_check::run(&root, &rest)
+        }
         Some("fetch-contracts") => {
             let rest: Vec<String> = std::env::args().skip(2).collect();
             fetch_contracts::run(&root, &rest)

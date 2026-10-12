@@ -13,6 +13,8 @@ use std::process::ExitCode;
 
 use anyhow::{Context, Result};
 
+use crate::tool_pins;
+
 const SPEC: &str = "specs/0004-dependency-and-licence-policy.md";
 const EBPF_DIR: &str = "crates/uas-ebpf/ebpf";
 const CI_YML: &str = ".github/workflows/ci.yml";
@@ -25,12 +27,33 @@ pub struct Report {
     pub checked: usize,
     /// One line per pinned crate that the lock does not hold at the pinned version.
     pub misses: Vec<String>,
+    /// How many tool references were checked in the Makefile.
+    pub tool_checked: usize,
 }
 
-pub fn run(root: &Path) -> ExitCode {
-    match check_root(root) {
+pub fn run(default_root: &Path, args: &[String]) -> ExitCode {
+    let mut root = default_root.to_path_buf();
+    let mut iter = args.iter();
+    while let Some(arg) = iter.next() {
+        if arg == "--root" {
+            if let Some(r) = iter.next() {
+                root = PathBuf::from(r);
+            } else {
+                eprintln!("pin-check: missing value for --root");
+                return ExitCode::from(2);
+            }
+        } else {
+            eprintln!("pin-check: unknown flag {arg:?}");
+            return ExitCode::from(2);
+        }
+    }
+    match check_root(&root) {
         Ok(report) if report.misses.is_empty() => {
             println!("pin-check: ok ({} pinned crates checked)", report.checked);
+            println!(
+                "pin-check: ok ({} tool references checked)",
+                report.tool_checked
+            );
             ExitCode::SUCCESS
         }
         Ok(report) => {
@@ -69,6 +92,11 @@ fn check_root(root: &Path) -> Result<Report> {
         println!("pin-check: gitleaks ok ({version})");
     }
     report.misses.extend(gitleaks);
+    let makefile = read(&root.join("Makefile"))?;
+    let tool_rows = tool_pins::parse_tool_rows(&spec);
+    let (tool_checked, makefile_misses) = tool_pins::check_makefile(&makefile, &tool_rows);
+    report.tool_checked = tool_checked;
+    report.misses.extend(makefile_misses);
     Ok(report)
 }
 
@@ -193,6 +221,7 @@ pub fn check_repo(
     let mut report = Report {
         checked: 0,
         misses: Vec::new(),
+        tool_checked: 0,
     };
     for (declared, lock_text, label) in [
         (&workspace, lock, "Cargo.lock"),
@@ -464,7 +493,8 @@ default = []
             got,
             Report {
                 checked: 0,
-                misses: Vec::new()
+                misses: Vec::new(),
+                tool_checked: 0,
             }
         );
     }
@@ -485,7 +515,8 @@ default = []
             got,
             Report {
                 checked: 1,
-                misses: Vec::new()
+                misses: Vec::new(),
+                tool_checked: 0,
             }
         );
     }
@@ -572,7 +603,8 @@ default = []
             got,
             Report {
                 checked: 1,
-                misses: Vec::new()
+                misses: Vec::new(),
+                tool_checked: 0,
             }
         );
     }
