@@ -19,6 +19,7 @@ AGENTS.md requires all external dependencies to be pinned before use. Currently,
 - **F1** [verified 2026-10-10]: `gitleaks` is used in CI but unpinned in Spec 0004. Command: `grep -in "GITLEAKS" .github/workflows/ci.yml`.
 - **F2** [verified 2026-10-10]: `cargo-cyclonedx` is used in the Makefile but unpinned. Command: `grep -in "cyclonedx" Makefile`.
 - **F3** [verified 2026-10-10]: The `xtask` pin-check does not scan CI tools. Command: `! grep -nE 'gitleaks|workflow|\.github' xtask/src/pin_check.rs`.
+- **F4** [verified 2026-10-11]: `install-action` floats `tool:` without a version. Command: `grep -nE 'tool: [a-z-]+$' .github/workflows/*.yml`.
 
 ## Design
 
@@ -29,6 +30,13 @@ AGENTS.md requires all external dependencies to be pinned before use. Currently,
 | D1 | Pinning rules extend to all external tools: GitHub Actions (per Spec 0005), CI-installed CLIs (by version/hash), Makefile-invoked Cargo subcommands (by version), and toolchains (by version or channel date). | lane w10:pN, 2026-10-10 |
 | D2 | The canonical record for these pins lives in Spec 0004 (amended). | lane w10:pN, 2026-10-10 |
 | D3 | The `make pin-check` (xtask) gate is expanded to parse YAML workflows and Makefiles against the Spec 0004 markdown tables. | lane w10:pN, 2026-10-10 |
+| D4 | A CI tools row is keyed by the first backticked token of its first cell. | proposed |
+| D5 | Actions are keyed by `owner/repo`; a `uses: owner/repo/path@ref` maps to `owner/repo`; local `./` uses are skipped; Pin cell holds the 40-hex SHA. | proposed |
+| D6 | A `with: tool:` entry is `name@X.Y.Z`; bare names or `@latest` are misses; `moon-version:` maps to `moon`; `*_VERSION` maps to the row whose Pin cell carries `env NAME`. | proposed |
+| D7 | `cargo <sub>` outside built-ins needs a row keyed `cargo-<sub>` with an `X.Y.Z` version; `cargo install` needs `--rev`, `--version` or `@X.Y.Z`. | proposed |
+| D8 | Toolchain channels in `rust-toolchain.toml`, `crates/uas-ebpf/ebpf/rust-toolchain.toml`, `EBPF_TOOLCHAIN` and `rustup toolchain install` must be `X.Y.Z` or `nightly-YYYY-MM-DD` and appear as a toolchain row. | proposed |
+| D9 | Baked tools (`cargo-deny`, `typos`) are recorded in spec 0004 and the Makefile check requires the row to exist. | proposed |
+| D10 | Success output prints `pin-check: ok (M tool references checked)`; misses print on stderr and exit code is 1. | proposed |
 
 The record belongs in Spec 0004 because it is the established dependency and licence policy registry. A centralized registry prevents policy fragmentation.
 
@@ -53,13 +61,18 @@ The record belongs in Spec 0004 because it is the established dependency and lic
 
 | Requirement | Negative Control |
 |---|---|
+| REQ-0034-01 | Remove a tool row from spec 0004. `pin-check` fails naming the missing row. |
+| REQ-0034-02 | Modify a GitHub Action SHA by one hex digit. `pin-check` fails naming the action. |
+| REQ-0034-03 | Strip `@version` from a `with: tool:` line. `pin-check` fails naming the unversioned tool. |
+| REQ-0034-04 | Invoke an unpinned Cargo subcommand in Makefile. `pin-check` fails naming the subcommand. |
+| REQ-0034-05 | Set a toolchain channel to `stable`. `pin-check` fails naming the invalid channel. |
 | REQ-0034-06 | `make pin-check` on a fixture Makefile with an unpinned `cargo-fake`. Goes red if the Makefile parser is removed. |
 | REQ-0034-07 | `make pin-check` returning non-zero. Goes red if the check incorrectly succeeds on an unpinned tool. |
 
 ```bash
 make pin-check
 ```
-Add a fixture `Makefile` calling an unpinned `cargo-fake`. A test in `xtask/tests/pin_check_test.rs` (using the new fixture entry point) asserts that `make pin-check` fails. If the Makefile parsing logic in `pin_check.rs` is deleted, this test goes red.
+A test in `xtask/tests/pin_check_test.rs` runs `cargo xtask pin-check --root <fixture>`; the fixture is built in a temp dir; every failing case asserts stderr names the tool and has a passing control.
 
 ## Notes
 
