@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
+- Spec 0036: implement host-wide slot arbitration in `uas-pool` and `uas-domain` with advisory file locking, bounded wait backoff, sequential slot indexing, directory security verification, and multi-process capacity enforcement.
 - Spec 0062: implement agent harness CLI invocation builder and environment sanitization in `uas-engine` with allowlisted system variables, secret scrubbing, slot metadata injection, and isolated configuration roots.
 - Spec 0032: implement Reverie memory proxy in `uas-router` and `uas-sandbox` with Unix socket isolation, route prefix matching, project scoping checks, and 502/504 error synthesis.
 - Spec 0030: implement A2A protocol gateway, version negotiation, and Cortex Mesh addressing in `uas-acp`, and out-of-band artifact storage references and peer loss compensation in `uas-engine`.

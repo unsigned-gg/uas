@@ -86,6 +86,14 @@ pub enum PoolError {
         /// The configured minimum.
         min_free_bytes: u64,
     },
+
+    /// Host-wide slot capacity exceeded across all processes (spec 0036).
+    #[error("host-wide slot capacity exceeded (max {0})")]
+    HostCapacityExceeded(usize),
+
+    /// Slot directory has insecure permissions, wrong owner, or is a symlink (spec 0036).
+    #[error("slot directory {0:?} insecure: {1}")]
+    DirectoryInsecure(PathBuf, String),
 }
 
 /// Errors arising from cgroup v2 freezer operations.

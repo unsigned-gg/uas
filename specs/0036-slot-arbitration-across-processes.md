@@ -1,5 +1,5 @@
 ---
-status: planned
+status: complete
 created: 2026-10-10
 tags: [pool, slots, arbitration, concurrency, flock, phase-3]
 priority: high
@@ -9,7 +9,7 @@ depends_on: [0001-cas-architecture-and-crate-layout, 0002-verification-gates-and
 
 # 0036-slot-arbitration-across-processes
 
-> **Status**: planned, **Priority**: high, **Created**: 2026-10-10
+> **Status**: complete, **Priority**: high, **Created**: 2026-10-10
 
 ## Overview
 
@@ -63,12 +63,12 @@ Capacity is a host property. Total worker slots across all processes on the host
 
 ## Plan
 
-- [ ] Define pure host capacity types (`HostCapacity`, `HostSlotIndex`, `SlotAcquirePolicy`) in `uas-domain`.
-- [ ] Add `HostCapacityExceeded(usize)` and `DirectoryInsecure(PathBuf, String)` to `PoolError` in `uas-pool`.
-- [ ] Add `host_max_slots` and `slot_acquire_timeout` configuration fields to `PoolConfig` in `uas-pool`.
-- [ ] Implement `HostSlotArbiter` in `uas-pool` managing canonical directory creation, `File::try_lock` acquisition, `O_CLOEXEC` descriptor retention, and polling backoff (50 ms to 500 ms).
-- [ ] Integrate `HostSlotArbiter` into `uas_pool::slot::SlotPool::allocate` to acquire a host slot before leasing a worker worktree.
-- [ ] Implement multi-process integration tests in `uas-pool` using `std::env::current_exe()` helper sub-processes to verify two-process capacity limits, timeout failure, and abnormal termination recovery.
+- [x] Define pure host capacity types (`HostCapacity`, `HostSlotIndex`, `SlotAcquirePolicy`) in `uas-domain`.
+- [x] Add `HostCapacityExceeded(usize)` and `DirectoryInsecure(PathBuf, String)` to `PoolError` in `uas-pool`.
+- [x] Add `host_max_slots` and `slot_acquire_timeout` configuration fields to `PoolConfig` in `uas-pool`.
+- [x] Implement `HostSlotArbiter` in `uas-pool` managing canonical directory creation, `File::try_lock` acquisition, `O_CLOEXEC` descriptor retention, and polling backoff (50 ms to 500 ms).
+- [x] Integrate `HostSlotArbiter` into `uas_pool::slot::SlotPool::allocate` to acquire a host slot before leasing a worker worktree.
+- [x] Implement multi-process integration tests in `uas-pool` using `std::env::current_exe()` helper sub-processes to verify two-process capacity limits, timeout failure, and abnormal termination recovery.
 
 ## Test
 

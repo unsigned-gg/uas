@@ -40,7 +40,7 @@ Methodology: LeanSpec. The reference copy is in `../vendor/leanspec/`.
 | [0033](0033-cargo-feature-policy-and-ci-matrix.md) | Cargo feature policy and CI matrix | in-progress | high |
 | [0034](0034-tool-pinning-beyond-cargo.md) | Tool pinning beyond cargo | planned | high |
 | [0035](0035-cas-acp-transport-scope.md) | uas-acp transport scope | planned | high |
-| [0036](0036-slot-arbitration-across-processes.md) | Slot arbitration across processes | planned | high |
+| [0036](0036-slot-arbitration-across-processes.md) | Slot arbitration across processes | complete | high |
 | [0037](0037-repository-migration-to-uas.md) | Repository migration to uas | planned | high |
 | [0038](0038-uas-operator-and-crds.md) | uas-operator and CRDs | planned | high |
 | [0039](0039-k8s-dependency-and-ci-plan.md) | k8s dependency and CI plan | planned | high |

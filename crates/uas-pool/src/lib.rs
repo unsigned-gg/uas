@@ -8,6 +8,7 @@
 //! - [`launch`]: clamped worker spawn and audit track (spec 0015 D6).
 #![deny(unsafe_code)]
 
+pub mod arbitration;
 pub mod error;
 pub mod freezer;
 pub mod launch;
@@ -17,6 +18,9 @@ pub mod reconcile;
 pub mod slot;
 pub mod worktree;
 
+pub use arbitration::{
+    HostSlotArbiter, HostSlotLease, HostSlotMetadata, DEFAULT_SLOT_DIR, UAS_SLOT_DIR_ENV,
+};
 pub use error::{FreezerError, PoolError};
 pub use freezer::{
     current_process_cgroup_path, is_process_or_group_alive, CgroupFreezer, CpuCap, Freezer,

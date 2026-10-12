@@ -11,9 +11,11 @@ use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
 use uas_domain::{
-    DomainError, Lease, LeaseToken, ReconcileReport, Slot, SlotId, SlotState, WorktreeRef,
+    DomainError, HostCapacity, Lease, LeaseToken, ReconcileReport, Slot, SlotAcquirePolicy, SlotId,
+    SlotState, WorktreeRef,
 };
 
+use crate::arbitration::{HostSlotArbiter, HostSlotLease, UAS_SLOT_DIR_ENV};
 use crate::error::PoolError;
 use crate::freezer::{
     CgroupFreezer, CpuCap, Freezer, ResourceLimits, SignalFreezer, SubreaperGuard,
@@ -26,6 +28,14 @@ use crate::reconcile::{self, ReconcileRoots};
 pub struct PoolConfig {
     /// Maximum concurrent slots allowed in the pool (default 2 on ceres).
     pub max_slots: usize,
+    /// Maximum concurrent slots allowed across all processes on the host (spec 0036).
+    pub host_max_slots: usize,
+    /// Timeout for acquiring a host slot under bounded wait policy (spec 0036).
+    pub slot_acquire_timeout: Duration,
+    /// Canonical directory for host slot lock files (spec 0036).
+    pub host_slot_dir: Option<PathBuf>,
+    /// Policy for acquiring host slots when capacity is contested (spec 0036).
+    pub slot_acquire_policy: SlotAcquirePolicy,
     /// Inactivity duration before an idle leased slot is suspended.
     pub idle_suspend_duration: Option<Duration>,
     /// Base directory for cgroup v2 hierarchy (None for signal fallback / mock).
@@ -41,11 +51,9 @@ pub struct PoolConfig {
 }
 
 impl PoolConfig {
-    /// Host slot ceiling used by the memory formula (spec 0041 D1).
-    ///
-    /// Spec 0036 adds a dedicated host field and replaces this body.
+    /// Host slot ceiling used by the memory formula (spec 0041 D1) and host arbitration (spec 0036).
     pub fn host_max_slots(&self) -> usize {
-        self.max_slots
+        self.host_max_slots
     }
 }
 
@@ -53,6 +61,12 @@ impl Default for PoolConfig {
     fn default() -> Self {
         Self {
             max_slots: 2,
+            host_max_slots: HostCapacity::DEFAULT_HOST_MAX_SLOTS,
+            slot_acquire_timeout: Duration::from_secs(30),
+            host_slot_dir: None,
+            slot_acquire_policy: SlotAcquirePolicy::WaitBounded {
+                timeout: Duration::from_secs(30),
+            },
             idle_suspend_duration: Some(Duration::from_secs(300)),
             cgroup_base: None,
             reconcile: None,
@@ -90,6 +104,7 @@ impl HostProbe {
 pub struct ManagedSlot {
     slot: Slot,
     lease: Option<Lease>,
+    host_lease: Option<HostSlotLease>,
     last_activity: Instant,
     freezer: Option<Box<dyn Freezer>>,
 }
@@ -100,9 +115,20 @@ impl ManagedSlot {
         Self {
             slot: Slot::new(id),
             lease: None,
+            host_lease: None,
             last_activity: Instant::now(),
             freezer,
         }
+    }
+
+    /// Associated host slot lease if held (spec 0036).
+    pub fn host_lease(&self) -> Option<&HostSlotLease> {
+        self.host_lease.as_ref()
+    }
+
+    /// Sets or clears the host slot lease (spec 0036).
+    pub fn set_host_lease(&mut self, lease: Option<HostSlotLease>) {
+        self.host_lease = lease;
     }
 
     /// The slot id.
@@ -156,6 +182,7 @@ pub struct SweepReport {
 /// Thread-safe worker slot pool manager.
 pub struct SlotPool {
     config: PoolConfig,
+    arbiter: Option<HostSlotArbiter>,
     slots: Mutex<BTreeMap<SlotId, ManagedSlot>>,
     reconcile_report: ReconcileReport,
     /// Limits resolved once at construction; the error side is the `MemoryLow` data.
@@ -225,8 +252,20 @@ impl SlotPool {
             .map(reconcile::reconcile)
             .unwrap_or_default();
         let subreaper = SubreaperGuard::enter().ok();
+        let arbiter =
+            if config.host_slot_dir.is_some() || std::env::var_os(UAS_SLOT_DIR_ENV).is_some() {
+                HostSlotArbiter::new(
+                    config.host_slot_dir.clone(),
+                    config.host_max_slots(),
+                    config.slot_acquire_policy,
+                )
+                .ok()
+            } else {
+                None
+            };
         Self {
             config,
+            arbiter,
             slots: Mutex::new(BTreeMap::new()),
             reconcile_report,
             resolved,
@@ -262,11 +301,11 @@ impl SlotPool {
         guard.len()
     }
 
-    /// Registers a new cold slot in the pool.
+    /// Allocates a worker slot in the pool with host-wide slot arbitration (spec 0036).
     ///
-    /// Returns [`PoolError::CapacityExhausted`] if the pool is already at or
-    /// above `config.max_slots`.
-    pub fn create_slot(&self, id: SlotId) -> Result<(), PoolError> {
+    /// Checks capacity and resource limits, acquires an exclusive advisory host slot lease
+    /// when an arbiter is active, and registers the managed slot.
+    pub fn allocate(&self, id: SlotId) -> Result<(), PoolError> {
         let mut guard = self.slots.lock().unwrap_or_else(|p| p.into_inner());
 
         if guard.contains_key(&id) {
@@ -298,6 +337,12 @@ impl SlotPool {
         let free = (self.free_bytes)(&root).map_err(PoolError::DiskProbe)?;
         limits::check_free(free, self.min_free_bytes)?;
 
+        let host_lease = if let Some(ref arbiter) = self.arbiter {
+            Some(arbiter.acquire(&id)?)
+        } else {
+            None
+        };
+
         let freezer: Option<Box<dyn Freezer>> = if let Some(ref base) = self.config.cgroup_base {
             let resource_limits = match &self.resolved {
                 Ok(r) => ResourceLimits::from(r),
@@ -312,9 +357,31 @@ impl SlotPool {
             Some(Box::new(SignalFreezer::new(id.clone())))
         };
 
-        let managed = ManagedSlot::new(id.clone(), freezer);
+        let mut managed = ManagedSlot::new(id.clone(), freezer);
+        managed.set_host_lease(host_lease);
         guard.insert(id, managed);
         Ok(())
+    }
+
+    /// Registers a new cold slot in the pool.
+    ///
+    /// Delegates to [`Self::allocate`] to enforce host-wide capacity ceilings (spec 0036).
+    pub fn create_slot(&self, id: SlotId) -> Result<(), PoolError> {
+        self.allocate(id)
+    }
+
+    /// Removes a slot from the pool, dropping any held host lease and resources.
+    pub fn remove_slot(&self, id: &SlotId) -> Result<(), PoolError> {
+        let mut guard = self.slots.lock().unwrap_or_else(|p| p.into_inner());
+        guard
+            .remove(id)
+            .ok_or_else(|| PoolError::SlotNotFound(id.clone()))?;
+        Ok(())
+    }
+
+    /// Returns a reference to the host slot arbiter if configured.
+    pub fn arbiter(&self) -> Option<&HostSlotArbiter> {
+        self.arbiter.as_ref()
     }
 
     /// Attaches a worktree reference and transitions a slot from `Cold` to `Warm`.

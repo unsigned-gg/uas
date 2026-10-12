@@ -24,6 +24,7 @@
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
 
+mod arbitration;
 mod attestation;
 mod envelope;
 mod error;
@@ -38,6 +39,7 @@ mod provider;
 mod reconcile;
 mod slot;
 
+pub use arbitration::{HostCapacity, HostSlotIndex, SlotAcquirePolicy};
 pub use attestation::{Attestation, EvidenceTier};
 pub use envelope::Envelope;
 pub use error::DomainError;

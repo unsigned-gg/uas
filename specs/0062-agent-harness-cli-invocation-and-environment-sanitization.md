@@ -20,7 +20,7 @@ precise command-line arguments and a strictly sanitized environment.
 Ambient host processes frequently contain sensitive credentials in environment variables (such as
 `GITHUB_TOKEN`, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `AWS_SECRET_ACCESS_KEY`, and SSH variables).
 Passing these ambient variables into a jailed slot risks leaking credentials into logs, tool invocations,
-and child processes. Furthermore, default user home paths (`~/.claude`, `~/.config`, `~/.gemini`) can cause
+and child processes. Furthermore, ambient user home configuration directories can cause
 unwanted state crosstalk between independent agent slots or host sessions.
 
 This specification defines the environment sanitization and CLI invocation protocol in `uas-engine`:
