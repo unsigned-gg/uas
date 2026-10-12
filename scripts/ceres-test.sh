@@ -28,6 +28,7 @@ cargo test -p uas-pool --locked -j "${JOBS}"
 cargo test -p uas-engine --locked -j "${JOBS}"
 cargo test -p uas-acp --locked -j "${JOBS}"
 cargo test -p uas-router --locked -j "${JOBS}"
+cargo test -p uas-deck --locked -j "${JOBS}"
 cargo test -p uas-cli --locked -j "${JOBS}"
 echo "crate integration suites: ok"
 
