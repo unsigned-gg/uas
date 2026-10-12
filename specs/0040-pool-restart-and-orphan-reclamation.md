@@ -72,12 +72,12 @@ reuses the spec 0036 primitive: ownership is an open advisory lock, never a pid 
 
 ## Plan
 
-- [ ] `uas-domain`: add `ReconcileReport` and the `LostSlot` reason for compensation.
-- [ ] `uas-pool`: write and lock the marker in `WarmWorktree::provision`; release it in `teardown_inner`.
-- [ ] `uas-pool`: add `SlotPool::reconcile(roots) -> ReconcileReport` and call it from the constructor before any `allocate`.
-- [ ] `uas-pool`: add `PoolError::ReconcileRefused` for D6 cases.
-- [ ] `uas-engine`: map `LeaseNotFound` on a replayed activity to compensation plus re-admission (D5).
-- [ ] Amend spec 0015's state diagram: `[*] --> Reconciling --> Idle` on start.
+- [x] `uas-domain`: add `ReconcileReport` and the `LostSlot` reason for compensation (PR #138).
+- [x] `uas-pool`: write and lock the marker in `WarmWorktree::provision`; release it in `teardown_inner` (PR #138).
+- [x] `uas-pool`: add `SlotPool::reconcile(roots) -> ReconcileReport` and call it from the constructor before any `allocate` (PR #140).
+- [x] `uas-pool`: add `PoolError::ReconcileRefused` for D6 cases (PR #140).
+- [x] `uas-engine`: map `LeaseNotFound` on a replayed activity to compensation plus re-admission (D5, PR #140).
+- [x] Amend spec 0015's state diagram: `[*] --> Reconciling --> Idle` on start (PR #138).
 
 ## Test
 

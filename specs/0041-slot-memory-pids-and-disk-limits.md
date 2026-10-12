@@ -72,10 +72,10 @@ D3). The kernel enforces them; the pool observes `memory.events` and reports.
 
 ## Plan
 
-- [ ] `uas-pool`: `pids_max` on `ResourceLimits`; the default `memory_max_bytes` from `MemTotal` and `host_max_slots`, `PoolError::MemoryLow`, and the `info` start log of the value and its source.
-- [ ] `uas-pool`: write `pids.max` in `configure_limits`; read `memory.events` and `pids.events` at reclaim.
-- [ ] `uas-pool`: `statvfs` floor in `allocate`; `PoolError::DiskLow`.
-- [ ] `uas-domain`: `WorkerOutcome::Killed(Oom)` and the two receipt counters.
+- [x] `uas-pool`: `pids_max` on `ResourceLimits`; the default `memory_max_bytes` from `MemTotal` and `host_max_slots`, `PoolError::MemoryLow`, and the `info` start log of the value and its source (PR #145).
+- [x] `uas-pool`: write `pids.max` in `configure_limits`; read `memory.events` and `pids.events` at reclaim (PR #145).
+- [x] `uas-pool`: `statvfs` floor in `allocate`; `PoolError::DiskLow` (PR #145).
+- [x] `uas-domain`: `WorkerOutcome::Killed(Oom)` and the two receipt counters (PR #145).
 - [ ] Spec 0038: add `spec.limits` to the `WorkerSlot` schema (D8).
 - [ ] Spec 0015: add the two receipt fields to the `AuditReceipt` row; spec 0020: cite this spec where it says memory is out of scope.
 
