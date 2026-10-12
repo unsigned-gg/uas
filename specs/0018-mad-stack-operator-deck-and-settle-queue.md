@@ -1,5 +1,5 @@
 ---
-status: planned
+status: in-progress
 created: 2026-10-09
 tags: [deck, axum, maud, htmx, settle, madstack, phase-5]
 priority: high
@@ -225,7 +225,7 @@ flowchart TD
 ## Plan
 
 - [x] Slice 1 (PR #68, 2026-10-10): `axum` 0.8.9 (no `ws` yet) and `maud` 0.27.0 in the workspace; read model; `GET /` and `GET /settle`; in-process `SettleQueue`; disconnected notice.
-- [ ] Slice 2 (brief P4b): deck card (D7); Cortex source parsed from fixture files (D9, D10); view of the new fields.
+- [x] Slice 2 (brief P4b): deck card (D7); Cortex source parsed from fixture files (D9, D10); view of the new fields.
 - [ ] Slice 3: HTTP fetch and poller with `reqwest` 0.13.5 (D9).
 - [ ] Actions (D8), after Invariant 2 is ruled; they dispatch the decision payload to a mock Cortex in tests.
 - [ ] Add `axum` feature `ws`, `tower-http` 0.7.1, `tokio-stream` 0.1.19 and `similar` 3.2.0 when D2, D4 and D6 land.
