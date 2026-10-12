@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
+- Spec 0030: define pure orchestrator AST node types (`LlmAgent`, `Sequential`, `Parallel`, `Loop`) and `AgentTool` in `uas-domain` with a maximum delegation depth limit of 5, zero I/O, and serde support.
 - Spec 0060: implement `SubreaperGuard` and non-blocking zombie reaping in `uas-pool`, add `pidfd_send_signal` path to `SignalFreezer`, wire process group teardown into `reclaim_slot`, and add child process tree verification tests.
 - Spec 0060: author LeanSpec 0060 defining agent harness process supervision, subreaper registration, process group isolation, and escalating signal coordination.
 - Spec 0018: add in-process syntactic diff engine with `similar` 3.2.0, implement `GET /diff/{card_id}` modal endpoint in `uas-deck`, and render line-numbered Maud diff tables.

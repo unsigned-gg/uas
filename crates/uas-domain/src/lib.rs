@@ -31,6 +31,7 @@ mod evaluator;
 mod ident;
 mod landing;
 mod lease;
+mod orchestrator;
 mod outcome;
 mod policy;
 mod provider;
@@ -45,6 +46,9 @@ pub use landing::{
     AuditStatus, CostSource, HumanRaise, LandingFacts, LandingReceipt, LandingReceiptError,
 };
 pub use lease::{check_slot_free, Budget, Lease, LeaseId, LeaseLedger, LeaseToken, PrincipalRef};
+pub use orchestrator::{
+    AgentTool, LlmAgent, Loop, OrchestratorNode, Parallel, Sequential, MAX_DELEGATION_DEPTH,
+};
 pub use outcome::{KillReason, LimitEvents, WorkerOutcome};
 pub use policy::{PolicyTier, SomaClassification};
 pub use provider::{ParseProviderError, Provider};
