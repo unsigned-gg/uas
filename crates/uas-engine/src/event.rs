@@ -91,6 +91,15 @@ pub enum WorkflowEvent {
         /// Epoch timestamp in seconds.
         timestamp: u64,
     },
+    /// Agent harness streaming event recorded during an activity turn (spec 0061).
+    HarnessStream {
+        /// Sequence number.
+        sequence: u64,
+        /// Harness event details.
+        event: crate::harness::HarnessEvent,
+        /// Epoch timestamp in seconds.
+        timestamp: u64,
+    },
     /// Session concluded in a terminal state.
     SessionFinished {
         /// Sequence number.
@@ -128,6 +137,7 @@ impl WorkflowEvent {
             Self::Compensating { sequence, .. } => *sequence,
             Self::SessionFinished { sequence, .. } => *sequence,
             Self::WaveStep { sequence, .. } => *sequence,
+            Self::HarnessStream { sequence, .. } => *sequence,
         }
     }
 
@@ -141,6 +151,7 @@ impl WorkflowEvent {
             Self::Compensating { timestamp, .. } => *timestamp,
             Self::SessionFinished { timestamp, .. } => *timestamp,
             Self::WaveStep { timestamp, .. } => *timestamp,
+            Self::HarnessStream { timestamp, .. } => *timestamp,
         }
     }
 }

@@ -167,6 +167,71 @@ impl StreamTranslator {
 
         events
     }
+
+    /// Parses events from a buffered reader using a harness-specific line parser.
+    pub fn parse_with<P: HarnessStreamParser, R: BufRead>(
+        &self,
+        parser: &mut P,
+        mut reader: R,
+    ) -> Vec<HarnessEvent> {
+        let mut events = Vec::new();
+        let mut line_buf = Vec::new();
+
+        loop {
+            line_buf.clear();
+            let read_res = reader
+                .by_ref()
+                .take(self.max_frame_bytes as u64 + 1)
+                .read_until(b'\n', &mut line_buf);
+
+            match read_res {
+                Ok(0) => break,
+                Ok(n) => {
+                    let has_newline = line_buf.last() == Some(&b'\n');
+                    if has_newline {
+                        line_buf.pop();
+                        if line_buf.last() == Some(&b'\r') {
+                            line_buf.pop();
+                        }
+                    } else if n > self.max_frame_bytes {
+                        let _ = skip_to_next_newline(&mut reader);
+                        events.push(HarnessEvent::Error {
+                            code: "frame_too_large".into(),
+                            message: format!(
+                                "stream line exceeded maximum size of {} bytes",
+                                self.max_frame_bytes
+                            ),
+                        });
+                        continue;
+                    }
+
+                    if line_buf.is_empty() {
+                        continue;
+                    }
+
+                    if let Ok(line_str) = std::str::from_utf8(&line_buf) {
+                        if let Some(event) = parser.parse_line(line_str) {
+                            events.push(event);
+                        }
+                    } else {
+                        events.push(HarnessEvent::Error {
+                            code: "invalid_utf8".into(),
+                            message: "stream frame was not valid utf-8".into(),
+                        });
+                    }
+                }
+                Err(err) => {
+                    events.push(HarnessEvent::Error {
+                        code: "io_error".into(),
+                        message: err.to_string(),
+                    });
+                    break;
+                }
+            }
+        }
+
+        events
+    }
 }
 
 /// Discards characters until the next newline.
@@ -236,8 +301,254 @@ impl MockStreamGenerator {
     }
 }
 
+/// Trait for harness-specific line parsers.
+pub trait HarnessStreamParser {
+    /// Attempt to parse a raw harness stdout line into a typed [`HarnessEvent`].
+    /// Returns `None` if the line is not recognized or contains non-event output.
+    fn parse_line(&mut self, line: &str) -> Option<HarnessEvent>;
+}
+
+/// Claude Code CLI streaming JSON line parser.
+#[derive(Debug, Default)]
+pub struct ClaudeStreamParser;
+
+impl HarnessStreamParser for ClaudeStreamParser {
+    fn parse_line(&mut self, line: &str) -> Option<HarnessEvent> {
+        let val: serde_json::Value = serde_json::from_str(line).ok()?;
+        let typ = val.get("type")?.as_str()?;
+        match typ {
+            "message_start" => {
+                let msg = val.get("message")?;
+                let turn_id = msg.get("id")?.as_str()?.to_string();
+                let model = msg
+                    .get("model")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("claude-unknown")
+                    .to_string();
+                Some(HarnessEvent::TurnStarted { turn_id, model })
+            }
+            "content_block_delta" => {
+                let delta = val.get("delta")?;
+                if delta.get("type")?.as_str()? == "text_delta" {
+                    let text = delta.get("text")?.as_str()?.to_string();
+                    Some(HarnessEvent::ThoughtDelta { delta: text })
+                } else {
+                    None
+                }
+            }
+            "tool_use" => {
+                let call_id = val.get("id")?.as_str()?.to_string();
+                let tool_name = val.get("name")?.as_str()?.to_string();
+                let arguments = val.get("input").cloned().unwrap_or(serde_json::Value::Null);
+                Some(HarnessEvent::ToolCallRequested {
+                    call_id,
+                    tool_name,
+                    arguments,
+                })
+            }
+            "tool_result" => {
+                let call_id = val.get("tool_use_id")?.as_str()?.to_string();
+                let result = val
+                    .get("content")
+                    .cloned()
+                    .unwrap_or(serde_json::Value::Null);
+                Some(HarnessEvent::ToolCallCompleted {
+                    call_id,
+                    result,
+                    duration_ms: 0,
+                })
+            }
+            "message_delta" => {
+                let usage = val.get("usage");
+                let completion_tokens = usage
+                    .and_then(|u| u.get("output_tokens"))
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(0);
+                let prompt_tokens = usage
+                    .and_then(|u| u.get("input_tokens"))
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(0);
+                let stop_reason = val
+                    .get("delta")
+                    .and_then(|d| d.get("stop_reason"))
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("end_turn")
+                    .to_string();
+                Some(HarnessEvent::TurnCompleted {
+                    stop_reason,
+                    metrics: TokenMetrics {
+                        prompt_tokens,
+                        completion_tokens,
+                        cached_tokens: 0,
+                    },
+                })
+            }
+            _ => None,
+        }
+    }
+}
+
+/// Antigravity (AGY) CLI streaming JSON line parser.
+#[derive(Debug, Default)]
+pub struct AgyStreamParser;
+
+impl HarnessStreamParser for AgyStreamParser {
+    fn parse_line(&mut self, line: &str) -> Option<HarnessEvent> {
+        let val: serde_json::Value = serde_json::from_str(line).ok()?;
+        let step = val.get("step")?.as_str()?;
+        match step {
+            "turn_started" => {
+                let turn_id = val.get("turn_id")?.as_str()?.to_string();
+                let model = val
+                    .get("model")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("agy-unknown")
+                    .to_string();
+                Some(HarnessEvent::TurnStarted { turn_id, model })
+            }
+            "thought" => {
+                let delta = val.get("text")?.as_str()?.to_string();
+                Some(HarnessEvent::ThoughtDelta { delta })
+            }
+            "tool_call" => {
+                let call_id = val.get("id")?.as_str()?.to_string();
+                let tool_name = val.get("tool")?.as_str()?.to_string();
+                let arguments = val.get("args").cloned().unwrap_or(serde_json::Value::Null);
+                Some(HarnessEvent::ToolCallRequested {
+                    call_id,
+                    tool_name,
+                    arguments,
+                })
+            }
+            "tool_result" => {
+                let call_id = val.get("id")?.as_str()?.to_string();
+                let result = val
+                    .get("result")
+                    .cloned()
+                    .unwrap_or(serde_json::Value::Null);
+                let duration_ms = val.get("duration_ms").and_then(|v| v.as_u64()).unwrap_or(0);
+                Some(HarnessEvent::ToolCallCompleted {
+                    call_id,
+                    result,
+                    duration_ms,
+                })
+            }
+            "turn_done" => {
+                let stop_reason = val
+                    .get("reason")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("stop")
+                    .to_string();
+                let prompt_tokens = val
+                    .get("prompt_tokens")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(0);
+                let completion_tokens = val
+                    .get("completion_tokens")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(0);
+                let cached_tokens = val
+                    .get("cached_tokens")
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(0);
+                Some(HarnessEvent::TurnCompleted {
+                    stop_reason,
+                    metrics: TokenMetrics {
+                        prompt_tokens,
+                        completion_tokens,
+                        cached_tokens,
+                    },
+                })
+            }
+            _ => None,
+        }
+    }
+}
+
+/// OMP (Oh My Prompt) CLI streaming JSON line parser.
+#[derive(Debug, Default)]
+pub struct OmpStreamParser;
+
+impl HarnessStreamParser for OmpStreamParser {
+    fn parse_line(&mut self, line: &str) -> Option<HarnessEvent> {
+        let val: serde_json::Value = serde_json::from_str(line).ok()?;
+        let event = val.get("event")?.as_str()?;
+        match event {
+            "start" => {
+                let turn_id = val.get("id")?.as_str()?.to_string();
+                let model = val
+                    .get("model")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("omp-unknown")
+                    .to_string();
+                Some(HarnessEvent::TurnStarted { turn_id, model })
+            }
+            "delta" => {
+                let delta = val.get("content")?.as_str()?.to_string();
+                Some(HarnessEvent::ThoughtDelta { delta })
+            }
+            "tool" => {
+                let call_id = val.get("call_id")?.as_str()?.to_string();
+                let tool_name = val.get("name")?.as_str()?.to_string();
+                let arguments = val
+                    .get("parameters")
+                    .cloned()
+                    .unwrap_or(serde_json::Value::Null);
+                Some(HarnessEvent::ToolCallRequested {
+                    call_id,
+                    tool_name,
+                    arguments,
+                })
+            }
+            "tool_done" => {
+                let call_id = val.get("call_id")?.as_str()?.to_string();
+                let result = val
+                    .get("result")
+                    .cloned()
+                    .unwrap_or(serde_json::Value::Null);
+                let duration_ms = val.get("duration_ms").and_then(|v| v.as_u64()).unwrap_or(0);
+                Some(HarnessEvent::ToolCallCompleted {
+                    call_id,
+                    result,
+                    duration_ms,
+                })
+            }
+            "finish" => {
+                let stop_reason = val
+                    .get("status")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("completed")
+                    .to_string();
+                let usage = val.get("usage");
+                let prompt_tokens = usage
+                    .and_then(|u| u.get("prompt"))
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(0);
+                let completion_tokens = usage
+                    .and_then(|u| u.get("completion"))
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(0);
+                let cached_tokens = usage
+                    .and_then(|u| u.get("cached"))
+                    .and_then(|v| v.as_u64())
+                    .unwrap_or(0);
+                Some(HarnessEvent::TurnCompleted {
+                    stop_reason,
+                    metrics: TokenMetrics {
+                        prompt_tokens,
+                        completion_tokens,
+                        cached_tokens,
+                    },
+                })
+            }
+            _ => None,
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
+
     use super::*;
     use std::io::Cursor;
 
@@ -314,5 +625,145 @@ mod tests {
                 delta: "safe".into()
             }
         );
+    }
+
+    #[test]
+    fn claude_stream_parser_translates_claude_json_lines() {
+        let mut parser = ClaudeStreamParser;
+        let start =
+            r#"{"type":"message_start","message":{"id":"msg-123","model":"claude-3-7-sonnet"}}"#;
+        assert_eq!(
+            parser.parse_line(start),
+            Some(HarnessEvent::TurnStarted {
+                turn_id: "msg-123".into(),
+                model: "claude-3-7-sonnet".into(),
+            })
+        );
+
+        let delta = r#"{"type":"content_block_delta","delta":{"type":"text_delta","text":"Thinking step."}}"#;
+        assert_eq!(
+            parser.parse_line(delta),
+            Some(HarnessEvent::ThoughtDelta {
+                delta: "Thinking step.".into(),
+            })
+        );
+
+        let tool = r#"{"type":"tool_use","id":"call-1","name":"bash","input":{"command":"ls"}}"#;
+        assert_eq!(
+            parser.parse_line(tool),
+            Some(HarnessEvent::ToolCallRequested {
+                call_id: "call-1".into(),
+                tool_name: "bash".into(),
+                arguments: serde_json::json!({"command": "ls"}),
+            })
+        );
+
+        let done = r#"{"type":"message_delta","delta":{"stop_reason":"end_turn"},"usage":{"output_tokens":25,"input_tokens":100}}"#;
+        assert_eq!(
+            parser.parse_line(done),
+            Some(HarnessEvent::TurnCompleted {
+                stop_reason: "end_turn".into(),
+                metrics: TokenMetrics {
+                    prompt_tokens: 100,
+                    completion_tokens: 25,
+                    cached_tokens: 0,
+                },
+            })
+        );
+    }
+
+    #[test]
+    fn agy_stream_parser_translates_agy_json_lines() {
+        let mut parser = AgyStreamParser;
+        let start = r#"{"step":"turn_started","turn_id":"agy-1","model":"agy-core"}"#;
+        assert_eq!(
+            parser.parse_line(start),
+            Some(HarnessEvent::TurnStarted {
+                turn_id: "agy-1".into(),
+                model: "agy-core".into(),
+            })
+        );
+
+        let thought = r#"{"step":"thought","text":"Exploring files"}"#;
+        assert_eq!(
+            parser.parse_line(thought),
+            Some(HarnessEvent::ThoughtDelta {
+                delta: "Exploring files".into(),
+            })
+        );
+
+        let done = r#"{"step":"turn_done","reason":"stop","prompt_tokens":50,"completion_tokens":20,"cached_tokens":10}"#;
+        assert_eq!(
+            parser.parse_line(done),
+            Some(HarnessEvent::TurnCompleted {
+                stop_reason: "stop".into(),
+                metrics: TokenMetrics {
+                    prompt_tokens: 50,
+                    completion_tokens: 20,
+                    cached_tokens: 10,
+                },
+            })
+        );
+    }
+
+    #[test]
+    fn omp_stream_parser_translates_omp_json_lines() {
+        let mut parser = OmpStreamParser;
+        let start = r#"{"event":"start","id":"omp-1","model":"omp-fast"}"#;
+        assert_eq!(
+            parser.parse_line(start),
+            Some(HarnessEvent::TurnStarted {
+                turn_id: "omp-1".into(),
+                model: "omp-fast".into(),
+            })
+        );
+
+        let delta = r#"{"event":"delta","content":"Processing prompt"}"#;
+        assert_eq!(
+            parser.parse_line(delta),
+            Some(HarnessEvent::ThoughtDelta {
+                delta: "Processing prompt".into(),
+            })
+        );
+
+        let finish = r#"{"event":"finish","status":"completed","usage":{"prompt":80,"completion":30,"cached":5}}"#;
+        assert_eq!(
+            parser.parse_line(finish),
+            Some(HarnessEvent::TurnCompleted {
+                stop_reason: "completed".into(),
+                metrics: TokenMetrics {
+                    prompt_tokens: 80,
+                    completion_tokens: 30,
+                    cached_tokens: 5,
+                },
+            })
+        );
+    }
+
+    #[test]
+    fn workflow_session_records_and_replays_harness_events() {
+        use crate::{SessionId, WorkflowSession};
+        use uas_domain::{LeaseId, SlotId};
+
+        let session_id = SessionId::new("sess-harness").unwrap();
+        let mut session = WorkflowSession::new(session_id.clone());
+
+        session
+            .start(
+                SlotId::new("slot-1").unwrap(),
+                LeaseId::new("lease-1").unwrap(),
+                100,
+            )
+            .unwrap();
+
+        let event = HarnessEvent::ThoughtDelta {
+            delta: "Session thinking delta".into(),
+        };
+        session.handle_harness_event(event.clone(), 105).unwrap();
+
+        assert_eq!(session.events().len(), 2);
+
+        let replayed = WorkflowSession::replay_from_events(session_id, session.events()).unwrap();
+        assert_eq!(replayed.events().len(), 2);
     }
 }

@@ -65,7 +65,7 @@ Methodology: LeanSpec. The reference copy is in `../vendor/leanspec/`.
 | [0058](0058-agent-harness-providers-and-mock-runtime.md) | Agent harness providers and mock runtime | complete | high |
 | [0059](0059-ceres-localhost-repeatable-substrate-testing.md) | Ceres localhost repeatable substrate testing | complete | high |
 | [0060](0060-agent-harness-process-supervision-and-signals-coordination.md) | Agent harness process supervision and signals coordination | complete | high |
-| [0061](0061-agent-harness-adapter-streaming-and-event-translation.md) | Agent harness adapter streaming and event translation | in-progress | high |
+| [0061](0061-agent-harness-adapter-streaming-and-event-translation.md) | Agent harness adapter streaming and event translation | complete | high |
 
 
 ## How to add a spec

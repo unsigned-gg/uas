@@ -102,6 +102,15 @@ impl WorkflowSession<InMemoryEventStore> {
                     }
                     session.store.append(event.clone())?;
                 }
+                WorkflowEvent::HarnessStream { sequence, .. } => {
+                    if *sequence != session.store.len() as u64 {
+                        return Err(EngineError::ReplayFailed {
+                            sequence: *sequence,
+                            reason: "non-sequential sequence number".into(),
+                        });
+                    }
+                    session.store.append(event.clone())?;
+                }
                 WorkflowEvent::SessionFinished {
                     sequence,
                     final_state,
@@ -296,6 +305,20 @@ impl<S: EventStore> WorkflowSession<S> {
         self.store.append(WorkflowEvent::ActivityCompleted {
             sequence: seq,
             result,
+            timestamp,
+        })
+    }
+
+    /// Record an agent harness streaming event in the session event log (spec 0061).
+    pub fn handle_harness_event(
+        &mut self,
+        event: crate::harness::HarnessEvent,
+        timestamp: u64,
+    ) -> Result<(), EngineError> {
+        let seq = self.store.len() as u64;
+        self.store.append(WorkflowEvent::HarnessStream {
+            sequence: seq,
+            event,
             timestamp,
         })
     }
