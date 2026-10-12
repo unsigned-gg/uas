@@ -10,6 +10,7 @@
 
 mod card;
 mod cortex;
+mod diff;
 mod error;
 mod read_model;
 mod server;
@@ -20,6 +21,9 @@ pub use card::{DeckCard, Guard, PendingCards, PlanStep};
 pub use cortex::{
     fetch_pending_http, parse_pending, CortexPoller, CortexPollerConfig, CortexSettleSource,
     PendingFetch, SnapshotFetch,
+};
+pub use diff::{
+    compute_diff, render_diff_modal, render_diff_table, DiffLine, DiffSummary, DiffTable, DiffTag,
 };
 pub use error::DeckError;
 pub use read_model::SessionRow;

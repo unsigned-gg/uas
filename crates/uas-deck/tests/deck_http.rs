@@ -367,3 +367,48 @@ async fn get_settle_renders_live_snapshot_from_poller() {
     );
     assert!(!response.body.contains("disconnected"), "{}", response.body);
 }
+
+#[tokio::test]
+async fn get_diff_modal_renders_diff_table_for_existing_card() {
+    let queue = SettleQueue::new();
+    let mut card = SettleCard::new(
+        "card-diff-1",
+        "sess-1",
+        "step-1",
+        "Patch auth gate",
+        "Add bypass guard",
+        1700000000,
+    );
+    card.diff_summary = Some("+ fn check_token() -> bool { true }\n".to_string());
+    queue.enqueue(card).unwrap();
+
+    let state = DeckState::new(sessions(), Arc::new(queue));
+    let response = get(state, "/diff/card-diff-1").await;
+    assert_eq!(response.status, 200);
+    assert!(
+        response.body.contains("diff-modal-card-diff-1"),
+        "{}",
+        response.body
+    );
+    assert!(
+        response.body.contains("diff-container"),
+        "{}",
+        response.body
+    );
+    assert!(response.body.contains("check_token"), "{}", response.body);
+}
+
+#[tokio::test]
+async fn get_diff_modal_returns_404_for_unknown_card() {
+    let queue = SettleQueue::new();
+    let state = DeckState::new(sessions(), Arc::new(queue));
+    let response = get(state, "/diff/missing-card").await;
+    assert_eq!(response.status, 404);
+    assert!(
+        response
+            .body
+            .contains("Settle card not found: missing-card"),
+        "{}",
+        response.body
+    );
+}

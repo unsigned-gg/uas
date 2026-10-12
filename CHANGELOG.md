@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
+- Spec 0018: add in-process syntactic diff engine with `similar` 3.2.0, implement `GET /diff/{card_id}` modal endpoint in `uas-deck`, and render line-numbered Maud diff tables.
 - Spec 0059: author LeanSpec 0059 defining the ceres localhost repeatable substrate testing protocol, live cgroup v2 subtree delegation, unprivileged test execution, and zero-I/O validation.
 - Spec 0058: add agent harness `Provider` enum to `uas-domain` (`claude`, `agy`, `omp`, `codex`, `gateway`, `mock`), implement dynamic provider task admission and hermetic mock execution in `uas-engine::wave_exec`, wire repeatable `make ceres-test` substrate suite for host ceres, and advance specs 0016, 0026 and 0058 in the registry.
 - Contributor Persona Gang: add the 16 Clockwork Elves of the Machine Conclave to `.claude/agents/ROSTER.md` (Sindri through Syn), establishing systems philosophy, literary foundations, and hardware sympathy.

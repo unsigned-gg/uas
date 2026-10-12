@@ -228,8 +228,9 @@ flowchart TD
 - [x] Slice 2 (brief P4b): deck card (D7); Cortex source parsed from fixture files (D9, D10); view of the new fields.
 - [x] Slice 3: HTTP fetch and background poller (`CortexPoller`, `SnapshotFetch`, `fetch_pending_http`) with snapshot caching (D9).
 - [ ] Actions (D8), after Invariant 2 is ruled; they dispatch the decision payload to a mock Cortex in tests.
-- [ ] Add `axum` feature `ws`, `tower-http` 0.7.1, `tokio-stream` 0.1.19 and `similar` 3.2.0 when D2, D4 and D6 land.
-- [ ] Implement `uas-deck::diff`; a test classifies insertions, deletions, and unchanged lines.
+- [ ] Add `axum` feature `ws`, `tower-http` 0.7.1, and `tokio-stream` 0.1.19 when D2 and D6 land.
+- [x] Add `similar` 3.2.0 to workspace dependencies and `uas-deck` (D4, spec 0004).
+- [x] Implement `uas-deck::diff`; a test classifies insertions, deletions, and unchanged lines.
 - [ ] Update `specs/README.md` and roadmap artifacts.
 
 ## Test
