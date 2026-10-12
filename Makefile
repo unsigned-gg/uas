@@ -17,8 +17,8 @@ SBOM_DIR ?= sbom
 	spec-check toolchain-check pin-check text-check oss-check spdx-check hook-test smoke audit sbom sbom-check doc release-notes custody-check pgt-install new-repo template-check \
 	ebpf-build ebpf-test fetch-contracts pool-live-test features feature-leg
 
-help: ## List targets
-	awk 'BEGIN { FS = ":.*## " } /^[a-zA-Z0-9_-]+:.*## / { printf "  %-16s %s\n", $$1, $$2 }' $(MAKEFILE_LIST)
+help: ## List available targets
+	@awk 'BEGIN {FS = ":.*## ?"; printf "\n\033[1mUsage:\033[0m\n  make \033[36m<target>\033[0m\n"} /^[a-zA-Z0-9_.-]+:.*##/ { printf "  \033[36m%-24s\033[0m %s\n", $$1, $$2 }' $(MAKEFILE_LIST)
 
 build: ## Build the workspace
 	cargo build --workspace --locked -j $(JOBS)
