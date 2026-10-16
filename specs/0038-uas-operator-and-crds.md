@@ -1,5 +1,5 @@
 ---
-status: planned
+status: in-progress
 created: 2026-10-10
 tags: [k8s, operator, crd, pool, sandbox, uas]
 priority: high
@@ -9,7 +9,7 @@ depends_on: [0001-cas-architecture-and-crate-layout, 0002-verification-gates-and
 
 # 0038-uas-operator-and-crds
 
-> **Status**: planned, **Priority**: high, **Created**: 2026-10-10
+> **Status**: in-progress, **Priority**: high, **Created**: 2026-10-10
 
 ## Overview
 
@@ -40,14 +40,14 @@ The operator reconciles two primary Custom Resource Definitions (CRDs):
 
 | # | Decision | Rationale | Source |
 |---|---|---|---|
-| D1 | `uas-operator` lives in dedicated binary crate `crates/uas-operator` (renamed `crates/uas-operator` under Spec 0037). It sits below `uas-deck` and `uas-acp`, beside `uas-engine` (invoking lease paths), and above `uas-pool` and `uas-sandbox`. `uas-domain` remains zero I/O and free of `kube` dependencies. | Crate layering purity and separation of CLI from continuous reconciliation; Spec 0001; Spec 0037 | proposed: research lane w1X:p1, 2026-10-10; awaits the operator confirmation (w1X:p22 notes location not decided yet; vespertin operator at `vespertin/operator`) |
+| D1 | `uas-operator` lives in dedicated binary crate `crates/uas-operator` (renamed `crates/uas-operator` under Spec 0037). It sits below `uas-deck` and `uas-acp`, beside `uas-engine` (invoking lease paths), and above `uas-pool` and `uas-sandbox`. `uas-domain` remains zero I/O and free of `kube` dependencies. | Crate layering purity and separation of CLI from continuous reconciliation; Spec 0001; Spec 0037 | ruled: the operator, 2026-10-16 |
 | D2 | `WorkerSlot` reconciles to `uas-pool` slot leases and Spec 0036 D2 host locks (`slot-<i>.lock` under the Spec 0036 slot directory: `/tmp/uas-slots` default, `UAS_SLOT_DIR` override). Finalizer `uas.unsigned.gg/slot-cleanup` ensures cgroups, worktrees, and host lock descriptors are reclaimed before CR deletion. | Grounded lifecycle mapping to kernel-arbitrated host slots; Spec 0036 D2; research lane w1X:p1, 2026-10-10 |
 | D3 | `AgentSandbox` reconciles to sandbox execution specifications configuring Landlock path rules, network namespace isolation, and IPC socket mounts (`.ipc`). Landlock self-restriction is applied by the sandboxed worker process at startup per Spec 0010; the controller does not invoke Landlock directly. Finalizer `uas.unsigned.gg/sandbox-cleanup` tears down IPC mounts and network namespaces. | Privilege separation; Landlock self-restriction constraint; Spec 0010; research lane w1X:p1, 2026-10-10 |
 | D4 | Host lock authority on split-brain: If cluster scheduling demands exceed available host slot locks, the operator refuses oversubscription, sets status condition `CapacityExhausted`, and retries with backoff. Physical `-j 2` constraints are never violated. | Host throttling invariant; Spec 0002; Spec 0036; research lane w1X:p1, 2026-10-10 |
 | D5 | Inviolable operator boundaries: `uas-operator` never lands code to Git branches, never manages raw credentials directly, and never bypasses the Spec 0022 custody chain. | Blast radius containment; Spec 0022; research lane w1X:p1, 2026-10-10 |
 | D6 | Transitional CRD placement: CRDs are defined in internal module `crates/uas-operator/src/crd.rs` behind feature flag `k8s`. Dependency on `unsigned-k8s-api` is deferred until publication on crates.io and pin approval in Spec 0004. | Decoupled migration cadence; F6; Spec 0039 D4; research lane w1X:p1, 2026-10-10 |
 | D7 | Operator deployment to the Cygnus cluster is an operator-gated action. An agent lane never deploys or syncs to Cygnus autonomously; deploying is the operator's act. | Estate safety SOP; the estate SOP `land-on-green-run-it`; the estate SOP `prod-is-dev`; research lane w1X:p1, 2026-10-10 |
-| D8 | Operator execution topology: The physical deployment topology of `uas-operator` is marked undecided between a cluster-wide controller (using a node-agent DaemonSet with hostPath to reach the Spec 0036 mode 0700 slot directory) and a node-local DaemonSet. | Node privilege and filesystem access boundaries; Spec 0036 D2 | undecided: research lane w1X:p1, 2026-10-10; awaits the operator confirmation |
+| D8 | Operator execution topology: Cluster-wide controller (`Deployment`, `uas-operator --mode controller`) paired with a per-node `DaemonSet` (`uas-operator --mode node-agent` mounting `/tmp/uas-slots` `0700` and `/sys/fs/cgroup/uas.slice`) that actuates node-local Spec 0036 host locks, cgroups, and sandboxes. | Node privilege separation and multi-node scheduling visibility; Spec 0036 D2 | ruled: the operator, 2026-10-16 |
 | D9 | Feature split and CI gating: Following Spec 0039 D4/D4a, unpublished estate crates enter no tracked manifest until published (avoiding cargo resolve failures on CI runners lacking local paas paths). The operator and in-tree CRD types sit behind the `k8s` feature, which is enabled in the CI test matrix so mocked-API tests run on every PR. The future `k8s-estate` feature remains off in CI until estate crates publish to crates.io. | CI portability and feature split; Spec 0004; Spec 0039 D4, D4a; research lane w1X:p1, 2026-10-10 |
 | D10 | The `WorkerSlot` CRD schema carries `spec.limits` defining `memory_max_bytes`, `memory_high_bytes`, and `pids_max`. These limits flow into `PoolConfig` at runtime and take precedence over the `uas-pool` environment twins (`UAS_SLOT_MEMORY_MAX`, etc.). | Declarative per-slot sizing; Spec 0041 D8; research lane w1X:p1, 2026-10-10 |
 
@@ -73,12 +73,12 @@ The operator reconciles two primary Custom Resource Definitions (CRDs):
 
 ## Plan
 
-- [ ] Scaffold `crates/uas-operator` binary crate with `kube` runtime dependencies behind `k8s` feature flag (renamed `crates/uas-operator` per Spec 0037).
-- [ ] Implement transitional CRD structs in `crates/uas-operator/src/crd.rs` for `WorkerSlot` and `AgentSandbox`.
-- [ ] Add `spec.limits` (`memory_max_bytes`, `memory_high_bytes`, `pids_max`) to `WorkerSlot` CRD schema and wire them into `PoolConfig`.
-- [ ] Implement `WorkerSlot` reconciler integrating with `uas-engine` lease paths, `uas-pool` slot allocation, Spec 0036 D2 host lock files, and cleanup finalizers.
-- [ ] Implement `AgentSandbox` reconciler generating sandbox execution specifications (Landlock path rules, netns, IPC proxy socket mounts).
-- [ ] Add unit and mocked controller tests using `kube::client::Client` mock servers verifying status condition transitions and capacity backoff with `--features k8s`.
+- [x] Scaffold `crates/uas-operator` binary crate with `kube` runtime dependencies behind `k8s` feature flag (renamed `crates/uas-operator` per Spec 0037).
+- [x] Implement transitional CRD structs in `crates/uas-operator/src/crd.rs` for `WorkerSlot` and `AgentSandbox`.
+- [x] Add `spec.limits` (`memory_max_bytes`, `memory_high_bytes`, `pids_max`) to `WorkerSlot` CRD schema and wire them into `PoolConfig`.
+- [x] Implement `WorkerSlot` reconciler integrating with `uas-engine` lease paths, `uas-pool` slot allocation, Spec 0036 D2 host lock files, and cleanup finalizers.
+- [x] Implement `AgentSandbox` reconciler generating sandbox execution specifications (Landlock path rules, netns, IPC proxy socket mounts).
+- [x] Add unit and mocked controller tests using `kube::client::Client` mock servers verifying status condition transitions and capacity backoff with `--features k8s`.
 - [ ] Pin `unsigned-k8s-api` in `specs/0004-dependency-and-licence-policy.md` when the crate is published.
 
 ## Test

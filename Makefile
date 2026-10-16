@@ -75,7 +75,7 @@ fetch-contracts: ## Fetch the pinned estate contracts into .contracts/ (contract
 	cargo xtask fetch-contracts
 
 # Spec 0033. One crate:feature pair per declared cargo feature. 'cargo xtask feature-check' reads this line.
-FEATURE_LEGS := uas-engine:cortex-grpc
+FEATURE_LEGS := uas-engine:cortex-grpc uas-operator:k8s
 
 # Not a prerequisite of check or ci (the contracts are fetched on demand). Needs 'make fetch-contracts' first.
 feature-leg: ## Clippy and tests for one cargo feature (CRATE=<crate> FEATURE=<feature>)
