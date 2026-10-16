@@ -25,9 +25,9 @@ labels: ""
 
 ## Branch and PR
 
-- Branch `feat/<slug>` (or `fix/`, `docs/`), cut from `origin/development`
-- PR targets `development`. The title has no ticket ID. The body says "Part of CER-N"
-- Merge on green CI with a merge commit. The promotion PR carries `development` to `main`
+- Branch `feat/<slug>` (or `fix/`, `docs/`), cut from `origin/main`
+- PR targets `main`. The title has no ticket ID. The body says "Part of CER-N"
+- Merge on green CI with a merge commit.
 
 ## Evidence
 

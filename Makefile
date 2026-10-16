@@ -132,8 +132,8 @@ pin-check: ## Verify the spec 0004 pin tables against the lockfiles
 # Spec 0053 D5. Not part of `hygiene`: that job also runs on push, which has no base. Values come
 # from the environment (BASE, HEAD, PR_BODY_FILE, HEAD_REF), never through make expansion, so a
 # hostile branch name or PR body cannot reach a shell word (REQ-0053-14).
-text-check: ## CHANGELOG line, commit subjects, PR body (BASE=origin/development; PR_BODY_FILE, HEAD_REF optional)
-	cargo xtask text-check --base "$${BASE:-origin/development}" --head "$${HEAD:-HEAD}" $${PR_BODY_FILE:+--body-file "$$PR_BODY_FILE"} $${HEAD_REF:+--head-ref "$$HEAD_REF"}
+text-check: ## CHANGELOG line, commit subjects, PR body (BASE=origin/main; PR_BODY_FILE, HEAD_REF optional)
+	cargo xtask text-check --base "$${BASE:-origin/main}" --head "$${HEAD:-HEAD}" $${PR_BODY_FILE:+--body-file "$$PR_BODY_FILE"} $${HEAD_REF:+--head-ref "$$HEAD_REF"}
 
 smoke: ## Build the CLI, run it, check the domain crate has no I/O
 	cargo build -p uas-cli --locked -j $(JOBS)
@@ -210,7 +210,7 @@ release-notes: ## Roll CHANGELOG and bump version (VERSION=x.y.z)
 		/^## \[Unreleased\]/ && !done { print; print ""; print "## [" v "] - " d; done = 1; next }
 		{ print }' CHANGELOG.md > CHANGELOG.md.tmp
 	mv CHANGELOG.md.tmp CHANGELOG.md
-	echo "release-notes: set version $(VERSION). Review the diff, then open a PR to development."
+	echo "release-notes: set version $(VERSION). Review the diff, then open a PR to main."
 
 custody-check: ## Check the blackwall custody setup (blackwall doctor)
 	blackwall doctor
@@ -299,7 +299,7 @@ template-check: ## Run check, spec-check, smoke, then prove the rename in a temp
 	export GIT_COMMITTER_NAME=probe GIT_COMMITTER_EMAIL=probe@example.invalid
 	export CARGO_TARGET_DIR="$(CURDIR)/target/probe"
 	cd "$$tmp"
-	git init -q -b development
+	git init -q -b main
 	git add -A
 	git commit -q -m probe
 	# `aaa-probe` sorts before every dependency name, so the rename moves the

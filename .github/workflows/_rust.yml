@@ -61,8 +61,8 @@ jobs:
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           shared-key: rust
-          # Only the integration and release branches write the cache; PRs read it.
-          save-if: ${{ github.ref == 'refs/heads/development' || github.ref == 'refs/heads/main' }}
+          # Only the main branch writes the cache; PRs read it.
+          save-if: ${{ github.ref == 'refs/heads/main' }}
           cache-on-failure: true
 
       - name: sccache (R2)

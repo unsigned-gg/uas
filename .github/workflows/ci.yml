@@ -1,5 +1,5 @@
 # CI gates. Spec: specs/0005-ci-cache-and-runners.md; gate rules: specs/0002.
-# Required checks on `development` and `main` (specs/0003): secrets, rust, cargo-deny, hygiene, ebpf-live.
+# Required checks on `main` (specs/0003): secrets, rust, cargo-deny, hygiene, ebpf-live.
 # `fork-gate` (spec 0051 D8) becomes a required check once the repository is public.
 # Every action is pinned by commit SHA with its version in a comment.
 name: CI
@@ -7,7 +7,7 @@ name: CI
 on:
   pull_request:
   push:
-    branches: [development, main]
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -76,7 +76,7 @@ jobs:
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           shared-key: hygiene
-          save-if: ${{ github.ref == 'refs/heads/development' || github.ref == 'refs/heads/main' }}
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       # typos 1.49 is baked into the ci-rust image; machete is not.
       - uses: taiki-e/install-action@f7e5d7c961414b23f5b25b2da9294395d08513ad # v2.87.26
         with:
@@ -115,7 +115,7 @@ jobs:
           # cargo must be the baked toolchain, not a proto shim.
           command -v cargo
           case "$(command -v cargo)" in "$HOME"/.proto/*) echo "::error::cargo resolves to a proto shim"; exit 1 ;; esac
-          base="origin/${{ github.base_ref || 'development' }}"
+          base="origin/${{ github.base_ref || 'main' }}"
           # moon 2.2.6 `moon ci` aborts with app::tty::required_id on an empty
           # task graph (docs-only diffs), so count affected tasks first.
           task_count=$(MOON_BASE="$base" moon query tasks --affected | jq '.tasks | length')
@@ -184,7 +184,7 @@ jobs:
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           shared-key: ebpf-live
-          save-if: ${{ github.ref == 'refs/heads/development' || github.ref == 'refs/heads/main' }}
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
       # The ci-kernel image has stable Rust only. The dated nightly goes into a job-local RUSTUP_HOME,
       # never into the baked /usr/local/rustup.
