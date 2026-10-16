@@ -125,10 +125,127 @@ impl PrincipalRef {
         Ok(Self(text))
     }
 
+    /// Construct a WIMSE (`draft-klrc-aiagent-auth-03`) agent SPIFFE URI
+    /// (`spiffe://<trust_domain>/agent/<team>/<agent_id>`).
+    pub fn wimse_agent(
+        trust_domain: &str,
+        team: &str,
+        agent_id: &str,
+    ) -> Result<Self, DomainError> {
+        check_wimse_segment("wimse agent principal", trust_domain)?;
+        check_wimse_segment("wimse agent principal", team)?;
+        check_wimse_segment("wimse agent principal", agent_id)?;
+        Self::new(format!("spiffe://{trust_domain}/agent/{team}/{agent_id}"))
+    }
+
+    /// Construct a WIMSE (`draft-klrc-aiagent-auth-03`) Conclave Elf SPIFFE URI
+    /// (`spiffe://<trust_domain>/conclave/<mesh>/elf/<elf_id>`).
+    pub fn wimse_conclave_elf(
+        trust_domain: &str,
+        mesh: &str,
+        elf_id: &str,
+    ) -> Result<Self, DomainError> {
+        check_wimse_segment("wimse conclave elf principal", trust_domain)?;
+        check_wimse_segment("wimse conclave elf principal", mesh)?;
+        check_wimse_segment("wimse conclave elf principal", elf_id)?;
+        Self::new(format!(
+            "spiffe://{trust_domain}/conclave/{mesh}/elf/{elf_id}"
+        ))
+    }
+
+    /// Parse and verify a WIMSE agent SPIFFE URI (`spiffe://<trust_domain>/agent/<team>/<agent_id>`)
+    /// against `expected_trust_domain`, returning `(team, agent_id)`.
+    pub fn parse_wimse_agent(
+        &self,
+        expected_trust_domain: &str,
+    ) -> Result<(&str, &str), DomainError> {
+        let rest = self
+            .0
+            .strip_prefix("spiffe://")
+            .ok_or_else(|| DomainError::Invalid {
+                kind: "wimse agent principal",
+                value: self.0.clone(),
+                reason: "must start with spiffe://",
+            })?;
+        let parts: Vec<&str> = rest.split('/').collect();
+        match parts.as_slice() {
+            [td, "agent", team, agent_id]
+                if *td == expected_trust_domain && !team.is_empty() && !agent_id.is_empty() =>
+            {
+                Ok((*team, *agent_id))
+            }
+            [td, "agent", _, _] if *td != expected_trust_domain => Err(DomainError::Invalid {
+                kind: "wimse agent principal",
+                value: self.0.clone(),
+                reason: "trust domain does not match expected trust domain",
+            }),
+            _ => Err(DomainError::Invalid {
+                kind: "wimse agent principal",
+                value: self.0.clone(),
+                reason: "path must match /agent/<team>/<agent_id>",
+            }),
+        }
+    }
+
+    /// Parse and verify a WIMSE Conclave Elf SPIFFE URI
+    /// (`spiffe://<trust_domain>/conclave/<mesh>/elf/<elf_id>`) against `expected_trust_domain`,
+    /// returning `(mesh, elf_id)`.
+    pub fn parse_wimse_conclave_elf(
+        &self,
+        expected_trust_domain: &str,
+    ) -> Result<(&str, &str), DomainError> {
+        let rest = self
+            .0
+            .strip_prefix("spiffe://")
+            .ok_or_else(|| DomainError::Invalid {
+                kind: "wimse conclave elf principal",
+                value: self.0.clone(),
+                reason: "must start with spiffe://",
+            })?;
+        let parts: Vec<&str> = rest.split('/').collect();
+        match parts.as_slice() {
+            [td, "conclave", mesh, "elf", elf_id]
+                if *td == expected_trust_domain && !mesh.is_empty() && !elf_id.is_empty() =>
+            {
+                Ok((*mesh, *elf_id))
+            }
+            [td, "conclave", _, "elf", _] if *td != expected_trust_domain => {
+                Err(DomainError::Invalid {
+                    kind: "wimse conclave elf principal",
+                    value: self.0.clone(),
+                    reason: "trust domain does not match expected trust domain",
+                })
+            }
+            _ => Err(DomainError::Invalid {
+                kind: "wimse conclave elf principal",
+                value: self.0.clone(),
+                reason: "path must match /conclave/<mesh>/elf/<elf_id>",
+            }),
+        }
+    }
+
     /// The reference as text.
     pub fn as_str(&self) -> &str {
         &self.0
     }
+}
+
+fn check_wimse_segment(kind: &'static str, segment: &str) -> Result<(), DomainError> {
+    if segment.is_empty() {
+        return Err(DomainError::Invalid {
+            kind,
+            value: segment.to_owned(),
+            reason: "segment must not be empty",
+        });
+    }
+    if segment.contains('/') || segment.contains(':') {
+        return Err(DomainError::Invalid {
+            kind,
+            value: segment.to_owned(),
+            reason: "segment must not contain path or scheme separators",
+        });
+    }
+    Ok(())
 }
 
 impl fmt::Display for PrincipalRef {
@@ -198,6 +315,9 @@ pub struct Lease {
     pub expires_at: u64,
     /// Spending limits.
     pub budget: Budget,
+    /// Ordered RFC 8693 `act` delegation chain (outermost actor first, root delegator last).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub delegation: Vec<PrincipalRef>,
 }
 
 /// The wire shape of a [`Budget`], checked by [`Budget::new`].
@@ -225,13 +345,15 @@ struct LeaseRepr {
     issued_at: u64,
     expires_at: u64,
     budget: Budget,
+    #[serde(default)]
+    delegation: Vec<PrincipalRef>,
 }
 
 impl TryFrom<LeaseRepr> for Lease {
     type Error = DomainError;
 
     fn try_from(r: LeaseRepr) -> Result<Self, Self::Error> {
-        Self::new(
+        let lease = Self::new(
             r.id,
             r.slot,
             r.holder,
@@ -239,11 +361,19 @@ impl TryFrom<LeaseRepr> for Lease {
             r.issued_at,
             r.expires_at,
             r.budget,
-        )
+        )?;
+        if r.delegation.is_empty() {
+            Ok(lease)
+        } else {
+            lease.with_delegation(r.delegation)
+        }
     }
 }
 
 impl Lease {
+    /// Maximum allowed RFC 8693 `act` delegation chain depth on a lease.
+    pub const MAX_DELEGATION_DEPTH: usize = 8;
+
     /// Build a lease. `expires_at` must be after `issued_at`.
     pub fn new(
         id: LeaseId,
@@ -269,7 +399,50 @@ impl Lease {
             issued_at,
             expires_at,
             budget,
+            delegation: Vec::new(),
         })
+    }
+
+    /// Attach a validated RFC 8693 `act` delegation chain to this lease.
+    ///
+    /// Rejects chains deeper than [`Self::MAX_DELEGATION_DEPTH`], chains containing
+    /// the lease `holder` itself, or chains with duplicate actor principals.
+    pub fn with_delegation(mut self, chain: Vec<PrincipalRef>) -> Result<Self, DomainError> {
+        if chain.len() > Self::MAX_DELEGATION_DEPTH {
+            return Err(DomainError::Invalid {
+                kind: "lease delegation",
+                value: format!("depth={}", chain.len()),
+                reason: "exceeds maximum delegation depth of 8",
+            });
+        }
+        for (idx, actor) in chain.iter().enumerate() {
+            if *actor == self.holder {
+                return Err(DomainError::Invalid {
+                    kind: "lease delegation",
+                    value: actor.to_string(),
+                    reason: "holder cannot appear in its own delegation chain",
+                });
+            }
+            if chain[..idx].contains(actor) {
+                return Err(DomainError::Invalid {
+                    kind: "lease delegation",
+                    value: actor.to_string(),
+                    reason: "delegation chain must not contain duplicate principals",
+                });
+            }
+        }
+        self.delegation = chain;
+        Ok(self)
+    }
+
+    /// Return the RFC 8693 `act` delegation chain for this lease.
+    pub fn delegation(&self) -> &[PrincipalRef] {
+        &self.delegation
+    }
+
+    /// True when `delegator` appears in this lease's RFC 8693 `act` delegation chain.
+    pub fn delegated_by(&self, delegator: &PrincipalRef) -> bool {
+        self.delegation.iter().any(|actor| actor == delegator)
     }
 
     /// True when `now` is at or after `expires_at`.
@@ -592,5 +765,62 @@ mod tests {
         let held = [lease_on("lease-1", "slot-1", 100, 200)];
         assert!(check_slot_free(&held, &lease_on("lease-2", "slot-1", 200, 300)).is_ok());
         assert!(check_slot_free(&held, &lease_on("lease-2", "slot-2", 150, 250)).is_ok());
+    }
+
+    #[test]
+    fn wimse_agent_and_conclave_elf_principals_round_trip_and_reject_mismatched_trust_domains() {
+        let agent = PrincipalRef::wimse_agent("unsigned.gg", "rd", "prober-01").unwrap();
+        assert_eq!(agent.as_str(), "spiffe://unsigned.gg/agent/rd/prober-01");
+        assert_eq!(
+            agent.parse_wimse_agent("unsigned.gg").unwrap(),
+            ("rd", "prober-01")
+        );
+        assert!(agent.parse_wimse_agent("evil.example").is_err());
+
+        let elf = PrincipalRef::wimse_conclave_elf("unsigned.gg", "cerebral", "elf-01").unwrap();
+        assert_eq!(
+            elf.as_str(),
+            "spiffe://unsigned.gg/conclave/cerebral/elf/elf-01"
+        );
+        assert_eq!(
+            elf.parse_wimse_conclave_elf("unsigned.gg").unwrap(),
+            ("cerebral", "elf-01")
+        );
+        assert!(elf.parse_wimse_conclave_elf("evil.example").is_err());
+    }
+
+    #[test]
+    fn lease_delegation_chain_round_trips_and_rejects_self_loops_or_excessive_depth() {
+        let l = lease(100, 200);
+        let coordinator =
+            PrincipalRef::wimse_agent("unsigned.gg", "estate", "coordinator-01").unwrap();
+        let operator = PrincipalRef::new("user:ctodie").unwrap();
+        let delegated = l
+            .clone()
+            .with_delegation(vec![coordinator.clone(), operator.clone()])
+            .unwrap();
+        assert!(delegated.delegated_by(&coordinator));
+        assert!(delegated.delegated_by(&operator));
+
+        let json = serde_json::to_string(&delegated).unwrap();
+        assert!(json.contains("\"delegation\""));
+        let decoded: Lease = serde_json::from_str(&json).unwrap();
+        assert_eq!(decoded, delegated);
+
+        // Self-delegation (holder in chain) must be rejected.
+        let holder = l.holder.clone();
+        assert!(l.clone().with_delegation(vec![holder]).is_err());
+
+        // Duplicate actor in chain must be rejected.
+        assert!(l
+            .clone()
+            .with_delegation(vec![coordinator.clone(), coordinator])
+            .is_err());
+
+        // Depth > 8 must be rejected.
+        let too_deep: Vec<PrincipalRef> = (0..=Lease::MAX_DELEGATION_DEPTH)
+            .map(|i| PrincipalRef::new(format!("spiffe://unsigned.gg/agent/rd/hop-{i}")).unwrap())
+            .collect();
+        assert!(l.with_delegation(too_deep).is_err());
     }
 }
