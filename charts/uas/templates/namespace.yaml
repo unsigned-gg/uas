@@ -1,0 +1,11 @@
+{{- if .Values.namespace.create }}
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .Values.namespace.name }}
+  labels:
+    {{- include "uas.labels" . | nindent 4 }}
+    pod-security.kubernetes.io/enforce: privileged
+    pod-security.kubernetes.io/audit: privileged
+    pod-security.kubernetes.io/warn: privileged
+{{- end }}

@@ -1,0 +1,58 @@
+{{- if .Values.networkPolicy.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "uas.fullname" . }}-default-deny
+  namespace: {{ .Values.namespace.name }}
+  labels:
+    {{- include "uas.labels" . | nindent 4 }}
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "uas.fullname" . }}-allow-control-plane
+  namespace: {{ .Values.namespace.name }}
+  labels:
+    {{- include "uas.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "uas.name" . }}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: {{ include "uas.name" . }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.operator.metricsPort }}
+        - protocol: TCP
+          port: {{ .Values.daemon.metricsPort }}
+        - protocol: TCP
+          port: {{ .Values.daemon.grpcPort }}
+  egress:
+    - to:
+        - namespaceSelector: {}
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+        - protocol: TCP
+          port: 443
+        - protocol: TCP
+          port: 6443
+        - protocol: TCP
+          port: {{ .Values.daemon.grpcPort }}
+{{- end }}

@@ -42,8 +42,8 @@ Methodology: LeanSpec. The reference copy is in `../vendor/leanspec/`.
 | [0035](0035-cas-acp-transport-scope.md) | uas-acp transport scope | planned | high |
 | [0036](0036-slot-arbitration-across-processes.md) | Slot arbitration across processes | planned | high |
 | [0037](0037-repository-migration-to-uas.md) | Repository migration to uas | planned | high |
-| [0038](0038-uas-operator-and-crds.md) | uas-operator and CRDs | planned | high |
-| [0039](0039-k8s-dependency-and-ci-plan.md) | k8s dependency and CI plan | planned | high |
+| [0038](0038-uas-operator-and-crds.md) | uas-operator and CRDs | in-progress | high |
+| [0039](0039-k8s-dependency-and-ci-plan.md) | k8s dependency and CI plan | in-progress | high |
 | [0040](0040-pool-restart-and-orphan-reclamation.md) | Pool restart and orphan reclamation | in-progress | high |
 | [0041](0041-slot-memory-pids-and-disk-limits.md) | Slot memory, pids and disk limits | in-progress | high |
 | [0042](0042-cas-binary-conventions.md) | uas binary conventions | complete | high |

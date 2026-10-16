@@ -1,0 +1,247 @@
+{
+  "apiVersion": "apiextensions.k8s.io/v1",
+  "kind": "CustomResourceDefinition",
+  "metadata": {
+    "name": "workerslots.uas.unsigned.gg"
+  },
+  "spec": {
+    "group": "uas.unsigned.gg",
+    "names": {
+      "kind": "WorkerSlot",
+      "plural": "workerslots",
+      "shortNames": [
+        "wslot"
+      ],
+      "singular": "workerslot"
+    },
+    "scope": "Namespaced",
+    "versions": [
+      {
+        "additionalPrinterColumns": [
+          {
+            "jsonPath": ".status.phase",
+            "name": "State",
+            "type": "string"
+          },
+          {
+            "jsonPath": ".spec.worktree_ref",
+            "name": "Worktree",
+            "type": "string"
+          },
+          {
+            "jsonPath": ".spec.lease_id",
+            "name": "Lease",
+            "type": "string"
+          },
+          {
+            "jsonPath": ".spec.node_name",
+            "name": "Node",
+            "type": "string"
+          },
+          {
+            "jsonPath": ".metadata.creationTimestamp",
+            "name": "Age",
+            "type": "date"
+          }
+        ],
+        "name": "v1alpha1",
+        "schema": {
+          "openAPIV3Schema": {
+            "description": "Auto-generated derived type for WorkerSlotSpec via `CustomResource`",
+            "properties": {
+              "spec": {
+                "description": "Desired state of a [`WorkerSlot`] custom resource (`uas.unsigned.gg/v1alpha1`).",
+                "properties": {
+                  "claim_verified_without_receipt": {
+                    "default": false,
+                    "description": "When true without a valid `landing_receipt_json`, simulates an invalid custody bypass attempt\nthat the reconciler must refuse with `CustodyReceiptInvalid` (spec 0038 REQ-0038-10).",
+                    "type": "boolean"
+                  },
+                  "desired_state": {
+                    "description": "Desired lifecycle phase (`\"Cold\"`, `\"Warm\"`, `\"Leased\"`, `\"Suspended\"`, `\"Failed\"`, `\"Terminated\"`).",
+                    "type": "string"
+                  },
+                  "landing_receipt_json": {
+                    "description": "Optional serialized `uas_domain::LandingReceipt` JSON payload for custody verification (spec 0038 D5).",
+                    "nullable": true,
+                    "type": "string"
+                  },
+                  "lease_id": {
+                    "description": "Optional lease identifier (`uas_domain::LeaseId`) when `desired_state == \"Leased\"`.",
+                    "nullable": true,
+                    "type": "string"
+                  },
+                  "lease_ttl_seconds": {
+                    "description": "Lease time-to-live in seconds.",
+                    "format": "uint64",
+                    "minimum": 0.0,
+                    "nullable": true,
+                    "type": "integer"
+                  },
+                  "limits": {
+                    "description": "Per-slot cgroup v2 resource limit overrides (spec 0038 REQ-0038-13).",
+                    "nullable": true,
+                    "properties": {
+                      "memory_high_bytes": {
+                        "description": "Throttle threshold (`memory.high`) in bytes; defaults to 90% of `memory_max_bytes` when omitted.",
+                        "format": "uint64",
+                        "minimum": 0.0,
+                        "nullable": true,
+                        "type": "integer"
+                      },
+                      "memory_max_bytes": {
+                        "description": "Hard memory ceiling (`memory.max`) in bytes.",
+                        "format": "uint64",
+                        "minimum": 0.0,
+                        "nullable": true,
+                        "type": "integer"
+                      },
+                      "pids_max": {
+                        "description": "Maximum number of processes (`pids.max`) inside the slot cgroup.",
+                        "format": "uint32",
+                        "minimum": 0.0,
+                        "nullable": true,
+                        "type": "integer"
+                      }
+                    },
+                    "type": "object"
+                  },
+                  "node_name": {
+                    "description": "Target Kubernetes node name assigned by the controller for DaemonSet node-agent actuation (spec 0038 D8).",
+                    "nullable": true,
+                    "type": "string"
+                  },
+                  "principal": {
+                    "description": "Optional principal holding the lease (`uas_domain::PrincipalRef`).",
+                    "nullable": true,
+                    "type": "string"
+                  },
+                  "sandbox_ref": {
+                    "description": "Optional reference to an `AgentSandbox` resource in the same namespace.",
+                    "nullable": true,
+                    "type": "string"
+                  },
+                  "slot_id": {
+                    "description": "Domain slot identifier (`uas_domain::SlotId`).",
+                    "type": "string"
+                  },
+                  "worktree_ref": {
+                    "description": "Worktree path or reference required to warm or lease the slot (`uas_domain::WorktreeRef`).",
+                    "nullable": true,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "desired_state",
+                  "slot_id"
+                ],
+                "type": "object"
+              },
+              "status": {
+                "description": "Observed state of a [`WorkerSlot`] custom resource (`uas.unsigned.gg/v1alpha1`).",
+                "nullable": true,
+                "properties": {
+                  "conditions": {
+                    "default": [],
+                    "description": "Standard Kubernetes status conditions (`Ready`, `CustodyReceiptInvalid`).",
+                    "items": {
+                      "description": "Standard Kubernetes-style status condition entry attached to UAS custom resources.",
+                      "properties": {
+                        "last_transition_time": {
+                          "description": "Epoch seconds when the condition last transitioned.",
+                          "format": "uint64",
+                          "minimum": 0.0,
+                          "type": "integer"
+                        },
+                        "message": {
+                          "description": "Human-readable description of the transition or blocker.",
+                          "type": "string"
+                        },
+                        "reason": {
+                          "description": "Machine-readable CamelCase reason code (for example `\"CapacityExhausted\"`).",
+                          "type": "string"
+                        },
+                        "status": {
+                          "description": "Condition status (`\"True\"`, `\"False\"`, or `\"Unknown\"`).",
+                          "type": "string"
+                        },
+                        "type": {
+                          "description": "Condition type (for example `\"Ready\"` or `\"CustodyReceiptInvalid\"`).",
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "last_transition_time",
+                        "message",
+                        "reason",
+                        "status",
+                        "type"
+                      ],
+                      "type": "object"
+                    },
+                    "type": "array"
+                  },
+                  "host_slot_index": {
+                    "description": "Acquired host lock index (`0..H`) under `UAS_SLOT_DIR` when warm or leased (spec 0036 D2).",
+                    "format": "uint",
+                    "minimum": 0.0,
+                    "nullable": true,
+                    "type": "integer"
+                  },
+                  "lease_expires_at": {
+                    "description": "Epoch seconds when the active lease expires, if leased.",
+                    "format": "uint64",
+                    "minimum": 0.0,
+                    "nullable": true,
+                    "type": "integer"
+                  },
+                  "observed_generation": {
+                    "description": "Last `metadata.generation` reconciled by the operator.",
+                    "format": "int64",
+                    "nullable": true,
+                    "type": "integer"
+                  },
+                  "phase": {
+                    "description": "Observed domain lifecycle phase (`Cold`, `Warm`, `Leased`, `Suspended`, `Failed`, `Terminated`).",
+                    "nullable": true,
+                    "type": "string"
+                  },
+                  "resolved_memory_max_bytes": {
+                    "description": "Effective `memory.max` in bytes resolved by `uas-pool` after applying `spec.limits` and env.",
+                    "format": "uint64",
+                    "minimum": 0.0,
+                    "nullable": true,
+                    "type": "integer"
+                  },
+                  "resolved_pids_max": {
+                    "description": "Effective `pids.max` resolved by `uas-pool` after applying `spec.limits` and env.",
+                    "format": "uint32",
+                    "minimum": 0.0,
+                    "nullable": true,
+                    "type": "integer"
+                  },
+                  "verified_landing": {
+                    "default": false,
+                    "description": "True only when a `uas_domain::LandingReceipt` passed custody verification at `EvidenceTier::Verified`.",
+                    "type": "boolean"
+                  }
+                },
+                "type": "object"
+              }
+            },
+            "required": [
+              "spec"
+            ],
+            "title": "WorkerSlot",
+            "type": "object"
+          }
+        },
+        "served": true,
+        "storage": true,
+        "subresources": {
+          "status": {}
+        }
+      }
+    ]
+  }
+}

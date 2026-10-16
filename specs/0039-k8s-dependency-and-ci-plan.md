@@ -1,5 +1,5 @@
 ---
-status: planned
+status: in-progress
 created: 2026-10-10
 tags: [k8s, kube-rs, dependencies, pins, ci, k3d, publish]
 priority: high
@@ -9,7 +9,7 @@ depends_on: [0004-dependency-and-licence-policy, 0005-ci-cache-and-runners, 0033
 
 # 0039-k8s-dependency-and-ci-plan
 
-> **Status**: planned, **Priority**: high, **Created**: 2026-10-10
+> **Status**: in-progress, **Priority**: high, **Created**: 2026-10-10
 
 ## Overview
 

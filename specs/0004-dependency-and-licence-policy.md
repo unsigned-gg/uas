@@ -195,14 +195,14 @@ metadata, read 2026-10-09.
 | `aya-log`, `aya-log-ebpf` | 0.3.0, 0.2.0 | MIT OR Apache-2.0 | uas-ebpf | 2 | only if the BPF program logs |
 | `seccompiler` | 0.5.0 | Apache-2.0 OR BSD-3-Clause | uas-sandbox | 2 | default features; no `libseccomp` link (spec 0043 D7; ruling 2026-10-11, lane w25:p1) |
 | `libc` | 0.2.190 | MIT OR Apache-2.0 | uas-sandbox | 2 | direct dependency: seccompiler keys rules by syscall number and rustix exports none (plan 0043 R1). Locked at 0.2.190 (spec 0043 D7; ruling 2026-10-11, lane w25:p1) |
-| `serde_json` | 1.0.151 | MIT OR Apache-2.0 | uas-acp, uas-cli, uas-deck, uas-ebpf, uas-engine, uas-pool, uas-router; uas-domain (dev only) | in use | root requirement `"1"`, a caret held by `pin-check` (D3). Pre-existing use found by the PR #138 critic; `uas-pool` added it in PR #138 (ruled: integrating lane w25:p1, 2026-10-11). Request-body and SSE chunk parsing in uas-router, spec 0017 (UAS lane amendment 2026-10-11, the operator corrects it in place; the dependency edge lands with plan 0017 P4) |
+| `serde_json` | 1.0.151 | MIT OR Apache-2.0 | uas-acp, uas-cli, uas-deck, uas-ebpf, uas-engine, uas-operator, uas-pool, uas-router; uas-domain (dev only) | in use | root requirement `"1"`, a caret held by `pin-check` (D3). Pre-existing use found by the PR #138 critic; `uas-pool` added it in PR #138 (ruled: integrating lane w25:p1, 2026-10-11). Request-body and SSE chunk parsing in uas-router, spec 0017 (UAS lane amendment 2026-10-11, the operator corrects it in place; the dependency edge lands with plan 0017 P4) |
 | `toml` | 1.1.8+spec-1.1.0 | MIT OR Apache-2.0 | uas-cli, uas-engine, xtask | in use | root requirement `"1.1"`, a caret held by `pin-check` (D3); the cell carries the lock's build metadata because pin-check compares strings. Ratified 2026-10-11 (ruled: the operator, 2026-10-11, lane w25:p1 (AskUserQuestion), "Ratify 1.1.8"), superseding the 0.8 decision of 2026-10-09. Parses `.saga/flows/*.toml` and, for `cargo xtask advisory-check`, `deny.toml` (spec 0045; the edge lands with plan 0045 P4) |
 | `gix` | 0.88.0 | MIT OR Apache-2.0 | uas-pool | 3 | default-features off, minimal features; MSRV 1.88; fallback 0.87.1 |
 | `agent-client-protocol` | 2.2.0 | Apache-2.0 | uas-acp | 3 | MSRV 1.88; 3.x is under 14 days old. In use since spec 0016 (2026-10-10); transitive pull in D1 |
-| `tokio` | 1.53.1 | MIT | uas-router, uas-deck, uas-storage; uas-engine behind feature `cortex-grpc` (spec 0026; UAS lane amendment, the operator corrects it in place) | 4, 5, 6 | default-features off; `rt-multi-thread`, `macros`, `net`, `time`, `sync`. The uas-pool runtime stays open (spec 0001 gap 1). In use since spec 0013 (2026-10-09) in uas-router, plus `io-util` (a feature of the same crate, needed by `AsyncReadExt` and `AsyncWriteExt`; UAS lane amendment, the operator corrects it in place) |
+| `tokio` | 1.53.1 | MIT | uas-operator, uas-router, uas-deck, uas-storage; uas-engine behind feature `cortex-grpc` (spec 0026; UAS lane amendment, the operator corrects it in place) | 4, 5, 6 | default-features off; `rt-multi-thread`, `macros`, `net`, `time`, `sync`. The uas-pool runtime stays open (spec 0001 gap 1). In use since spec 0013 (2026-10-09) in uas-router, plus `io-util` (a feature of the same crate, needed by `AsyncReadExt` and `AsyncWriteExt`; UAS lane amendment, the operator corrects it in place) |
 | `sha2` | 0.11.0 | MIT OR Apache-2.0 | uas-ebpf, uas-router, xtask | 2, 4 | none |
 | `reqwest` | 0.13.5 | MIT OR Apache-2.0 | uas-router, uas-deck | 4, 5 | default-features off; `rustls` (aws-lc-rs provider, needs cmake), `http2`, `json`, `stream` |
-| `futures-util` | 0.3.34 | MIT OR Apache-2.0 | uas-deck | 5 | `uas-router` dropped 2026-10-11: spec 0017 says the crate is not needed there (plan 0017 finding 2) |
+| `futures-util` | 0.3.34 | MIT OR Apache-2.0 | uas-deck, uas-operator | 5 | `uas-router` dropped 2026-10-11: spec 0017 says the crate is not needed there (plan 0017 finding 2) |
 | `axum` | 0.8.9 | MIT | uas-deck | 5 | default features off, `http1` and `tokio` (P4, 2026-10-10); `ws` waits for D2 |
 | `tower-http` | 0.7.1 | MIT | uas-deck | 5 | `fs`, `trace`, `timeout`, `compression-gzip` |
 | `tokio-stream` | 0.1.19 | MIT | uas-deck | 5 | none |
@@ -214,8 +214,8 @@ metadata, read 2026-10-09.
 | `governor` | 0.10.4 | MIT | identity | 7 | Phase 7 waits for the Director of Engineering |
 | `a2a-lf` | 0.3.1 | Apache-2.0 | uas-engine (A2A envelopes) | 7 | protocol conformance not verified; Phase 7 waits for the Director of Engineering |
 | `criterion` | 0.8.2 | Apache-2.0 OR MIT | benches (dev only) | 3, 8 | default-features off; `cargo_bench_support` |
-| `clap` | 4.6.7 | MIT OR Apache-2.0 | uas-cli, uas-ebpf | 2 | `derive`, `env`; `env` approved by this amendment (spec 0042 D1, D2; plan 0042 P1; integrating lane w25:p1, 2026-10-10) |
-| `tracing-subscriber` | 0.3.23 | MIT | uas-cli, uas-ebpf | 2 | `env-filter`, `json`; `json` approved by this amendment (spec 0042 D1, D2; plan 0042 P1; integrating lane w25:p1, 2026-10-10) |
+| `clap` | 4.6.7 | MIT OR Apache-2.0 | uas-cli, uas-ebpf, uas-operator | 2 | `derive`, `env`; `env` approved by this amendment (spec 0042 D1, D2; plan 0042 P1; integrating lane w25:p1, 2026-10-10) |
+| `tracing-subscriber` | 0.3.23 | MIT | uas-cli, uas-ebpf, uas-operator | 2 | `env-filter`, `json`; `json` approved by this amendment (spec 0042 D1, D2; plan 0042 P1; integrating lane w25:p1, 2026-10-10) |
 | `tracing-serde` | 0.2.0 | MIT | none (transitive) | 2 | planned pin: pulled by the `json` feature of `tracing-subscriber`; not yet in `Cargo.lock`; approved by this amendment (spec 0042 D2; plan 0042 P1; integrating lane w25:p1, 2026-10-10) |
 
 Not listed, with the reason:
@@ -227,8 +227,7 @@ Check of the whole set (`cargo deny check` with this repo's deny.toml, throwaway
 project, 522 packages, 2026-10-09):
 - With the aws-sdk-s3 features above: no vulnerability, no yanked crate.
 - All targets: rejected licences `MIT-0` (fluent-uri, via jsonschema) and
-  `CDLA-Permissive-2.0` (webpki-root-certs, wasm32 only). Linux targets only:
-  `MIT-0` remains.
+  `CDLA-Permissive-2.0` (webpki-root-certs, wasm32 and Linux via kube rustls-tls). `deny.toml` allows `CDLA-Permissive-2.0` scoped to `webpki-root-certs` only (spec 0039 F5, D3).
 - Unmaintained: `bincode` (syntect) and `smallstr` (yrs). Both are excluded above.
 - The set needs a Rust floor of 1.88 (aya, gix, ACP, transitive icu crates);
   aws-sdk-s3 needs 1.94.1, which equals the pinned toolchain. Amended
@@ -258,6 +257,16 @@ a throwaway project with these pins, `tokio` 1.53.1 (features as its row) and to
 `server` in dev ran `cargo deny check` with this repo's `deny.toml`: "advisories ok,
 bans ok, licenses ok, sources ok", 106 packages.
 Warnings: duplicate `hashbrown`, `logos` (3 crates) and `syn`, all through `protox`.
+
+### Kubernetes operator and CRDs (specs 0038, 0039)
+
+Status: approved by the operator, 2026-10-16 (specs 0038, 0039 D1–D3). Each row enters `Cargo.toml` with an `=` requirement (D3) behind the `k8s` feature of `uas-operator`. `deny.toml` allows `CDLA-Permissive-2.0` scoped to `webpki-root-certs` (spec 0039 F5, D3).
+
+| Crate | Version | Licence | Used by | Conditions |
+|---|---|---|---|---|
+| `kube` | 4.2.0 | Apache-2.0 | uas-operator, feature `k8s` | `runtime`, `derive`; MSRV 1.89.0 (spec 0039 F1, D1, D2) |
+| `k8s-openapi` | 0.28.0 | Apache-2.0 | uas-operator, feature `k8s` | `v1_36` (spec 0039 F2, F3, D1) |
+| `schemars` | 1.2.2 | MIT | uas-operator, feature `k8s` | `derive`; MSRV 1.74 (spec 0039 F4, D1) |
 
 ### CI tools
 
