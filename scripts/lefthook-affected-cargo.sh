@@ -6,7 +6,7 @@
 #
 # Usage: lefthook-affected-cargo.sh [--staged|--push] [test|clippy]
 #   --staged  diff --cached                 (pre-commit; default)
-#   --push    diff against origin/development, then development, then HEAD~1
+#   --push    diff against origin/main, then main, then HEAD~1
 #   test      cargo test -p <affected> -j 2 (default)
 #   clippy    cargo clippy -p <affected> --all-targets -j 2 -- -D warnings
 #
@@ -22,7 +22,7 @@ case "$mode" in
   --staged) changed=$(git diff --cached --name-only --diff-filter=ACMR) ;;
   --push)
     base=""
-    for ref in origin/development development; do
+    for ref in origin/main main; do
       if git rev-parse --verify --quiet "$ref^{commit}" >/dev/null; then
         base=$(git merge-base "$ref" HEAD 2>/dev/null || echo "")
         [ -n "$base" ] && break

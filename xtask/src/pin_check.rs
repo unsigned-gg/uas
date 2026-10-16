@@ -187,7 +187,15 @@ pub fn check_repo(
     ebpf_manifest: &str,
     ebpf_lock: &str,
 ) -> Report {
-    let pins = parse_pins(spec);
+    let pins = match parse_pins(spec) {
+        Ok(pins) => pins,
+        Err(errors) => {
+            return Report {
+                checked: 0,
+                misses: errors,
+            };
+        }
+    };
     let workspace: BTreeSet<String> = manifests.iter().flat_map(|m| direct_deps(m)).collect();
     let ebpf = direct_deps(ebpf_manifest);
     let mut report = Report {
@@ -220,11 +228,14 @@ pub fn check_repo(
     report
 }
 
-/// The `(crate, version)` pairs of every `| Crate | Version |` table. Only `X.Y.Z` or `X.Y.Z+build` versions count.
-pub fn parse_pins(spec: &str) -> Vec<(String, String)> {
+/// The `(crate, version)` pairs of every `| Crate | Version |` table. Only `X.Y.Z` or `X.Y.Z+build`
+/// versions count; a row with an empty crate name, a version outside that form, or a different count
+/// of crates and versions is an error that names the spec line and the row (spec 0004 D3).
+pub fn parse_pins(spec: &str) -> Result<Vec<(String, String)>, Vec<String>> {
     let mut pins: Vec<(String, String)> = Vec::new();
+    let mut errors: Vec<String> = Vec::new();
     let mut in_table = false;
-    for raw in spec.lines() {
+    for (index, raw) in spec.lines().enumerate() {
         let line = raw.trim();
         if !line.starts_with('|') {
             in_table = false;
@@ -235,13 +246,34 @@ pub fn parse_pins(spec: &str) -> Vec<(String, String)> {
             in_table = true;
             continue;
         }
-        if !in_table || cells.len() < 2 || cells[0].starts_with("---") {
+        if !in_table || cells[0].starts_with("---") {
             continue;
         }
-        let names = cells[0].split(',').map(|n| n.trim().trim_matches('`'));
-        let versions = cells[1].split(',').map(str::trim);
-        for (name, version) in names.zip(versions) {
-            if is_exact_version(version) && !name.is_empty() {
+        // Echo the crate and version cells only: the other cells are long prose.
+        let row = format!("| {} |", cells[..cells.len().min(2)].join(" | "));
+        let fail =
+            |problem: String| format!("pin-check: {SPEC} line {}: {problem}: {row}", index + 1);
+        if cells.len() < 2 {
+            errors.push(fail("the row has no version cell".to_owned()));
+            continue;
+        }
+        let names: Vec<&str> = cells[0]
+            .split(',')
+            .map(|n| n.trim().trim_matches('`'))
+            .collect();
+        let versions: Vec<&str> = cells[1].split(',').map(str::trim).collect();
+        if names.iter().any(|n| n.is_empty()) {
+            errors.push(fail("empty crate name".to_owned()));
+        } else if names.len() != versions.len() {
+            errors.push(fail(format!(
+                "{} crates but {} versions",
+                names.len(),
+                versions.len()
+            )));
+        } else if let Some(bad) = versions.iter().find(|v| !is_exact_version(v)) {
+            errors.push(fail(format!("version {bad:?} is not X.Y.Z")));
+        } else {
+            for (name, version) in names.into_iter().zip(versions) {
                 let pair = (name.to_owned(), version.to_owned());
                 if !pins.contains(&pair) {
                     pins.push(pair);
@@ -249,7 +281,11 @@ pub fn parse_pins(spec: &str) -> Vec<(String, String)> {
             }
         }
     }
-    pins
+    if errors.is_empty() {
+        Ok(pins)
+    } else {
+        Err(errors)
+    }
 }
 
 /// True for `X.Y.Z` with digits only, optionally followed by `+` and a build
@@ -354,8 +390,6 @@ mod tests {
 |---|---|---|---|
 | `tokio` | 1.53.1 | MIT | uas-router |
 | `aya-log`, `aya-log-ebpf` | 0.3.0, 0.2.0 | MIT | uas-ebpf |
-| `serde` | 0.8 | MIT | none |
-| `thing` | none | MIT | none |
 
 | Component | Version |
 |---|---|
@@ -376,7 +410,7 @@ mod tests {
 
     #[test]
     fn parses_pin_rows() {
-        let pins = parse_pins(SPEC_TEXT);
+        let pins = parse_pins(SPEC_TEXT).unwrap();
         let want: Vec<(String, String)> = [
             ("tokio", "1.53.1"),
             ("aya-log", "0.3.0"),
@@ -387,6 +421,96 @@ mod tests {
         .map(|(n, v)| ((*n).to_owned(), (*v).to_owned()))
         .collect();
         assert_eq!(pins, want);
+    }
+
+    #[test]
+    fn rejects_malformed_rows() {
+        let table = |row: &str| format!("intro\n\n| Crate | Version |\n|---|---|\n{row}\n");
+        let cases = [
+            ("short", "| `serde` | 0.8 |", "0.8"),
+            ("none", "| `thing` | none |", "none"),
+            ("empty name", "| `` | 1.0.0 |", "empty crate name"),
+            ("blank name", "|  | 1.0.0 |", "empty crate name"),
+            ("count", "| `a`, `b` | 1.0.0 |", "2 crates but 1 versions"),
+            ("one cell", "| `a` |", "`a`"),
+        ];
+        for (name, row, want) in cases {
+            let errors = parse_pins(&table(row)).expect_err(name);
+            assert_eq!(errors.len(), 1, "{name}: {errors:?}");
+            assert!(errors[0].contains("line 5"), "{name}: {errors:?}");
+            assert!(errors[0].contains(row), "{name}: {errors:?}");
+            assert!(errors[0].contains(want), "{name}: {errors:?}");
+        }
+        // Control: a good row in the same shape parses.
+        assert_eq!(
+            parse_pins(&table("| `a`, `b` | 1.0.0, 2.0.0 |"))
+                .unwrap()
+                .len(),
+            2
+        );
+        // A malformed row outside a pin table is not read.
+        assert!(parse_pins("| Component | Version |\n|---|---|\n| `x` | none |\n").is_ok());
+    }
+
+    #[test]
+    fn malformed_rows_fail_the_check() {
+        let spec = "| Crate | Version |\n|---|---|\n| `tokio` | 1.53 |\n";
+        let manifests = ["[dependencies]\ntokio = \"1\"\n".to_owned()];
+        let got = check_repo(spec, &manifests, &lock(&[("tokio", "1.53.1")]), "", "");
+        assert_eq!(got.checked, 0);
+        assert_eq!(got.misses.len(), 1, "{:?}", got.misses);
+        assert!(got.misses[0].contains("line 3"), "{:?}", got.misses);
+    }
+
+    fn temp_repo(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("xtask-pc-{}-{name}", std::process::id()));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(dir.join("xtask")).unwrap();
+        fs::create_dir_all(dir.join(EBPF_DIR)).unwrap();
+        fs::create_dir_all(dir.join("specs")).unwrap();
+        fs::create_dir_all(dir.join(".github/workflows")).unwrap();
+        fs::write(
+            dir.join(SPEC),
+            "| Tool | Version |\n|---|---|\n| `gitleaks` | 8.30.1 |\n",
+        )
+        .unwrap();
+        fs::write(dir.join(CI_YML), CI_TEXT).unwrap();
+        fs::write(dir.join(LEFTHOOK_YML), HOOK_TEXT).unwrap();
+        fs::write(
+            dir.join("Cargo.toml"),
+            "[workspace]\nmembers = [\"xtask\"]\n",
+        )
+        .unwrap();
+        fs::write(dir.join("xtask/Cargo.toml"), "[dependencies]\n").unwrap();
+        fs::write(dir.join(EBPF_DIR).join("Cargo.toml"), "[dependencies]\n").unwrap();
+        dir
+    }
+
+    #[test]
+    fn fails_on_missing_lockfile() {
+        let dir = temp_repo("lock");
+        let ws_lock = dir.join("Cargo.lock");
+        let ebpf_lock = dir.join(EBPF_DIR).join("Cargo.lock");
+        let (ws, ebpf) = (
+            ws_lock.display().to_string(),
+            ebpf_lock.display().to_string(),
+        );
+        // Both locks missing: the error names the root lock and not the eBPF lock.
+        let err = format!("{:#}", check_root(&dir).unwrap_err());
+        assert!(err.contains(&ws) && !err.contains(&ebpf), "{err}");
+        // The eBPF lock only: the error still names the root lock.
+        fs::write(&ebpf_lock, "").unwrap();
+        let err = format!("{:#}", check_root(&dir).unwrap_err());
+        assert!(err.contains(&ws) && !err.contains(&ebpf), "{err}");
+        // The root lock only: the error names the eBPF lock and not the root lock.
+        fs::remove_file(&ebpf_lock).unwrap();
+        fs::write(&ws_lock, "").unwrap();
+        let err = format!("{:#}", check_root(&dir).unwrap_err());
+        assert!(err.contains(&ebpf) && !err.contains(&ws), "{err}");
+        // Control: both locks present, the check runs.
+        fs::write(&ebpf_lock, "").unwrap();
+        assert!(check_root(&dir).is_ok());
+        fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]
@@ -534,7 +658,7 @@ default = []
     fn parses_build_metadata_pin() {
         let spec = "| Crate | Version |\n|---|---|\n| `toml` | 1.1.8+spec-1.1.0 | MIT |\n";
         assert_eq!(
-            parse_pins(spec),
+            parse_pins(spec).unwrap(),
             [("toml".to_owned(), "1.1.8+spec-1.1.0".to_owned())]
         );
     }
@@ -580,7 +704,7 @@ default = []
     #[test]
     fn skips_prerelease_pin() {
         let spec = "| Crate | Version |\n|---|---|\n| `toml` | 1.1.8-rc.1 |\n";
-        assert!(parse_pins(spec).is_empty());
+        assert!(parse_pins(spec).is_err());
     }
 
     const TOOLS_SPEC: &str = "\
@@ -650,14 +774,14 @@ default = []
     #[test]
     fn skips_build_metadata_without_a_build_string() {
         let spec = "| Crate | Version |\n|---|---|\n| `toml` | 1.1.8+ |\n";
-        assert!(parse_pins(spec).is_empty());
+        assert!(parse_pins(spec).is_err());
         assert!(!is_exact_version("1.1.8+"));
     }
 
     #[test]
     fn skips_build_metadata_with_a_bad_character() {
         let spec = "| Crate | Version |\n|---|---|\n| `toml` | 1.1.8+a_b |\n";
-        assert!(parse_pins(spec).is_empty());
+        assert!(parse_pins(spec).is_err());
         assert!(!is_exact_version("1.1.8+a_b"));
         // Control: a valid build string is kept.
         assert!(is_exact_version("1.1.8+a-b.1"));

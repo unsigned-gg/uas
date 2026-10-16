@@ -1,7 +1,7 @@
 # Release: tag + GitHub release on the release branch. Spec: specs/0005 (release flow).
 #
 # The version bump and the CHANGELOG roll happen BEFORE this, in a normal PR to
-# `development` (`make release-notes VERSION=x.y.z`), so CI runs on them. A
+# `main` (`make release-notes VERSION=x.y.z`), so CI runs on them. A
 # release-plz `release-pr` is not used: a PR opened with the default
 # GITHUB_TOKEN never triggers CI, so its required checks would never report.
 #
