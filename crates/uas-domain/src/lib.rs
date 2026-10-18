@@ -35,6 +35,7 @@ mod lease;
 mod outcome;
 mod policy;
 mod reconcile;
+mod seat;
 mod slot;
 
 pub use attestation::{Attestation, EvidenceTier};
@@ -49,4 +50,7 @@ pub use lease::{check_slot_free, Budget, Lease, LeaseId, LeaseLedger, LeaseToken
 pub use outcome::{KillReason, LimitEvents, WorkerOutcome};
 pub use policy::{PolicyTier, SomaClassification};
 pub use reconcile::{LostSlot, ReconcileReport};
+pub use seat::{
+    CpuMax, HeadroomGate, Limit, ScopeKind, SeatSample, SeatsDocument, TmuxStatus, SEATS_SCHEMA,
+};
 pub use slot::{Slot, SlotId, SlotState, WorktreeRef};

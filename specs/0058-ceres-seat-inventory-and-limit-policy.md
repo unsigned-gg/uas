@@ -1,5 +1,5 @@
 ---
-status: planned
+status: in-progress
 created: 2026-10-18
 tags: [pool, cgroups, seats, limits, inventory, ceres, observability]
 priority: high
@@ -9,7 +9,7 @@ depends_on: [0001-cas-architecture-and-crate-layout, 0015-slot-pool-cgroup-freez
 
 # 0058-ceres-seat-inventory-and-limit-policy
 
-> **Status**: planned, **Priority**: high, **Created**: 2026-10-18
+> **Status**: in-progress, **Priority**: high, **Created**: 2026-10-18
 
 ## Overview
 
@@ -76,10 +76,10 @@ This spec adds two things:
 
 Wave 1: inventory (REQ-01 to REQ-10).
 
-- [ ] Add `SeatSample`, `ScopeKind`, `HeadroomGate` and the `uas.seats.v1` document types to `uas-domain`, with serde round-trip tests.
-- [ ] Add a read-only scope reader to `uas-pool` that takes the cgroup root as an argument, so tests use a fixture tree.
-- [ ] Add a tmux attribution adapter and the `uas seats [--json]` command to `uas-cli`.
-- [ ] Add fixture tests for REQ-01 to REQ-09, and a source-scan test for REQ-06 and REQ-10.
+- [x] Add `SeatSample`, `ScopeKind`, `HeadroomGate` and the `uas.seats.v1` document types to `uas-domain`, with serde round-trip tests.
+- [x] Add a read-only scope reader to `uas-pool` that takes the cgroup root as an argument, so tests use a fixture tree.
+- [x] Add a tmux attribution adapter and the `uas seats [--json]` command to `uas-cli`.
+- [x] Add fixture tests for REQ-01 to REQ-09, and a source-scan test for REQ-06 and REQ-10.
 
 Wave 2: dry-run plan (REQ-11 and REQ-12).
 

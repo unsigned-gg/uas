@@ -16,6 +16,7 @@ path = "src/main.rs"
 [dependencies]
 uas-domain = { path = "../uas-domain" }
 uas-engine = { path = "../uas-engine" }
+uas-pool = { path = "../uas-pool" }
 anyhow = { workspace = true }
 clap = { workspace = true }
 serde = { workspace = true }

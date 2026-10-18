@@ -4297,6 +4297,7 @@ dependencies = [
  "tracing-subscriber",
  "uas-domain",
  "uas-engine",
+ "uas-pool",
 ]
 
 [[package]]

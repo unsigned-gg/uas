@@ -2,6 +2,7 @@
 //! `uas` command line entry point.
 
 mod memory;
+mod seats;
 mod wave_flow;
 
 use anyhow::{Context, Result};
@@ -45,6 +46,30 @@ enum Command {
         /// Id for the slot.
         #[arg(long, default_value = "slot-1")]
         slot: String,
+    },
+    /// List agent seat scopes with usage, limits and host headroom. Read-only (spec 0058).
+    Seats {
+        /// Emit one `uas.seats.v1` JSON document.
+        #[arg(long)]
+        json: bool,
+        /// The cgroup v2 mount.
+        #[arg(long, default_value = "/sys/fs/cgroup")]
+        cgroup_root: std::path::PathBuf,
+        /// The proc mount.
+        #[arg(long, default_value = "/proc")]
+        proc_root: std::path::PathBuf,
+        /// The tmux binary used to attribute scopes to seats.
+        #[arg(long, default_value = "tmux")]
+        tmux_bin: std::path::PathBuf,
+        /// Read this uid's user service cgroup; default is the caller.
+        #[arg(long)]
+        uid: Option<u32>,
+        /// The headroom gate needs a 1-minute load below this.
+        #[arg(long, default_value_t = 12.0)]
+        max_load: f64,
+        /// The headroom gate needs at least this many GiB available.
+        #[arg(long, default_value_t = 16.0)]
+        min_mem_gib: f64,
     },
     /// Manage harness execution, session lifecycle, and receipts.
     Harness {
@@ -1142,6 +1167,30 @@ fn main() -> Result<()> {
         Command::Demo { slot } => {
             let report = demo(&slot)?;
             println!("{}", serde_json::to_string_pretty(&report)?);
+        }
+        Command::Seats {
+            json,
+            cgroup_root,
+            proc_root,
+            tmux_bin,
+            uid,
+            max_load,
+            min_mem_gib,
+        } => {
+            let cfg = seats::SeatsConfig {
+                cgroup_root,
+                proc_root,
+                tmux_bin,
+                uid,
+                max_load_1m: max_load,
+                min_mem_gib,
+            };
+            let doc = seats::build_document(&cfg)?;
+            if json {
+                println!("{}", serde_json::to_string_pretty(&doc)?);
+            } else {
+                print!("{}", seats::render_text(&doc));
+            }
         }
         Command::Wave { command } => match command {
             WaveCommand::Flow {
