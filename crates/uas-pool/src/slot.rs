@@ -11,13 +11,17 @@ use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
 use uas_domain::{
-    DomainError, Lease, LeaseToken, ReconcileReport, Slot, SlotId, SlotState, WorktreeRef,
+    DomainError, Lease, LeaseToken, ReconcileReport, Slot, SlotAcquirePolicy, SlotId, SlotState,
+    WorktreeRef,
 };
 
 use crate::error::PoolError;
 use crate::freezer::{CgroupFreezer, CpuCap, Freezer, ResourceLimits, SignalFreezer};
 use crate::limits::{self, LimitOverrides, LimitSource, ResolvedLimits};
 use crate::reconcile::{self, ReconcileRoots};
+use arbitration::{HostSlotArbiter, HostSlotLease};
+
+pub mod arbitration;
 
 /// Configuration options for the worker slot pool.
 #[derive(Debug, Clone)]
@@ -36,14 +40,23 @@ pub struct PoolConfig {
     /// Worktree root whose filesystem must keep `min_free_bytes` free (spec 0041 D3).
     /// `None` uses `reconcile.worktree_root` when set, else the current directory.
     pub disk_root: Option<PathBuf>,
+    /// Host-wide slot ceiling shared by every process on the host (spec 0036 D1).
+    /// `None` uses `max_slots`.
+    pub host_max_slots: Option<usize>,
+    /// Directory of the host slot lock files (spec 0036 D2; the operator flag is
+    /// `UAS_SLOT_DIR`). `None` turns host arbitration off for this pool.
+    pub host_slot_dir: Option<PathBuf>,
+    /// What [`SlotPool::create_slot`] does when every host slot is held (spec 0036 D4).
+    pub slot_acquire_policy: SlotAcquirePolicy,
+    /// Longest wait under [`SlotAcquirePolicy::WaitBounded`] (spec 0036 D4).
+    pub slot_acquire_timeout: Duration,
 }
 
 impl PoolConfig {
-    /// Host slot ceiling used by the memory formula (spec 0041 D1).
-    ///
-    /// Spec 0036 adds a dedicated host field and replaces this body.
+    /// Host slot ceiling used by the memory formula (spec 0041 D1) and the host arbiter
+    /// (spec 0036 D1).
     pub fn host_max_slots(&self) -> usize {
-        self.max_slots
+        self.host_max_slots.unwrap_or(self.max_slots)
     }
 }
 
@@ -56,6 +69,10 @@ impl Default for PoolConfig {
             reconcile: None,
             limits: LimitOverrides::default(),
             disk_root: None,
+            host_max_slots: None,
+            host_slot_dir: None,
+            slot_acquire_policy: SlotAcquirePolicy::Try,
+            slot_acquire_timeout: arbitration::DEFAULT_ACQUIRE_TIMEOUT,
         }
     }
 }
@@ -90,6 +107,8 @@ pub struct ManagedSlot {
     lease: Option<Lease>,
     last_activity: Instant,
     freezer: Option<Box<dyn Freezer>>,
+    /// The host slot lock this slot holds; dropping it frees the lock (spec 0036 D3).
+    host_lease: Option<HostSlotLease>,
 }
 
 impl ManagedSlot {
@@ -100,6 +119,7 @@ impl ManagedSlot {
             lease: None,
             last_activity: Instant::now(),
             freezer,
+            host_lease: None,
         }
     }
 
@@ -133,6 +153,11 @@ impl ManagedSlot {
         self.freezer.as_mut()
     }
 
+    /// Index of the host slot lock this slot holds, if host arbitration is on.
+    pub fn host_slot_index(&self) -> Option<usize> {
+        self.host_lease.as_ref().map(|l| l.index().get())
+    }
+
     /// Returns the CPU cap recorded by the assigned freezer, or [`CpuCap::Uncapped`] if none.
     pub fn cpu_cap(&self) -> CpuCap {
         self.freezer
@@ -160,6 +185,8 @@ pub struct SlotPool {
     resolved: Result<ResolvedLimits, (u64, u64)>,
     min_free_bytes: u64,
     free_bytes: Box<dyn Fn(&Path) -> io::Result<u64> + Send + Sync>,
+    /// Host-wide slot arbiter; `None` when `host_slot_dir` is unset (spec 0036).
+    host_arbiter: Option<HostSlotArbiter>,
 }
 
 impl SlotPool {
@@ -221,6 +248,13 @@ impl SlotPool {
             .as_ref()
             .map(reconcile::reconcile)
             .unwrap_or_default();
+        let host_arbiter = config.host_slot_dir.as_ref().map(|dir| {
+            HostSlotArbiter::new(
+                dir,
+                uas_domain::HostCapacity::new(config.host_max_slots())
+                    .unwrap_or(uas_domain::HostCapacity::DEFAULT),
+            )
+        });
         Self {
             config,
             slots: Mutex::new(BTreeMap::new()),
@@ -228,6 +262,7 @@ impl SlotPool {
             resolved,
             min_free_bytes,
             free_bytes: host.free_bytes,
+            host_arbiter,
         }
     }
 
@@ -261,7 +296,29 @@ impl SlotPool {
     ///
     /// Returns [`PoolError::CapacityExhausted`] if the pool is already at or
     /// above `config.max_slots`.
+    ///
+    /// With host arbitration on, a host slot lock is taken first and held until the slot
+    /// drains. A full host returns [`PoolError::HostCapacityExceeded`] (spec 0036 REQ-0036-01).
     pub fn create_slot(&self, id: SlotId) -> Result<(), PoolError> {
+        let host_lease = match &self.host_arbiter {
+            Some(arbiter) => {
+                {
+                    // Pool-local refusals come first; the wait below must not hold the map lock.
+                    let guard = self.slots.lock().unwrap_or_else(|p| p.into_inner());
+                    if guard.contains_key(&id) {
+                        return Err(PoolError::SlotExists(id));
+                    }
+                    if guard.len() >= self.config.max_slots {
+                        return Err(PoolError::CapacityExhausted(self.config.max_slots));
+                    }
+                }
+                Some(arbiter.acquire(
+                    self.config.slot_acquire_policy,
+                    self.config.slot_acquire_timeout,
+                )?)
+            }
+            None => None,
+        };
         let mut guard = self.slots.lock().unwrap_or_else(|p| p.into_inner());
 
         if guard.contains_key(&id) {
@@ -307,7 +364,8 @@ impl SlotPool {
             Some(Box::new(SignalFreezer::new(id.clone())))
         };
 
-        let managed = ManagedSlot::new(id.clone(), freezer);
+        let mut managed = ManagedSlot::new(id.clone(), freezer);
+        managed.host_lease = host_lease;
         guard.insert(id, managed);
         Ok(())
     }
@@ -534,6 +592,8 @@ impl SlotPool {
         let next = current.drain()?;
         managed.slot = next;
         managed.lease = None;
+        // A draining slot no longer counts against the host ceiling (spec 0036 D3).
+        managed.host_lease = None;
         Ok(())
     }
 
