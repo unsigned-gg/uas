@@ -58,6 +58,60 @@ pub fn read_scopes(service_dir: &Path) -> Result<Vec<SeatSample>, SeatError> {
 /// The most bytes read from one interface file (REQ-0058-14).
 pub const MAX_READ_BYTES: u64 = 64 * 1024;
 
+/// The flags `read_bounded` opens with: never block on a FIFO, never follow a symlink.
+///
+/// `NOFOLLOW` closes the gap between the `symlink_metadata` check and the open.
+pub const OPEN_FLAGS: rustix::fs::OFlags =
+    rustix::fs::OFlags::NONBLOCK.union(rustix::fs::OFlags::NOFOLLOW);
+
+/// The result of probing a tmux server socket.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SocketProbe {
+    /// A server accepted the connection.
+    Live,
+    /// Connection refused, or the socket path is gone: no server behind it.
+    Stale,
+    /// The accept backlog is full, so a blocking connect would hang.
+    Busy,
+    /// Any other connect error, as errno text.
+    Other(String),
+}
+
+/// Map a connect errno to a probe result.
+pub fn classify_connect_error(e: rustix::io::Errno) -> SocketProbe {
+    use rustix::io::Errno;
+    match e {
+        Errno::CONNREFUSED | Errno::NOENT => SocketProbe::Stale,
+        Errno::AGAIN => SocketProbe::Busy,
+        other => SocketProbe::Other(format!("cannot connect: {other}")),
+    }
+}
+
+/// Probe whether a server listens on `path`, without starting a process and without waiting.
+///
+/// The connect is non-blocking and close-on-exec. The stream is dropped at once: nothing is
+/// sent and nothing is written, so the probe keeps REQ-0058-02.
+pub fn probe_socket(path: &Path) -> SocketProbe {
+    use rustix::net::{AddressFamily, SocketAddrUnix, SocketFlags, SocketType};
+    let addr = match SocketAddrUnix::new(path) {
+        Ok(a) => a,
+        Err(e) => return SocketProbe::Other(format!("bad socket path: {e}")),
+    };
+    let fd = match rustix::net::socket_with(
+        AddressFamily::UNIX,
+        SocketType::STREAM,
+        SocketFlags::NONBLOCK | SocketFlags::CLOEXEC,
+        None,
+    ) {
+        Ok(fd) => fd,
+        Err(e) => return SocketProbe::Other(format!("cannot open a socket: {e}")),
+    };
+    match rustix::net::connect(&fd, &addr) {
+        Ok(()) => SocketProbe::Live,
+        Err(e) => classify_connect_error(e),
+    }
+}
+
 /// Read `path` as text only if it is a regular file of at most [`MAX_READ_BYTES`].
 ///
 /// A symlink, FIFO, directory, oversize or unreadable file gives `None` (REQ-0058-14). The
@@ -68,7 +122,7 @@ pub fn read_bounded(path: &Path) -> Option<String> {
     }
     let mut file = fs::OpenOptions::new()
         .read(true)
-        .custom_flags(rustix::fs::OFlags::NONBLOCK.bits().try_into().ok()?)
+        .custom_flags(OPEN_FLAGS.bits().try_into().ok()?)
         .open(path)
         .ok()?;
     let mut text = String::new();

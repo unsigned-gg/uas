@@ -4,9 +4,7 @@
 //! tmux is asked for panes with one `list-panes` call. The binary path is an argument, so tests
 //! use a fake. Nothing here writes.
 
-use std::io::ErrorKind;
 use std::os::unix::fs::{FileTypeExt, MetadataExt};
-use std::os::unix::net::UnixStream;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -15,7 +13,9 @@ use uas_domain::{
     Attribution, HeadroomGate, ScopeKind, SeatSample, SeatsDocument, SocketCounts, SocketOutcome,
     SocketStatus, TmuxStatus,
 };
-use uas_pool::seats::{read_headroom, read_scopes, scope_of_pid, user_service_dir};
+use uas_pool::seats::{
+    probe_socket, read_headroom, read_scopes, scope_of_pid, user_service_dir, SocketProbe,
+};
 
 /// Inputs of one inventory run.
 #[derive(Debug, Clone)]
@@ -66,20 +66,16 @@ pub fn parse_panes(text: &str) -> Vec<Pane> {
 /// Skip reason for a socket that refuses a connection.
 const STALE_REASON: &str = "stale socket (connect refused)";
 
-/// Probe whether a server listens on `socket`, without starting tmux.
-///
-/// This connects and drops the stream at once. It sends nothing and writes nothing, so it keeps
-/// REQ-0058-02. A refused or missing socket is stale (REQ-0058-15).
+/// Skip reason for a socket whose accept backlog is full.
+const BUSY_REASON: &str = "busy (backlog full)";
+
+/// Probe `socket` without starting tmux (REQ-0058-15). The connect itself lives in `uas-pool`.
 fn probe(socket: &Path) -> Result<(), (SocketOutcome, String)> {
-    match UnixStream::connect(socket) {
-        Ok(stream) => {
-            drop(stream);
-            Ok(())
-        }
-        Err(e) if matches!(e.kind(), ErrorKind::ConnectionRefused | ErrorKind::NotFound) => {
-            Err((SocketOutcome::Stale, STALE_REASON.to_string()))
-        }
-        Err(e) => Err((SocketOutcome::Skipped, format!("cannot connect: {e}"))),
+    match probe_socket(socket) {
+        SocketProbe::Live => Ok(()),
+        SocketProbe::Stale => Err((SocketOutcome::Stale, STALE_REASON.to_string())),
+        SocketProbe::Busy => Err((SocketOutcome::Skipped, BUSY_REASON.to_string())),
+        SocketProbe::Other(reason) => Err((SocketOutcome::Skipped, reason)),
     }
 }
 
@@ -215,13 +211,18 @@ pub fn build_document(cfg: &SeatsConfig) -> Result<SeatsDocument> {
     }
     let available = counts.queried > 0;
     let reason = (!available).then(|| {
-        if statuses.is_empty() {
+        if counts.found == 0 {
             format!(
                 "no tmux sockets in {}",
                 cfg.tmux_socket_base.join(format!("tmux-{uid}")).display()
             )
+        } else if counts.stale == counts.found {
+            format!("{} sockets found, all stale (connect refused)", counts.found)
         } else {
-            "no live tmux server answered".to_string()
+            format!(
+                "{} sockets found, none queried: {} stale (connect refused), {} other skips, {} live over the cap",
+                counts.found, counts.stale, counts.other_skips, counts.over_cap
+            )
         }
     });
     let tmux = TmuxStatus {

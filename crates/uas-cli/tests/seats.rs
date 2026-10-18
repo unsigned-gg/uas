@@ -128,6 +128,56 @@ fn scope<'a>(v: &'a serde_json::Value, name: &str) -> &'a serde_json::Value {
         .unwrap_or_else(|| panic!("scope {name} missing"))
 }
 
+/// Tokens that mean a write, a create or a send. The scanned inventory and probe code holds none.
+/// (The command's stdout lines live in `main.rs`, outside the scanned module.)
+const BANNED: &[&str] = &[
+    "fs::write",
+    "File::create",
+    "create_new(",
+    ".create(",
+    ".write(",
+    ".write_all(",
+    ".append(",
+    ".truncate(",
+    ".set_len(",
+    ".send(",
+    "write!(",
+    "writeln!(",
+    "print!(",
+    "println!(",
+    "io::Write",
+    "io::write(",
+    "remove_file",
+    "remove_dir",
+    "create_dir",
+    "set_permissions",
+    "fs::rename",
+    "fs::copy",
+    "O_WRONLY",
+    "O_RDWR",
+    "O_CREAT",
+    "O_TRUNC",
+    "OFlags::WRONLY",
+    "OFlags::RDWR",
+    "OFlags::CREATE",
+    "OFlags::TRUNC",
+    "UnixStream",
+];
+
+/// The banned tokens, and the `environ` path, found in `src`.
+fn violations(src: &str) -> Vec<String> {
+    let environ = ["env", "iron"].concat();
+    let mut found: Vec<String> = BANNED
+        .iter()
+        .filter(|b| src.contains(*b))
+        .map(|b| (*b).to_string())
+        .collect();
+    if src.contains(&environ) {
+        found.push(environ);
+    }
+    found
+}
+
 #[test]
 fn seats_json_carries_the_schema() {
     let t = Tmp::new("schema");
@@ -210,23 +260,25 @@ fn seats_gate_fails_on_high_load() {
 #[test]
 fn seats_source_has_no_write_and_no_environ() {
     let src = include_str!("../src/seats.rs");
-    let environ = ["env", "iron"].concat();
-    assert!(!src.contains(&environ));
-    for banned in [
-        "fs::write",
-        "File::create",
-        ".write(true)",
-        ".append(",
-        ".create(",
-        ".truncate(",
-        "remove_file",
-        "remove_dir",
-        "create_dir",
-        "set_permissions",
-        "fs::rename",
-        "fs::copy",
+    assert_eq!(violations(src), Vec::<String>::new());
+}
+
+#[test]
+fn seats_source_scan_goes_red_on_planted_forms() {
+    // Negative control: each planted form must be caught by the scan.
+    for planted in [
+        "OpenOptions::new().create_new(true)",
+        "file.write_all(b\"x\")",
+        "use std::io::Write;",
+        "use std::fs::write;",
+        "fs::write(p, b\"\")",
+        "File::create(p)",
+        "flags | O_WRONLY",
+        "stream.write(b\"\")",
+        "UnixStream::connect(p)",
     ] {
-        assert!(!src.contains(banned), "seats.rs uses {banned}");
+        let src = format!("{}\n{planted}", include_str!("../src/seats.rs"));
+        assert!(!violations(&src).is_empty(), "scan missed {planted}");
     }
 }
 
@@ -343,6 +395,10 @@ fn seats_stale_socket_is_skipped_with_zero_tmux_spawns() {
     assert_eq!(v["tmux"]["counts"]["queried"], 0);
     assert_eq!(v["tmux"]["available"], false);
     assert!(v["tmux"]["sockets"].as_array().unwrap().is_empty());
+    assert_eq!(
+        v["tmux"]["reason"],
+        "2 sockets found, all stale (connect refused)"
+    );
 }
 
 #[test]
