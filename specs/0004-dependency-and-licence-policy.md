@@ -165,7 +165,7 @@ Each row: ruled: the operator, grill sheet 2026-10-10 answer <n>, read 2026-10-1
 | Library | Answer | Verdict |
 |---|---|---|
 | `nom`, `rkyv` | 8a | Rejected: serde JSON-RPC is the contract (`communication/designs/rust-subsystem-crate-topology.md:23,53`; `agentic-systems/findings/marathon-crdt-p2p-and-hyperlight-vmm.md:25`) |
-| `mmap-sync`, SHM transport | 4a | Cortex spec 0009 owns it; no uas pin. rustix `net` and `mm` features wait for a uas spec that needs them |
+| `mmap-sync`, SHM transport | 4a | Cortex spec 0009 owns it; no uas pin. rustix `mm` feature waits for a uas spec that needs it (`net` is enabled by spec 0058) |
 | `shellflip` | 5a | Watch. Adopt only when `uas-ebpfd` or the deck needs zero-downtime restart with fd passing |
 | `foundations` | 6a | Rejected: uas owns its seccomp and landlock jails |
 | io_uring, `tokio-uring`, `heph` | 7a | Closed by spec 0019 D2 (OS threads) |
@@ -189,7 +189,7 @@ metadata, read 2026-10-09.
 | Crate | Version | Licence | Used by | Phase | Conditions |
 |---|---|---|---|---|---|
 | `landlock` | 0.4.7 | MIT OR Apache-2.0 | uas-sandbox | 2 | none |
-| `rustix` | 1.1.5 | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT | uas-sandbox, uas-pool | 2, 3 | default-features off; `std`, `process`, `thread`, `fs`, `mount`. In use since spec 0011 (2026-10-09) with `std`, `thread`, `process`, `fs` |
+| `rustix` | 1.1.5 | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT | uas-sandbox, uas-pool | 2, 3 | default-features off; `std`, `process`, `thread`, `fs`, `mount`, `net`. In use since spec 0011 (2026-10-09) with `std`, `thread`, `process`, `fs`; `net` added for the non-blocking tmux socket probe in uas-pool (spec 0058 D3) |
 | `aya` | 0.14.0 | MIT OR Apache-2.0 | uas-ebpf (loader) | 2 | MSRV 1.87 |
 | `aya-ebpf` | 0.2.1 | MIT OR Apache-2.0 | kernel-side BPF program, outside the workspace build | 2 | nightly, rust-src, bpf-linker; program package is `GPL-2.0-only OR MIT`; the object still declares `Dual MIT/GPL` |
 | `aya-log`, `aya-log-ebpf` | 0.3.0, 0.2.0 | MIT OR Apache-2.0 | uas-ebpf | 2 | only if the BPF program logs |

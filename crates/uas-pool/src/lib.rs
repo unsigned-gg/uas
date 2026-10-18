@@ -14,6 +14,7 @@ pub mod launch;
 pub mod limits;
 mod marker;
 pub mod reconcile;
+pub mod seats;
 pub mod slot;
 pub mod worktree;
 
