@@ -7,19 +7,18 @@
 //! plans and Spec 0013 IPC socket directories).
 
 use std::collections::BTreeMap;
-use std::fs::{File, OpenOptions};
 use std::io;
-use std::os::unix::fs::{MetadataExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use thiserror::Error;
 use uas_domain::{
-    Budget, DomainError, EvidenceTier, LandingReceipt, Lease, LeaseId, LeaseToken, PrincipalRef,
-    Slot, SlotId, SlotState, WorktreeRef,
+    Budget, DomainError, EvidenceTier, HostCapacity, LandingReceipt, Lease, LeaseId, LeaseToken,
+    PrincipalRef, Slot, SlotId, SlotState, WorktreeRef,
 };
 use uas_pool::limits::{LimitOverrides, ResolvedLimits};
+use uas_pool::slot::arbitration::{HostSlotArbiter, HostSlotLease};
 use uas_pool::{HostProbe, PoolConfig, PoolError, SlotPool};
 use uas_sandbox::{
     ipc, LandlockRulesetBuilder, PathAccess, PlannedRule, RulesetPlan, SandboxError,
@@ -129,22 +128,21 @@ pub enum ReconcileError {
     UnsupportedDesiredState(String),
 }
 
-/// An open, flock-held host slot lock file under `UAS_SLOT_DIR` (spec 0036 D2).
+/// A host slot lease held for one `WorkerSlot` (spec 0036 D3). Dropping it frees the lock.
 #[derive(Debug)]
 struct HeldHostLock {
     index: usize,
-    _file: File,
+    _lease: HostSlotLease,
 }
 
-/// Cross-process host slot lock table implementing Spec 0036 D2 (`slot-0.lock` .. `slot-(H-1).lock`).
+/// Cross-process host slot lock table over the `uas-pool` arbiter (spec 0036 D2, D6).
 ///
-/// The lock table keeps the open [`File`] descriptor alive for as long as a
-/// `WorkerSlot` holds the slot, and drops the descriptor (without unlinking the
-/// file) when the slot transitions to `Cold`/`Terminated` or its finalizer runs.
+/// The arbiter owns the lock files and descriptors. This table only maps a `WorkerSlot` key to
+/// the lease it holds, and drops the lease (without unlinking the file) when the slot
+/// transitions to `Cold`/`Terminated` or its finalizer runs.
 #[derive(Debug)]
 pub struct HostSlotLockTable {
-    slot_dir: PathBuf,
-    host_max_slots: usize,
+    arbiter: HostSlotArbiter,
     held: Mutex<BTreeMap<String, HeldHostLock>>,
 }
 
@@ -154,133 +152,42 @@ impl HostSlotLockTable {
         slot_dir: impl Into<PathBuf>,
         host_max_slots: usize,
     ) -> Result<Self, ReconcileError> {
-        let slot_dir = slot_dir.into();
-        Self::ensure_slot_dir(&slot_dir)?;
+        let capacity = HostCapacity::new(host_max_slots.max(1)).map_err(ReconcileError::Domain)?;
+        let arbiter = HostSlotArbiter::new(slot_dir, capacity);
+        arbiter.ensure_dir().map_err(map_arbiter_error)?;
         Ok(Self {
-            slot_dir,
-            host_max_slots: host_max_slots.max(1),
+            arbiter,
             held: Mutex::new(BTreeMap::new()),
         })
     }
 
     /// Directory holding `slot-0.lock` .. `slot-(H-1).lock`.
     pub fn slot_dir(&self) -> &Path {
-        &self.slot_dir
+        self.arbiter.dir()
     }
 
     /// Maximum concurrent host slots (`H`).
     pub fn host_max_slots(&self) -> usize {
-        self.host_max_slots
-    }
-
-    /// Validate or create `slot_dir` with mode `0700` owned by the current UID (spec 0036 D2).
-    fn ensure_slot_dir(dir: &Path) -> Result<(), ReconcileError> {
-        if let Ok(meta) = std::fs::symlink_metadata(dir) {
-            if meta.file_type().is_symlink() {
-                return Err(ReconcileError::InvalidSlotDir {
-                    path: dir.to_path_buf(),
-                    reason: "slot directory must not be a symlink".to_string(),
-                });
-            }
-            if !meta.is_dir() {
-                return Err(ReconcileError::InvalidSlotDir {
-                    path: dir.to_path_buf(),
-                    reason: "slot directory path is not a directory".to_string(),
-                });
-            }
-        } else {
-            std::fs::create_dir_all(dir).map_err(|source| ReconcileError::SlotLockIo {
-                path: dir.to_path_buf(),
-                source,
-            })?;
-            std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700)).map_err(
-                |source| ReconcileError::SlotLockIo {
-                    path: dir.to_path_buf(),
-                    source,
-                },
-            )?;
-        }
-
-        let meta = std::fs::symlink_metadata(dir).map_err(|source| ReconcileError::SlotLockIo {
-            path: dir.to_path_buf(),
-            source,
-        })?;
-        let mode = meta.permissions().mode() & 0o777;
-        if mode & 0o077 != 0 {
-            return Err(ReconcileError::InvalidSlotDir {
-                path: dir.to_path_buf(),
-                reason: format!("permissions {mode:04o} are looser than 0700"),
-            });
-        }
-        let current_uid = std::fs::metadata("/proc/self")
-            .map(|m| m.uid())
-            .unwrap_or_else(|_| meta.uid());
-        if meta.uid() != current_uid {
-            return Err(ReconcileError::InvalidSlotDir {
-                path: dir.to_path_buf(),
-                reason: format!(
-                    "directory uid {} does not match process uid {}",
-                    meta.uid(),
-                    current_uid
-                ),
-            });
-        }
-        Ok(())
+        self.arbiter.capacity().get()
     }
 
     /// Acquire one of `slot-0.lock` .. `slot-(H-1).lock` for `slot_key`, or return the
     /// already-held index if `slot_key` already owns a lock.
     pub fn acquire(&self, slot_key: &str) -> Result<usize, ReconcileError> {
-        Self::ensure_slot_dir(&self.slot_dir)?;
         let mut held = self.held.lock().expect("host slot lock mutex poisoned");
         if let Some(existing) = held.get(slot_key) {
             return Ok(existing.index);
         }
-
-        for idx in 0..self.host_max_slots {
-            let lock_path = self.slot_dir.join(format!("slot-{idx}.lock"));
-            if let Ok(meta) = std::fs::symlink_metadata(&lock_path) {
-                if meta.file_type().is_symlink() {
-                    return Err(ReconcileError::InvalidSlotDir {
-                        path: lock_path,
-                        reason: "slot lock file must not be a symlink".to_string(),
-                    });
-                }
-            }
-            let file = OpenOptions::new()
-                .create(true)
-                .truncate(false)
-                .read(true)
-                .write(true)
-                .open(&lock_path)
-                .map_err(|source| ReconcileError::SlotLockIo {
-                    path: lock_path.clone(),
-                    source,
-                })?;
-            match file.try_lock() {
-                Ok(()) => {
-                    held.insert(
-                        slot_key.to_string(),
-                        HeldHostLock {
-                            index: idx,
-                            _file: file,
-                        },
-                    );
-                    return Ok(idx);
-                }
-                Err(std::fs::TryLockError::WouldBlock) => continue,
-                Err(std::fs::TryLockError::Error(source)) => {
-                    return Err(ReconcileError::SlotLockIo {
-                        path: lock_path,
-                        source,
-                    });
-                }
-            }
-        }
-
-        Err(ReconcileError::CapacityExhausted {
-            max_slots: self.host_max_slots,
-        })
+        let lease = self.arbiter.try_acquire().map_err(map_arbiter_error)?;
+        let index = lease.index().get();
+        held.insert(
+            slot_key.to_string(),
+            HeldHostLock {
+                index,
+                _lease: lease,
+            },
+        );
+        Ok(index)
     }
 
     /// Release the open lock descriptor held by `slot_key`, if any, without unlinking the file.
@@ -293,6 +200,20 @@ impl HostSlotLockTable {
     pub fn held_index(&self, slot_key: &str) -> Option<usize> {
         let held = self.held.lock().expect("host slot lock mutex poisoned");
         held.get(slot_key).map(|h| h.index)
+    }
+}
+
+/// Map an arbiter error onto the reconciler's error type.
+fn map_arbiter_error(err: PoolError) -> ReconcileError {
+    match err {
+        PoolError::HostCapacityExceeded(max_slots) => {
+            ReconcileError::CapacityExhausted { max_slots }
+        }
+        PoolError::DirectoryInsecure(path, reason) => {
+            ReconcileError::InvalidSlotDir { path, reason }
+        }
+        PoolError::HostSlotIo { path, source } => ReconcileError::SlotLockIo { path, source },
+        other => ReconcileError::Pool(other),
     }
 }
 

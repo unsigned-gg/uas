@@ -12,6 +12,26 @@ pub enum PoolError {
     #[error("slot pool capacity exhausted (max {0})")]
     CapacityExhausted(usize),
 
+    /// Every host-wide slot lock is held by some process (spec 0036 D6). Distinct from
+    /// [`PoolError::CapacityExhausted`], which is this pool's own ceiling.
+    #[error("all {0} host slot locks are held")]
+    HostCapacityExceeded(usize),
+
+    /// The host slot directory or a lock file is a symlink, has the wrong owner or has a mode
+    /// looser than 0700 (spec 0036 D2).
+    #[error("host slot path {0} is insecure: {1}")]
+    DirectoryInsecure(PathBuf, String),
+
+    /// Creating, opening, locking or writing a host slot file failed.
+    #[error("host slot io error on {path}: {source}")]
+    HostSlotIo {
+        /// The directory or lock file.
+        path: PathBuf,
+        /// The underlying error.
+        #[source]
+        source: std::io::Error,
+    },
+
     /// Requested slot does not exist.
     #[error("slot {0} not found")]
     SlotNotFound(SlotId),
