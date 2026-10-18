@@ -69,16 +69,32 @@ fn fixture(t: &Tmp) {
     write(&t.0.join("proc/meminfo"), "MemAvailable: 33554432 kB\n");
 }
 
-/// A real unix socket file named `name` in the fixture's `tmux-1000` directory.
-fn socket(t: &Tmp, name: &str) {
+/// A listening unix socket named `name` in the fixture's `tmux-1000` directory. It accepts
+/// connections while the returned listener lives.
+fn socket(t: &Tmp, name: &str) -> UnixListener {
     let dir = t.0.join("tmp/tmux-1000");
     fs::create_dir_all(&dir).unwrap();
-    drop(UnixListener::bind(dir.join(name)).expect("bind"));
+    UnixListener::bind(dir.join(name)).expect("bind")
+}
+
+/// A socket file that nothing listens on: bound, then closed. Connecting is refused.
+fn stale_socket(t: &Tmp, name: &str) {
+    drop(socket(t, name));
+}
+
+/// How many times the fake tmux ran.
+fn spawns(t: &Tmp) -> usize {
+    fs::read_to_string(t.0.join("calls")).map_or(0, |s| s.lines().count())
 }
 
 fn fake_tmux(t: &Tmp, body: &str) -> PathBuf {
     let p = t.0.join("fake-tmux");
-    fs::write(&p, format!("#!/bin/sh\n{body}\n")).unwrap();
+    let calls = t.0.join("calls");
+    fs::write(
+        &p,
+        format!("#!/bin/sh\necho x >> '{}'\n{body}\n", calls.display()),
+    )
+    .unwrap();
     fs::set_permissions(&p, fs::Permissions::from_mode(0o755)).unwrap();
     p
 }
@@ -116,7 +132,7 @@ fn scope<'a>(v: &'a serde_json::Value, name: &str) -> &'a serde_json::Value {
 fn seats_json_carries_the_schema() {
     let t = Tmp::new("schema");
     fixture(&t);
-    socket(&t, "default");
+    let _l1 = socket(&t, "default");
     let v = run(&t, &fake_tmux(&t, "exit 0"));
     assert_eq!(v["schema"], "uas.seats.v1");
     assert_eq!(v["headroom"]["passes"], true);
@@ -127,7 +143,7 @@ fn seats_json_carries_the_schema() {
 fn seats_pane_pid_maps_to_scope_and_session() {
     let t = Tmp::new("attrib");
     fixture(&t);
-    socket(&t, "default");
+    let _l2 = socket(&t, "default");
     let v = run(
         &t,
         &fake_tmux(&t, "echo '4242 orch-lead@uas'; echo '5555 ghost@uas'"),
@@ -143,7 +159,7 @@ fn seats_pane_pid_maps_to_scope_and_session() {
 fn seats_scope_without_a_pane_is_listed_unattributed() {
     let t = Tmp::new("unattrib");
     fixture(&t);
-    socket(&t, "default");
+    let _l3 = socket(&t, "default");
     let v = run(&t, &fake_tmux(&t, "echo '4242 orch-lead@uas'"));
     let bbb = scope(&v, "tmux-spawn-bbb.scope");
     assert!(bbb["attributions"].as_array().unwrap().is_empty());
@@ -154,7 +170,7 @@ fn seats_scope_without_a_pane_is_listed_unattributed() {
 fn seats_missing_files_are_absent_not_zero() {
     let t = Tmp::new("absent");
     fixture(&t);
-    socket(&t, "default");
+    let _l4 = socket(&t, "default");
     let v = run(&t, &fake_tmux(&t, "exit 0"));
     let aaa = scope(&v, "tmux-spawn-aaa.scope");
     assert!(aaa["memory_peak"].is_null());
@@ -165,7 +181,7 @@ fn seats_missing_files_are_absent_not_zero() {
 fn seats_failing_tmux_leaves_every_scope_unattributed_with_a_reason() {
     let t = Tmp::new("tmuxfail");
     fixture(&t);
-    socket(&t, "default");
+    let _l5 = socket(&t, "default");
     for tmux in [
         t.0.join("no-such-tmux"),
         fake_tmux(&t, "echo 'no server running' >&2; exit 1"),
@@ -218,7 +234,7 @@ fn seats_source_has_no_write_and_no_environ() {
 fn seats_nested_cgroup_pid_and_two_panes_keep_every_session() {
     let t = Tmp::new("twopanes");
     fixture(&t);
-    socket(&t, "default");
+    let _l6 = socket(&t, "default");
     let v = run(
         &t,
         &fake_tmux(
@@ -244,7 +260,7 @@ fn seats_nested_cgroup_pid_and_two_panes_keep_every_session() {
 fn seats_non_pane_scope_is_kind_other() {
     let t = Tmp::new("other");
     fixture(&t);
-    socket(&t, "default");
+    let _l7 = socket(&t, "default");
     let v = run(&t, &fake_tmux(&t, "exit 0"));
     let other = scope(&v, "app-other.scope");
     assert_eq!(other["kind"], "other");
@@ -255,9 +271,9 @@ fn seats_non_pane_scope_is_kind_other() {
 fn seats_every_socket_is_queried_labelled_and_a_dead_one_is_skipped() {
     let t = Tmp::new("sockets");
     fixture(&t);
-    socket(&t, "default");
-    socket(&t, "openrig-x");
-    socket(&t, "dead");
+    let _l8 = socket(&t, "default");
+    let _l9 = socket(&t, "openrig-x");
+    let _dead = socket(&t, "dead");
     // A regular file in the socket directory is not a socket.
     fs::write(t.0.join("tmp/tmux-1000/not-a-socket"), "").unwrap();
     let v = run(
@@ -279,7 +295,7 @@ esac"#,
     let socks = v["tmux"]["sockets"].as_array().unwrap();
     assert_eq!(socks.len(), 3, "the regular file is not listed");
     let dead = socks.iter().find(|s| s["socket"] == "dead").unwrap();
-    assert_eq!(dead["queried"], false);
+    assert_eq!(dead["outcome"], "skipped");
     assert!(dead["reason"]
         .as_str()
         .unwrap()
@@ -292,7 +308,7 @@ esac"#,
 fn seats_summary_counts_empty_and_busy_unattributed() {
     let t = Tmp::new("summary");
     fixture(&t);
-    socket(&t, "default");
+    let _l11 = socket(&t, "default");
     let v = run(&t, &fake_tmux(&t, "echo '4242 one@default'"));
     // aaa attributed, bbb empty (pids.current 0), ccc and app-other hold processes and have no pane.
     assert_eq!(v["summary"]["attributed"], 1);
@@ -312,4 +328,79 @@ fn seats_no_socket_directory_reports_unavailable_with_a_reason() {
         .unwrap()
         .contains("no tmux sockets"));
     assert_eq!(v["scopes"].as_array().unwrap().len(), 4);
+}
+
+#[test]
+fn seats_stale_socket_is_skipped_with_zero_tmux_spawns() {
+    let t = Tmp::new("stale");
+    fixture(&t);
+    stale_socket(&t, "default");
+    stale_socket(&t, "old-1");
+    let v = run(&t, &fake_tmux(&t, "echo '4242 one@default'"));
+    assert_eq!(spawns(&t), 0, "no tmux process for a refused socket");
+    assert_eq!(v["tmux"]["counts"]["found"], 2);
+    assert_eq!(v["tmux"]["counts"]["stale"], 2);
+    assert_eq!(v["tmux"]["counts"]["queried"], 0);
+    assert_eq!(v["tmux"]["available"], false);
+    let s = &v["tmux"]["sockets"][0];
+    assert_eq!(s["outcome"], "stale");
+    assert_eq!(s["reason"], "stale socket (connect refused)");
+}
+
+#[test]
+fn seats_listening_socket_is_queried_once() {
+    let t = Tmp::new("live");
+    fixture(&t);
+    let _l = socket(&t, "default");
+    stale_socket(&t, "old-1");
+    let v = run(&t, &fake_tmux(&t, "echo '4242 one@default'"));
+    assert_eq!(spawns(&t), 1, "only the live socket spawns tmux");
+    assert_eq!(v["tmux"]["counts"]["queried"], 1);
+    assert_eq!(v["tmux"]["counts"]["stale"], 1);
+    assert_eq!(v["summary"]["attributed"], 1);
+}
+
+#[test]
+fn seats_socket_cap_probes_default_first_and_counts_the_overflow() {
+    let t = Tmp::new("cap");
+    fixture(&t);
+    let _d = socket(&t, "default");
+    let _a = socket(&t, "aaa");
+    let _z = socket(&t, "zzz");
+    let _y = socket(&t, "yyy");
+    let out = Command::new(env!("CARGO_BIN_EXE_uas"))
+        .args([
+            "seats",
+            "--json",
+            "--uid",
+            "1000",
+            "--max-tmux-sockets",
+            "2",
+        ])
+        .arg("--cgroup-root")
+        .arg(t.0.join("cg"))
+        .arg("--proc-root")
+        .arg(t.0.join("proc"))
+        .arg("--tmux-socket-dir")
+        .arg(t.0.join("tmp"))
+        .arg("--tmux-bin")
+        .arg(fake_tmux(&t, "exit 0"))
+        .output()
+        .expect("run uas");
+    assert!(out.status.success());
+    let v: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    let names: Vec<&str> = v["tmux"]["sockets"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|s| s["socket"].as_str().unwrap())
+        .collect();
+    assert_eq!(names, ["default", "aaa"]);
+    assert_eq!(v["tmux"]["counts"]["found"], 4);
+    assert_eq!(v["tmux"]["counts"]["over_cap"], 2);
+    assert!(v["tmux"]["over_cap_reason"]
+        .as_str()
+        .unwrap()
+        .contains("cap"));
+    assert_eq!(spawns(&t), 2);
 }

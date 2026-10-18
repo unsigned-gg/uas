@@ -4,13 +4,16 @@
 //! tmux is asked for panes with one `list-panes` call. The binary path is an argument, so tests
 //! use a fake. Nothing here writes.
 
+use std::io::ErrorKind;
 use std::os::unix::fs::{FileTypeExt, MetadataExt};
+use std::os::unix::net::UnixStream;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use anyhow::{Context, Result};
 use uas_domain::{
-    Attribution, HeadroomGate, ScopeKind, SeatSample, SeatsDocument, SocketStatus, TmuxStatus,
+    Attribution, HeadroomGate, ScopeKind, SeatSample, SeatsDocument, SocketCounts, SocketOutcome,
+    SocketStatus, TmuxStatus,
 };
 use uas_pool::seats::{read_headroom, read_scopes, scope_of_pid, user_service_dir};
 
@@ -27,6 +30,8 @@ pub struct SeatsConfig {
     pub tmux_socket_base: PathBuf,
     /// The uid whose user service cgroup is read; `None` means the owner of `<proc>/self`.
     pub uid: Option<u32>,
+    /// The most sockets probed in one run; the rest are counted and skipped.
+    pub max_tmux_sockets: usize,
     /// Gate ceiling for the 1-minute load.
     pub max_load_1m: f64,
     /// Gate floor for `MemAvailable`, in GiB.
@@ -58,6 +63,26 @@ pub fn parse_panes(text: &str) -> Vec<Pane> {
         .collect()
 }
 
+/// Skip reason for a socket that refuses a connection.
+const STALE_REASON: &str = "stale socket (connect refused)";
+
+/// Probe whether a server listens on `socket`, without starting tmux.
+///
+/// This connects and drops the stream at once. It sends nothing and writes nothing, so it keeps
+/// REQ-0058-02. A refused or missing socket is stale (REQ-0058-15).
+fn probe(socket: &Path) -> Result<(), (SocketOutcome, String)> {
+    match UnixStream::connect(socket) {
+        Ok(stream) => {
+            drop(stream);
+            Ok(())
+        }
+        Err(e) if matches!(e.kind(), ErrorKind::ConnectionRefused | ErrorKind::NotFound) => {
+            Err((SocketOutcome::Stale, STALE_REASON.to_string()))
+        }
+        Err(e) => Err((SocketOutcome::Skipped, format!("cannot connect: {e}"))),
+    }
+}
+
 /// Ask the tmux server on `socket` for every pane, with argv only. The error text is the
 /// reason the socket was skipped.
 pub fn list_panes(tmux_bin: &Path, socket: &Path) -> Result<Vec<Pane>, String> {
@@ -84,7 +109,14 @@ pub fn find_sockets(base: &Path, uid: u32) -> Vec<PathBuf> {
         .filter(|e| e.file_type().is_ok_and(|t| t.is_socket()))
         .map(|e| e.path())
         .collect();
-    found.sort();
+    // `default` first, then by name, so the cap drops the same sockets every run.
+    found.sort_by_key(|p| {
+        let name = p.file_name().map(|n| n.to_os_string());
+        (
+            name.as_deref() != Some(std::ffi::OsStr::new(DEFAULT_SOCKET)),
+            name,
+        )
+    });
     found
 }
 
@@ -120,33 +152,54 @@ pub fn build_document(cfg: &SeatsConfig) -> Result<SeatsDocument> {
     let dir = user_service_dir(&cfg.cgroup_root, uid);
     let mut scopes = read_scopes(&dir)?;
     let sockets = find_sockets(&cfg.tmux_socket_base, uid);
+    let mut counts = SocketCounts {
+        found: sockets.len(),
+        ..SocketCounts::default()
+    };
+    counts.over_cap = sockets.len().saturating_sub(cfg.max_tmux_sockets);
     let mut statuses = Vec::new();
-    for socket in &sockets {
+    for socket in sockets.iter().take(cfg.max_tmux_sockets) {
         let name = socket
             .file_name()
             .map_or_else(String::new, |n| n.to_string_lossy().into_owned());
-        match list_panes(&cfg.tmux_bin, socket) {
+        let result = probe(socket).and_then(|()| {
+            list_panes(&cfg.tmux_bin, socket).map_err(|r| (SocketOutcome::Skipped, r))
+        });
+        match result {
             Ok(panes) => {
                 let label = (name != DEFAULT_SOCKET).then_some(name.as_str());
                 attribute(&mut scopes, &panes, label, &cfg.proc_root);
+                counts.queried += 1;
                 statuses.push(SocketStatus {
                     socket: name,
-                    queried: true,
+                    outcome: SocketOutcome::Queried,
                     reason: None,
                 });
             }
-            Err(reason) => statuses.push(SocketStatus {
-                socket: name,
-                queried: false,
-                reason: Some(reason),
-            }),
+            Err((outcome, reason)) => {
+                match outcome {
+                    SocketOutcome::Stale => counts.stale += 1,
+                    _ => counts.other_skips += 1,
+                }
+                statuses.push(SocketStatus {
+                    socket: name,
+                    outcome,
+                    reason: Some(reason),
+                });
+            }
         }
     }
+    let over_cap_reason = (counts.over_cap > 0).then(|| {
+        format!(
+            "{} sockets not probed: over the cap of {} (--max-tmux-sockets)",
+            counts.over_cap, cfg.max_tmux_sockets
+        )
+    });
     for s in &mut scopes {
         s.attributions.sort();
         s.attributions.dedup();
     }
-    let available = statuses.iter().any(|s| s.queried);
+    let available = counts.queried > 0;
     let reason = (!available).then(|| {
         if statuses.is_empty() {
             format!(
@@ -154,13 +207,15 @@ pub fn build_document(cfg: &SeatsConfig) -> Result<SeatsDocument> {
                 cfg.tmux_socket_base.join(format!("tmux-{uid}")).display()
             )
         } else {
-            "every tmux socket was skipped".to_string()
+            "no live tmux server answered".to_string()
         }
     });
     let tmux = TmuxStatus {
         available,
         reason,
         sockets: statuses,
+        counts,
+        over_cap_reason,
     };
     // A fractional GiB flag value rounds down to the byte.
     let min_bytes = (cfg.min_mem_gib * 1024.0 * 1024.0 * 1024.0) as u64;
@@ -191,18 +246,25 @@ pub fn render_text(doc: &SeatsDocument) -> String {
         opt(h.mem_available_bytes),
         h.min_mem_available_bytes,
     );
-    let queried = doc.tmux.sockets.iter().filter(|s| s.queried).count();
+    let c = &doc.tmux.counts;
     out.push_str(&format!(
-        "tmux sockets: {} found, {queried} queried, {} skipped\n",
-        doc.tmux.sockets.len(),
-        doc.tmux.sockets.len() - queried,
+        "tmux sockets: {} found, {} live and queried, {} stale, {} other skips, {} over the cap\n",
+        c.found, c.queried, c.stale, c.other_skips, c.over_cap,
     ));
-    for s in doc.tmux.sockets.iter().filter(|s| !s.queried) {
+    for s in doc
+        .tmux
+        .sockets
+        .iter()
+        .filter(|s| s.outcome == SocketOutcome::Skipped)
+    {
         out.push_str(&format!(
             "  skipped {}: {}\n",
             s.socket,
             s.reason.as_deref().unwrap_or("unknown")
         ));
+    }
+    if let Some(reason) = &doc.tmux.over_cap_reason {
+        out.push_str(&format!("  {reason}\n"));
     }
     if let Some(reason) = &doc.tmux.reason {
         out.push_str(&format!("tmux: unavailable ({reason})\n"));

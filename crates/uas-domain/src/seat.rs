@@ -211,10 +211,37 @@ impl HeadroomGate {
 pub struct SocketStatus {
     /// The socket file name.
     pub socket: String,
-    /// True when `list-panes` ran and succeeded.
-    pub queried: bool,
-    /// Why the socket was skipped, when `queried` is false.
+    /// What happened to the socket.
+    pub outcome: SocketOutcome,
+    /// Why the socket was skipped, when it was.
     pub reason: Option<String>,
+}
+
+/// What happened to one probed socket (REQ-0058-13, REQ-0058-15).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SocketOutcome {
+    /// The server accepted a connection and `list-panes` succeeded.
+    Queried,
+    /// The socket refused the connection: no server behind it, and no tmux was started.
+    Stale,
+    /// Any other skip: a connect error, or `list-panes` failing on a live socket.
+    Skipped,
+}
+
+/// Socket counts for the summary.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SocketCounts {
+    /// Socket entries found in the socket directory.
+    pub found: usize,
+    /// Live sockets whose `list-panes` succeeded.
+    pub queried: usize,
+    /// Sockets that refused the connection.
+    pub stale: usize,
+    /// Other skips.
+    pub other_skips: usize,
+    /// Sockets not probed because the cap was reached.
+    pub over_cap: usize,
 }
 
 /// Whether tmux could be asked for panes (REQ-0058-09, REQ-0058-13).
@@ -224,8 +251,12 @@ pub struct TmuxStatus {
     pub available: bool,
     /// Why not, when `available` is false.
     pub reason: Option<String>,
-    /// Every socket found, queried or skipped.
+    /// Every socket probed, with its outcome. Sockets over the cap are only counted.
     pub sockets: Vec<SocketStatus>,
+    /// Counts over all sockets found.
+    pub counts: SocketCounts,
+    /// Why `counts.over_cap` sockets were not probed, when any were not.
+    pub over_cap_reason: Option<String>,
 }
 
 /// Counts over the scopes.
@@ -328,6 +359,8 @@ mod tests {
                 available: false,
                 reason: Some("no server".into()),
                 sockets: Vec::new(),
+                counts: SocketCounts::default(),
+                over_cap_reason: None,
             },
             vec![sample],
         );

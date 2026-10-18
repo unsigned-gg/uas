@@ -52,6 +52,6 @@ pub use policy::{PolicyTier, SomaClassification};
 pub use reconcile::{LostSlot, ReconcileReport};
 pub use seat::{
     Attribution, CpuMax, HeadroomGate, Limit, ScopeKind, SeatSample, SeatSummary, SeatsDocument,
-    SocketStatus, TmuxStatus, SEATS_SCHEMA,
+    SocketCounts, SocketOutcome, SocketStatus, TmuxStatus, SEATS_SCHEMA,
 };
 pub use slot::{Slot, SlotId, SlotState, WorktreeRef};

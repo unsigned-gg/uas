@@ -64,6 +64,9 @@ enum Command {
         /// The directory holding `tmux-<uid>/` with the tmux server sockets.
         #[arg(long, env = "TMUX_TMPDIR", default_value = "/tmp")]
         tmux_socket_dir: std::path::PathBuf,
+        /// The most tmux sockets to probe; the rest are counted and skipped.
+        #[arg(long, default_value_t = 256)]
+        max_tmux_sockets: usize,
         /// Read this uid's user service cgroup; default is the caller.
         #[arg(long)]
         uid: Option<u32>,
@@ -1177,6 +1180,7 @@ fn main() -> Result<()> {
             proc_root,
             tmux_bin,
             tmux_socket_dir,
+            max_tmux_sockets,
             uid,
             max_load,
             min_mem_gib,
@@ -1186,6 +1190,7 @@ fn main() -> Result<()> {
                 proc_root,
                 tmux_bin,
                 tmux_socket_base: tmux_socket_dir,
+                max_tmux_sockets,
                 uid,
                 max_load_1m: max_load,
                 min_mem_gib,
