@@ -53,7 +53,7 @@ libc = "0.2.190"
 # SHA-256 for the run_hash transcript digest (spec 0014), the committed BPF object check in uas-ebpf build.rs, and the uas-router prefix hash and HRW weight (spec 0017).
 sha2 = "0.11.0"
 # Agent Client Protocol wire types for uas-acp (spec 0016, amendment A1). The crate pins schema 1.9.1; ACP is JSON-RPC 2.0 over stdio.
-agent-client-protocol = "2.2.0"
+agent-client-protocol = "3.3.0"
 # Axum web service for the operator deck (spec 0018, CER-2733). `serve` needs http1 and tokio;
 # `ws` waits for the WebSocket slice (D2). Madstack pin, spec 0004.
 axum = { version = "0.8.9", default-features = false, features = ["http1", "tokio"] }
