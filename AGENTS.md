@@ -31,7 +31,7 @@ A crate depends only on crates in lower layers. Add a Cargo dependency only when
 
 ## Rules that bind
 
-1. **LeanSpec first.** A new concept or an architecture change starts as a spec in `specs/`. Run `make spec-check`. It must pass before you open the PR.
+1. **LeanSpec first.** A new concept or an architecture change starts as a spec in `specs/`. A `feat` or `fix` PR creates or updates a spec, or names one in its body. Run `make spec-check`. It must pass before you open the PR. The `lsc` PR job runs `lsc check specs/` and the spec-link check; both warn until the backfill is done.
 2. **Use `-j 2` on shared workstations.** The Makefile sets `JOBS ?= 2` and passes it to every cargo call. Do not raise it on a shared host. CI is the one exception: it calls make with `JOBS=10`. Spec 0002 gives the reason.
 3. **Evidence tiers.** Label every claim `verified`, `reported`, `heuristic` or `asserted`. Only `verified` satisfies a gate. A `verified` claim names the command that proved it.
 4. **Branch model.** Work happens on feature branches cut from `development`. A PR into `development` merges on green CI. `main` is the release branch. Spec 0003 has the details.

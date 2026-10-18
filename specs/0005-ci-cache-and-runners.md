@@ -87,6 +87,7 @@ Measured 2026-10-08:
 | `release.yml` | release-plz `release` on push to `main`. |
 | `audit.yml` | Weekly `cargo audit`. |
 | `labeler.yml` | Labels PRs by path. |
+| `lsc.yml` | `lsc`: the estate LeanSpec check on pull requests, warn mode. It calls the reusable `unsigned-gg/lsc` job; spec 0004 pins it. |
 
 Required checks are `secrets`, `rust`, `cargo-deny` and `hygiene`. Spec 0003
 holds the protection table.
