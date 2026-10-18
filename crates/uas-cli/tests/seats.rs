@@ -342,9 +342,7 @@ fn seats_stale_socket_is_skipped_with_zero_tmux_spawns() {
     assert_eq!(v["tmux"]["counts"]["stale"], 2);
     assert_eq!(v["tmux"]["counts"]["queried"], 0);
     assert_eq!(v["tmux"]["available"], false);
-    let s = &v["tmux"]["sockets"][0];
-    assert_eq!(s["outcome"], "stale");
-    assert_eq!(s["reason"], "stale socket (connect refused)");
+    assert!(v["tmux"]["sockets"].as_array().unwrap().is_empty());
 }
 
 #[test]
@@ -360,14 +358,7 @@ fn seats_listening_socket_is_queried_once() {
     assert_eq!(v["summary"]["attributed"], 1);
 }
 
-#[test]
-fn seats_socket_cap_probes_default_first_and_counts_the_overflow() {
-    let t = Tmp::new("cap");
-    fixture(&t);
-    let _d = socket(&t, "default");
-    let _a = socket(&t, "aaa");
-    let _z = socket(&t, "zzz");
-    let _y = socket(&t, "yyy");
+fn run_capped(t: &Tmp, cap: &str) -> serde_json::Value {
     let out = Command::new(env!("CARGO_BIN_EXE_uas"))
         .args([
             "seats",
@@ -375,7 +366,7 @@ fn seats_socket_cap_probes_default_first_and_counts_the_overflow() {
             "--uid",
             "1000",
             "--max-tmux-sockets",
-            "2",
+            cap,
         ])
         .arg("--cgroup-root")
         .arg(t.0.join("cg"))
@@ -384,23 +375,61 @@ fn seats_socket_cap_probes_default_first_and_counts_the_overflow() {
         .arg("--tmux-socket-dir")
         .arg(t.0.join("tmp"))
         .arg("--tmux-bin")
-        .arg(fake_tmux(&t, "exit 0"))
+        .arg(fake_tmux(t, "exit 0"))
         .output()
         .expect("run uas");
     assert!(out.status.success());
-    let v: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    serde_json::from_slice(&out.stdout).unwrap()
+}
+
+#[test]
+fn seats_every_socket_is_probed_even_past_the_cap_and_every_live_one_is_queried() {
+    let t = Tmp::new("probeall");
+    fixture(&t);
+    // Five stale sockets that sort before the live ones, and a cap of 3 tmux queries.
+    for i in 0..5 {
+        stale_socket(&t, &format!("a-stale-{i}"));
+    }
+    let _d = socket(&t, "default");
+    let _l1 = socket(&t, "zz-live-1");
+    let _l2 = socket(&t, "zz-live-2");
+    let v = run_capped(&t, "3");
+    let c = &v["tmux"]["counts"];
+    assert_eq!(c["found"], 8);
+    assert_eq!(c["stale"], 5);
+    assert_eq!(c["live"], 3);
+    assert_eq!(c["queried"], 3);
+    assert_eq!(c["over_cap"], 0);
+    assert_eq!(spawns(&t), 3);
+}
+
+#[test]
+fn seats_live_sockets_over_the_cap_are_counted_with_no_extra_spawn() {
+    let t = Tmp::new("cap");
+    fixture(&t);
+    let _d = socket(&t, "default");
+    let _a = socket(&t, "aaa");
+    let _z = socket(&t, "zzz");
+    let _y = socket(&t, "yyy");
+    stale_socket(&t, "bbb-stale");
+    let v = run_capped(&t, "2");
     let names: Vec<&str> = v["tmux"]["sockets"]
         .as_array()
         .unwrap()
         .iter()
         .map(|s| s["socket"].as_str().unwrap())
         .collect();
-    assert_eq!(names, ["default", "aaa"]);
-    assert_eq!(v["tmux"]["counts"]["found"], 4);
-    assert_eq!(v["tmux"]["counts"]["over_cap"], 2);
+    assert_eq!(names, ["default", "aaa"], "default first, then sorted");
+    let c = &v["tmux"]["counts"];
+    assert_eq!(
+        (c["found"].as_u64(), c["live"].as_u64()),
+        (Some(5), Some(4))
+    );
+    assert_eq!(c["stale"], 1);
+    assert_eq!(c["over_cap"], 2);
     assert!(v["tmux"]["over_cap_reason"]
         .as_str()
         .unwrap()
         .contains("cap"));
-    assert_eq!(spawns(&t), 2);
+    assert_eq!(spawns(&t), 2, "the cap bounds tmux spawns");
 }

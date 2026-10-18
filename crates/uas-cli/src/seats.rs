@@ -30,7 +30,7 @@ pub struct SeatsConfig {
     pub tmux_socket_base: PathBuf,
     /// The uid whose user service cgroup is read; `None` means the owner of `<proc>/self`.
     pub uid: Option<u32>,
-    /// The most sockets probed in one run; the rest are counted and skipped.
+    /// The most live sockets queried with tmux in one run; the rest are counted and skipped.
     pub max_tmux_sockets: usize,
     /// Gate ceiling for the 1-minute load.
     pub max_load_1m: f64,
@@ -156,16 +156,33 @@ pub fn build_document(cfg: &SeatsConfig) -> Result<SeatsDocument> {
         found: sockets.len(),
         ..SocketCounts::default()
     };
-    counts.over_cap = sockets.len().saturating_sub(cfg.max_tmux_sockets);
     let mut statuses = Vec::new();
-    for socket in sockets.iter().take(cfg.max_tmux_sockets) {
+    let mut spawned = 0;
+    // Every socket is probed: a connect starts no process. Only a tmux spawn is capped.
+    for socket in &sockets {
         let name = socket
             .file_name()
             .map_or_else(String::new, |n| n.to_string_lossy().into_owned());
-        let result = probe(socket).and_then(|()| {
-            list_panes(&cfg.tmux_bin, socket).map_err(|r| (SocketOutcome::Skipped, r))
-        });
-        match result {
+        if let Err((outcome, reason)) = probe(socket) {
+            if outcome == SocketOutcome::Stale {
+                counts.stale += 1;
+            } else {
+                counts.other_skips += 1;
+                statuses.push(SocketStatus {
+                    socket: name,
+                    outcome,
+                    reason: Some(reason),
+                });
+            }
+            continue;
+        }
+        counts.live += 1;
+        if spawned >= cfg.max_tmux_sockets {
+            counts.over_cap += 1;
+            continue;
+        }
+        spawned += 1;
+        match list_panes(&cfg.tmux_bin, socket) {
             Ok(panes) => {
                 let label = (name != DEFAULT_SOCKET).then_some(name.as_str());
                 attribute(&mut scopes, &panes, label, &cfg.proc_root);
@@ -176,14 +193,11 @@ pub fn build_document(cfg: &SeatsConfig) -> Result<SeatsDocument> {
                     reason: None,
                 });
             }
-            Err((outcome, reason)) => {
-                match outcome {
-                    SocketOutcome::Stale => counts.stale += 1,
-                    _ => counts.other_skips += 1,
-                }
+            Err(reason) => {
+                counts.other_skips += 1;
                 statuses.push(SocketStatus {
                     socket: name,
-                    outcome,
+                    outcome: SocketOutcome::Skipped,
                     reason: Some(reason),
                 });
             }
@@ -191,7 +205,7 @@ pub fn build_document(cfg: &SeatsConfig) -> Result<SeatsDocument> {
     }
     let over_cap_reason = (counts.over_cap > 0).then(|| {
         format!(
-            "{} sockets not probed: over the cap of {} (--max-tmux-sockets)",
+            "{} live sockets not queried: over the cap of {} tmux queries (--max-tmux-sockets)",
             counts.over_cap, cfg.max_tmux_sockets
         )
     });
@@ -248,8 +262,8 @@ pub fn render_text(doc: &SeatsDocument) -> String {
     );
     let c = &doc.tmux.counts;
     out.push_str(&format!(
-        "tmux sockets: {} found, {} live and queried, {} stale, {} other skips, {} over the cap\n",
-        c.found, c.queried, c.stale, c.other_skips, c.over_cap,
+        "tmux sockets: {} found, {} live, {} queried, {} stale, {} other skips, {} live over the cap\n",
+        c.found, c.live, c.queried, c.stale, c.other_skips, c.over_cap,
     ));
     for s in doc
         .tmux

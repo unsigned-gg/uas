@@ -64,8 +64,8 @@ enum Command {
         /// The directory holding `tmux-<uid>/` with the tmux server sockets.
         #[arg(long, env = "TMUX_TMPDIR", default_value = "/tmp")]
         tmux_socket_dir: std::path::PathBuf,
-        /// The most tmux sockets to probe; the rest are counted and skipped.
-        #[arg(long, default_value_t = 256)]
+        /// The most live tmux sockets to query with tmux; the rest are counted and skipped.
+        #[arg(long, default_value_t = 64)]
         max_tmux_sockets: usize,
         /// Read this uid's user service cgroup; default is the caller.
         #[arg(long)]

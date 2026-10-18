@@ -234,13 +234,15 @@ pub enum SocketOutcome {
 pub struct SocketCounts {
     /// Socket entries found in the socket directory.
     pub found: usize,
+    /// Sockets that accepted a connection.
+    pub live: usize,
     /// Live sockets whose `list-panes` succeeded.
     pub queried: usize,
     /// Sockets that refused the connection.
     pub stale: usize,
     /// Other skips.
     pub other_skips: usize,
-    /// Sockets not probed because the cap was reached.
+    /// Live sockets not queried because the tmux cap was reached.
     pub over_cap: usize,
 }
 
@@ -251,11 +253,11 @@ pub struct TmuxStatus {
     pub available: bool,
     /// Why not, when `available` is false.
     pub reason: Option<String>,
-    /// Every socket probed, with its outcome. Sockets over the cap are only counted.
+    /// Every live socket queried or skipped, with its outcome. Stale and over-cap sockets are only counted.
     pub sockets: Vec<SocketStatus>,
     /// Counts over all sockets found.
     pub counts: SocketCounts,
-    /// Why `counts.over_cap` sockets were not probed, when any were not.
+    /// Why `counts.over_cap` live sockets were not queried, when any were not.
     pub over_cap_reason: Option<String>,
 }
 
