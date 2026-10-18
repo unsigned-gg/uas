@@ -52,7 +52,7 @@ make spec-check
 ## Phase 4: Implement
 
 1. Set `status: in-progress`.
-2. Cut a branch from `development`: `git switch -c feat/<slug> origin/development`.
+2. Cut a branch from `main`: `git switch -c feat/<slug> origin/main`.
 3. Do one plan item at a time. Tick the item in the spec as you finish it.
 4. Commit with a signed Conventional Commit. One logical change per commit.
 5. Add one line under `## [Unreleased]` in `CHANGELOG.md` if the change is user-visible.
@@ -70,7 +70,7 @@ make smoke
 
 3. Label your evidence. Only `verified` evidence satisfies a gate. See spec 0002.
 4. Set `status: complete`. Update the row in `specs/README.md`.
-5. Open the PR into `development`. Put the commands and results in the PR's Verified section.
+5. Open the PR into `main`. Put the commands and results in the PR's Verified section.
 
 ## Do not
 

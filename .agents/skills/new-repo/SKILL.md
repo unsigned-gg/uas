@@ -15,7 +15,7 @@ The rename logic is in the `Makefile` target `new-repo`. There is one implementa
 ## Path A: GitHub template
 
 1. On GitHub, open `cerebral-work/rust-monorepo-template` and use "Use this template". Create the repo private.
-2. Clone it. Check out `development`.
+2. Clone it. Check out `main`.
 3. Run:
 
 ```bash
@@ -67,7 +67,7 @@ make smoke
 ## Operator steps
 
 These need the operator. Prepare them and stop:
-- Branch protection on `main` and `development`. Spec 0003 has the table.
+- Branch protection on `main`. Spec 0003 has the table.
 - Required checks: `secrets`, `rust`, `cargo-deny`, `hygiene`.
 - Secrets for CI, such as the sccache bucket.
 - A registry row in `cerebral-work/terrarium`, if the repo is a registered node.

@@ -14,8 +14,8 @@ model = "sonnet"
 command = "make check JOBS=2 && make hygiene JOBS=2"
 
 [pr]
-# Feature PRs target development (specs/0003). The blackwall default is main.
-base = "development"
+# Feature PRs target main (specs/0003).
+base = "main"
 
 [merge]
 # blackwall 1.2.0 merge-gate squash-merges with no head pin. This repo merges

@@ -27,14 +27,14 @@ and the integrator, who alone lands.
 ## Tools and policy
 
 1. CI and PR state:
-   `gh pr list --repo unsigned-gg/uas --base development`, `gh pr checks <n>`,
+   `gh pr list --repo unsigned-gg/uas --base main`, `gh pr checks <n>`,
    `gh pr view <n> --json mergeable,headRefOid`, `gh run list --workflow ci.yml --limit 10`.
    On red, give the failing job's name and the last 30 lines of its log
    (`gh run view <id> --log-failed | tail -n 30`). A PR that is CONFLICTING gets no new checks:
    report `mergeable` before you call a runner stuck.
 2. Repo state, with no ref change in the shared checkout:
-   `git -C <shared-checkout> ls-remote origin refs/heads/development`
-   gives the live head. `git -C <that path> log --oneline -10 origin/development` and
+   `git -C <shared-checkout> ls-remote origin refs/heads/main`
+   gives the live head. `git -C <that path> log --oneline -10 origin/main` and
    `git -C <that path> worktree list` read local state; the local ref can lag, so compare its head
    with the `ls-remote` SHA and say when they differ. Open blackwall runs: `blackwall list` in the
    checkout the foreman names. Run only these read commands there.

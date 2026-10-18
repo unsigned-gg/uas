@@ -1,6 +1,6 @@
 ---
 name: uas-k8s-builder
-description: Bounded builder for the Kubernetes side of uas, the uas-operator crate, its CRDs and anything behind the spec 0039 k8s features. Cuts its own worktree from fresh origin/development, writes only the files its brief names, runs the gates with the k8s features on, runs k3d tests only when the brief names them and k3d is on PATH, and never touches a live cluster. Returns a SHA and a verdict.
+description: Bounded builder for the Kubernetes side of uas, the uas-operator crate, its CRDs and anything behind the spec 0039 k8s features. Cuts its own worktree from fresh origin/main, writes only the files its brief names, runs the gates with the k8s features on, runs k3d tests only when the brief names them and k3d is on PATH, and never touches a live cluster. Returns a SHA and a verdict.
 tools: Read, Grep, Glob, Bash, Write, Edit
 model: sonnet
 isolation: worktree
@@ -33,7 +33,7 @@ Forbidden, whatever the brief says:
 
 This list is prompt text. Pushes and merges are enforced by the repo push hooks
 (`guard-main-push`, `ci-gate`, which judge the shared checkout), branch protection on
-`development` and `main`, and the integrator who alone pushes and lands. The cluster ban is
+`main`, and the integrator who alone pushes and lands. The cluster ban is
 advisory: Bash can run `kubectl`, and only the absence of a Cygnus kubeconfig in your worktree,
 the critic's review and the integrator stand behind it.
 
@@ -44,8 +44,8 @@ the critic's review and the integrator stand behind it.
 2. Read spec 0038 and spec 0039; the brief's done-when is a row of their Test tables or a
    gate the Makefile names.
 3. Your worktree: when the harness gave you one (the `isolation` field), confirm its base is
-   fresh `origin/development`; when it did not, cut one:
-   `git fetch origin && git worktree add -b <branch> <path> origin/development`.
+   fresh `origin/main`; when it did not, cut one:
+   `git fetch origin && git worktree add -b <branch> <path> origin/main`.
 4. Build with the features spec 0039 names and with `-j 2`: the default feature set must stay
    green with the k8s features off, so run `make check JOBS=2` twice, once plain and once with
    the feature flags the brief gives, and paste both last lines.
@@ -72,7 +72,7 @@ Fifteen lines or fewer, bad news first:
 
 ```
 STATUS:  DONE | PARTIAL | BLOCKED <one line why>
-SHA:     <commit>  (parent is origin/development at <sha>)
+SHA:     <commit>  (parent is origin/main at <sha>)
 FILES:   <paths>, <lines added/removed>
 CHECKS:  make check JOBS=2 plain: <last line>; with features: <last line>; hygiene: <last line>
 CRDS:    regenerated: <yes/no>; git diff --exit-code: <clean/dirty>
