@@ -68,7 +68,7 @@ State as of 2026-10-18, read from `gh api repos/unsigned-gg/uas/branches/<branch
 | PR required | not configured | not configured |
 | Required approvals | not configured | not configured |
 | Admins included (`enforce_admins`) | yes | yes |
-| Signed commits required | yes | yes |
+| Signed commits required (`required_signatures`) | no, not configured (read back 2026-10-18); signing is policy, AGENTS.md rule 5 | no, not configured (read back 2026-10-18) |
 | Required check `secrets` | yes | yes |
 | Required check `rust / cargo` | yes | yes |
 | Required check `cargo-deny` | yes | yes |
