@@ -120,9 +120,9 @@ Wave 1: inventory (REQ-01 to REQ-10, REQ-13 to REQ-15).
 
 Wave 2: dry-run plan (REQ-11, REQ-12 and REQ-16 to REQ-18).
 
-- [ ] Add the size newtype, `SeatLimitPolicy` (with its typed parse errors and the REQ-0058-12 check), `SeatLimitPlan` and the `uas.seats.plan.v1` document to `uas-domain`, pure, with unit tests.
-- [ ] Add `uas seats plan --policy <file.toml> [--json]` to `uas-cli`, reusing the wave 1 inventory, with the no-apply statement, the peak-over-high mark, the unknown-session report and the seat ceiling.
-- [ ] Add fixture tests for REQ-11, REQ-12 and REQ-16 to REQ-18, and put the plan modules under the source-scan bans.
+- [x] Add the size newtype, `SeatLimitPolicy` (with its typed parse errors and the REQ-0058-12 check), `SeatLimitPlan` and the `uas.seats.plan.v1` document to `uas-domain`, pure, with unit tests.
+- [x] Add `uas seats plan --policy <file.toml> [--json]` to `uas-cli`, reusing the wave 1 inventory, with the no-apply statement, the peak-over-high mark, the unknown-session report and the seat ceiling.
+- [x] Add fixture tests for REQ-11, REQ-12 and REQ-16 to REQ-18, and put the plan modules under the source-scan bans.
 - [ ] Sample a normal week of inventory on ceres before any limit value is proposed (D7).
 
 ## Test

@@ -489,3 +489,193 @@ fn seats_live_sockets_over_the_cap_are_counted_with_no_extra_spawn() {
         .contains("cap"));
     assert_eq!(spawns(&t), 2, "the cap bounds tmux spawns");
 }
+
+const GIB: u64 = 1 << 30;
+
+fn plan(t: &Tmp, policy: &str, json: bool) -> std::process::Output {
+    let policy_path = t.0.join("policy.toml");
+    fs::write(&policy_path, policy).unwrap();
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_uas"));
+    cmd.args(["seats", "plan", "--uid", "1000", "--policy"])
+        .arg(&policy_path)
+        .arg("--cgroup-root")
+        .arg(t.0.join("cg"))
+        .arg("--proc-root")
+        .arg(t.0.join("proc"))
+        .arg("--tmux-socket-dir")
+        .arg(t.0.join("tmp"))
+        .arg("--tmux-bin")
+        .arg(fake_tmux(
+            t,
+            "echo '4242 one@default'; echo '5001 two@default'",
+        ));
+    if json {
+        cmd.arg("--json");
+    }
+    cmd.output().expect("run uas")
+}
+
+/// Two attributed seats: `one@default` (aaa, peak 5 GiB) and `two@default` (ccc, peak 1 GiB).
+fn plan_fixture(t: &Tmp) -> UnixListener {
+    fixture(t);
+    let svc = t.0.join("cg/user.slice/user-1000.slice/user@1000.service");
+    write(
+        &svc.join("tmux-spawn-aaa.scope/memory.peak"),
+        &format!("{}\n", 5 * GIB),
+    );
+    write(
+        &svc.join("tmux-spawn-ccc.scope/memory.peak"),
+        &format!("{GIB}\n"),
+    );
+    socket(t, "default")
+}
+
+fn plan_json(t: &Tmp, policy: &str) -> serde_json::Value {
+    let out = plan(t, policy, true);
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    serde_json::from_slice(&out.stdout).expect("json")
+}
+
+fn planned<'a>(v: &'a serde_json::Value, scope: &str) -> &'a serde_json::Value {
+    v["seats"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|s| s["scope"] == scope)
+        .unwrap_or_else(|| panic!("{scope} not planned"))
+}
+
+#[test]
+fn seats_plan_marks_a_peak_over_memory_high_and_states_nothing_was_applied() {
+    let t = Tmp::new("plan-mark");
+    let _l = plan_fixture(&t);
+    let out = plan(&t, "[default]\nmemory_high = \"4G\"\n", false);
+    assert!(out.status.success());
+    let text = String::from_utf8_lossy(&out.stdout);
+    assert!(text.contains("applied nothing"), "{text}");
+    assert!(text.contains("seat launch"));
+    assert!(text.contains("PEAK OVER MemoryHigh"));
+    assert!(text.contains("MemoryHigh=4G"));
+    assert!(text.contains("seats: 2, peak over MemoryHigh: 1"), "{text}");
+    let v = plan_json(&t, "[default]\nmemory_high = \"4G\"\n");
+    assert_eq!(v["schema"], "uas.seats.plan.v1");
+    assert!(v["notice"].as_str().unwrap().contains("applied nothing"));
+    assert_eq!(v["marked_over_high"], 1);
+    let aaa = planned(&v, "tmux-spawn-aaa.scope");
+    assert_eq!(aaa["peak_over_high"], true);
+    assert_eq!(aaa["memory_peak"], 5 * GIB);
+    assert_eq!(aaa["memory_current"], 1_048_576);
+    assert_eq!(aaa["proposed"]["memory_high"], 4 * GIB);
+    assert_eq!(planned(&v, "tmux-spawn-ccc.scope")["peak_over_high"], false);
+}
+
+#[test]
+fn seats_plan_per_seat_override_beats_the_default() {
+    let t = Tmp::new("plan-override");
+    let _l = plan_fixture(&t);
+    let v = plan_json(
+        &t,
+        "[default]\nmemory_high = \"4G\"\ntasks_max = 500\n\n[[seat]]\nsession = \"one@default\"\nmemory_high = \"8G\"\n",
+    );
+    let aaa = planned(&v, "tmux-spawn-aaa.scope");
+    assert_eq!(aaa["proposed"]["memory_high"], 8 * GIB);
+    assert_eq!(aaa["proposed"]["tasks_max"], 500);
+    assert_eq!(
+        aaa["peak_over_high"], false,
+        "5 GiB is under the 8 GiB override"
+    );
+    assert_eq!(
+        planned(&v, "tmux-spawn-ccc.scope")["proposed"]["memory_high"],
+        4 * GIB
+    );
+    assert_eq!(v["marked_over_high"], 0);
+}
+
+#[test]
+fn seats_plan_reports_an_unknown_session() {
+    let t = Tmp::new("plan-unknown");
+    let _l = plan_fixture(&t);
+    let policy = "[[seat]]\nsession = \"nobody@default\"\nmemory_high = \"1G\"\n";
+    let v = plan_json(&t, policy);
+    assert_eq!(v["unknown_sessions"][0], "nobody@default");
+    let text = plan(&t, policy, false).stdout;
+    assert!(String::from_utf8_lossy(&text).contains("unknown session in policy: nobody@default"));
+}
+
+#[test]
+fn seats_plan_reports_the_seat_ceiling() {
+    let t = Tmp::new("plan-ceiling");
+    let _l = plan_fixture(&t);
+    let v = plan_json(&t, "[host]\nmax_attributed_seats = 1\n");
+    assert_eq!(v["ceiling"]["attributed"], 2);
+    assert_eq!(v["ceiling"]["max_attributed_seats"], 1);
+    assert_eq!(v["ceiling"]["over"], true);
+    let v = plan_json(&t, "[host]\nmax_attributed_seats = 2\n");
+    assert_eq!(v["ceiling"]["over"], false);
+    let text = plan(&t, "[host]\nmax_attributed_seats = 1\n", false).stdout;
+    assert!(String::from_utf8_lossy(&text).contains("2 attributed of 1 allowed: OVER"));
+    assert!(plan_json(&t, "")["ceiling"].is_null());
+}
+
+#[test]
+fn seats_plan_host_table_overrides_the_headroom_gate() {
+    let t = Tmp::new("plan-host");
+    let _l = plan_fixture(&t);
+    assert_eq!(plan_json(&t, "")["headroom"]["passes"], true);
+    let v = plan_json(&t, "[host]\nmax_load_1m = 0.5\n");
+    assert_eq!(v["headroom"]["passes"], false);
+}
+
+#[test]
+fn seats_plan_rejects_memory_max_without_a_high_at_or_below_it() {
+    let t = Tmp::new("plan-reject");
+    let _l = plan_fixture(&t);
+    for bad in [
+        "[default]\nmemory_max = \"4G\"\n",
+        "[default]\nmemory_high = \"8G\"\nmemory_max = \"4G\"\n",
+        "[[seat]]\nsession = \"x\"\nmemory_max = \"4G\"\n",
+    ] {
+        let out = plan(&t, bad, true);
+        assert!(!out.status.success(), "accepted: {bad}");
+        assert!(
+            out.stdout.is_empty(),
+            "printed a plan for a rejected policy"
+        );
+        assert!(String::from_utf8_lossy(&out.stderr).contains("memory_max"));
+    }
+    assert!(plan(
+        &t,
+        "[default]\nmemory_high = \"2G\"\nmemory_max = \"4G\"\n",
+        true
+    )
+    .status
+    .success());
+}
+
+#[test]
+fn seats_plan_rejects_garbage_sizes_and_unknown_keys() {
+    let t = Tmp::new("plan-garbage");
+    let _l = plan_fixture(&t);
+    for bad in [
+        "[default]\nmemory_high = \"lots\"\n",
+        "[default]\nmemory_high = \"4GB\"\n",
+        "[default]\nmemry_high = \"4G\"\n",
+        "[default]\ncpu_weight = 0\n",
+    ] {
+        assert!(!plan(&t, bad, true).status.success(), "accepted: {bad}");
+    }
+}
+
+#[test]
+fn seats_plan_source_has_no_write_and_no_environ() {
+    assert_eq!(
+        violations(include_str!("../src/plan.rs")),
+        Vec::<String>::new()
+    );
+    let planted = format!("{}\nfile.write_all(b\"\")", include_str!("../src/plan.rs"));
+    assert!(!violations(&planted).is_empty());
+}
