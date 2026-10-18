@@ -6,4 +6,4 @@ projects:
 
 vcs:
   client: 'git'
-  defaultBranch: 'development'
+  defaultBranch: 'main'

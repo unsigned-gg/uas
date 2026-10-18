@@ -1,0 +1,10 @@
+apiVersion: v2
+name: uas
+description: Unified Agent Substrate (UAS) operator and node daemon chart for Cygnus
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+maintainers:
+  - name: cerebral-work
+annotations:
+  io.unsigned.managed-by: argocd

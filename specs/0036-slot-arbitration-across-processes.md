@@ -1,5 +1,5 @@
 ---
-status: planned
+status: in-progress
 created: 2026-10-10
 tags: [pool, slots, arbitration, concurrency, flock, phase-3]
 priority: high
@@ -9,7 +9,7 @@ depends_on: [0001-cas-architecture-and-crate-layout, 0002-verification-gates-and
 
 # 0036-slot-arbitration-across-processes
 
-> **Status**: planned, **Priority**: high, **Created**: 2026-10-10
+> **Status**: in-progress, **Priority**: high, **Created**: 2026-10-10
 
 ## Overview
 
@@ -63,12 +63,14 @@ Capacity is a host property. Total worker slots across all processes on the host
 
 ## Plan
 
-- [ ] Define pure host capacity types (`HostCapacity`, `HostSlotIndex`, `SlotAcquirePolicy`) in `uas-domain`.
-- [ ] Add `HostCapacityExceeded(usize)` and `DirectoryInsecure(PathBuf, String)` to `PoolError` in `uas-pool`.
-- [ ] Add `host_max_slots` and `slot_acquire_timeout` configuration fields to `PoolConfig` in `uas-pool`.
-- [ ] Implement `HostSlotArbiter` in `uas-pool` managing canonical directory creation, `File::try_lock` acquisition, `O_CLOEXEC` descriptor retention, and polling backoff (50 ms to 500 ms).
-- [ ] Integrate `HostSlotArbiter` into `uas_pool::slot::SlotPool::allocate` to acquire a host slot before leasing a worker worktree.
-- [ ] Implement multi-process integration tests in `uas-pool` using `std::env::current_exe()` helper sub-processes to verify two-process capacity limits, timeout failure, and abnormal termination recovery.
+- [x] Define pure host capacity types (`HostCapacity`, `HostSlotIndex`, `SlotAcquirePolicy`) in `uas-domain`.
+- [x] Add `HostCapacityExceeded(usize)` and `DirectoryInsecure(PathBuf, String)` to `PoolError` in `uas-pool`.
+- [x] Add `host_max_slots` and `slot_acquire_timeout` configuration fields to `PoolConfig` in `uas-pool`.
+- [x] Implement `HostSlotArbiter` in `uas-pool` managing canonical directory creation, `File::try_lock` acquisition, `O_CLOEXEC` descriptor retention, and polling backoff (50 ms to 500 ms).
+- [x] Integrate `HostSlotArbiter` into `uas_pool::slot::SlotPool::allocate` to acquire a host slot before leasing a worker worktree.
+- [x] Implement multi-process integration tests in `uas-pool` using `std::env::current_exe()` helper sub-processes to verify two-process capacity limits, timeout failure, and abnormal termination recovery.
+- [ ] Build the D2 `capacity.json` clamp: processes that disagree on `host_max_slots` clamp to the minimum.
+- [ ] Set the default slot directory (`/tmp/uas-slots`, override `UAS_SLOT_DIR`) for production `SlotPool` callers.
 
 ## Test
 
@@ -98,7 +100,18 @@ The primary negative control: if the host slot iteration loop in `uas-pool` is b
 
 ## Notes
 
+- Built 2026-10-18 (CER-2987). Deviations from the text above, each a decision for the operator:
+  1. Arbitration is opt-in per pool. `PoolConfig::host_slot_dir` is `None` by default and nothing in production sets it. `uas-operator` arbitrates through `HostSlotLockTable`, which takes its locks from `HostSlotArbiter` directly; `UAS_SLOT_DIR` reaches only that table, and `pool_config_for_slot` keeps the default so the same slot is never locked twice. `SlotPool`-level arbitration has no production caller yet. The CLI build path that will use it, with `/tmp/uas-slots` as its default, is a later slice. Turning it on by default would make every unit-test pool share that directory.
+  2. D2 `capacity.json` (clamp a disagreeing `host_max_slots` to the minimum) is not built. No requirement or Plan item names it.
+  3. The host slot is taken in `SlotPool::create_slot` and freed in `drain_slot`. `SlotPool` has no `allocate` method; `create_slot` is the admission point that already checks `max_slots`.
+  4. `PoolError::HostSlotIo` is added beside the two variants the Plan names, for open, lock and write failures.
+  5. `SlotAcquirePolicy` has no timeout payload; `PoolConfig::slot_acquire_timeout` carries it, as REQ-0036-06 words it.
+  6. `uas-operator` now takes its locks from `uas_pool::slot::arbitration::HostSlotArbiter` (D6); `HostSlotLockTable` keeps only the per-`WorkerSlot` key map.
+
 - Host property vs Process property: Spec 0015 handled per-pool limits, allowing concurrent pools to multiply resource usage. Spec 0036 resolves this by anchoring the ceiling to the host [reported: spec 0015].
 - Dead holder resolution: Advisory locks via `File::try_lock` avoid the need for dead-holder detection loops; the kernel automatically drops all locks upon process termination (normal, panic, or `SIGKILL`) [verified: F3].
 - Relationship with Spec 0025 D8: Spec 0025 D8 locks heavyweight wave gate commands (`make check`); Spec 0036 locks general worker slots. Because wave runs allocate no UAS slots (Spec 0025 F2, D9), the two synchronization mechanisms govern disjoint scopes and never overlap.
 - Layering preservation: `uas-pool` sits above `uas-sandbox` and `uas-router`, and below `uas-engine`, while `uas-domain` remains zero I/O [reported: spec 0001; verified: `make smoke JOBS=2`].
+- The owner clause of REQ-0036-11 is tested through the pure `owner_check(dir_uid, process_uid)`. A directory with a foreign owner is not created in a test, since that needs root.
+- Between `ensure_dir` and the lock-file open there is a check-then-open window in which the directory could be swapped. `O_NOFOLLOW` on the file open limits it to the lock file; the directory itself is rechecked on every acquire, not held open.
+- Spec 0059 adds `uas build -- <command>`, the first CLI caller of `HostSlotArbiter`. It uses `/tmp/uas-slots` as its default directory. `SlotPool` callers have not adopted the default, so the default-directory Plan item stays open.

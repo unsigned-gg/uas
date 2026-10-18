@@ -13,7 +13,7 @@ worktree and report what a command proved.
 
 ## Boundaries
 
-You work only inside the worktree you cut from fresh `origin/development`. You write only the
+You work only inside the worktree you cut from fresh `origin/main`. You write only the
 files the brief names under `crates/uas-ebpf/`. You never edit `CHANGELOG.md`: the integrator writes the wave's one line (spec 0050 D6). You read the surfaces
 in the research surfaces and spec 0014 and treat them as the fetched truth, so the sources stay unread.
 
@@ -69,7 +69,7 @@ Fifteen lines or fewer, bad news first:
 
 ```
 STATUS:   DONE | PARTIAL | BLOCKED <one line why>
-SHA:      <commit>  (parent origin/development <sha>)
+SHA:      <commit>  (parent origin/main <sha>)
 OBJECT:   sha256 <hash>, rebuilt twice identical: <yes/no>, sections: <list>, license: <text>
 CHECKS:   make check JOBS=2: <last line>; make hygiene JOBS=2: <last line>
 TESTS:    nextest: <summary>; skipped live tests: <names>; unproven until live gate: <list>

@@ -31,15 +31,15 @@ A crate depends only on crates in lower layers. Add a Cargo dependency only when
 
 ## Rules that bind
 
-1. **LeanSpec first.** A new concept or an architecture change starts as a spec in `specs/`. Run `make spec-check`. It must pass before you open the PR.
+1. **LeanSpec first.** A new concept or an architecture change starts as a spec in `specs/`. A `feat` or `fix` PR creates or updates a spec, or names one in its body. Run `make spec-check`. It must pass before you open the PR. The `lsc` PR job runs `lsc check specs/` and the spec-link check; both warn until the backfill is done.
 2. **Use `-j 2` on shared workstations.** The Makefile sets `JOBS ?= 2` and passes it to every cargo call. Do not raise it on a shared host. CI is the one exception: it calls make with `JOBS=10`. Spec 0002 gives the reason.
 3. **Evidence tiers.** Label every claim `verified`, `reported`, `heuristic` or `asserted`. Only `verified` satisfies a gate. A `verified` claim names the command that proved it.
-4. **Branch model.** Work happens on feature branches cut from `development`. A PR into `development` merges on green CI. `main` is the release branch. Spec 0003 has the details.
+4. **Branch model.** Work happens on feature branches cut from `main`. A PR into `main` merges on green CI. `main` is the only integration and release branch (GitHub Flow). Spec 0003 has the details.
 5. **Sign every commit.** Never skip signing.
 6. **Use Conventional Commits.** Do not put a ticket ID in the subject. Put `Part of CER-N` in the PR body. See specs/0053-changelog-and-commit-text-policy.md.
 7. **Merge with merge commits only.** Never squash. Enforced: squash and rebase merging are off on the GitHub repo (checked 2026-10-10).
 8. **Write the changelog.** Add one line under `## [Unreleased]` in `CHANGELOG.md` for each user-visible PR. Never edit a released section. See specs/0053-changelog-and-commit-text-policy.md.
-9. **Merge the promotion PR on green.** The promotion PR carries `development` to `main`. A lane merges it when CI is green, with a merge commit pinned to the head SHA. Agents never approve it. Then check that `main` matches `development` and that the `release` run is green. Spec 0003 has the operator ruling.
+9. **Release from `main`.** Open a PR into `main` that runs `make release-notes VERSION=x.y.z`, and merge it on green CI. The push to `main` starts `release.yml`, which tags `vX.Y.Z` when the tag does not exist (spec 0005). Check that the `release` run is green. Agents never approve their own PR.
 10. **Never push to `main`.** Enforced by the hook `guard-main-push.sh`.
 11. **No secrets in the repo.** Enforced: the lefthook pre-commit stage and the CI `secrets` job run gitleaks.
 12. **Pin every external dependency** and record it in spec 0004 before first use. Enforced: copyleft licences are denied by `deny.toml`, and `make pin-check` binds the spec 0004 tables to the lockfiles.
@@ -71,8 +71,7 @@ version), `ci-triage` (a red CI run), `new-repo` (making a repo from this templa
 
 ## Approval routes
 
-- A lane merges its own feature PR into `development` when CI is green.
-- A lane merges the promotion PR from `development` to `main` when CI is green (spec 0003).
+- A lane merges its own PR into `main` when CI is green (spec 0003).
 - Secrets, Terraform, DNS and platform apps need the operator. Prepare the change and stop.
 - Force-push to `main`, unsigned commits and merging with red CI are never allowed.
 - Code owners are listed in `.github/CODEOWNERS`.

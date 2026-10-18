@@ -16,7 +16,7 @@ uas is pre-1.0 and follows semver as Cargo reads it for `0.y.z`:
 The CHANGELOG rule, with the heading set and the text rules, is in
 `specs/0053-changelog-and-commit-text-policy.md`. Read it there; this page does not copy it.
 `make release-notes VERSION=x.y.z` turns the Unreleased lines into a release section, in a PR
-to `development`.
+to `main`. The merge to `main` starts `release.yml`, which tags the version.
 
 ## Tags
 

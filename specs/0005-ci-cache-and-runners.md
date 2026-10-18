@@ -58,7 +58,7 @@ Measured 2026-10-08:
 ### Requirements (EARS)
 
 - **Ubiquitous:** The CI system shall execute Rust jobs on ephemeral `ci-rust` runners using the pre-baked toolchain.
-- **Ubiquitous:** The build pipeline shall configure `Swatinem/rust-cache` with write access restricted to `development` and `main`.
+- **Ubiquitous:** The build pipeline shall configure `Swatinem/rust-cache` with write access restricted to `main`.
 - **Event-driven:** WHEN commits land on `main`, the CI system shall execute SBOM generation and `release-plz` publishing.
 - **State-driven:** WHILE running inside CI runner pods, the system shall execute jobs without mutating the read-only rustup directory.
 - **Unwanted behavior:** IF a job on the `ci-rust` lane attempts toolchain installation or network toolchain download, THEN the job shall fail immediately.
@@ -87,14 +87,15 @@ Measured 2026-10-08:
 | `release.yml` | release-plz `release` on push to `main`. |
 | `audit.yml` | Weekly `cargo audit`. |
 | `labeler.yml` | Labels PRs by path. |
+| `lsc.yml` | `lsc`: the estate LeanSpec check on pull requests, warn mode. It calls the reusable `unsigned-gg/lsc` job; spec 0004 pins it. |
 
-Required checks are `secrets`, `rust`, `cargo-deny` and `hygiene`. Spec 0003
+Required checks on `main` are `secrets`, `rust / cargo`, `cargo-deny` and `hygiene` (2026-10-18). `ebpf-live` and `fork-gate` are the target and wait for a separate operator go. Spec 0003
 holds the protection table.
 
 ### Cache
 
 - `Swatinem/rust-cache` runs in every Rust job. It uses `shared-key`. Only the
-  `development` and `main` refs save the cache (`save-if`); PRs read it.
+  `main` ref saves the cache (`save-if`); PRs read it.
   `cache-on-failure` is true.
 - sccache on Cloudflare R2 is planned. The secret names match reverie's:
   `SCCACHE_R2_BUCKET`, `SCCACHE_R2_ENDPOINT`, `R2_ACCESS_KEY_ID`,
@@ -127,11 +128,11 @@ Nobody turns it on without his go.
 
 Refined from decision 8, the operator, interviews 2026-10-08.
 
-1. A person opens a normal PR to `development`. The PR runs
+1. A person opens a normal PR to `main`. The PR runs
    `make release-notes VERSION=x.y.z`. It sets the workspace version, runs
    `cargo update -w`, and moves `[Unreleased]` entries under a dated heading.
    CI runs on this PR.
-2. The promotion PR moves the change to `main` (spec 0003).
+2. The PR merges to `main` on green CI (spec 0003).
 3. On push to `main`, release-plz `release` runs with `git_only = true`. When
    the version has no tag yet, it creates tag `vX.Y.Z` and the GitHub release.
    The job first installs a pinned `gh`, because the `ci-rust` image has none

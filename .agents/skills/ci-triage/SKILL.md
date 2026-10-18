@@ -1,6 +1,6 @@
 ---
 name: ci-triage
-description: Use when a CI run or required check is red on a PR or on development or main. Shows how to find the failing job, read the last 30 lines of its log, and reproduce it with the matching make target.
+description: Use when a CI run or required check is red on a PR or on main. Shows how to find the failing job, read the last 30 lines of its log, and reproduce it with the matching make target.
 ---
 
 # CI triage
@@ -32,7 +32,7 @@ Read the error text. Do not guess from the job name.
 | `cargo-deny` | `make deny` |
 | `hygiene` | `make hygiene` (runs `typos`, `machete`, `spec-check`, `toolchain-check`) |
 | `secrets` | `gitleaks detect --config .gitleaks.toml` |
-| `moon-affected` | `moon ci --base origin/development --downstream deep` |
+| `moon-affected` | `moon ci --base origin/main --downstream deep` |
 | `template-check` | `make template-check` |
 
 Inside `make ci`, the failing step is one of `fmt-check`, `clippy`, `test`, `doc-test`. Run that target alone.

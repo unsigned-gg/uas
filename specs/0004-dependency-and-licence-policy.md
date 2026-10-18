@@ -165,7 +165,7 @@ Each row: ruled: the operator, grill sheet 2026-10-10 answer <n>, read 2026-10-1
 | Library | Answer | Verdict |
 |---|---|---|
 | `nom`, `rkyv` | 8a | Rejected: serde JSON-RPC is the contract (`communication/designs/rust-subsystem-crate-topology.md:23,53`; `agentic-systems/findings/marathon-crdt-p2p-and-hyperlight-vmm.md:25`) |
-| `mmap-sync`, SHM transport | 4a | Cortex spec 0009 owns it; no uas pin. rustix `net` and `mm` features wait for a uas spec that needs them |
+| `mmap-sync`, SHM transport | 4a | Cortex spec 0009 owns it; no uas pin. rustix `mm` feature waits for a uas spec that needs it (`net` is enabled by spec 0058) |
 | `shellflip` | 5a | Watch. Adopt only when `uas-ebpfd` or the deck needs zero-downtime restart with fd passing |
 | `foundations` | 6a | Rejected: uas owns its seccomp and landlock jails |
 | io_uring, `tokio-uring`, `heph` | 7a | Closed by spec 0019 D2 (OS threads) |
@@ -189,20 +189,20 @@ metadata, read 2026-10-09.
 | Crate | Version | Licence | Used by | Phase | Conditions |
 |---|---|---|---|---|---|
 | `landlock` | 0.4.7 | MIT OR Apache-2.0 | uas-sandbox | 2 | none |
-| `rustix` | 1.1.5 | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT | uas-sandbox, uas-pool | 2, 3 | default-features off; `std`, `process`, `thread`, `fs`, `mount`. In use since spec 0011 (2026-10-09) with `std`, `thread`, `process`, `fs` |
+| `rustix` | 1.1.5 | Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT | uas-sandbox, uas-pool | 2, 3 | default-features off; `std`, `process`, `thread`, `fs`, `mount`, `net`. In use since spec 0011 (2026-10-09) with `std`, `thread`, `process`, `fs`; `net` added for the non-blocking tmux socket probe in uas-pool (spec 0058 D3) |
 | `aya` | 0.14.0 | MIT OR Apache-2.0 | uas-ebpf (loader) | 2 | MSRV 1.87 |
 | `aya-ebpf` | 0.2.1 | MIT OR Apache-2.0 | kernel-side BPF program, outside the workspace build | 2 | nightly, rust-src, bpf-linker; program package is `GPL-2.0-only OR MIT`; the object still declares `Dual MIT/GPL` |
 | `aya-log`, `aya-log-ebpf` | 0.3.0, 0.2.0 | MIT OR Apache-2.0 | uas-ebpf | 2 | only if the BPF program logs |
 | `seccompiler` | 0.5.0 | Apache-2.0 OR BSD-3-Clause | uas-sandbox | 2 | default features; no `libseccomp` link (spec 0043 D7; ruling 2026-10-11, lane w25:p1) |
 | `libc` | 0.2.190 | MIT OR Apache-2.0 | uas-sandbox | 2 | direct dependency: seccompiler keys rules by syscall number and rustix exports none (plan 0043 R1). Locked at 0.2.190 (spec 0043 D7; ruling 2026-10-11, lane w25:p1) |
-| `serde_json` | 1.0.151 | MIT OR Apache-2.0 | uas-acp, uas-cli, uas-deck, uas-ebpf, uas-engine, uas-pool, uas-router; uas-domain (dev only) | in use | root requirement `"1"`, a caret held by `pin-check` (D3). Pre-existing use found by the PR #138 critic; `uas-pool` added it in PR #138 (ruled: integrating lane w25:p1, 2026-10-11). Request-body and SSE chunk parsing in uas-router, spec 0017 (UAS lane amendment 2026-10-11, the operator corrects it in place; the dependency edge lands with plan 0017 P4) |
+| `serde_json` | 1.0.151 | MIT OR Apache-2.0 | uas-acp, uas-cli, uas-deck, uas-ebpf, uas-engine, uas-operator, uas-pool, uas-router; uas-domain (dev only) | in use | root requirement `"1"`, a caret held by `pin-check` (D3). Pre-existing use found by the PR #138 critic; `uas-pool` added it in PR #138 (ruled: integrating lane w25:p1, 2026-10-11). Request-body and SSE chunk parsing in uas-router, spec 0017 (UAS lane amendment 2026-10-11, the operator corrects it in place; the dependency edge lands with plan 0017 P4) |
 | `toml` | 1.1.8+spec-1.1.0 | MIT OR Apache-2.0 | uas-cli, uas-engine, xtask | in use | root requirement `"1.1"`, a caret held by `pin-check` (D3); the cell carries the lock's build metadata because pin-check compares strings. Ratified 2026-10-11 (ruled: the operator, 2026-10-11, lane w25:p1 (AskUserQuestion), "Ratify 1.1.8"), superseding the 0.8 decision of 2026-10-09. Parses `.saga/flows/*.toml` and, for `cargo xtask advisory-check`, `deny.toml` (spec 0045; the edge lands with plan 0045 P4) |
 | `gix` | 0.88.0 | MIT OR Apache-2.0 | uas-pool | 3 | default-features off, minimal features; MSRV 1.88; fallback 0.87.1 |
 | `agent-client-protocol` | 2.2.0 | Apache-2.0 | uas-acp | 3 | MSRV 1.88; 3.x is under 14 days old. In use since spec 0016 (2026-10-10); transitive pull in D1 |
-| `tokio` | 1.53.1 | MIT | uas-router, uas-deck, uas-storage; uas-engine behind feature `cortex-grpc` (spec 0026; UAS lane amendment, the operator corrects it in place) | 4, 5, 6 | default-features off; `rt-multi-thread`, `macros`, `net`, `time`, `sync`. The uas-pool runtime stays open (spec 0001 gap 1). In use since spec 0013 (2026-10-09) in uas-router, plus `io-util` (a feature of the same crate, needed by `AsyncReadExt` and `AsyncWriteExt`; UAS lane amendment, the operator corrects it in place) |
+| `tokio` | 1.53.1 | MIT | uas-operator, uas-router, uas-deck, uas-storage; uas-engine behind feature `cortex-grpc` (spec 0026; UAS lane amendment, the operator corrects it in place) | 4, 5, 6 | default-features off; `rt-multi-thread`, `macros`, `net`, `time`, `sync`. The uas-pool runtime stays open (spec 0001 gap 1). In use since spec 0013 (2026-10-09) in uas-router, plus `io-util` (a feature of the same crate, needed by `AsyncReadExt` and `AsyncWriteExt`; UAS lane amendment, the operator corrects it in place) |
 | `sha2` | 0.11.0 | MIT OR Apache-2.0 | uas-ebpf, uas-router, xtask | 2, 4 | none |
 | `reqwest` | 0.13.5 | MIT OR Apache-2.0 | uas-router, uas-deck | 4, 5 | default-features off; `rustls` (aws-lc-rs provider, needs cmake), `http2`, `json`, `stream` |
-| `futures-util` | 0.3.34 | MIT OR Apache-2.0 | uas-deck | 5 | `uas-router` dropped 2026-10-11: spec 0017 says the crate is not needed there (plan 0017 finding 2) |
+| `futures-util` | 0.3.34 | MIT OR Apache-2.0 | uas-deck, uas-operator | 5 | `uas-router` dropped 2026-10-11: spec 0017 says the crate is not needed there (plan 0017 finding 2) |
 | `axum` | 0.8.9 | MIT | uas-deck | 5 | default features off, `http1` and `tokio` (P4, 2026-10-10); `ws` waits for D2 |
 | `tower-http` | 0.7.1 | MIT | uas-deck | 5 | `fs`, `trace`, `timeout`, `compression-gzip` |
 | `tokio-stream` | 0.1.19 | MIT | uas-deck | 5 | none |
@@ -214,8 +214,8 @@ metadata, read 2026-10-09.
 | `governor` | 0.10.4 | MIT | identity | 7 | Phase 7 waits for the Director of Engineering |
 | `a2a-lf` | 0.3.1 | Apache-2.0 | uas-engine (A2A envelopes) | 7 | protocol conformance not verified; Phase 7 waits for the Director of Engineering |
 | `criterion` | 0.8.2 | Apache-2.0 OR MIT | benches (dev only) | 3, 8 | default-features off; `cargo_bench_support` |
-| `clap` | 4.6.7 | MIT OR Apache-2.0 | uas-cli, uas-ebpf | 2 | `derive`, `env`; `env` approved by this amendment (spec 0042 D1, D2; plan 0042 P1; integrating lane w25:p1, 2026-10-10) |
-| `tracing-subscriber` | 0.3.23 | MIT | uas-cli, uas-ebpf | 2 | `env-filter`, `json`; `json` approved by this amendment (spec 0042 D1, D2; plan 0042 P1; integrating lane w25:p1, 2026-10-10) |
+| `clap` | 4.6.7 | MIT OR Apache-2.0 | uas-cli, uas-ebpf, uas-operator | 2 | `derive`, `env`; `env` approved by this amendment (spec 0042 D1, D2; plan 0042 P1; integrating lane w25:p1, 2026-10-10) |
+| `tracing-subscriber` | 0.3.23 | MIT | uas-cli, uas-ebpf, uas-operator | 2 | `env-filter`, `json`; `json` approved by this amendment (spec 0042 D1, D2; plan 0042 P1; integrating lane w25:p1, 2026-10-10) |
 | `tracing-serde` | 0.2.0 | MIT | none (transitive) | 2 | planned pin: pulled by the `json` feature of `tracing-subscriber`; not yet in `Cargo.lock`; approved by this amendment (spec 0042 D2; plan 0042 P1; integrating lane w25:p1, 2026-10-10) |
 
 Not listed, with the reason:
@@ -227,8 +227,7 @@ Check of the whole set (`cargo deny check` with this repo's deny.toml, throwaway
 project, 522 packages, 2026-10-09):
 - With the aws-sdk-s3 features above: no vulnerability, no yanked crate.
 - All targets: rejected licences `MIT-0` (fluent-uri, via jsonschema) and
-  `CDLA-Permissive-2.0` (webpki-root-certs, wasm32 only). Linux targets only:
-  `MIT-0` remains.
+  `CDLA-Permissive-2.0` (webpki-root-certs, wasm32 and Linux via kube rustls-tls). `deny.toml` allows `CDLA-Permissive-2.0` scoped to `webpki-root-certs` only (spec 0039 F5, D3).
 - Unmaintained: `bincode` (syntect) and `smallstr` (yrs). Both are excluded above.
 - The set needs a Rust floor of 1.88 (aya, gix, ACP, transitive icu crates);
   aws-sdk-s3 needs 1.94.1, which equals the pinned toolchain. Amended
@@ -259,6 +258,16 @@ a throwaway project with these pins, `tokio` 1.53.1 (features as its row) and to
 bans ok, licenses ok, sources ok", 106 packages.
 Warnings: duplicate `hashbrown`, `logos` (3 crates) and `syn`, all through `protox`.
 
+### Kubernetes operator and CRDs (specs 0038, 0039)
+
+Status: approved by the operator, 2026-10-16 (specs 0038, 0039 D1–D3). Each row enters `Cargo.toml` with an `=` requirement (D3) behind the `k8s` feature of `uas-operator`. `deny.toml` allows `CDLA-Permissive-2.0` scoped to `webpki-root-certs` (spec 0039 F5, D3).
+
+| Crate | Version | Licence | Used by | Conditions |
+|---|---|---|---|---|
+| `kube` | 4.2.0 | Apache-2.0 | uas-operator, feature `k8s` | `runtime`, `derive`; MSRV 1.89.0 (spec 0039 F1, D1, D2) |
+| `k8s-openapi` | 0.28.0 | Apache-2.0 | uas-operator, feature `k8s` | `v1_36` (spec 0039 F2, F3, D1) |
+| `schemars` | 1.2.2 | MIT | uas-operator, feature `k8s` | `derive`; MSRV 1.74 (spec 0039 F4, D1) |
+
 ### CI tools
 
 A tool that a workflow downloads at run time is an external dependency too.
@@ -273,6 +282,7 @@ Pin it by version and sha256 and record it here.
 | `cargo-semver-checks` (obi1kenobi) | 0.51.0 | Apache-2.0 OR MIT (`cargo info`, read 2026-10-11) | the semver gate of spec 0048 D13: pull-request CI on each published crate | sha256 for `x86_64-unknown-linux-gnu.tar.gz` `cacadafaa5cd27ae6d05a74a103266917ebab4c5e43c898360e177d4fbf06a65`, published 2026-10-03 [verified 2026-10-11: the release page digest for v0.51.0 and a local `sha256sum` of the downloaded tarball match]. Used by `.github/workflows/semver.yml`. Ruled: the operator, lane w25:p1, 2026-10-11 (AskUserQuestion), "RELEASING.md, pre-1.0 semver, cargo-semver-checks gate" |
 | `gitleaks` | 8.30.1, published 2026-03-21 | MIT [verified 2026-10-11: the `LICENSE` file of gitleaks/gitleaks at tag `v8.30.1`, read with `gh api repos/gitleaks/gitleaks/contents/LICENSE?ref=v8.30.1`, is the MIT License] | the secret scan: `.github/workflows/ci.yml` job `secrets` and the `lefthook.yml` pre-commit hook. `ci.yml` pins it; the `lefthook.yml` install message names it; the hook does not check the binary (spec 0055 D14). | sha256 for `gitleaks_8.30.1_linux_x64.tar.gz` `551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb` [verified 2026-10-11: the release API digest for v8.30.1 and a local `sha256sum` of the downloaded tarball match]. It equals `GITLEAKS_SHA256` in `ci.yml`, which checks it with `sha256sum -c`. Cited: spec 0055 D14. |
 | `cargo-cyclonedx` | 0.5.9, published 2026-03-19 | Apache-2.0 [verified 2026-10-11: `cargo info cargo-cyclonedx@0.5.9`] | the SBOM: `make sbom`, `.github/workflows/sbom.yml` and `.github/workflows/release.yml`. Format and spec version are spec 0045 D4. | sha256 for `cargo-cyclonedx-x86_64-unknown-linux-gnu.tar.xz` `fb8dbee9f182173e062a64a387b21a0badc6fab8b2abf9294973f012972bf6d8`, CycloneDX/cyclonedx-rust-cargo tag `cargo-cyclonedx-0.5.9` [verified 2026-10-11: the release API digest and a local `sha256sum` of the downloaded tarball match]. `sbom.yml` and `release.yml` check this sha256 by `sha256sum -c`. The earlier `taiki-e/install-action` install at `f7e5d7c` named no version; its manifest resolved `latest` to 0.5.9 and fetched the musl tarball, sha256 `9bd3e599314f50810c9d98b8b68a617ff9d3cc20873968d90b29d121f6b226ff` [verified 2026-10-11: `manifests/cargo-cyclonedx.json` at `f7e5d7c`, the release API digest and a local `sha256sum` match]. Spec 0045 owns the install path. Cited: specs 0045 D4 and 0055 D8. |
+| `lsc` (unsigned-gg/lsc) | 0.1.0 at commit `d19f393f7f9a`, built per run by the reusable workflow `lsc-check.yml` | Apache-2.0 OR MIT [verified 2026-10-18: `Cargo.toml` `license` at `d19f393f`, read with `gh api repos/unsigned-gg/lsc/contents/Cargo.toml?ref=d19f393f...`; `LICENSE-APACHE` and `LICENSE-MIT` present] | `.github/workflows/lsc.yml`: `lsc check specs/` and the spec-link check on pull requests, warn mode (estate LeanSpec standard). | `lsc.yml` pins the workflow by full SHA `ddde01ee2958a4ff2b71fbb898699e266f1062db`. That workflow pins lsc `d19f393f7f9a65373d4a50f0734d9a927038c431`, a vendored `Cargo.lock` (sha256 `484cf356af31ec6365fa9a13605514607a9eb8afac1f5d4fa202e2b1358fe463`) and Rust 1.85.0, and builds with `--locked`. |
 
 The `gh` step is temporary. Remove it when the `ci-rust` image ships `gh`.
 

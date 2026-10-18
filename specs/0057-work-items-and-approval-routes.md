@@ -92,7 +92,7 @@ Land-on-green is the standing green light for route 1 and 2: the lane still acts
 
 | Route | Action | Who acts | Who gates | Class |
 |---|---|---|---|---|
-| 1 | Merge a lane's own feature PR into `development` | The lane | Required checks SUCCESS on the exact head; no approval | 200-GIT, lit by ruling |
+| 1 | Merge a lane's own PR into `main` | The lane | Required checks SUCCESS on the exact head; no approval | 200-GIT, lit by ruling |
 | 2 | Merge the promotion PR to `main` | The lane | Same, merge commit pinned to the head (0003) | 200-GIT, lit by ruling |
 | 3 | Change branch protection, merge methods, required checks, signing | Operator | Operator; the lane prepares the API call and stops | 220-GIT |
 | 4 | Secrets, Terraform, DNS, platform apps | Operator | Operator (AGENTS.md approval routes) | 230-SEC, 220-IAC |

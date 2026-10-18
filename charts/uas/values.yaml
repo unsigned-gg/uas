@@ -1,0 +1,59 @@
+namespace:
+  name: uas-system
+  create: false
+
+operator:
+  enabled: true
+  replicas: 2
+  image:
+    repository: ghcr.io/cerebral-work/uas-operator
+    tag: "0.1.0"
+    digest: ""
+    pullPolicy: IfNotPresent
+  metricsPort: 9090
+  healthPort: 8081
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  nodeSelector:
+    node-role.unsigned.io/core: "true"
+  tolerations: []
+
+daemon:
+  enabled: true
+  image:
+    repository: ghcr.io/cerebral-work/uas-daemon
+    tag: "0.1.0"
+    digest: ""
+    pullPolicy: IfNotPresent
+  grpcPort: 50051
+  metricsPort: 9091
+  runtimeClassDefault: kata-fc
+  resources:
+    requests:
+      cpu: 200m
+      memory: 256Mi
+    limits:
+      cpu: "1"
+      memory: 1Gi
+  nodeSelector:
+    node-role.unsigned.io/agents: "true"
+  tolerations:
+    - key: dedicated
+      operator: Equal
+      value: agents
+      effect: NoSchedule
+    - key: node-role.unsigned.io/agents
+      operator: Exists
+      effect: NoSchedule
+
+networkPolicy:
+  enabled: true
+
+serviceMonitor:
+  enabled: true
+  interval: 30s

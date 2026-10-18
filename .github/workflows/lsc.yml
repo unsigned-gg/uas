@@ -1,0 +1,20 @@
+# Estate LeanSpec check: `lsc check specs/` plus the spec-link check for feat and fix PRs.
+# Both run in warn mode until the backfill is done. AGENTS.md rule 1; spec 0004 pins the job.
+# The reusable job is pinned by commit SHA; it pins lsc d19f393f and its lockfile itself.
+name: lsc
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  lsc:
+    # Fork guard: self-hosted runners never run code from a fork.
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    uses: unsigned-gg/lsc/.github/workflows/lsc-check.yml@ddde01ee2958a4ff2b71fbb898699e266f1062db
+    with:
+      runs-on: '{"group":"ent-default","labels":["ci-rust"]}'
+      lsc-mode: warn
+      spec-link-mode: warn

@@ -1,0 +1,98 @@
+{{- if .Values.daemon.enabled }}
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: {{ include "uas.fullname" . }}-daemon
+  namespace: {{ .Values.namespace.name }}
+  labels:
+    {{- include "uas.labels" . | nindent 4 }}
+    app.kubernetes.io/component: daemon
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "uas.name" . }}
+      app.kubernetes.io/component: daemon
+  template:
+    metadata:
+      labels:
+        {{- include "uas.labels" . | nindent 8 }}
+        app.kubernetes.io/name: {{ include "uas.name" . }}
+        app.kubernetes.io/component: daemon
+    spec:
+      serviceAccountName: {{ include "uas.fullname" . }}-daemon
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      {{- with .Values.daemon.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.daemon.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: uas-daemon
+          image: {{ include "uas.daemonImage" . }}
+          imagePullPolicy: {{ .Values.daemon.image.pullPolicy }}
+          args:
+            - "--mode=node-agent"
+            - "--namespace={{ .Values.namespace.name }}"
+            - "--slot-dir=/run/uas/slots"
+          env:
+            - name: UAS_OPERATOR_MODE
+              value: "node-agent"
+            - name: UAS_OPERATOR_NAMESPACE
+              value: {{ .Values.namespace.name | quote }}
+            - name: UAS_RUNTIME_CLASS_DEFAULT
+              value: {{ .Values.daemon.runtimeClassDefault | quote }}
+            - name: UAS_NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          ports:
+            - name: grpc
+              containerPort: {{ .Values.daemon.grpcPort }}
+              protocol: TCP
+            - name: metrics
+              containerPort: {{ .Values.daemon.metricsPort }}
+              protocol: TCP
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          resources:
+            {{- toYaml .Values.daemon.resources | nindent 12 }}
+          volumeMounts:
+            - name: slot-locks
+              mountPath: /run/uas/slots
+      volumes:
+        - name: slot-locks
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "uas.fullname" . }}-daemon
+  namespace: {{ .Values.namespace.name }}
+  labels:
+    {{- include "uas.labels" . | nindent 4 }}
+    app.kubernetes.io/component: daemon
+spec:
+  type: ClusterIP
+  clusterIP: None
+  selector:
+    app.kubernetes.io/name: {{ include "uas.name" . }}
+    app.kubernetes.io/component: daemon
+  ports:
+    - name: grpc
+      port: {{ .Values.daemon.grpcPort }}
+      targetPort: grpc
+      protocol: TCP
+    - name: metrics
+      port: {{ .Values.daemon.metricsPort }}
+      targetPort: metrics
+      protocol: TCP
+{{- end }}

@@ -1,0 +1,95 @@
+{{- if .Values.operator.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "uas.fullname" . }}-operator
+  namespace: {{ .Values.namespace.name }}
+  labels:
+    {{- include "uas.labels" . | nindent 4 }}
+    app.kubernetes.io/component: operator
+spec:
+  replicas: {{ .Values.operator.replicas }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "uas.name" . }}
+      app.kubernetes.io/component: operator
+  template:
+    metadata:
+      labels:
+        {{- include "uas.labels" . | nindent 8 }}
+        app.kubernetes.io/name: {{ include "uas.name" . }}
+        app.kubernetes.io/component: operator
+    spec:
+      serviceAccountName: {{ include "uas.fullname" . }}-operator
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      {{- with .Values.operator.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.operator.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: uas-operator
+          image: {{ include "uas.operatorImage" . }}
+          imagePullPolicy: {{ .Values.operator.image.pullPolicy }}
+          args:
+            - "--mode=controller"
+            - "--namespace={{ .Values.namespace.name }}"
+            - "--slot-dir=/tmp/uas-slots"
+          env:
+            - name: UAS_OPERATOR_MODE
+              value: "controller"
+            - name: UAS_OPERATOR_NAMESPACE
+              value: {{ .Values.namespace.name | quote }}
+            - name: UAS_NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+          ports:
+            - name: metrics
+              containerPort: {{ .Values.operator.metricsPort }}
+              protocol: TCP
+            - name: health
+              containerPort: {{ .Values.operator.healthPort }}
+              protocol: TCP
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          resources:
+            {{- toYaml .Values.operator.resources | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "uas.fullname" . }}-operator
+  namespace: {{ .Values.namespace.name }}
+  labels:
+    {{- include "uas.labels" . | nindent 4 }}
+    app.kubernetes.io/component: operator
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: {{ include "uas.name" . }}
+    app.kubernetes.io/component: operator
+  ports:
+    - name: metrics
+      port: {{ .Values.operator.metricsPort }}
+      targetPort: metrics
+      protocol: TCP
+{{- end }}

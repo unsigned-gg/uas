@@ -1,0 +1,47 @@
+[package]
+name = "uas-operator"
+description = "Kubernetes operator and node agent for WorkerSlot and AgentSandbox custom resources."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "uas-operator"
+path = "src/main.rs"
+
+[dependencies]
+uas-domain = { path = "../uas-domain" }
+uas-pool = { path = "../uas-pool" }
+uas-sandbox = { path = "../uas-sandbox" }
+clap = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+# Kubernetes controller and CRD derives (specs 0038, 0039), behind the feature `k8s`.
+kube = { workspace = true, optional = true }
+k8s-openapi = { workspace = true, optional = true }
+schemars = { workspace = true, optional = true }
+tokio = { workspace = true, optional = true }
+futures-util = { workspace = true, optional = true }
+
+[dev-dependencies]
+tokio = { workspace = true }
+
+[features]
+# Kubernetes CRD derives, OpenAPI schema generation and controller runtime (specs 0038, 0039).
+k8s = [
+    "dep:kube",
+    "dep:k8s-openapi",
+    "dep:schemars",
+    "dep:tokio",
+    "dep:futures-util",
+]
+
+[lints]
+workspace = true

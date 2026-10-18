@@ -28,18 +28,22 @@ mod attestation;
 mod envelope;
 mod error;
 mod evaluator;
+mod host_capacity;
 mod ident;
 mod landing;
 mod lease;
 mod outcome;
 mod policy;
 mod reconcile;
+mod seat;
+mod seat_plan;
 mod slot;
 
 pub use attestation::{Attestation, EvidenceTier};
 pub use envelope::Envelope;
 pub use error::DomainError;
 pub use evaluator::{is_critic_input_path, is_evaluator_path, CRITIC_INPUT_PATHS, EVALUATOR_PATHS};
+pub use host_capacity::{HostCapacity, HostSlotIndex, SlotAcquirePolicy};
 pub use landing::{
     AuditStatus, CostSource, HumanRaise, LandingFacts, LandingReceipt, LandingReceiptError,
 };
@@ -47,4 +51,13 @@ pub use lease::{check_slot_free, Budget, Lease, LeaseId, LeaseLedger, LeaseToken
 pub use outcome::{KillReason, LimitEvents, WorkerOutcome};
 pub use policy::{PolicyTier, SomaClassification};
 pub use reconcile::{LostSlot, ReconcileReport};
+pub use seat::{
+    Attribution, CpuMax, HeadroomGate, Limit, ScopeKind, SeatSample, SeatSummary, SeatsDocument,
+    SocketCounts, SocketOutcome, SocketStatus, TmuxStatus, SEATS_SCHEMA,
+};
+pub use seat_plan::{
+    Ceiling, HostPolicy, PlannedSeat, PolicyError, RawHost, RawLimits, RawPolicy, RawSeat,
+    SeatLimitPlan, SeatLimitPolicy, SeatLimits, SeatOverride, Size, NO_APPLY_NOTICE,
+    SEATS_PLAN_SCHEMA,
+};
 pub use slot::{Slot, SlotId, SlotState, WorktreeRef};

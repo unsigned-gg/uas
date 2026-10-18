@@ -43,7 +43,7 @@ landlock = "0.4.7"
 # plus io-util, which AsyncReadExt and AsyncWriteExt need; recorded in spec 0004.
 tokio = { version = "=1.53.1", default-features = false, features = ["rt-multi-thread", "macros", "net", "time", "sync", "io-util"] }
 # unshare, procfs writes and the lo ioctl for the worker network namespace (spec 0011, CER-2717).
-rustix = { version = "1.1.5", default-features = false, features = ["std", "thread", "process", "fs"] }
+rustix = { version = "1.1.5", default-features = false, features = ["std", "thread", "process", "fs", "net"] }
 # Userspace eBPF loader, tracepoint attach and ring buffer reader in uas-ebpf (spec 0014, CER-2719, CER-2720).
 aya = "0.14.0"
 # seccomp-BPF deny-list filter for the worker (spec 0043 D7, spec 0004). Default features; no libseccomp link.
@@ -76,6 +76,14 @@ maud = { version = "0.27.0", features = ["axum"] }
 
 # In-process git operations for warm worktrees in uas-pool (spec 0004, 0015, CER-2724).
 gix = { version = "0.88.0", default-features = false, features = ["worktree-mutation", "revision", "sha1"] }
+# Kubernetes client, controller runtime, and CustomResource derive in uas-operator, feature k8s (specs 0038, 0039 D1, spec 0004).
+kube = { version = "=4.2.0", features = ["runtime", "derive"] }
+# Kubernetes OpenAPI schema types in uas-operator, feature k8s (specs 0038, 0039 D1, spec 0004).
+k8s-openapi = { version = "=0.28.0", features = ["v1_36"] }
+# JSON Schema derive for CustomResource in uas-operator, feature k8s (specs 0038, 0039 D1, spec 0004).
+schemars = { version = "=1.2.2", features = ["derive"] }
+# Async stream combinators for the kube runtime controller stream in uas-operator, feature k8s (spec 0004).
+futures-util = "=0.3.34"
 
 # Example of a private git dependency (record it in specs/0004 before first use):
 # pgt-core = { git = "https://github.com/cerebral-work/pgt", rev = "54d90f5" }

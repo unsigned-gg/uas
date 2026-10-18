@@ -1,0 +1,3 @@
+# LeanSpec marker - specification files live in specs/
+# Validated by `cargo xtask spec-check` and, on pull requests, by `lsc check specs/` (lsc.yml)
+spec_dirs = ["specs"]

@@ -21,6 +21,10 @@ confidence-threshold = 0.8
 [licenses.private]
 ignore = false
 
+[[licenses.exceptions]]
+allow = ["CDLA-Permissive-2.0"]
+crate = "webpki-root-certs"
+
 [advisories]
 yanked = "deny"
 

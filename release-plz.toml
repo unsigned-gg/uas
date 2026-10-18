@@ -1,4 +1,4 @@
-# Release flow: `make release-notes VERSION=x.y.z` in a PR to development.
+# Release flow: `make release-notes VERSION=x.y.z` in a PR to main.
 # On push to main, release-plz `release` tags vX.Y.Z and creates the GitHub release.
 # See specs/0005-ci-cache-and-runners.md.
 [workspace]

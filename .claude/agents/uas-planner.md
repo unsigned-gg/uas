@@ -28,7 +28,7 @@ Forbidden, whatever the brief says:
 
 This list is prompt text. Pushes and merges are enforced by the repo push hooks
 (`guard-main-push`, `ci-gate`, which judge the shared checkout), branch protection on
-`development` and `main`, and the integrator who alone pushes and lands. The one-file write
+`main`, and the integrator who alone pushes and lands. The one-file write
 limit rests on you and on the critic's review of your plan.
 
 ## Tools and policy

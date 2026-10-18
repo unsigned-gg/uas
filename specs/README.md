@@ -40,10 +40,10 @@ Methodology: LeanSpec. The reference copy is in `../vendor/leanspec/`.
 | [0033](0033-cargo-feature-policy-and-ci-matrix.md) | Cargo feature policy and CI matrix | in-progress | high |
 | [0034](0034-tool-pinning-beyond-cargo.md) | Tool pinning beyond cargo | planned | high |
 | [0035](0035-cas-acp-transport-scope.md) | uas-acp transport scope | planned | high |
-| [0036](0036-slot-arbitration-across-processes.md) | Slot arbitration across processes | planned | high |
+| [0036](0036-slot-arbitration-across-processes.md) | Slot arbitration across processes | in-progress | high |
 | [0037](0037-repository-migration-to-uas.md) | Repository migration to uas | planned | high |
-| [0038](0038-uas-operator-and-crds.md) | uas-operator and CRDs | planned | high |
-| [0039](0039-k8s-dependency-and-ci-plan.md) | k8s dependency and CI plan | planned | high |
+| [0038](0038-uas-operator-and-crds.md) | uas-operator and CRDs | in-progress | high |
+| [0039](0039-k8s-dependency-and-ci-plan.md) | k8s dependency and CI plan | in-progress | high |
 | [0040](0040-pool-restart-and-orphan-reclamation.md) | Pool restart and orphan reclamation | in-progress | high |
 | [0041](0041-slot-memory-pids-and-disk-limits.md) | Slot memory, pids and disk limits | in-progress | high |
 | [0042](0042-cas-binary-conventions.md) | uas binary conventions | complete | high |
@@ -62,6 +62,8 @@ Methodology: LeanSpec. The reference copy is in `../vendor/leanspec/`.
 | [0055](0055-supply-chain-automation.md) | Supply-chain automation | planned | medium |
 | [0056](0056-agent-roster-and-tooling.md) | Agent roster and tooling surface | planned | medium |
 | [0057](0057-work-items-and-approval-routes.md) | Work items and approval routes | planned | medium |
+| [0058](0058-ceres-seat-inventory-and-limit-policy.md) | Ceres seat inventory and limit policy | in-progress | high |
+| [0059](0059-host-build-slots.md) | Host build slots | in-progress | high |
 
 
 ## How to add a spec

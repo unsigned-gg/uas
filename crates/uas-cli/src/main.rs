@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 //! `uas` command line entry point.
 
+mod build;
 mod memory;
+mod plan;
+mod seats;
 mod wave_flow;
 
 use anyhow::{Context, Result};
@@ -38,6 +41,28 @@ struct Cli {
     command: Command,
 }
 
+/// `uas seats` and its subcommands.
+#[derive(Debug, clap::Args)]
+#[command(args_conflicts_with_subcommands = true)]
+struct SeatsCmd {
+    #[command(subcommand)]
+    sub: Option<SeatsSub>,
+    #[command(flatten)]
+    inventory: seats::SeatsOpts,
+}
+
+#[derive(Debug, Subcommand)]
+enum SeatsSub {
+    /// Print the limits a policy would set on each attributed seat. Applies nothing (spec 0058).
+    Plan {
+        /// The policy file (TOML).
+        #[arg(long)]
+        policy: std::path::PathBuf,
+        #[command(flatten)]
+        opts: seats::SeatsOpts,
+    },
+}
+
 #[derive(Debug, Subcommand)]
 enum Command {
     /// Walk a slot through its lifecycle with an in-memory ledger and print JSON.
@@ -46,6 +71,10 @@ enum Command {
         #[arg(long, default_value = "slot-1")]
         slot: String,
     },
+    /// List agent seat scopes with usage, limits and host headroom. Read-only (spec 0058).
+    Seats(SeatsCmd),
+    /// Run a command while holding one host build slot. A slot count only (spec 0059).
+    Build(build::BuildOpts),
     /// Manage harness execution, session lifecycle, and receipts.
     Harness {
         #[command(subcommand)]
@@ -1143,6 +1172,18 @@ fn main() -> Result<()> {
             let report = demo(&slot)?;
             println!("{}", serde_json::to_string_pretty(&report)?);
         }
+        Command::Build(opts) => std::process::exit(build::run(&opts)?),
+        Command::Seats(cmd) => match cmd.sub {
+            Some(SeatsSub::Plan { policy, opts }) => print!("{}", plan::render(&policy, &opts)?),
+            None => {
+                let doc = seats::build_document(&cmd.inventory.config(None))?;
+                if cmd.inventory.json {
+                    println!("{}", serde_json::to_string_pretty(&doc)?);
+                } else {
+                    print!("{}", seats::render_text(&doc));
+                }
+            }
+        },
         Command::Wave { command } => match command {
             WaveCommand::Flow {
                 from,
