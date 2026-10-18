@@ -24,26 +24,13 @@ metadata:
     {{- include "uas.labels" . | nindent 4 }}
     app.kubernetes.io/component: operator
 rules:
-  - apiGroups: ["uas.cerebral.work"]
-    resources:
-      - sandboxes
-      - sandboxes/status
-      - snapshotlineages
-      - snapshotlineages/status
-      - egressprofiles
-      - egressprofiles/status
-      - secretgrants
-      - secretgrants/status
-    verbs: ["get", "list", "watch", "create", "update", "patch"]
-  - apiGroups: [""]
-    resources: ["pods", "services", "configmaps", "events"]
-    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
-  - apiGroups: ["networking.k8s.io"]
-    resources: ["networkpolicies"]
-    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
-  - apiGroups: ["external-secrets.io"]
-    resources: ["externalsecrets"]
-    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  # run_k8s_watch_loop (crates/uas-operator/src/lib.rs) watches WorkerSlot and patches its status.
+  - apiGroups: ["uas.unsigned.gg"]
+    resources: ["workerslots"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["uas.unsigned.gg"]
+    resources: ["workerslots/status"]
+    verbs: ["patch"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -59,4 +46,20 @@ roleRef:
 subjects:
   - kind: ServiceAccount
     name: {{ include "uas.fullname" . }}-operator
+    namespace: {{ .Values.namespace.name }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "uas.fullname" . }}-daemon
+  labels:
+    {{- include "uas.labels" . | nindent 4 }}
+    app.kubernetes.io/component: daemon
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "uas.fullname" . }}-operator
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "uas.fullname" . }}-daemon
     namespace: {{ .Values.namespace.name }}
