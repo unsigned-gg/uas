@@ -42,10 +42,10 @@ pub struct SeatsOpts {
     /// Read this uid's user service cgroup; default is the caller.
     #[arg(long)]
     pub uid: Option<u32>,
-    /// The headroom gate needs a 1-minute load below this (default 12).
+    /// The headroom gate needs a 1-minute load below this. Without a flag or a policy `[host]` value, the estate default applies (D4).
     #[arg(long)]
     pub max_load: Option<f64>,
-    /// The headroom gate needs at least this many GiB available (default 16).
+    /// The headroom gate needs at least this many GiB available. Without a flag or a policy `[host]` value, the estate default applies (D4).
     #[arg(long)]
     pub min_mem_gib: Option<f64>,
 }
@@ -70,7 +70,7 @@ impl SeatsOpts {
                 .or(host
                     .and_then(|h| h.min_mem_available)
                     .map(|s| s.bytes() as f64 / gib))
-                .unwrap_or(16.0),
+                .unwrap_or(uas_domain::HeadroomGate::DEFAULT_MIN_MEM_AVAILABLE_GIB as f64),
         }
     }
 }

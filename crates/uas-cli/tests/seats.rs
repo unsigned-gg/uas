@@ -493,6 +493,10 @@ fn seats_live_sockets_over_the_cap_are_counted_with_no_extra_spawn() {
 const GIB: u64 = 1 << 30;
 
 fn plan(t: &Tmp, policy: &str, json: bool) -> std::process::Output {
+    plan_with(t, policy, json, &[])
+}
+
+fn plan_with(t: &Tmp, policy: &str, json: bool, extra: &[&str]) -> std::process::Output {
     let policy_path = t.0.join("policy.toml");
     fs::write(&policy_path, policy).unwrap();
     let mut cmd = Command::new(env!("CARGO_BIN_EXE_uas"));
@@ -512,6 +516,7 @@ fn plan(t: &Tmp, policy: &str, json: bool) -> std::process::Output {
     if json {
         cmd.arg("--json");
     }
+    cmd.args(extra);
     cmd.output().expect("run uas")
 }
 
@@ -678,4 +683,45 @@ fn seats_plan_source_has_no_write_and_no_environ() {
     );
     let planted = format!("{}\nfile.write_all(b\"\")", include_str!("../src/plan.rs"));
     assert!(!violations(&planted).is_empty());
+}
+
+fn gate(t: &Tmp, policy: &str, extra: &[&str]) -> serde_json::Value {
+    let out = plan_with(t, policy, true, extra);
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let v: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
+    v["headroom"].clone()
+}
+
+#[test]
+fn seats_plan_flag_beats_policy_beats_default_for_load_and_memory_floor() {
+    let t = Tmp::new("plan-precedence");
+    let _l = plan_fixture(&t); // load 1.0, 32 GiB available
+    let host = "[host]\nmax_load_1m = 0.5\nmin_mem_available = \"40G\"\n";
+
+    // Neither: the defaults apply, and 1.0 load with 32 GiB passes.
+    let h = gate(&t, "", &[]);
+    assert_eq!(h["max_load_1m"], 12.0);
+    assert_eq!(h["min_mem_available_bytes"], 16 * GIB);
+    assert_eq!(h["passes"], true);
+
+    // Only the policy: its values apply, and the gate fails on both.
+    let h = gate(&t, host, &[]);
+    assert_eq!(h["max_load_1m"], 0.5);
+    assert_eq!(h["min_mem_available_bytes"], 40 * GIB);
+    assert_eq!(h["passes"], false);
+
+    // Flags and policy together: the flags win, and the gate passes.
+    let h = gate(&t, host, &["--max-load", "5", "--min-mem-gib", "8"]);
+    assert_eq!(h["max_load_1m"], 5.0);
+    assert_eq!(h["min_mem_available_bytes"], 8 * GIB);
+    assert_eq!(h["passes"], true);
+
+    // Each threshold takes its own source.
+    let h = gate(&t, host, &["--min-mem-gib", "8"]);
+    assert_eq!(h["max_load_1m"], 0.5, "load still from the policy");
+    assert_eq!(h["min_mem_available_bytes"], 8 * GIB, "floor from the flag");
 }

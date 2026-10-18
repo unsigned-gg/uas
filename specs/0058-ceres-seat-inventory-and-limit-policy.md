@@ -79,9 +79,12 @@ max_load_1m          = <number>      # headroom gate overrides
 min_mem_available    = "<size>"
 ```
 
-- A size uses systemd syntax: a decimal number with an optional `K`, `M`, `G` or `T` suffix, in
-  powers of 1024 (`4G`, `512M`). The parser returns a typed error for anything else, for a zero
-  size, and for an unknown key.
+- A size uses systemd syntax: a number with an optional fraction and an optional `K`, `M`, `G`
+  or `T` suffix, in powers of 1024 (`4G`, `512M`, `1.5G`), truncated to whole bytes. The parser
+  returns a typed error for anything else, for a zero size, and for an unknown key. `infinity`
+  and `max` are not accepted: omit the field for no limit.
+- When one scope holds several panes that match different `[[seat]]` entries, the entry of the
+  first session in sorted order applies.
 - The merged limits of the default, and of each seat over the default, must pass REQ-0058-12.
 - A `[[seat]]` whose session matches no attributed scope is reported as unknown, not ignored.
 - `uas seats plan --json` emits `schema = "uas.seats.plan.v1"`. The plan types live in

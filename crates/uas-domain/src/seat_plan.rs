@@ -28,6 +28,14 @@ pub enum PolicyError {
         /// The text given.
         value: String,
     },
+    /// A size spells "no limit" (`infinity`, `max`); the policy omits the field instead.
+    #[error("{field}: {value:?} is not a size; omit the field for no limit")]
+    NoLimitSpelling {
+        /// The policy key.
+        field: &'static str,
+        /// The text given.
+        value: String,
+    },
     /// A size, or `tasks_max`, is zero.
     #[error("{field}: must be greater than zero")]
     Zero {
@@ -60,25 +68,50 @@ pub enum PolicyError {
 pub struct Size(u64);
 
 impl Size {
-    /// Parse a decimal number with an optional `K`, `M`, `G` or `T` suffix (powers of 1024).
+    /// Parse systemd size syntax: digits with an optional fraction (`1.5G`) and an optional
+    /// `K`, `M`, `G` or `T` suffix in powers of 1024. The result is truncated to whole bytes.
     pub fn parse(field: &'static str, text: &str) -> Result<Self, PolicyError> {
         let bad = || PolicyError::BadSize {
             field,
             value: text.to_string(),
         };
         let t = text.trim();
-        let (digits, mult) = match t.chars().last().ok_or_else(bad)? {
-            'K' => (&t[..t.len() - 1], 1u64 << 10),
-            'M' => (&t[..t.len() - 1], 1 << 20),
-            'G' => (&t[..t.len() - 1], 1 << 30),
-            'T' => (&t[..t.len() - 1], 1 << 40),
-            _ => (t, 1),
+        if t.eq_ignore_ascii_case("infinity") || t.eq_ignore_ascii_case("max") {
+            return Err(PolicyError::NoLimitSpelling {
+                field,
+                value: text.to_string(),
+            });
+        }
+        let (number, shift) = match t.chars().last().ok_or_else(bad)? {
+            'K' => (&t[..t.len() - 1], 10u32),
+            'M' => (&t[..t.len() - 1], 20),
+            'G' => (&t[..t.len() - 1], 30),
+            'T' => (&t[..t.len() - 1], 40),
+            _ => (t, 0),
         };
-        if digits.is_empty() || !digits.bytes().all(|b| b.is_ascii_digit()) {
+        let (int, frac) = number.split_once('.').unwrap_or((number, ""));
+        let digits = |s: &str| s.bytes().all(|b| b.is_ascii_digit());
+        let has_dot = number.contains('.');
+        if int.is_empty() || !digits(int) || !digits(frac) || (has_dot && frac.is_empty()) {
             return Err(bad());
         }
-        let n: u64 = digits.parse().map_err(|_| bad())?;
-        let bytes = n.checked_mul(mult).ok_or_else(bad)?;
+        // 18 fraction digits keep 10^18 * u64 * 2^40 inside u128 (checked anyway).
+        if frac.len() > 18 {
+            return Err(bad());
+        }
+        let scale = 10u128.pow(frac.len() as u32);
+        let int_n: u128 = int.parse().map_err(|_| bad())?;
+        let frac_n: u128 = if frac.is_empty() {
+            0
+        } else {
+            frac.parse().map_err(|_| bad())?
+        };
+        let scaled = int_n
+            .checked_mul(scale)
+            .and_then(|v| v.checked_add(frac_n))
+            .and_then(|v| v.checked_mul(1u128 << shift))
+            .ok_or_else(bad)?;
+        let bytes = u64::try_from(scaled / scale).map_err(|_| bad())?;
         if bytes == 0 {
             return Err(PolicyError::Zero { field });
         }
@@ -349,10 +382,14 @@ impl SeatLimitPlan {
         let mut named: Vec<&str> = Vec::new();
         for s in doc.scopes.iter().filter(|s| !s.attributions.is_empty()) {
             named.extend(s.attributions.iter().map(|a| a.session.as_str()));
-            let matched = s
-                .attributions
+            // When several panes match different entries, the first in sorted session order
+            // wins, whatever order the document lists them in.
+            let mut sessions: Vec<&str> =
+                s.attributions.iter().map(|a| a.session.as_str()).collect();
+            sessions.sort_unstable();
+            let matched = sessions
                 .iter()
-                .find_map(|a| policy.seats.iter().find(|o| o.session == a.session));
+                .find_map(|name| policy.seats.iter().find(|o| o.session == *name));
             let proposed = matched.map_or(policy.default, |o| o.limits.over(policy.default));
             let peak_over_high = match (s.memory_peak, proposed.memory_high) {
                 (Some(peak), Some(high)) => Some(peak > high.bytes()),
@@ -459,20 +496,48 @@ mod tests {
             "4g",
             "4GB",
             "-1",
-            "1.5G",
+            "-1G",
             "four",
             "4 G",
             "99999999999999T",
+            "1.2.3G",
+            "1.",
+            ".5G",
+            "1.G",
+            "99999999999999999999",
         ] {
             assert!(
                 matches!(Size::parse("f", bad), Err(PolicyError::BadSize { .. })),
                 "{bad:?} must be rejected"
             );
         }
-        assert!(matches!(
-            Size::parse("f", "0"),
-            Err(PolicyError::Zero { .. })
-        ));
+        for zero in ["0", "0G", "0.0G"] {
+            assert!(
+                matches!(Size::parse("f", zero), Err(PolicyError::Zero { .. })),
+                "{zero:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn seat_size_accepts_decimals_like_systemd_and_truncates() {
+        assert_eq!(Size::parse("f", "1.5G").unwrap().bytes(), 1_610_612_736);
+        assert_eq!(Size::parse("f", "0.5M").unwrap().bytes(), 524_288);
+        assert_eq!(
+            Size::parse("f", "1.0001K").unwrap().bytes(),
+            1024,
+            "truncated"
+        );
+        assert_eq!(Size::parse("f", "1.5G").unwrap().to_string(), "1536M");
+    }
+
+    #[test]
+    fn seat_size_tells_the_user_to_omit_the_field_for_no_limit() {
+        for word in ["infinity", "max", "Infinity", "MAX"] {
+            let e = Size::parse("memory_max", word).unwrap_err();
+            assert!(matches!(e, PolicyError::NoLimitSpelling { .. }), "{word}");
+            assert!(e.to_string().contains("omit the field for no limit"));
+        }
     }
 
     #[test]
@@ -532,6 +597,23 @@ mod tests {
         assert_eq!(plan.seats[0].matched_session.as_deref(), Some("big"));
         assert_eq!(plan.seats[1].proposed.memory_high.unwrap().bytes(), 4 * G);
         assert_eq!(plan.seats[1].matched_session, None);
+    }
+
+    #[test]
+    fn seat_plan_multi_session_scope_takes_the_first_in_sorted_order() {
+        // `zeta` is listed first in the policy and first in the scope; `alpha` sorts first.
+        let mut p = raw(Some("4G"), None);
+        p.seat.push(seat_raw("zeta", Some("1G"), None));
+        p.seat.push(seat_raw("alpha", Some("2G"), None));
+        let policy = SeatLimitPolicy::from_raw(&p).unwrap();
+        let mut scope = attributed("a.scope", "zeta", None);
+        scope.attributions.push(Attribution {
+            session: "alpha".into(),
+            socket: None,
+        });
+        let plan = SeatLimitPlan::build(&policy, &doc(vec![scope]));
+        assert_eq!(plan.seats[0].matched_session.as_deref(), Some("alpha"));
+        assert_eq!(plan.seats[0].proposed.memory_high.unwrap().bytes(), 2 * G);
     }
 
     #[test]
