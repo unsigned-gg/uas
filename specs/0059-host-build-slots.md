@@ -1,5 +1,5 @@
 ---
-status: planned
+status: in-progress
 created: 2026-10-18
 tags: [pool, slots, arbitration, builds, cli, ceres]
 priority: high
@@ -9,7 +9,7 @@ depends_on: [0002-verification-gates-and-evidence, 0020-build-job-cap, 0036-slot
 
 # 0059-host-build-slots
 
-> **Status**: planned, **Priority**: high, **Created**: 2026-10-18
+> **Status**: in-progress, **Priority**: high, **Created**: 2026-10-18
 
 ## Overview
 
@@ -58,9 +58,9 @@ as long as the command runs.
 
 ## Plan
 
-- [ ] Add the `uas build` subcommand to `uas-cli` on top of `HostSlotArbiter`, with `--slot-dir`, `--host-slots`, `--wait` and `--try`.
-- [ ] Add tests for REQ-01 to REQ-08 with a temporary slot directory and helper commands such as `sh -c 'exit 3'`.
-- [ ] Add a multi-process test: with `--host-slots 1`, a second `uas build --try` exits 75 while the first holds the slot.
+- [x] Add the `uas build` subcommand to `uas-cli` on top of `HostSlotArbiter`, with `--slot-dir`, `--host-slots`, `--wait` and `--try`.
+- [x] Add tests for REQ-01 to REQ-08 with a temporary slot directory and helper commands such as `sh -c 'exit 3'`.
+- [x] Add a multi-process test: with `--host-slots 1`, a second `uas build --try` exits 75 while the first holds the slot.
 - [ ] Tick spec 0036's default-directory Plan item only if `SlotPool` callers also adopt the default. Otherwise leave it, and point to this spec from 0036 Notes.
 
 ## Test
