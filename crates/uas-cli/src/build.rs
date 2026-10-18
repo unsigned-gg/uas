@@ -15,6 +15,10 @@ use uas_pool::PoolError;
 
 /// Exit status when no slot frees in time (`EX_TEMPFAIL`, REQ-0059-04).
 pub const EXIT_NO_SLOT: i32 = 75;
+/// Exit status when the command exists but cannot be run (shell convention).
+pub const EXIT_NOT_EXECUTABLE: i32 = 126;
+/// Exit status when the command is not found (shell convention).
+pub const EXIT_NOT_FOUND: i32 = 127;
 /// Value given to a child that has no `CARGO_BUILD_JOBS` (D4, spec 0020).
 const DEFAULT_JOBS: &str = "2";
 
@@ -82,12 +86,21 @@ pub fn run(opts: &BuildOpts) -> Result<i32> {
         .context("no command given after --")?;
     let mut child = Process::new(program);
     child.args(args);
-    if std::env::var_os("CARGO_BUILD_JOBS").is_none() {
+    if std::env::var_os("CARGO_BUILD_JOBS").is_none_or(|v| v.is_empty()) {
         child.env("CARGO_BUILD_JOBS", DEFAULT_JOBS);
     }
-    let status = child
-        .status()
-        .with_context(|| format!("cannot run {program}"))?;
+    let status = match child.status() {
+        Ok(status) => status,
+        Err(e) => {
+            let code = match e.kind() {
+                std::io::ErrorKind::NotFound => EXIT_NOT_FOUND,
+                std::io::ErrorKind::PermissionDenied => EXIT_NOT_EXECUTABLE,
+                _ => return Err(e).with_context(|| format!("cannot run {program}")),
+            };
+            eprintln!("uas build: cannot run {program}: {e}");
+            return Ok(code);
+        }
+    };
     drop(lease);
     Ok(exit_code(status))
 }
