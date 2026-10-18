@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0 OR MIT
 //! `uas` command line entry point.
 
+mod build;
 mod memory;
 mod plan;
 mod seats;
@@ -72,6 +73,8 @@ enum Command {
     },
     /// List agent seat scopes with usage, limits and host headroom. Read-only (spec 0058).
     Seats(SeatsCmd),
+    /// Run a command while holding one host build slot. A slot count only (spec 0059).
+    Build(build::BuildOpts),
     /// Manage harness execution, session lifecycle, and receipts.
     Harness {
         #[command(subcommand)]
@@ -1169,6 +1172,7 @@ fn main() -> Result<()> {
             let report = demo(&slot)?;
             println!("{}", serde_json::to_string_pretty(&report)?);
         }
+        Command::Build(opts) => std::process::exit(build::run(&opts)?),
         Command::Seats(cmd) => match cmd.sub {
             Some(SeatsSub::Plan { policy, opts }) => print!("{}", plan::render(&policy, &opts)?),
             None => {

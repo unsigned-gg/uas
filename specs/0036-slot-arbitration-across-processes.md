@@ -114,3 +114,4 @@ The primary negative control: if the host slot iteration loop in `uas-pool` is b
 - Layering preservation: `uas-pool` sits above `uas-sandbox` and `uas-router`, and below `uas-engine`, while `uas-domain` remains zero I/O [reported: spec 0001; verified: `make smoke JOBS=2`].
 - The owner clause of REQ-0036-11 is tested through the pure `owner_check(dir_uid, process_uid)`. A directory with a foreign owner is not created in a test, since that needs root.
 - Between `ensure_dir` and the lock-file open there is a check-then-open window in which the directory could be swapped. `O_NOFOLLOW` on the file open limits it to the lock file; the directory itself is rechecked on every acquire, not held open.
+- Spec 0059 adds `uas build -- <command>`, the first CLI caller of `HostSlotArbiter`. It uses `/tmp/uas-slots` as its default directory. `SlotPool` callers have not adopted the default, so the default-directory Plan item stays open.
