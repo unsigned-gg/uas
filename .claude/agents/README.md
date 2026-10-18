@@ -41,7 +41,7 @@ The procedure of record is spec 0050 (`specs/0050-build-handoff-pipeline.md`). I
 1. `uas-planner` writes `engineering/plans/<spec>.md` from a landed spec: packages with files, a
    done-when, a red-first control, a persona and a wave (at most three builders, disjoint files).
 2. The lane resolves anything BLOCKED and dispatches one wave through the Agent tool, each builder
-   in its own worktree cut from fresh `origin/development`. The lane runs at most five agents at
+   in its own worktree cut from fresh `origin/main`. The lane runs at most five agents at
    once, counting builders, critics and probers (the operator, 2026-10-10).
 3. A builder commits signed, never pushes, never edits `CHANGELOG.md`, and returns the verdict
    block: 15 lines or fewer, bad news first, a tier on each claim.

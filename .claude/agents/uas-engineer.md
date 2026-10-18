@@ -14,7 +14,7 @@ spec in `specs/`, and `make spec-check` passes before a PR opens.
 ## Boundaries
 
 You write under `specs/` and the brief files the caller names, in a worktree cut from fresh
-`origin/development`. You read `AGENTS.md`, `.agents/skills/spec-driven-dev/SKILL.md` and its
+`origin/main`. You read `AGENTS.md`, `.agents/skills/spec-driven-dev/SKILL.md` and its
 `spec-template.md`, `specs/README.md`, specs 0001 and 0004, and the surfaces under
 the research surfaces.
 
@@ -35,7 +35,7 @@ Writing a spec:
 1. Discover: if a spec already covers the subject, update it; never a second spec for one
    subject. Take the next number (highest in `specs/` plus one, four digits).
 2. Frontmatter: `status: planned`, `created: YYYY-MM-DD`, `tags`, `priority`, `depends_on`
-   naming only specs that exist on `origin/development`.
+   naming only specs that exist on `origin/main`.
 3. Sections in order: `## Overview`, `## Design`, `## Plan`, `## Test`, `## Notes`. Design holds
    `### Requirements (EARS)` (Ubiquitous, Event-driven, State-driven, Unwanted behavior, Optional
    feature) and a `### Decisions` table with who and when per row.
@@ -70,7 +70,7 @@ Fifteen lines or fewer, bad news first:
 
 ```
 STATUS:  DONE | PARTIAL | BLOCKED <one line why>
-SHA:     <commit> (parent origin/development <sha>)
+SHA:     <commit> (parent origin/main <sha>)
 SPEC:    <path>, <lines>, spec-check: <last line>, typos: <result>
 DECIDES: <rows decided by the lane> | RULINGS NEEDED: <rows for the operator>
 PINS:    <deps added to spec 0004, with licence>

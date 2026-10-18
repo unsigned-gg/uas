@@ -4,7 +4,7 @@ UAS is the Unsigned Agent Substrate. It is a Rust-native, pooled runtime for age
 harnesses. The design calls for durable workflows, kernel confinement, prefix-aware
 model routing and an operator dashboard.
 
-**Status:** scaffold and domain; no runtime yet. Version 0.1.0. Private. Licensed
+**Status:** early runtime. The pool, sandbox, seats, build and operator crates run; the `uas` CLI has `seats`, `build` and wave commands. Version 0.1.0. Public. Licensed
 `Apache-2.0 OR MIT` (see `LICENSE-APACHE`, `LICENSE-MIT` and `NOTICE`). The design is a draft from `cerebral-work/research@4068134`.
 
 **Support:** This project is pre-1.0.
@@ -23,6 +23,7 @@ Example code is not for production.
 | `uas-acp` | JSON-RPC server for IDEs. | 3 |
 | `uas-router` | Prefix-hash routing for model calls. | 4 |
 | `uas-deck` | Operator dashboard. | 5 |
+| `uas-operator` | Kubernetes operator and node agent for `WorkerSlot`. | n/a |
 | `uas-storage` | Storage clients. No phase yet. | open |
 | `uas-cli` | Binary `uas`. | n/a |
 

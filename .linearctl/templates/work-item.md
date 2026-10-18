@@ -22,9 +22,9 @@ title: "{{ summary }}"
 
 ## Branch and PR (spec 0003)
 
-- Branch `feat/<slug>` (or `fix/`, `docs/`), cut from `origin/development` in a sibling worktree
-- PR targets `development`. The title has no ticket ID. The body says "Part of CER-N"
-- Merge on green CI with a merge commit pinned to the head SHA. A promotion PR carries `development` to `main`
+- Branch `feat/<slug>` (or `fix/`, `docs/`), cut from `origin/main` in a sibling worktree
+- PR targets `main`. The title has no ticket ID. The body says "Part of CER-N"
+- Merge on green CI with a merge commit pinned to the head SHA. `main` is the only integration branch
 
 ## Evidence (spec 0002)
 

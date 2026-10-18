@@ -29,11 +29,11 @@ make check
 
 - A new concept or an architecture change starts as a spec in `specs/`. Run `make spec-check`.
 - Use `make` targets. On a shared workstation they pass `-j 2`. Do not raise it.
-- Cut your branch from `development`. Open the PR into `development`.
+- Cut your branch from `main`. Open the PR into `main`.
 - Sign every commit. Use Conventional Commits. Do not put a ticket ID in the subject.
 - Merge with a merge commit. Never squash.
 - Add one line under `## [Unreleased]` in `CHANGELOG.md` for each user-visible change. See specs/0053-changelog-and-commit-text-policy.md.
-- The promotion PR from `development` to `main` merges on green CI (spec 0003).
+- A PR into `main` merges on green CI. `main` is the only integration and release branch (spec 0003).
 - Run `make check` and `make hygiene` before you push.
 
 ## Pull requests

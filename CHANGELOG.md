@@ -148,6 +148,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `release-plz`: name GitHub releases `v{{ version }}` to match tag names instead of `cas-cli-v{{ version }}`.
 - `ci`: drop the dead `release` trigger and attach job from `sbom.yml`, generating the SBOM artifact on push to `main` only.
 - `cas-sandbox`, `cas-pool` and `cas-ebpf` deny `unsafe` instead of forbidding it. A block opts in with `#[allow(unsafe_code)]` and a `// SAFETY:` comment, which clippy enforces. Spec 0001 and spec 0004 record this ruling, the BPF program licence (`Dual MIT/GPL`, program object only) and the sudo `make ebpf-test` decision.
+- GitHub Flow governance (operator ruling 2026-10-18, UAS-D1): AGENTS.md rules 4 and 9 and the approval routes, specs 0003, 0005, 0054, 0056 and 0057, CONTRIBUTING.md, RELEASING.md, `release-plz.toml`, the agent and skill files and `.moon/workspace.yml` and the README now say `main` is the only integration and release branch; the README status and visibility are corrected.
 
 ### Deprecated
 - Spec 0049 wave 1 (plan 0049 P1): the `uas wave` subcommands, `uas harness run --show-cpm`, `--wave` and `--max-concurrency`, the two `SagaFlowCoordinator` methods and the two `HarnessReport` fields are deprecated in favour of saga (spec 0049); `--help` and a single stderr line say so (the `--max-concurrency` notice fires only for a value other than its default of 3), and behaviour is unchanged until the removal PR after saga's parity step.

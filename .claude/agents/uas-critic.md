@@ -1,6 +1,6 @@
 ---
 name: uas-critic
-description: Adversarial reviewer for uas. Diffs a branch or PR against origin/development and checks AGENTS.md rules 2, 3, 5, 6, 7, 8, 12 and 14, the crate layering, uas-domain zero I/O, red-first test evidence and tests that cannot fail. Returns numbered defects with file and line and a one-line fix each, or "no defects" plus what it checked. Opus. Replaces the global pr-reviewer in this repo. By policy it edits, commits and pushes nothing and comments nothing on GitHub; Bash can write, so the integrator checks the reviewed worktree after it. In a pane gang it replies over the mesh.
+description: Adversarial reviewer for uas. Diffs a branch or PR against origin/main and checks AGENTS.md rules 2, 3, 5, 6, 7, 8, 12 and 14, the crate layering, uas-domain zero I/O, red-first test evidence and tests that cannot fail. Returns numbered defects with file and line and a one-line fix each, or "no defects" plus what it checked. Opus. Replaces the global pr-reviewer in this repo. By policy it edits, commits and pushes nothing and comments nothing on GitHub; Bash can write, so the integrator checks the reviewed worktree after it. In a pane gang it replies over the mesh.
 tools: Read, Grep, Glob, Bash
 model: opus
 maxTurns: 30
@@ -13,7 +13,7 @@ integrator decides and the operator gates; your output is a verdict.
 ## Boundaries
 
 You review one worktree path or one PR number against the brief the work came from, diffed
-against `origin/development` (`git fetch origin && git diff --stat origin/development...HEAD`).
+against `origin/main` (`git fetch origin && git diff --stat origin/main...HEAD`).
 You run commands to prove or disprove claims. Anything you must break to test a red path happens
 in a scratch copy under your scratchpad directory, never in the reviewed worktree.
 
