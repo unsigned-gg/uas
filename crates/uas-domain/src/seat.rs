@@ -184,8 +184,11 @@ pub struct HeadroomGate {
 impl HeadroomGate {
     /// Default load ceiling (D4).
     pub const DEFAULT_MAX_LOAD_1M: f64 = 12.0;
-    /// Default memory floor, 16 GiB (D4).
-    pub const DEFAULT_MIN_MEM_AVAILABLE_BYTES: u64 = 16 * 1024 * 1024 * 1024;
+    /// Default memory floor in GiB (D4).
+    pub const DEFAULT_MIN_MEM_AVAILABLE_GIB: u64 = 16;
+    /// Default memory floor in bytes (D4).
+    pub const DEFAULT_MIN_MEM_AVAILABLE_BYTES: u64 =
+        Self::DEFAULT_MIN_MEM_AVAILABLE_GIB * 1024 * 1024 * 1024;
 
     /// Evaluate the gate. An unreadable value fails it: headroom cannot be shown.
     pub fn evaluate(

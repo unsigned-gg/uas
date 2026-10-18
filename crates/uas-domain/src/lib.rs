@@ -36,6 +36,7 @@ mod outcome;
 mod policy;
 mod reconcile;
 mod seat;
+mod seat_plan;
 mod slot;
 
 pub use attestation::{Attestation, EvidenceTier};
@@ -53,5 +54,10 @@ pub use reconcile::{LostSlot, ReconcileReport};
 pub use seat::{
     Attribution, CpuMax, HeadroomGate, Limit, ScopeKind, SeatSample, SeatSummary, SeatsDocument,
     SocketCounts, SocketOutcome, SocketStatus, TmuxStatus, SEATS_SCHEMA,
+};
+pub use seat_plan::{
+    Ceiling, HostPolicy, PlannedSeat, PolicyError, RawHost, RawLimits, RawPolicy, RawSeat,
+    SeatLimitPlan, SeatLimitPolicy, SeatLimits, SeatOverride, Size, NO_APPLY_NOTICE,
+    SEATS_PLAN_SCHEMA,
 };
 pub use slot::{Slot, SlotId, SlotState, WorktreeRef};

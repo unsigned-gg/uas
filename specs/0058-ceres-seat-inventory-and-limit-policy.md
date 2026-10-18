@@ -57,6 +57,39 @@ This spec adds two things:
 | D6 | `--json` emits one typed document with `schema = "uas.seats.v1"`. An unreadable value is absent, not zero. | Estate wire rule: typed structs, and absent is not the same as defaulted. | lane, 2026-10-18 |
 | D7 | The plan policy is a TOML file given by flag. The repository ships no default limit values until the inventory has sampled a normal week on ceres. | Values guessed before measurement become policy by accident. | lane, 2026-10-18 |
 
+### Policy file (wave 2)
+
+`uas seats plan --policy <file.toml>` reads one TOML file. The repository ships no policy with
+values (D7). Test fixtures hold values only to test the parser.
+
+```toml
+[default]            # optional; every field optional
+memory_high = "<size>"
+memory_max  = "<size>"
+tasks_max   = <integer>
+cpu_weight  = <integer 1 to 10000>
+
+[[seat]]             # optional, repeatable; matched by exact tmux session name
+session     = "<session name>"
+memory_high = "<size>"   # each field overrides the default for this seat only
+
+[host]               # optional
+max_attributed_seats = <integer>
+max_load_1m          = <number>      # headroom gate overrides
+min_mem_available    = "<size>"
+```
+
+- A size uses systemd syntax: a number with an optional fraction and an optional `K`, `M`, `G`
+  or `T` suffix, in powers of 1024 (`4G`, `512M`, `1.5G`), truncated to whole bytes. The parser
+  returns a typed error for anything else, for a zero size, and for an unknown key. `infinity`
+  and `max` are not accepted: omit the field for no limit.
+- When one scope holds several panes that match different `[[seat]]` entries, the entry of the
+  first session in sorted order applies.
+- The merged limits of the default, and of each seat over the default, must pass REQ-0058-12.
+- A `[[seat]]` whose session matches no attributed scope is reported as unknown, not ignored.
+- `uas seats plan --json` emits `schema = "uas.seats.plan.v1"`. The plan types live in
+  `uas-domain`; the TOML read lives in `uas-cli`.
+
 ### Requirements (EARS)
 
 - **[REQ-0058-01]** (Ubiquitous): The `uas seats` command shall list every direct child scope of the calling uid's user service cgroup, with `memory.current`, `memory.peak`, `memory.high`, `memory.max`, `pids.current`, `pids.max`, `cpu.max`, `cpu.weight` and the `some avg10` value of `memory.pressure` and `cpu.pressure`.
@@ -75,6 +108,9 @@ This spec adds two things:
 - **[REQ-0058-13]** (Event-driven): WHEN more than one tmux server socket of the calling uid exists, the inventory shall query each one and label each attribution with its socket name.
 - **[REQ-0058-14]** (Unwanted): IF a cgroup interface file is not a regular file or exceeds 64 KiB, THEN the inventory shall report that field as absent.
 - **[REQ-0058-15]** (Unwanted): IF a tmux socket refuses a connection, THEN the inventory shall skip it without starting a tmux process.
+- **[REQ-0058-16]** (Ubiquitous): The `uas seats plan` command shall print each attributed seat's `memory.peak` and `memory.current` beside the proposed `MemoryHigh`, and shall mark each seat whose peak exceeds it.
+- **[REQ-0058-17]** (Event-driven): WHEN the policy sets `max_attributed_seats`, `uas seats plan` shall report the current attributed count against it, and shall say whether the host is over it.
+- **[REQ-0058-18]** (Ubiquitous): The `uas seats plan` output shall state that uas applied nothing, and that enforcement belongs to seat launch.
 
 ## Plan
 
@@ -85,9 +121,11 @@ Wave 1: inventory (REQ-01 to REQ-10, REQ-13 to REQ-15).
 - [x] Add a tmux attribution adapter and the `uas seats [--json]` command to `uas-cli`.
 - [x] Add fixture tests for REQ-01 to REQ-09 and REQ-13 to REQ-15 (the CLI tests cover a nested-cgroup pid, a two-pane scope, a non-pane scope, pressure values, several sockets and a dead socket), and a source-scan test for REQ-06 and REQ-10.
 
-Wave 2: dry-run plan (REQ-11 and REQ-12).
+Wave 2: dry-run plan (REQ-11, REQ-12 and REQ-16 to REQ-18).
 
-- [ ] Add `SeatLimitPolicy` and `SeatLimitPlan` to `uas-domain`, and the `uas seats plan --policy` command.
+- [x] Add the size newtype, `SeatLimitPolicy` (with its typed parse errors and the REQ-0058-12 check), `SeatLimitPlan` and the `uas.seats.plan.v1` document to `uas-domain`, pure, with unit tests.
+- [x] Add `uas seats plan --policy <file.toml> [--json]` to `uas-cli`, reusing the wave 1 inventory, with the no-apply statement, the peak-over-high mark, the unknown-session report and the seat ceiling.
+- [x] Add fixture tests for REQ-11, REQ-12 and REQ-16 to REQ-18, and put the plan modules under the source-scan bans.
 - [ ] Sample a normal week of inventory on ceres before any limit value is proposed (D7).
 
 ## Test
@@ -111,6 +149,12 @@ removed:
 | a stale socket file is skipped with zero tmux spawns, a listening socket is queried, and every socket is probed even past the cap, while the cap bounds tmux spawns, takes `default` first and counts the live overflow | REQ-0058-15 |
 | a scope with two panes lists both sessions, sorted and deduplicated | REQ-0058-03 |
 | an oversize file, a FIFO and a symlink as interface files give absent fields | REQ-0058-14 |
+| a policy with `memory_max` and no `memory_high` at or below it is rejected, for the default and for a seat | REQ-0058-12 |
+| a per-seat override beats the default, field by field, and an unlisted seat takes the default | REQ-0058-11 |
+| a `[[seat]]` naming a session that no scope holds is reported as unknown | REQ-0058-11 |
+| a seat whose `memory.peak` exceeds the proposed `MemoryHigh` is marked, and one at or under it is not | REQ-0058-16 |
+| the plan reports the attributed count against `max_attributed_seats` and whether it is over | REQ-0058-17 |
+| the human and JSON plan carry the statement that uas applied nothing | REQ-0058-18 |
 | a source scan finds no `environ` path and no write call in the inventory modules | REQ-0058-02, REQ-0058-06 |
 | `uas-domain` seat types use no `std::fs`, `std::net`, `std::process` or `tokio` | REQ-0058-10 |
 

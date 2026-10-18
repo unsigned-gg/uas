@@ -9,6 +9,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use anyhow::{Context, Result};
+use clap::Args;
 use uas_domain::{
     Attribution, HeadroomGate, ScopeKind, SeatSample, SeatsDocument, SocketCounts, SocketOutcome,
     SocketStatus, TmuxStatus,
@@ -16,6 +17,63 @@ use uas_domain::{
 use uas_pool::seats::{
     probe_socket, read_headroom, read_scopes, scope_of_pid, user_service_dir, SocketProbe,
 };
+
+/// The flags shared by `uas seats` and `uas seats plan`.
+#[derive(Debug, Clone, Args)]
+pub struct SeatsOpts {
+    /// Emit one JSON document.
+    #[arg(long)]
+    pub json: bool,
+    /// The cgroup v2 mount.
+    #[arg(long, default_value = "/sys/fs/cgroup")]
+    pub cgroup_root: PathBuf,
+    /// The proc mount.
+    #[arg(long, default_value = "/proc")]
+    pub proc_root: PathBuf,
+    /// The tmux binary used to attribute scopes to seats.
+    #[arg(long, default_value = "tmux")]
+    pub tmux_bin: PathBuf,
+    /// The directory holding `tmux-<uid>/` with the tmux server sockets.
+    #[arg(long, env = "TMUX_TMPDIR", default_value = "/tmp")]
+    pub tmux_socket_dir: PathBuf,
+    /// The most live tmux sockets to query with tmux; the rest are counted and skipped.
+    #[arg(long, default_value_t = 64)]
+    pub max_tmux_sockets: usize,
+    /// Read this uid's user service cgroup; default is the caller.
+    #[arg(long)]
+    pub uid: Option<u32>,
+    /// The headroom gate needs a 1-minute load below this. Without a flag or a policy `[host]` value, the estate default applies (D4).
+    #[arg(long)]
+    pub max_load: Option<f64>,
+    /// The headroom gate needs at least this many GiB available. Without a flag or a policy `[host]` value, the estate default applies (D4).
+    #[arg(long)]
+    pub min_mem_gib: Option<f64>,
+}
+
+impl SeatsOpts {
+    /// The run config. A flag beats a policy `[host]` value, which beats the default.
+    pub fn config(&self, host: Option<&uas_domain::HostPolicy>) -> SeatsConfig {
+        let gib = 1024.0 * 1024.0 * 1024.0;
+        SeatsConfig {
+            cgroup_root: self.cgroup_root.clone(),
+            proc_root: self.proc_root.clone(),
+            tmux_bin: self.tmux_bin.clone(),
+            tmux_socket_base: self.tmux_socket_dir.clone(),
+            max_tmux_sockets: self.max_tmux_sockets,
+            uid: self.uid,
+            max_load_1m: self
+                .max_load
+                .or(host.and_then(|h| h.max_load_1m))
+                .unwrap_or(uas_domain::HeadroomGate::DEFAULT_MAX_LOAD_1M),
+            min_mem_gib: self
+                .min_mem_gib
+                .or(host
+                    .and_then(|h| h.min_mem_available)
+                    .map(|s| s.bytes() as f64 / gib))
+                .unwrap_or(uas_domain::HeadroomGate::DEFAULT_MIN_MEM_AVAILABLE_GIB as f64),
+        }
+    }
+}
 
 /// Inputs of one inventory run.
 #[derive(Debug, Clone)]
