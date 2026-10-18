@@ -121,12 +121,7 @@ impl HostSlotArbiter {
             return Err(insecure(format!("mode {mode:04o} is looser than 0700")));
         }
         let uid = rustix::process::geteuid().as_raw();
-        if meta.uid() != uid {
-            return Err(insecure(format!(
-                "owner uid {} is not process uid {uid}",
-                meta.uid()
-            )));
-        }
+        owner_check(meta.uid(), uid).map_err(insecure)?;
         Ok(())
     }
 
@@ -203,6 +198,17 @@ impl HostSlotArbiter {
         let text = std::str::from_utf8(bytes.get(..HOLDER_RECORD_LEN)?).ok()?;
         serde_json::from_str(text.trim()).ok()
     }
+}
+
+/// Refuse a directory owned by another uid (spec 0036 D2). Pure, so the mismatch is testable
+/// without root.
+fn owner_check(dir_uid: u32, process_uid: u32) -> Result<(), String> {
+    if dir_uid != process_uid {
+        return Err(format!(
+            "owner uid {dir_uid} is not process uid {process_uid}"
+        ));
+    }
+    Ok(())
 }
 
 /// Write the fixed-length holder record at offset 0 without truncating. A failed write is
@@ -368,33 +374,93 @@ mod tests {
             .unwrap()
             .len();
         assert_eq!(len as usize, HOLDER_RECORD_LEN);
-        // A garbage record does not change lock state: slot 0 stays held.
-        std::fs::write(s.slots().join("slot-1.lock"), b"garbage").unwrap();
-        assert_eq!(a.try_acquire().expect("slot 1 free").index().get(), 1);
     }
 
-    /// REQ-0036-08: arbitration touches only `slot-<i>.lock` files; a wave lock (spec 0025 D8)
-    /// stays free while every host slot is held, and the arbiter never creates one.
+    /// REQ-0036-10: the lock decides, not the record. Garbage on a held slot leaves it held;
+    /// garbage on a free slot is still acquirable.
     #[test]
-    fn host_slots_do_not_touch_a_wave_lock() {
+    fn lock_state_decides_not_the_record() {
+        use std::os::unix::fs::FileExt;
+        let s = Scratch::new("garbage");
+        let a = arbiter(&s, 1);
+        let lease = a.try_acquire().expect("lease");
+        let path = s.slots().join("slot-0.lock");
+        let scribble = || {
+            OpenOptions::new()
+                .write(true)
+                .open(&path)
+                .unwrap()
+                .write_all_at(&[b'x'; HOLDER_RECORD_LEN], 0)
+                .unwrap();
+        };
+        scribble();
+        assert!(
+            a.holder_record(lease.index()).is_none(),
+            "record is garbage"
+        );
+        assert!(matches!(
+            a.try_acquire(),
+            Err(PoolError::HostCapacityExceeded(1))
+        ));
+        drop(lease);
+        scribble();
+        assert_eq!(a.try_acquire().expect("free slot").index().get(), 0);
+    }
+
+    /// REQ-0036-11: a directory owned by another uid is refused.
+    #[test]
+    fn foreign_owner_is_refused() {
+        assert!(owner_check(1000, 1000).is_ok());
+        assert!(owner_check(0, 1000).is_err());
+    }
+
+    /// REQ-0036-08: a wave lock (spec 0025 D8) in the SAME directory is never taken. The arbiter
+    /// claims exactly `slot-0..H-1.lock`, leaves `wave.lock` unlocked and unwritten, and still
+    /// acquires its slots while another descriptor holds `wave.lock`.
+    #[test]
+    fn host_slots_do_not_touch_a_wave_lock_in_the_same_directory() {
         let s = Scratch::new("wave");
         let a = arbiter(&s, 2);
-        let _l0 = a.try_acquire().expect("l0");
-        let _l1 = a.try_acquire().expect("l1");
-        let wave = s.0.join("wave.lock");
-        let f = OpenOptions::new()
-            .create(true)
-            .truncate(false)
-            .write(true)
-            .open(&wave)
-            .unwrap();
-        f.try_lock()
-            .expect("wave lock is free with all host slots held");
+        drop(a.try_acquire().expect("create dir"));
+        let wave = s.slots().join("wave.lock");
+        let open_wave = || {
+            OpenOptions::new()
+                .create(true)
+                .truncate(false)
+                .write(true)
+                .open(&wave)
+                .unwrap()
+        };
+        drop(open_wave());
+
+        let l0 = a.try_acquire().expect("l0");
+        let l1 = a.try_acquire().expect("l1");
+        assert_eq!((l0.index().get(), l1.index().get()), (0, 1));
+        assert_eq!(
+            std::fs::metadata(&wave).unwrap().len(),
+            0,
+            "wave.lock written"
+        );
+        let held_by_other = open_wave();
+        held_by_other
+            .try_lock()
+            .expect("arbiter took wave.lock while holding its slots");
+
+        // With wave.lock held elsewhere, the slots still come free and are retaken.
+        drop((l0, l1));
+        let _again = (
+            a.try_acquire().expect("l0 again"),
+            a.try_acquire().expect("l1 again"),
+        );
+        assert!(matches!(
+            a.try_acquire(),
+            Err(PoolError::HostCapacityExceeded(2))
+        ));
         let mut names: Vec<_> = std::fs::read_dir(s.slots())
             .unwrap()
             .map(|e| e.unwrap().file_name().into_string().unwrap())
             .collect();
         names.sort();
-        assert_eq!(names, vec!["slot-0.lock", "slot-1.lock"]);
+        assert_eq!(names, vec!["slot-0.lock", "slot-1.lock", "wave.lock"]);
     }
 }
