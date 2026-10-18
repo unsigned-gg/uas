@@ -73,12 +73,12 @@ State as of 2026-10-18, read from `gh api repos/unsigned-gg/uas/branches/<branch
 | Required check `rust / cargo` | yes | yes |
 | Required check `cargo-deny` | yes | yes |
 | Required check `hygiene` | yes | yes |
-| Required check `ebpf-live` | no. Adding it is a separate operator go, pending. | yes (2026-10-10, after development run 38028975897; spec 0005 D2) |
-| Required check `fork-gate` | no. Adding it is a separate operator go, pending. | yes (2026-10-11, the operator, "Add fork-gate to the required checks now", lane w25:p1 about 05:25Z; plan 0051 P7) |
+| Required check `ebpf-live` | yes (2026-10-18, operator go; spec 0054 REQ-12: required on `development` since 2026-10-10, 0 failures in 44 PR job results since 2026-10-11) | yes (2026-10-10, after development run 38028975897; spec 0005 D2) |
+| Required check `fork-gate` | yes (2026-10-18, operator go; same evidence) | yes (2026-10-11, the operator, "Add fork-gate to the required checks now", lane w25:p1 about 05:25Z; plan 0051 P7) |
 
-`main` requires four checks today: `secrets`, `rust / cargo`, `cargo-deny` and
-`hygiene`. The target on `main` is the six that `development` carries. Spec
-0054 D7 and REQ-0054-11 name the target.
+`main` requires six checks: `secrets`, `rust / cargo`, `cargo-deny`, `hygiene`,
+`ebpf-live` and `fork-gate`. These are the six that `development` carries. Spec
+0054 D7 and REQ-0054-11 name them.
 
 The template repo itself also requires `template-check` on both branches. A
 repo made from the template does not, because `make new-repo` deletes that
@@ -108,9 +108,9 @@ reports as `rust / cargo`. Spec 0005 lists the jobs.
 - [x] Write the protection for both branches.
 - [x] Add the four required checks after the first green run.
 - [x] Open the first promotion PR and merge it (#4, merged 2026-10-08).
-- [ ] Move governance text and specs to GitHub Flow (CER-2986 part 1).
-- [ ] Make the last promotion of `development` to `main`. Then `main` is the base.
-- [ ] Operator go: add `ebpf-live` and `fork-gate` to the `main` required checks.
+- [x] Move governance text and specs to GitHub Flow (CER-2986 part 1, #251).
+- [x] Make the last promotion of `development` to `main` (#252, merged 2026-10-18 as b107447). Then `main` is the base.
+- [x] Operator go: add `ebpf-live` and `fork-gate` to the `main` required checks.
 - [ ] Operator decision: what happens to `development`.
 
 ## Test
@@ -123,8 +123,8 @@ gh api repos/unsigned-gg/uas/branches/main/protection \
 ```
 
 Passing means `force` and `del` are false, `admins` is true, and `checks`
-lists `secrets`, `rust / cargo`, `cargo-deny` and `hygiene` (the four of 2026-10-18;
-`ebpf-live` and `fork-gate` join them after the operator go).
+lists `secrets`, `rust / cargo`, `cargo-deny`, `hygiene`, `ebpf-live` and
+`fork-gate`.
 A push to `main` from a throwaway clone must be refused.
 
 ## Notes

@@ -1,6 +1,6 @@
 # CI gates. Spec: specs/0005-ci-cache-and-runners.md; gate rules: specs/0002.
-# Required checks on `main` (specs/0003): secrets, rust, cargo-deny, hygiene, ebpf-live.
-# `fork-gate` (spec 0051 D8) becomes a required check once the repository is public.
+# Required checks on `main` (specs/0003): secrets, rust / cargo, cargo-deny, hygiene, ebpf-live, fork-gate.
+# `fork-gate` (spec 0051 D8) decides fork PRs; every self-hosted job skips them.
 # Every action is pinned by commit SHA with its version in a comment.
 name: CI
 
