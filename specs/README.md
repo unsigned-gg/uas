@@ -63,6 +63,7 @@ Methodology: LeanSpec. The reference copy is in `../vendor/leanspec/`.
 | [0056](0056-agent-roster-and-tooling.md) | Agent roster and tooling surface | planned | medium |
 | [0057](0057-work-items-and-approval-routes.md) | Work items and approval routes | planned | medium |
 | [0058](0058-ceres-seat-inventory-and-limit-policy.md) | Ceres seat inventory and limit policy | in-progress | high |
+| [0059](0059-host-build-slots.md) | Host build slots | planned | high |
 
 
 ## How to add a spec
