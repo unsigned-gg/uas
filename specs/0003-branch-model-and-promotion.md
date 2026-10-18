@@ -35,7 +35,7 @@ token that triggers workflows. Spec 0005 uses a normal PR for the version bump.
 
 ### Requirements (EARS)
 
-- **Ubiquitous:** The repository shall enforce PR-only integration with signed commits and merge commits without squashing.
+- **Ubiquitous:** The repository shall integrate by PR only (policy and guard hooks; branch protection does not require a PR) with signed commits and merge commits without squashing.
 - **Ubiquitous:** The repository branch protections shall block force-pushes and deletions on `main`.
 - **Event-driven:** WHEN merging a PR into `main`, the lane shall pin the head commit with `--match-head-commit` and verify green CI.
 - **Event-driven:** WHEN commits land on `main`, the release automation shall execute the `release` workflow.
@@ -54,20 +54,21 @@ token that triggers workflows. Spec 0005 uses a normal PR for the version bump.
   the signed commits intact.
 - Commits are signed. Subjects follow the Conventional Commits regex in spec 0051
   (D4); Merge and Revert subjects stay allowed. Amended 2026-10-11 (plan 0051 P6).
-- Nobody pushes directly to `main`. Every change uses a PR.
+- Nobody pushes directly to `main`. Every change uses a PR (policy, AGENTS.md rule 10; see the protection table for what GitHub enforces).
 - The repo setting `delete_branch_on_merge` is on. Squash merge is off.
 
 ### Protection table
 
-State as of 2026-10-18. Both branches carry the same classic protection except
-for the last two checks.
+State as of 2026-10-18, read from `gh api repos/unsigned-gg/uas/branches/<branch>/protection` and `gh api repos/unsigned-gg/uas/rulesets`. Both branches carry the same classic protection except for the last two checks. The protection has no `required_pull_request_reviews` key, so neither branch requires a PR or approvals, and the repo has 0 rulesets. A direct push is held off by the required status checks with `enforce_admins` true, and by the guard hooks. Turning PR-required on is a separate operator decision and this spec does not propose it.
 
 | Setting | `main` | `development` (retired after the last promotion) |
 |---|---|---|
 | Deletion blocked | yes | yes |
 | Force-push blocked | yes | yes |
-| PR required, admins included | yes | yes |
-| Required approvals | 0 | 0 |
+| PR required | not configured | not configured |
+| Required approvals | not configured | not configured |
+| Admins included (`enforce_admins`) | yes | yes |
+| Signed commits required | yes | yes |
 | Required check `secrets` | yes | yes |
 | Required check `rust / cargo` | yes | yes |
 | Required check `cargo-deny` | yes | yes |
@@ -83,7 +84,7 @@ The template repo itself also requires `template-check` on both branches. A
 repo made from the template does not, because `make new-repo` deletes that
 workflow.
 
-The approval count is 0 on purpose. Estate rule "prod is dev" (operator ruling
+No approval is required, on purpose. Estate rule "prod is dev" (operator ruling
 2026-09-30) lets a lane merge on green CI. Review can follow the merge.
 The check names were read back from the API on 2026-10-08. The `rust` job
 reports as `rust / cargo`. Spec 0005 lists the jobs.

@@ -94,7 +94,7 @@ marked. Write scope is what the persona's Boundaries section allows.
 | Skill | Purpose | Lines |
 |---|---|---|
 | `spec-driven-dev` | A new concept or architecture change: LeanSpec phases, `make spec-check` | 79 |
-| `release` | Cut a version: `make release-notes`, the PR into development, the promotion PR | 63 |
+| `release` | Cut a version: `make release-notes`, the PR into main | 63 |
 | `ci-triage` | A red check: find the job, read 30 log lines, reproduce with the make target | 55 |
 | `new-repo` | Make a repository from the template: `make new-repo`, then the checks | 79 |
 | `custody-run` | Agent work under blackwall custody: task file, jailed run, settle, reconcile | 36 |
