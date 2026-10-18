@@ -6,6 +6,8 @@
 //! (REQ-0058-02, REQ-0058-06).
 
 use std::fs;
+use std::io::Read;
+use std::os::unix::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
 
 use uas_domain::{CpuMax, HeadroomGate, Limit, SeatSample};
@@ -53,10 +55,32 @@ pub fn read_scopes(service_dir: &Path) -> Result<Vec<SeatSample>, SeatError> {
         .collect())
 }
 
+/// The most bytes read from one interface file (REQ-0058-14).
+pub const MAX_READ_BYTES: u64 = 64 * 1024;
+
+/// Read `path` as text only if it is a regular file of at most [`MAX_READ_BYTES`].
+///
+/// A symlink, FIFO, directory, oversize or unreadable file gives `None` (REQ-0058-14). The
+/// file is opened non-blocking, so a racing swap to a FIFO cannot hang the read.
+pub fn read_bounded(path: &Path) -> Option<String> {
+    if !fs::symlink_metadata(path).ok()?.file_type().is_file() {
+        return None;
+    }
+    let mut file = fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(rustix::fs::OFlags::NONBLOCK.bits().try_into().ok()?)
+        .open(path)
+        .ok()?;
+    let mut text = String::new();
+    file.by_ref()
+        .take(MAX_READ_BYTES + 1)
+        .read_to_string(&mut text)
+        .ok()?;
+    (text.len() as u64 <= MAX_READ_BYTES).then_some(text)
+}
+
 fn read_trimmed(dir: &Path, file: &str) -> Option<String> {
-    fs::read_to_string(dir.join(file))
-        .ok()
-        .map(|t| t.trim().to_string())
+    read_bounded(&dir.join(file)).map(|t| t.trim().to_string())
 }
 
 fn read_u64(dir: &Path, file: &str) -> Option<u64> {
@@ -86,12 +110,14 @@ fn sample_scope(dir: &Path, name: &str) -> SeatSample {
     s.pids_max = read_limit(dir, "pids.max");
     s.cpu_max = read_trimmed(dir, "cpu.max").and_then(|t| CpuMax::parse(&t));
     s.cpu_weight = read_u64(dir, "cpu.weight");
-    s.memory_pressure_some_avg10 = fs::read_to_string(dir.join("memory.pressure"))
-        .ok()
-        .and_then(|t| parse_pressure_some_avg10(&t));
-    s.cpu_pressure_some_avg10 = fs::read_to_string(dir.join("cpu.pressure"))
-        .ok()
-        .and_then(|t| parse_pressure_some_avg10(&t));
+    s.memory_pressure_some_avg10 =
+        read_bounded(&dir.join("memory.pressure")).and_then(|t| parse_pressure_some_avg10(&t));
+    s.cpu_pressure_some_avg10 =
+        read_bounded(&dir.join("cpu.pressure")).and_then(|t| parse_pressure_some_avg10(&t));
+    s.has_processes = s
+        .pids_current
+        .map(|n| n > 0)
+        .or_else(|| read_bounded(&dir.join("cgroup.procs")).map(|t| !t.trim().is_empty()));
     s
 }
 
@@ -99,7 +125,7 @@ fn sample_scope(dir: &Path, name: &str) -> SeatSample {
 ///
 /// Returns the path component after `user@<uid>.service` when it ends in `.scope`.
 pub fn scope_of_pid(proc_root: &Path, pid: u32) -> Option<String> {
-    let text = fs::read_to_string(proc_root.join(pid.to_string()).join("cgroup")).ok()?;
+    let text = read_bounded(&proc_root.join(pid.to_string()).join("cgroup"))?;
     text.lines().find_map(|line| {
         let path = line.strip_prefix("0::")?;
         let mut parts = path.split('/');
@@ -111,12 +137,9 @@ pub fn scope_of_pid(proc_root: &Path, pid: u32) -> Option<String> {
 
 /// Read the 1-minute load and `MemAvailable` under `proc_root` and evaluate the gate.
 pub fn read_headroom(proc_root: &Path, max_load_1m: f64, min_mem_bytes: u64) -> HeadroomGate {
-    let load = fs::read_to_string(proc_root.join("loadavg"))
-        .ok()
+    let load = read_bounded(&proc_root.join("loadavg"))
         .and_then(|t| t.split_whitespace().next()?.parse::<f64>().ok());
-    let mem = fs::read_to_string(proc_root.join("meminfo"))
-        .ok()
-        .and_then(|t| parse_mem_available(&t));
+    let mem = read_bounded(&proc_root.join("meminfo")).and_then(|t| parse_mem_available(&t));
     HeadroomGate::evaluate(load, mem, max_load_1m, min_mem_bytes)
 }
 

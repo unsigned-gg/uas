@@ -51,6 +51,7 @@ pub use outcome::{KillReason, LimitEvents, WorkerOutcome};
 pub use policy::{PolicyTier, SomaClassification};
 pub use reconcile::{LostSlot, ReconcileReport};
 pub use seat::{
-    CpuMax, HeadroomGate, Limit, ScopeKind, SeatSample, SeatsDocument, TmuxStatus, SEATS_SCHEMA,
+    Attribution, CpuMax, HeadroomGate, Limit, ScopeKind, SeatSample, SeatSummary, SeatsDocument,
+    SocketStatus, TmuxStatus, SEATS_SCHEMA,
 };
 pub use slot::{Slot, SlotId, SlotState, WorktreeRef};

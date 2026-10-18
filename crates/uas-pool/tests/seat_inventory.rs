@@ -155,7 +155,10 @@ fn seat_readers_source_has_no_write_and_no_environ() {
     for banned in [
         "fs::write",
         "File::create",
-        "OpenOptions",
+        ".write(true)",
+        ".append(",
+        ".create(",
+        ".truncate(",
         "remove_file",
         "remove_dir",
         "create_dir",
@@ -165,4 +168,46 @@ fn seat_readers_source_has_no_write_and_no_environ() {
     ] {
         assert!(!src.contains(banned), "seats.rs uses {banned}");
     }
+}
+
+#[test]
+fn seat_oversize_and_fifo_interface_files_are_absent() {
+    let tmp = TempDirGuard::new("seat-bounded");
+    let service = user_service_dir(tmp.path(), 1000);
+    full_scope(&service, "tmux-spawn-eee.scope");
+    let d = service.join("tmux-spawn-eee.scope");
+    // Leading zeros parse as 0, so only the size check can reject this file.
+    write(&d, "memory.current", &"0".repeat(64 * 1024 + 1));
+    // A FIFO with no writer would block a plain read forever.
+    fs::remove_file(d.join("pids.current")).unwrap();
+    rustix::fs::mknodat(
+        rustix::fs::CWD,
+        d.join("pids.current"),
+        rustix::fs::FileType::Fifo,
+        rustix::fs::Mode::from_raw_mode(0o600),
+        0,
+    )
+    .expect("mkfifo");
+    // A symlink to a normal file is not a regular file either.
+    fs::remove_file(d.join("memory.peak")).unwrap();
+    std::os::unix::fs::symlink(d.join("memory.max"), d.join("memory.peak")).unwrap();
+    let scopes = read_scopes(&service).unwrap();
+    assert_eq!(scopes[0].memory_current, None, "oversize");
+    assert_eq!(scopes[0].pids_current, None, "fifo");
+    assert_eq!(scopes[0].memory_peak, None, "symlink");
+    assert_eq!(scopes[0].memory_max, Some(Limit::Value(4_294_967_296)));
+    assert_eq!(scopes[0].has_processes, None, "no readable process count");
+}
+
+#[test]
+fn seat_file_of_exactly_64_kib_is_still_read() {
+    let tmp = TempDirGuard::new("seat-edge");
+    let f = tmp.path().join("f");
+    fs::write(&f, "x".repeat(64 * 1024)).unwrap();
+    assert_eq!(
+        uas_pool::seats::read_bounded(&f).map(|t| t.len()),
+        Some(64 * 1024)
+    );
+    fs::write(&f, "x".repeat(64 * 1024 + 1)).unwrap();
+    assert_eq!(uas_pool::seats::read_bounded(&f), None);
 }

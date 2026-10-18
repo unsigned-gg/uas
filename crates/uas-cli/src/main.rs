@@ -61,6 +61,9 @@ enum Command {
         /// The tmux binary used to attribute scopes to seats.
         #[arg(long, default_value = "tmux")]
         tmux_bin: std::path::PathBuf,
+        /// The directory holding `tmux-<uid>/` with the tmux server sockets.
+        #[arg(long, env = "TMUX_TMPDIR", default_value = "/tmp")]
+        tmux_socket_dir: std::path::PathBuf,
         /// Read this uid's user service cgroup; default is the caller.
         #[arg(long)]
         uid: Option<u32>,
@@ -1173,6 +1176,7 @@ fn main() -> Result<()> {
             cgroup_root,
             proc_root,
             tmux_bin,
+            tmux_socket_dir,
             uid,
             max_load,
             min_mem_gib,
@@ -1181,6 +1185,7 @@ fn main() -> Result<()> {
                 cgroup_root,
                 proc_root,
                 tmux_bin,
+                tmux_socket_base: tmux_socket_dir,
                 uid,
                 max_load_1m: max_load,
                 min_mem_gib,

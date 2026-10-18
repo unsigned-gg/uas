@@ -100,6 +100,15 @@ impl ScopeKind {
     }
 }
 
+/// One tmux pane's seat in a scope: its session name and the tmux server socket it came from.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+pub struct Attribution {
+    /// The tmux session name.
+    pub session: String,
+    /// The socket file name; `None` for the `default` socket (REQ-0058-13).
+    pub socket: Option<String>,
+}
+
 /// One scope under the user service cgroup (REQ-0058-01).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SeatSample {
@@ -107,8 +116,12 @@ pub struct SeatSample {
     pub scope: String,
     /// Whether the scope is a tmux pane.
     pub kind: ScopeKind,
-    /// The tmux session name of a pane in this scope; `None` when unattributed (REQ-0058-03/04).
-    pub session: Option<String>,
+    /// Every pane in this scope, sorted and deduplicated; empty when unattributed
+    /// (REQ-0058-03/04).
+    pub attributions: Vec<Attribution>,
+    /// Whether the scope holds any process; `None` when neither `pids.current` nor
+    /// `cgroup.procs` could be read.
+    pub has_processes: Option<bool>,
     /// `memory.current`, bytes.
     pub memory_current: Option<u64>,
     /// `memory.peak`, bytes.
@@ -137,7 +150,8 @@ impl SeatSample {
         Self {
             scope: scope.to_string(),
             kind: ScopeKind::of_scope_name(scope),
-            session: None,
+            attributions: Vec::new(),
+            has_processes: None,
             memory_current: None,
             memory_peak: None,
             memory_high: None,
@@ -192,13 +206,64 @@ impl HeadroomGate {
     }
 }
 
-/// Whether tmux could be asked for panes (REQ-0058-09).
+/// The outcome of querying one tmux server socket (REQ-0058-13).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SocketStatus {
+    /// The socket file name.
+    pub socket: String,
+    /// True when `list-panes` ran and succeeded.
+    pub queried: bool,
+    /// Why the socket was skipped, when `queried` is false.
+    pub reason: Option<String>,
+}
+
+/// Whether tmux could be asked for panes (REQ-0058-09, REQ-0058-13).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TmuxStatus {
-    /// True when `list-panes` ran and succeeded.
+    /// True when at least one socket was queried successfully.
     pub available: bool,
     /// Why not, when `available` is false.
     pub reason: Option<String>,
+    /// Every socket found, queried or skipped.
+    pub sockets: Vec<SocketStatus>,
+}
+
+/// Counts over the scopes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SeatSummary {
+    /// Scopes with at least one pane.
+    pub attributed: usize,
+    /// Scopes with no pane that hold processes.
+    pub unattributed_with_processes: usize,
+    /// Scopes with no processes (attributed or not).
+    pub empty: usize,
+    /// Scopes with no pane whose process count could not be read.
+    pub unattributed_unknown: usize,
+}
+
+impl SeatSummary {
+    /// Count `scopes`.
+    pub fn of(scopes: &[SeatSample]) -> Self {
+        let mut s = Self {
+            attributed: 0,
+            unattributed_with_processes: 0,
+            empty: 0,
+            unattributed_unknown: 0,
+        };
+        for sc in scopes {
+            let attributed = !sc.attributions.is_empty();
+            if attributed {
+                s.attributed += 1;
+            }
+            match sc.has_processes {
+                Some(false) => s.empty += 1,
+                Some(true) if !attributed => s.unattributed_with_processes += 1,
+                None if !attributed => s.unattributed_unknown += 1,
+                _ => {}
+            }
+        }
+        s
+    }
 }
 
 /// The `uas.seats.v1` document.
@@ -210,6 +275,8 @@ pub struct SeatsDocument {
     pub headroom: HeadroomGate,
     /// The tmux attribution status.
     pub tmux: TmuxStatus,
+    /// Counts over `scopes`.
+    pub summary: SeatSummary,
     /// Every direct child scope, attributed or not.
     pub scopes: Vec<SeatSample>,
 }
@@ -221,6 +288,7 @@ impl SeatsDocument {
             schema: SEATS_SCHEMA.to_string(),
             headroom,
             tmux,
+            summary: SeatSummary::of(&scopes),
             scopes,
         }
     }
@@ -259,6 +327,7 @@ mod tests {
             TmuxStatus {
                 available: false,
                 reason: Some("no server".into()),
+                sockets: Vec::new(),
             },
             vec![sample],
         );
@@ -282,6 +351,32 @@ mod tests {
             Limit::Value(200_000)
         );
         assert_eq!(CpuMax::parse("max"), None);
+    }
+
+    #[test]
+    fn seat_summary_counts_attributed_empty_and_busy() {
+        let attr = |s: &str| Attribution {
+            session: s.into(),
+            socket: None,
+        };
+        let mut a = SeatSample::empty("a.scope");
+        a.attributions = vec![attr("x")];
+        a.has_processes = Some(true);
+        let mut b = SeatSample::empty("b.scope");
+        b.has_processes = Some(false);
+        let mut c = SeatSample::empty("c.scope");
+        c.has_processes = Some(true);
+        let d = SeatSample::empty("d.scope");
+        let s = SeatSummary::of(&[a, b, c, d]);
+        assert_eq!(
+            (
+                s.attributed,
+                s.unattributed_with_processes,
+                s.empty,
+                s.unattributed_unknown
+            ),
+            (1, 1, 1, 1)
+        );
     }
 
     #[test]

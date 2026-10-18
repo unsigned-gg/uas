@@ -51,7 +51,7 @@ This spec adds two things:
 |---|---|---|---|
 | D1 | uas measures and proposes. It never writes a cgroup property onto a running seat scope. Enforcement belongs to seat launch, owned by the OpenRig lanes with the operator's go. A policy uses `MemoryHigh` (throttle) before `MemoryMax`. | Writing onto a running scope mutates another lane's live session. A `MemoryMax` that kills a seat mid-work loses its work. | operator ruling 2026-10-18 (uas lane decision D2) |
 | D2 | Discovery reads the cgroup subtree `user.slice/user-<uid>.slice/user@<uid>.service` of the calling uid. It reports every direct child scope, and marks `tmux-spawn-*` scopes as panes. | Seats live there (F1). The calling uid owns the subtree, so no privilege is needed (F3). | lane, 2026-10-18 |
-| D3 | Attribution works through tmux: `list-panes -a` gives each pane's pid and session name, and `/proc/<pid>/cgroup` gives its scope. The inventory never reads `/proc/<pid>/environ`. | Session name equals seat name (F5). A process environment can hold credentials. | lane, 2026-10-18 |
+| D3 | Attribution works through tmux: for every tmux server socket of the calling uid, `tmux -S <socket> list-panes -a` gives each pane's pid and session name, and `/proc/<pid>/cgroup` gives its scope. Sockets are the socket entries of `$TMUX_TMPDIR` (else `/tmp`) `/tmux-<uid>/`. A scope keeps every session found, sorted and deduplicated, each with its socket name (the `default` socket is unlabelled). A dead socket is skipped with a recorded reason. The inventory never reads `/proc/<pid>/environ`. | Session name equals seat name (F5). OpenRig tests start their own tmux servers, so one socket misses panes. A process environment can hold credentials. | lane, 2026-10-18 |
 | D4 | The headroom gate reads `/proc/loadavg` and `MemAvailable` from `/proc/meminfo`. Defaults: 1-minute load under 12, and at least 16 GiB available. Flags override both. | The same gate the estate uses to admit seats (F6). | lane, 2026-10-18 |
 | D5 | Pure types (`SeatSample`, `HeadroomGate`, `SeatLimitPolicy`, `SeatLimitPlan`) live in `uas-domain`. The `/sys` and `/proc` readers live in `uas-pool`, which already parses cgroup files (spec 0041). The tmux call and the commands live in `uas-cli`, which gains a `uas-pool` dependency. | Layering from spec 0001. `uas-domain` stays zero I/O. | lane, 2026-10-18 |
 | D6 | `--json` emits one typed document with `schema = "uas.seats.v1"`. An unreadable value is absent, not zero. | Estate wire rule: typed structs, and absent is not the same as defaulted. | lane, 2026-10-18 |
@@ -61,7 +61,7 @@ This spec adds two things:
 
 - **[REQ-0058-01]** (Ubiquitous): The `uas seats` command shall list every direct child scope of the calling uid's user service cgroup, with `memory.current`, `memory.peak`, `memory.high`, `memory.max`, `pids.current`, `pids.max`, `cpu.max`, `cpu.weight` and the `some avg10` value of `memory.pressure` and `cpu.pressure`.
 - **[REQ-0058-02]** (Ubiquitous): The inventory shall perform no write to a cgroup file, to `/proc`, to tmux or to any file.
-- **[REQ-0058-03]** (Event-driven): WHEN a tmux pane's pid belongs to a scope, the inventory shall label that scope with the pane's tmux session name.
+- **[REQ-0058-03]** (Event-driven): WHEN a tmux pane's pid belongs to a scope, the inventory shall label that scope with the pane's tmux session name, and with every other pane's session name when a scope holds several.
 - **[REQ-0058-04]** (Unwanted): IF a scope has no tmux pane, THEN the inventory shall report the scope as unattributed and shall not drop it.
 - **[REQ-0058-05]** (Unwanted): IF a cgroup interface file is missing or unreadable, THEN the inventory shall report that field as absent and shall not report zero.
 - **[REQ-0058-06]** (Ubiquitous): The inventory shall not open any `/proc/<pid>/environ` file.
@@ -72,14 +72,17 @@ This spec adds two things:
 - **[REQ-0058-11]** (Event-driven): WHEN `uas seats plan` runs with a policy file, it shall print, for each attributed seat, the `MemoryHigh`, `TasksMax` and `CPUWeight` values it would set, and it shall apply none of them.
 - **[REQ-0058-12]** (Unwanted): IF a policy sets `MemoryMax` without a `MemoryHigh` that is at or below it, THEN `uas seats plan` shall reject the policy.
 
+- **[REQ-0058-13]** (Event-driven): WHEN more than one tmux server socket of the calling uid exists, the inventory shall query each one and label each attribution with its socket name.
+- **[REQ-0058-14]** (Unwanted): IF a cgroup interface file is not a regular file or exceeds 64 KiB, THEN the inventory shall report that field as absent.
+
 ## Plan
 
-Wave 1: inventory (REQ-01 to REQ-10).
+Wave 1: inventory (REQ-01 to REQ-10, REQ-13 and REQ-14).
 
 - [x] Add `SeatSample`, `ScopeKind`, `HeadroomGate` and the `uas.seats.v1` document types to `uas-domain`, with serde round-trip tests.
 - [x] Add a read-only scope reader to `uas-pool` that takes the cgroup root as an argument, so tests use a fixture tree.
 - [x] Add a tmux attribution adapter and the `uas seats [--json]` command to `uas-cli`.
-- [x] Add fixture tests for REQ-01 to REQ-09, and a source-scan test for REQ-06 and REQ-10.
+- [x] Add fixture tests for REQ-01 to REQ-09, REQ-13 and REQ-14 (the CLI tests cover a nested-cgroup pid, a two-pane scope, a non-pane scope, pressure values, several sockets and a dead socket), and a source-scan test for REQ-06 and REQ-10.
 
 Wave 2: dry-run plan (REQ-11 and REQ-12).
 
@@ -103,6 +106,9 @@ removed:
 | a fake tmux that fails to start leaves every scope listed and unattributed, with a reason | REQ-0058-09 |
 | the JSON document carries `schema = "uas.seats.v1"` | REQ-0058-08 |
 | the gate fails at load 12.0 and at 15.9 GiB available | REQ-0058-07 |
+| two tmux sockets are both queried, each attribution carries its socket name, and a dead socket is skipped with a reason | REQ-0058-13 |
+| a scope with two panes lists both sessions, sorted and deduplicated | REQ-0058-03 |
+| an oversize file, a FIFO and a symlink as interface files give absent fields | REQ-0058-14 |
 | a source scan finds no `environ` path and no write call in the inventory modules | REQ-0058-02, REQ-0058-06 |
 | `uas-domain` seat types use no `std::fs`, `std::net`, `std::process` or `tokio` | REQ-0058-10 |
 

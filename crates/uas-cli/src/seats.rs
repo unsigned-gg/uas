@@ -4,12 +4,14 @@
 //! tmux is asked for panes with one `list-panes` call. The binary path is an argument, so tests
 //! use a fake. Nothing here writes.
 
-use std::os::unix::fs::MetadataExt;
+use std::os::unix::fs::{FileTypeExt, MetadataExt};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use anyhow::{Context, Result};
-use uas_domain::{HeadroomGate, ScopeKind, SeatSample, SeatsDocument, TmuxStatus};
+use uas_domain::{
+    Attribution, HeadroomGate, ScopeKind, SeatSample, SeatsDocument, SocketStatus, TmuxStatus,
+};
 use uas_pool::seats::{read_headroom, read_scopes, scope_of_pid, user_service_dir};
 
 /// Inputs of one inventory run.
@@ -21,6 +23,8 @@ pub struct SeatsConfig {
     pub proc_root: PathBuf,
     /// The tmux binary.
     pub tmux_bin: PathBuf,
+    /// The directory that holds `tmux-<uid>/`: `$TMUX_TMPDIR`, else `/tmp`.
+    pub tmux_socket_base: PathBuf,
     /// The uid whose user service cgroup is read; `None` means the owner of `<proc>/self`.
     pub uid: Option<u32>,
     /// Gate ceiling for the 1-minute load.
@@ -38,6 +42,9 @@ pub struct Pane {
     pub session: String,
 }
 
+/// The socket label of the server tmux starts without `-L` or `-S`.
+const DEFAULT_SOCKET: &str = "default";
+
 /// Parse `#{pane_pid} #{session_name}` lines. A line that does not parse is skipped.
 pub fn parse_panes(text: &str) -> Vec<Pane> {
     text.lines()
@@ -51,9 +58,12 @@ pub fn parse_panes(text: &str) -> Vec<Pane> {
         .collect()
 }
 
-/// Ask tmux for every pane. The error text is the reason attribution is unavailable.
-pub fn list_panes(tmux_bin: &Path) -> Result<Vec<Pane>, String> {
+/// Ask the tmux server on `socket` for every pane, with argv only. The error text is the
+/// reason the socket was skipped.
+pub fn list_panes(tmux_bin: &Path, socket: &Path) -> Result<Vec<Pane>, String> {
     let out = Command::new(tmux_bin)
+        .arg("-S")
+        .arg(socket)
         .args(["list-panes", "-a", "-F", "#{pane_pid} #{session_name}"])
         .output()
         .map_err(|e| format!("cannot run tmux: {e}"))?;
@@ -64,15 +74,37 @@ pub fn list_panes(tmux_bin: &Path) -> Result<Vec<Pane>, String> {
     Ok(parse_panes(&String::from_utf8_lossy(&out.stdout)))
 }
 
-/// Label each scope with its pane's session name (REQ-0058-03). Scopes with no pane stay as
-/// they are (REQ-0058-04).
-pub fn attribute(scopes: &mut [SeatSample], panes: &[Pane], proc_root: &Path) {
+/// The sockets in `<base>/tmux-<uid>/`, sorted by name. Only entries that are sockets count.
+pub fn find_sockets(base: &Path, uid: u32) -> Vec<PathBuf> {
+    let Ok(entries) = std::fs::read_dir(base.join(format!("tmux-{uid}"))) else {
+        return Vec::new();
+    };
+    let mut found: Vec<PathBuf> = entries
+        .filter_map(Result::ok)
+        .filter(|e| e.file_type().is_ok_and(|t| t.is_socket()))
+        .map(|e| e.path())
+        .collect();
+    found.sort();
+    found
+}
+
+/// Add each pane's session to the scope that holds its pid (REQ-0058-03). Scopes with no pane
+/// stay as they are (REQ-0058-04). `socket` is the label: `None` for the default socket.
+pub fn attribute(
+    scopes: &mut [SeatSample],
+    panes: &[Pane],
+    socket: Option<&str>,
+    proc_root: &Path,
+) {
     for pane in panes {
         let Some(scope) = scope_of_pid(proc_root, pane.pid) else {
             continue;
         };
         if let Some(s) = scopes.iter_mut().find(|s| s.scope == scope) {
-            s.session.get_or_insert_with(|| pane.session.clone());
+            s.attributions.push(Attribution {
+                session: pane.session.clone(),
+                socket: socket.map(str::to_string),
+            });
         }
     }
 }
@@ -87,20 +119,50 @@ pub fn build_document(cfg: &SeatsConfig) -> Result<SeatsDocument> {
     };
     let dir = user_service_dir(&cfg.cgroup_root, uid);
     let mut scopes = read_scopes(&dir)?;
-    let tmux = match list_panes(&cfg.tmux_bin) {
-        Ok(panes) => {
-            attribute(&mut scopes, &panes, &cfg.proc_root);
-            TmuxStatus {
-                available: true,
-                reason: None,
+    let sockets = find_sockets(&cfg.tmux_socket_base, uid);
+    let mut statuses = Vec::new();
+    for socket in &sockets {
+        let name = socket
+            .file_name()
+            .map_or_else(String::new, |n| n.to_string_lossy().into_owned());
+        match list_panes(&cfg.tmux_bin, socket) {
+            Ok(panes) => {
+                let label = (name != DEFAULT_SOCKET).then_some(name.as_str());
+                attribute(&mut scopes, &panes, label, &cfg.proc_root);
+                statuses.push(SocketStatus {
+                    socket: name,
+                    queried: true,
+                    reason: None,
+                });
             }
+            Err(reason) => statuses.push(SocketStatus {
+                socket: name,
+                queried: false,
+                reason: Some(reason),
+            }),
         }
-        Err(reason) => TmuxStatus {
-            available: false,
-            reason: Some(reason),
-        },
+    }
+    for s in &mut scopes {
+        s.attributions.sort();
+        s.attributions.dedup();
+    }
+    let available = statuses.iter().any(|s| s.queried);
+    let reason = (!available).then(|| {
+        if statuses.is_empty() {
+            format!(
+                "no tmux sockets in {}",
+                cfg.tmux_socket_base.join(format!("tmux-{uid}")).display()
+            )
+        } else {
+            "every tmux socket was skipped".to_string()
+        }
+    });
+    let tmux = TmuxStatus {
+        available,
+        reason,
+        sockets: statuses,
     };
-    // Whole GiB to bytes; a fractional flag value rounds down to the byte.
+    // A fractional GiB flag value rounds down to the byte.
     let min_bytes = (cfg.min_mem_gib * 1024.0 * 1024.0 * 1024.0) as u64;
     let headroom: HeadroomGate = read_headroom(&cfg.proc_root, cfg.max_load_1m, min_bytes);
     Ok(SeatsDocument::new(headroom, tmux, scopes))
@@ -129,15 +191,43 @@ pub fn render_text(doc: &SeatsDocument) -> String {
         opt(h.mem_available_bytes),
         h.min_mem_available_bytes,
     );
+    let queried = doc.tmux.sockets.iter().filter(|s| s.queried).count();
+    out.push_str(&format!(
+        "tmux sockets: {} found, {queried} queried, {} skipped\n",
+        doc.tmux.sockets.len(),
+        doc.tmux.sockets.len() - queried,
+    ));
+    for s in doc.tmux.sockets.iter().filter(|s| !s.queried) {
+        out.push_str(&format!(
+            "  skipped {}: {}\n",
+            s.socket,
+            s.reason.as_deref().unwrap_or("unknown")
+        ));
+    }
     if let Some(reason) = &doc.tmux.reason {
         out.push_str(&format!("tmux: unavailable ({reason})\n"));
     }
+    let m = &doc.summary;
+    out.push_str(&format!(
+        "scopes: {} total, {} attributed, {} unattributed with processes, {} empty, {} unattributed unknown\n",
+        doc.scopes.len(), m.attributed, m.unattributed_with_processes, m.empty, m.unattributed_unknown
+    ));
     out.push_str("session\tscope\tmem_cur\tmem_high\tmem_max\tpids\tpids_max\tmem_psi\tcpu_psi\n");
     for s in &doc.scopes {
-        let label = match (&s.session, s.kind) {
-            (Some(name), _) => name.as_str(),
-            (None, ScopeKind::TmuxPane) => "(unattributed)",
-            (None, ScopeKind::Other) => "(not a pane)",
+        let label = if s.attributions.is_empty() {
+            match s.kind {
+                ScopeKind::TmuxPane => "(unattributed)".to_string(),
+                ScopeKind::Other => "(not a pane)".to_string(),
+            }
+        } else {
+            s.attributions
+                .iter()
+                .map(|a| match &a.socket {
+                    Some(sock) => format!("{}[{sock}]", a.session),
+                    None => a.session.clone(),
+                })
+                .collect::<Vec<_>>()
+                .join(",")
         };
         out.push_str(&format!(
             "{label}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n",
