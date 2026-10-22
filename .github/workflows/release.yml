@@ -74,7 +74,7 @@ jobs:
         run: cargo deny check advisories
       # Tag only from main. A manual run on another branch tests the steps above
       # and creates no tag.
-      - uses: release-plz/action@18641b6c63063cc5ff8786ebf69cd57e8541bae1 # v0.5.140
+      - uses: release-plz/action@6caa8d34f74d82b0dc76a18edd1cc3d6801c9baf # v0.5.143
         id: release-plz
         if: github.ref == 'refs/heads/main'
         with:
